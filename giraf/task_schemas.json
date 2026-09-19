@@ -1,0 +1,3809 @@
+{
+  "version": 1,
+  "irafVersion": "2.18.1",
+  "tasks": {
+    "dataio.rtextimage": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "single",
+            "default": "output.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_IMAGE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "b42db425782fca7dfc075023905ac76fb16030b9d05ae9fe02c8fad97838aad0",
+      "parameterHash": "150159bbb6ef3c0f48b16964fd1e69b2bc057076e94f1dea010766ed968c919d",
+      "sourcePath": "pkg/dataio/imtext/t_rtextimage.x"
+    },
+    "dataio.export": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "images",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "images",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "images",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "f27cd6a51f1627a75ae97ec8fd6cda6876b5649d952102322f6e86934813399e",
+      "parameterHash": "8a2e0ff23af35592b644559418181df668dc62ec94eafb2486bf32c9f8bb2383",
+      "sourcePath": "pkg/dataio/export/t_export.x"
+    },
+    "images.imcoords.ccfind": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "images",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "projection",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "projection",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "images",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "c60979178e7a759429981a017dc46c7e042590f3c39a0c1277002f786c45b048",
+      "parameterHash": "3c5d848006269f112b5fb6ce8ae37b8d773541e897947d370f50a513ea389c7f",
+      "sourcePath": "pkg/images/imcoords/src/t_ccfind.x"
+    },
+    "images.imcoords.ccget": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "c0d6534dbd0cc7a2950ca84af8da69023360e41771ac770371611cb4836210e1",
+      "parameterHash": "4763a2316985fdcb3d0740a2fa17c08c5add178111f4a41340832a63a5eb8adb",
+      "sourcePath": "pkg/images/imcoords/src/t_ccget.x"
+    },
+    "images.imcoords.ccstd": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "cf78ab267db9e82ef6a5e6d9b07afd846c27cf69c8d6859dd8cc2c38509eb8a8",
+      "parameterHash": "c7b782faf83af79ee8bf89703188771e903c32ea053629cfc3d7ac05e7db32dd",
+      "sourcePath": "pkg/images/imcoords/src/t_ccstd.x"
+    },
+    "images.imcoords.cctran": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "adae25b3d2348c922e1d9ab473e1d35ded57885eeed1840158c360bca588c3b4",
+      "parameterHash": "b794a202a4be333a92cb6e32ee30d5fab26f1f5c5282d280a85855529e4add9d",
+      "sourcePath": "pkg/images/imcoords/src/t_cctran.x"
+    },
+    "images.imcoords.ccxymatch": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "reference",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "refpoints",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          },
+          {
+            "name": "projection",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "projection",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "refpoints",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "reference",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "6b81b3c960c31012d6f4dbcb13f456f5e60773fccde2ad00701ff236c254888c",
+      "parameterHash": "587b7838f70587d1db06c228d67df1261a37eba1322aca964a6d0cae2b137c46",
+      "sourcePath": "pkg/images/imcoords/src/t_ccxymatch.x"
+    },
+    "images.imcoords.skyctran": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": true,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "e3111c20318aa8faf49955220a4162cd634c5fe81c84f8b0d2285d186605591c",
+      "parameterHash": "43444d96a9a2dc54f597a8a5ce217a57689773e52769964ba934eb70b599a2d2",
+      "sourcePath": "pkg/images/imcoords/src/t_skyctran.x"
+    },
+    "images.imcoords.starfind": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "35f0eebe9c0f09aee7d08a86fa5bed8f43b033943838a3a8578d45e7d52d47aa",
+      "parameterHash": "2e194eeed3781216f710d04e6a1136d0c5fbcc6628e37f0d7812bcbae4a412fb",
+      "sourcePath": "pkg/images/imcoords/src/t_starfind.x"
+    },
+    "images.imcoords.wcsctran": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "f2c4effc52ddf7ab41a0ccda83f7f18824a44bbeebaeed2454c150fd9225c64e",
+      "parameterHash": "133141fdf6934239f9d0c685fcfa4ac3e94b15b95882323b3398d699b4c2371f",
+      "sourcePath": "pkg/images/imcoords/src/t_wcsctran.x"
+    },
+    "images.imfit.imsurfit": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "a5f5be5f3475a568eeb096942408f3229a707e5a4e6b2dafe5c70c36ea65fd74",
+      "parameterHash": "0380c45c42849c34d15255e483a3be73611754779a0dfb572501a93c741fbe3a",
+      "sourcePath": "pkg/images/imfit/src/t_imsurfit.x"
+    },
+    "images.imgeom.blkavg": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "c3e06e968169fc6f88e86b1b0cbf1603b6494bb67618d30c4803f060c52fb57d",
+      "parameterHash": "9db5030edac1d56fed4017c07d76ebbd7fcef3d1c33dd56ffc7a5ab0eced3ecf",
+      "sourcePath": "pkg/images/imgeom/src/t_blkavg.x"
+    },
+    "images.imgeom.blkrep": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "09164d18dfa2a849d36b0f4285e7deaec4022901ae7c75e8769ced23efb16029",
+      "parameterHash": "0b3ce24bff8380c4803a625863f9b4af394d45949845ba30f2f475225f22dcb9",
+      "sourcePath": "pkg/images/imgeom/src/t_blkrep.x"
+    },
+    "images.imgeom.shiftlines": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "95b3d11724abd0dc1af66f3c08d8f9c51b0567726bcc67f3778d7b0ab2e07cae",
+      "parameterHash": "930c7b1b93ed0cceafb996dd476be004399a99e6c297ddfefd1ac3e774ed8578",
+      "sourcePath": "pkg/images/imgeom/src/t_shiftlines.x"
+    },
+    "images.immatch.imcombine": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "3a77ea144f7749d5a27426372dbce9fc109e3607290bb52da0387a40de0d76d7",
+      "parameterHash": "4d6b4d6686f16cf55c263cbce6f568c52808c935acb08c9b53050427cad6c105",
+      "sourcePath": "pkg/images/immatch/src/imcombine/t_imcombine.x"
+    },
+    "images.immatch.geoxytran": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "7ac4eec71df17d4ba54b635649e161c7a9dce50fe09ffdef9da03941540fe9ce",
+      "parameterHash": "d62f6d191c3ba1e3a6db24d3d27f5678e34ab95437920e147a9d5c7b9f7180f8",
+      "sourcePath": "pkg/images/immatch/src/geometry/t_geoxytran.x"
+    },
+    "images.immatch.skyxymatch": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "reference",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "coords",
+            "kind": "text",
+            "multiple": true,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "reference",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "coords",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "b02bc5ee22e038150d4c1055c91f3db8e0fb51de5d75ef03c2ea7b8e9c51b774",
+      "parameterHash": "b399080a91b6abd4205beee474fe85320fff8fd18e6d92bd44fa8edcc3ca0a22",
+      "sourcePath": "pkg/images/immatch/src/wcsmatch/t_skyxymatch.x"
+    },
+    "images.immatch.wcsxymatch": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "reference",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "coords",
+            "kind": "text",
+            "multiple": true,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "reference",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "coords",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "770349927f0e694c06df928aa4adfb6d0dda7b7fa36c92e562878cbea2adb84f",
+      "parameterHash": "115c1a1eb355660cfd32488a1544c3fee48f7c7945bc02d82501f969c65f6e95",
+      "sourcePath": "pkg/images/immatch/src/wcsmatch/t_wcsxymatch.x"
+    },
+    "images.immatch.xyxymatch": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "reference",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "refpoints",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {
+          "interactive": "no"
+        }
+      },
+      "evidence": [
+        {
+          "parameter": "refpoints",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "reference",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "108d5a59a54083cb0c4f02b6ddb28c9278f38ce96f16e3072ad4e248768ec381",
+      "parameterHash": "e66ca20fa71b710c8396c7efda4064039a006488cd367ac9b2285e661ad933fd",
+      "sourcePath": "pkg/images/immatch/src/listmatch/t_xyxymatch.x"
+    },
+    "images.imutil.imarith": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "operand1",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "operand2",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "result",
+            "kind": "image",
+            "mode": "each",
+            "default": "result_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "operand1",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "operand2",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "result",
+          "call": "immap",
+          "access": "NEW_COPY"
+        },
+        {
+          "parameter": "result",
+          "call": "immap",
+          "access": "NEW_COPY"
+        },
+        {
+          "parameter": "result",
+          "call": "immap",
+          "access": "NEW_COPY"
+        },
+        {
+          "parameter": "result",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "7ba85f570d650e63b84d3ea94c6e137f8c31a2eb002c76e14a0d5027c00f2173",
+      "parameterHash": "a0473de8013b6b8d1156a9fa0271bcf325e93e8772fffe1b4624694707961bf3",
+      "sourcePath": "pkg/images/imutil/src/t_imarith.x"
+    },
+    "images.imutil.imstack": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "images",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "single",
+            "default": "output.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "images",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "8c3eb98f48f1a3c3b1a21e2365cb40a495544007d3c2e1b714540c8b66a318b5",
+      "parameterHash": "8895f7f9d87ea593b664388709560e1690ef37b0ca13b1fda0fbddfd3f0fa941",
+      "sourcePath": "pkg/images/imutil/src/t_imstack.x"
+    },
+    "images.imutil.imsum": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "single",
+            "default": "output.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "4a1be3a3052f1505d26b91ff4cb11c419fb60ee9ff5ba551c25bf07c8d33dbed",
+      "parameterHash": "66bc20390da8e45c9a724918cc5fe768e935fcbe3c2d9ea9849b747b475d998e",
+      "sourcePath": "pkg/images/imutil/src/t_imsum.x"
+    },
+    "images.tv.display": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "c0c0c65b675f9312cf65901c3061318e0ae566b256ee91fc55dc1c2848ce4742",
+      "parameterHash": "3beeeea4aa556424b5b1b8f18a83d3b85369fcd71684eb2bfbd589eee5cc64e0",
+      "sourcePath": "pkg/images/tv/display/t_display.x"
+    },
+    "images.tv.wcslab": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "cb39d80571f262c8233888eec35dab428b93911991901c0c5dd593e61350c7a7",
+      "parameterHash": "1d22ebbab9dd94eaefa9b6a2b8dcac7d90bf95e4ff3553213f1beb6b8610b819",
+      "sourcePath": "pkg/images/tv/wcslab/t_wcslab.x"
+    },
+    "noao.artdata.gallist": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "sfile",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          },
+          {
+            "name": "lfile",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          }
+        ],
+        "outputs": [],
+        "fixed": {
+          "interactive": "no"
+        }
+      },
+      "evidence": [
+        {
+          "parameter": "sfile",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "lfile",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "eedd138d736ce9d99a5c6148c96f10a63938ded8e8bc2fdffc01fdf3939b3960",
+      "parameterHash": "5a1df804402c2a93c51c3c1ce5791a92cc910f437147ea4c88d9171f8d16bd15",
+      "sourcePath": "noao/artdata/lists/t_gallist.x"
+    },
+    "noao.artdata.starlist": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "sfile",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          },
+          {
+            "name": "lfile",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {
+          "interactive": "no"
+        }
+      },
+      "evidence": [
+        {
+          "parameter": "sfile",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "lfile",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "657db2f556f5d79b358d96a6e37b12541dc9533ee7e7503c1abe78b51123dfdb",
+      "parameterHash": "2b2e437ee9636c1a11e7216ca455e87f9b0cc6dca93c76b37b4e40826e8386f9",
+      "sourcePath": "noao/artdata/lists/t_starlist.x"
+    },
+    "noao.astcat.agetcat": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "catdb",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "catalogs",
+            "kind": "text",
+            "mode": "single",
+            "default": "catalogs.txt"
+          }
+        ],
+        "fixed": {
+          "update": "no"
+        }
+      },
+      "evidence": [
+        {
+          "parameter": "catalogs",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "catdb",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "0a6aac14f1378eec74aef78fed6809c8e619526d8da5d535dfbdfb14f982b371",
+      "parameterHash": "694812278cb13ada9dd9d262c694b21d28f4162b3559133af67fb981d1701b98",
+      "sourcePath": "noao/astcat/src/agetcat/t_agetcat.x"
+    },
+    "noao.astcat.adumpcat": {
+      "profile": {
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "single",
+            "default": "output.txt"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "b782901945e4e1a2dc37397593bdafc94420b70688b3cb2a259e0b51acbea71f",
+      "parameterHash": "4b18b3d9a412f7c7c655d9632ac374edb1deefbf9f955dbf88b209edc180a875",
+      "sourcePath": "noao/astcat/src/debug/t_adumpcat.x"
+    },
+    "noao.astcat.adumpim": {
+      "profile": {
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "single",
+            "default": "output.txt"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "b6ba3f48ace5b3ed1507e4e0ce4d6b4fbdc9219ed444de837bfe6db04c13f1dd",
+      "parameterHash": "532c6edeb53ae917a5125a0946783e6debd916769b36b1cdf974f5f4d75b8846",
+      "sourcePath": "noao/astcat/src/debug/t_adumpim.x"
+    },
+    "noao.astcat.acqftest": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "textfile",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "textfile",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "ff30bdb64dfdf1087d563c4baa9968cd8375bce72b341749fd4c4b2d928b75e8",
+      "parameterHash": "68999a91e05ea8ae08b65e21621300bab01311309b30c9ced1806303ea61cef1",
+      "sourcePath": "noao/astcat/src/debug/t_acqftest.x"
+    },
+    "noao.astutil.asttimes": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "files",
+            "kind": "text",
+            "multiple": true,
+            "required": false
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "files",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "56acbd58816b73b815be68c2eece6a688b54650168ac3e74531e7718c24993fd",
+      "parameterHash": "8f7fe751082ff9649c9bf37ea63f4987a3f33637ea7900a1f5519959905ef9cd",
+      "sourcePath": "noao/astutil/t_asttimes.x"
+    },
+    "noao.digiphot.apphot.daofind": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {
+          "interactive": "no",
+          "verify": "no",
+          "update": "no"
+        }
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "starmap",
+          "call": "aptmpimage",
+          "direction": "output",
+          "naming": "prefix"
+        },
+        {
+          "parameter": "skymap",
+          "call": "aptmpimage",
+          "direction": "output",
+          "naming": "prefix"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [
+        {
+          "name": "starmap",
+          "naming": "prefix",
+          "kind": "image",
+          "mode": "each"
+        },
+        {
+          "name": "skymap",
+          "naming": "prefix",
+          "kind": "image",
+          "mode": "each"
+        }
+      ],
+      "complete": true,
+      "sourceHash": "5e968e0523dacda5df2a110eac1c7420a985c0583310ab0ab62f2c531a5b24d8",
+      "parameterHash": "311dff1306237eae69456ab05aba09450b0f55a159f8caa33e2de4dd5877f0ed",
+      "sourcePath": "noao/digiphot/apphot/daofind/t_daofind.x"
+    },
+    "noao.digiphot.daophot.group": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "photfile",
+            "kind": "text",
+            "multiple": true,
+            "required": false
+          },
+          {
+            "name": "psfimage",
+            "kind": "image",
+            "multiple": true,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "groupfile",
+            "kind": "text",
+            "mode": "each",
+            "default": "groupfile_"
+          }
+        ],
+        "fixed": {
+          "verify": "no",
+          "update": "no"
+        }
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "photfile",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "psfimage",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "groupfile",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "954afada95ba10f7ca38fa28b1b9278551fc72cb3fcc9ca60c17656fb6c279cb",
+      "parameterHash": "84b2cf38154b9987a56aa721f3b4890399c25ef5d544591d52d62875e647462a",
+      "sourcePath": "noao/digiphot/daophot/group/t_group.x"
+    },
+    "noao.digiphot.daophot.grpselect": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "ingroupfile",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "outgroupfile",
+            "kind": "text",
+            "mode": "each",
+            "default": "outgroupfile_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "ingroupfile",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "outgroupfile",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "b1f24bdfb9964cc16793da6ffc82a907a8a8bef49dbd0132dc58581cdb031998",
+      "parameterHash": "f41b8111b432a5a9a519362b494e4a5cc5e3c86bbcfffa6e4861304e50ebc296",
+      "sourcePath": "noao/digiphot/daophot/select/t_grpselect.x"
+    },
+    "noao.digiphot.daophot.nstar": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "groupfile",
+            "kind": "text",
+            "multiple": true,
+            "required": false
+          },
+          {
+            "name": "psfimage",
+            "kind": "image",
+            "multiple": true,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "nstarfile",
+            "kind": "text",
+            "mode": "each",
+            "default": "nstarfile_"
+          },
+          {
+            "name": "rejfile",
+            "kind": "text",
+            "mode": "each",
+            "default": "rejfile_"
+          }
+        ],
+        "fixed": {
+          "verify": "no",
+          "update": "no"
+        }
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "groupfile",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "psfimage",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "nstarfile",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "rejfile",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "a455abce8de229541925c6775633aa3062a1a36747b5ff29e608a7c5e6b6181d",
+      "parameterHash": "55f204f2918abde1d3eaeb7ac5de134f2ec84ee520abb8880e3d53d29b60d1cc",
+      "sourcePath": "noao/digiphot/daophot/nstar/t_nstar.x"
+    },
+    "noao.digiphot.daophot.peak": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "photfile",
+            "kind": "text",
+            "multiple": true,
+            "required": false
+          },
+          {
+            "name": "psfimage",
+            "kind": "image",
+            "multiple": true,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "peakfile",
+            "kind": "text",
+            "mode": "each",
+            "default": "peakfile_"
+          },
+          {
+            "name": "rejfile",
+            "kind": "text",
+            "mode": "each",
+            "default": "rejfile_"
+          }
+        ],
+        "fixed": {
+          "verify": "no",
+          "update": "no"
+        }
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "photfile",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "psfimage",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "peakfile",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "rejfile",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "0f124f45da93430b15899e64c01fbe34227baccaba89ad2f2498b6d69247f2ea",
+      "parameterHash": "c9759ea15f7f05da18b3f6900de7a67675d590d9b02af3606b3601d92f4e70a9",
+      "sourcePath": "noao/digiphot/daophot/peak/t_peak.x"
+    },
+    "noao.digiphot.daophot.pfmerge": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "inphotfiles",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "outphotfile",
+            "kind": "text",
+            "mode": "single",
+            "default": "outphotfile.txt"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "outphotfile",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "inphotfiles",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "9179d594f2366ec7707243507965655ce4995f6ea2c5a2b19e97929100479f59",
+      "parameterHash": "c776fa8cdb67b93816bd838c59f1b7dabd50276b4491d4307b72fba73ce9d661",
+      "sourcePath": "noao/digiphot/daophot/select/t_pfmerge.x"
+    },
+    "noao.digiphot.daophot.seepsf": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "psfimage",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "mode": "each",
+            "default": "image_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "psfimage",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "92c26264f465e57d1e1e09d0e66aad052d823dea0aa337e1c88293f9c9a838ae",
+      "parameterHash": "f5782bba140d14e7948180d72de469d6bd352bb8e5191e6156b3caddb531f5e9",
+      "sourcePath": "noao/digiphot/daophot/seepsf/t_seepsf.x"
+    },
+    "noao.digiphot.daophot.daoedit": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "37dfa8d70bff332a019b42c3687be2c0506111d5364f3990bff06a110ff936e2",
+      "parameterHash": "10d74f4c0a7e96f72305bce92f16f817675df1df90b859c913d5e39084788e97",
+      "sourcePath": "noao/digiphot/daophot/daoedit/t_daoedit.x"
+    },
+    "noao.digiphot.daophot.substar": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "photfile",
+            "kind": "text",
+            "multiple": true,
+            "required": false
+          },
+          {
+            "name": "exfile",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "psfimage",
+            "kind": "image",
+            "multiple": true,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "subimage",
+            "kind": "image",
+            "mode": "each",
+            "default": "subimage_"
+          }
+        ],
+        "fixed": {
+          "verify": "no",
+          "update": "no"
+        }
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "subimage",
+          "call": "immap",
+          "access": "NEW_COPY"
+        },
+        {
+          "parameter": "photfile",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "exfile",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "psfimage",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "d28a5ed4f6e0cd245d60834528b890a1ea3975c19d108c343b2ea3490c7a94c6",
+      "parameterHash": "230c7c76ba77e4bde2d54d7ff4389631ed30cf643d8ced630cd7a45e4989c4a0",
+      "sourcePath": "noao/digiphot/daophot/substar/t_substar.x"
+    },
+    "noao.digiphot.photcal.config": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "catalog",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          },
+          {
+            "name": "observations",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          },
+          {
+            "name": "transform",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "config",
+            "kind": "text",
+            "mode": "single",
+            "default": "config.txt"
+          }
+        ],
+        "fixed": {
+          "verify": "no"
+        }
+      },
+      "evidence": [
+        {
+          "parameter": "config",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "catalog",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "observations",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "transform",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "0a9f129d1630a35b0677bc6cbf8c73a261fc4a4a31031f4af50c997ccf49f55e",
+      "parameterHash": "b5be6a4ecb863117226d7dab60716855a7f67483d59bcf84bf9975c10c195240",
+      "sourcePath": "noao/digiphot/photcal/mkconfig/t_config.x"
+    },
+    "noao.digiphot.photcal.imgroup": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "imlist",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "imsetlist",
+            "kind": "text",
+            "mode": "single",
+            "default": "imsetlist.txt"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "imlist",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "imsetlist",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "38fb08f43f51c997682dbc43c3bad89237e08ec9cfe9d49c2d75356081dde016",
+      "parameterHash": "ec1a259de14d473a7300a5d6bb0dc3703e84d840dc06735daddda28f9890b2a6",
+      "sourcePath": "noao/digiphot/photcal/mkimsets/t_imgroup.x"
+    },
+    "noao.digiphot.photcal.obsfile": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "photfiles",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "imsets",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          },
+          {
+            "name": "obsparams",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          },
+          {
+            "name": "shifts",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          },
+          {
+            "name": "apercors",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "observations",
+            "kind": "text",
+            "mode": "single",
+            "default": "observations.txt"
+          }
+        ],
+        "fixed": {
+          "verify": "no"
+        }
+      },
+      "evidence": [
+        {
+          "parameter": "imsets",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "observations",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "shifts",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "apercors",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "obsparams",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "photfiles",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "3e4cad3e84a949dccbdb2ee73e02af427800ff813bf37e008697d7d1145ed7cf",
+      "parameterHash": "0f1bb1c5638c9577422d8bfd82836cc80ce07ddc82931b7484cb4c78c5c6dda7",
+      "sourcePath": "noao/digiphot/photcal/mkobsfile/t_obsfile.x"
+    },
+    "noao.digiphot.ptools.pconvert": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "textfile",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "textfile",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "47baa101e67395ecc01ef2fca106677d989d52bbb406caf365457c3286b3af89",
+      "parameterHash": "34f4b7cf266c3ddc827feebfa8460434939a49ab20308954c7c68b374f86ad6b",
+      "sourcePath": "noao/digiphot/ptools/pconvert/t_pconvert.x"
+    },
+    "noao.digiphot.ptools.istable": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "infile",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "infile",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "0ab043ae3d117bf3ab777163d0dd199e26209a62a28b18ee69366b7824c53a5b",
+      "parameterHash": "856cd84c66c29dcca5f8a69172a3acbb46fc0be62b8cc3149a43f3350fdcd34d",
+      "sourcePath": "noao/digiphot/ptools/ptutils/t_istable.x"
+    },
+    "noao.digiphot.ptools.pexamine": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          },
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "single",
+            "default": "output.txt"
+          },
+          {
+            "name": "deletions",
+            "kind": "text",
+            "mode": "single",
+            "default": "deletions.txt"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "deletions",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "4a2e0dbefc8aece5a8ce5d35e643c0bbc6218dcf9ed52538c18b2b288dbfff2b",
+      "parameterHash": "8b174b6339ce2509010464a23b661505f88c3cf154fd5f77eb59c531b866f8e2",
+      "sourcePath": "noao/digiphot/ptools/pexamine/t_pexamine.x"
+    },
+    "noao.digiphot.ptools.txconcat": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "textfiles",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "outfile",
+            "kind": "text",
+            "mode": "single",
+            "default": "outfile.txt"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "textfiles",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "outfile",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "textfiles",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "34679426c43b18a7536eb0437bd5072a785d7eb114f6ab54affa317cfae3a202",
+      "parameterHash": "b1440d98e349fc664142c2f0c81747c4bb37eb111d103aa7be9f639f4734aaa5",
+      "sourcePath": "noao/digiphot/ptools/txtools/t_txconcat.x"
+    },
+    "noao.digiphot.ptools.txdump": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "textfiles",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "textfiles",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "e5c8575d1715067b1e099df4b271da7c30433a0d5a9a5b2b2ec80ddb7e68919b",
+      "parameterHash": "88c33b8e4e818a2a14d09fb0264a2d4537cf72fbecbd6d2a4c2df99f51decd42",
+      "sourcePath": "noao/digiphot/ptools/txtools/t_txdump.x"
+    },
+    "noao.digiphot.ptools.txselect": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "textfiles",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "outfiles",
+            "kind": "text",
+            "mode": "each",
+            "default": "outfiles_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "textfiles",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "outfiles",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "f2fecf52b1a40b5936894863bd16f97adf2886f40caba10637dd318f94798bd3",
+      "parameterHash": "5bc6b1f41479e9e6ba6752d6a8e479ffe8cbbed55efd38b292cbc65762166aa2",
+      "sourcePath": "noao/digiphot/ptools/txtools/t_txselect.x"
+    },
+    "noao.imred.crutil.crmedian": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "single",
+            "default": "output.fits"
+          },
+          {
+            "name": "crmask",
+            "kind": "image",
+            "mode": "single",
+            "default": "crmask.fits"
+          },
+          {
+            "name": "median",
+            "kind": "image",
+            "mode": "single",
+            "default": "median.fits"
+          },
+          {
+            "name": "sigma",
+            "kind": "image",
+            "mode": "single",
+            "default": "sigma.fits"
+          },
+          {
+            "name": "residual",
+            "kind": "image",
+            "mode": "single",
+            "default": "residual.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        },
+        {
+          "parameter": "crmask",
+          "call": "immap",
+          "access": "NEW_COPY"
+        },
+        {
+          "parameter": "median",
+          "call": "immap",
+          "access": "NEW_COPY"
+        },
+        {
+          "parameter": "sigma",
+          "call": "immap",
+          "access": "NEW_COPY"
+        },
+        {
+          "parameter": "residual",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "cc132d49ad4d73ccb7048dc2e3863b2cdc31f1c95a70c215487981626c76aadf",
+      "parameterHash": "d08211f27fab99b6dd1aa636e8eea4a76789cb056f51e73c38e71ab24bc80c7b",
+      "sourcePath": "noao/imred/crutil/src/t_crmedian.x"
+    },
+    "noao.imred.irred.irlincor": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "section",
+            "kind": "image",
+            "multiple": false,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "section",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "section",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "e6e905fa029152211b9e4272987252fa551b58fb7d02d48ef9f1da03bc72b1c8",
+      "parameterHash": "1f62d325e16aeae5e37c20fa346c9119482cf7c49c1ac3ef2648745b399857dc",
+      "sourcePath": "noao/imred/irred/t_irlincor.x"
+    },
+    "noao.nproto.binpairs": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "file1",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          },
+          {
+            "name": "file2",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "file1",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "file2",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "3445997221fd7790ff8590e391d74641059e03bbb874d2b2e241156862ba4b83",
+      "parameterHash": "549866e5acc1c7a2b3b5273e9464d39068fd4b395869411c376cf481a239cdfe",
+      "sourcePath": "noao/nproto/t_binpairs.x"
+    },
+    "noao.nproto.iralign": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          },
+          {
+            "name": "coords",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "single",
+            "default": "output.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        },
+        {
+          "parameter": "coords",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "coords",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "4bdd9cdb6e7f3431e15b371b799c4d3d37b345a77b1b45df64ac8cff517b10a2",
+      "parameterHash": "167a2b49a992805163f3c554fd6ee232f5ce21fca6b4e837d5c541b183605862",
+      "sourcePath": "noao/nproto/ir/t_iralign.x"
+    },
+    "noao.nproto.irmatch1d": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          },
+          {
+            "name": "coords",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "single",
+            "default": "output.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        },
+        {
+          "parameter": "coords",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "coords",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "b376b08d9ba854886515d4dd9c234abafd232522175a11cae6451b37dadfeae1",
+      "parameterHash": "a33bf28c6d58b0b95bef63d45be3b84f91e766385be1d5fc5a64990b3d577f45",
+      "sourcePath": "noao/nproto/ir/t_irmatch1d.x"
+    },
+    "noao.nproto.irmatch2d": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          },
+          {
+            "name": "coords",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "single",
+            "default": "output.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        },
+        {
+          "parameter": "coords",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "coords",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "511eeca63017f3688d38d8c5576d232ff74c28b49b94c4680db74999b947bc59",
+      "parameterHash": "3841486d453aefc53c24f903a7023eb7388c1a5d0b0074e5cad7f3ee47008eea",
+      "sourcePath": "noao/nproto/ir/t_irmatch2d.x"
+    },
+    "noao.nproto.slitpic": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "tape1",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output_root",
+            "kind": "image",
+            "mode": "single",
+            "default": "output_root.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "tape1",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output_root",
+          "call": "immap",
+          "access": "NEW_IMAGE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "795a77dd1b2ddce19a5c91259b35f57c5e73a1058229f7a62977dc91738e6abe",
+      "parameterHash": "00ad9b2833ddefb01c8e1d51dac00f9156df33d13da69d222c6c7be897324527",
+      "sourcePath": "noao/nproto/t_slitpic.x"
+    },
+    "noao.obsutil.bitcount": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "images",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "images",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "4ac65af11e96f7e5d5f61fa9c700574d1fdb8e9eafc2a5336b79b56fb76db901",
+      "parameterHash": "0a29a484beeff8a1bafb7bc0f8da2d16b48f171a175b3e9bfe193ef85e8572ed",
+      "sourcePath": "noao/obsutil/src/t_bitcount.x"
+    },
+    "noao.onedspec.mkspec": {
+      "profile": {
+        "inputs": [],
+        "outputs": [
+          {
+            "name": "image_name",
+            "kind": "image",
+            "mode": "single",
+            "default": "image_name.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image_name",
+          "call": "immap",
+          "access": "NEW_IMAGE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "2d716b090e969932d2c5aa1bae532355ad3822e0e795ff010ca029d561bf0deb",
+      "parameterHash": "dc8c98783b57995f8456c0a8eac9a75f720a74b724f4848e56cee632462fdb0e",
+      "sourcePath": "noao/onedspec/t_mkspec.x"
+    },
+    "noao.onedspec.names": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "d4b6d55b06113e76dbe2717f10d2d73dc0315c1ccb8dfa4438ae89f58220341f",
+      "parameterHash": "f749c53f1219ed0c0ab68b0da54a9fd6faa4db65a00b45f7e9e354bbcabbff2f",
+      "sourcePath": "noao/onedspec/t_names.x"
+    },
+    "noao.onedspec.rstext": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output1",
+            "kind": "text",
+            "mode": "single",
+            "default": "output1.txt"
+          },
+          {
+            "name": "output2",
+            "kind": "text",
+            "mode": "single",
+            "default": "output2.txt"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output1",
+          "call": "open",
+          "access": "NEW_FILE"
+        },
+        {
+          "parameter": "output2",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "cb43e8b955d3f67baee0934117db259744112d44efc852bd82df43a95aeb1cb2",
+      "parameterHash": "d2cb3c808426eae4cf05ab649abf15d94112844acea7a343cb4ba377d6f0cb23",
+      "sourcePath": "noao/onedspec/t_rstext.x"
+    },
+    "noao.onedspec.sinterp": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "tbl_file",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          },
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": true,
+            "required": false
+          }
+        ],
+        "outputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "mode": "single",
+            "default": "image.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "tbl_file",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "NEW_IMAGE"
+        },
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "469f3787ba796068e043716b1a55b722cc2c4c6fe00d8a4833263fffe3609db5",
+      "parameterHash": "ce4c601fbc96cadcb6e57a21e19d270c8378b37ea1db283734f3fe23886071d0",
+      "sourcePath": "noao/onedspec/t_sinterp.x"
+    },
+    "noao.onedspec.slist": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "images",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "images",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "049c79a5af9ba936859e65a3cefcffe83d82b3bf5c3bf792b0c0cea79714d4d3",
+      "parameterHash": "d0b1f194b1e1c1f1ddeb2baf7e2f1b1d47338b410e08ef658740415c7b20a09a",
+      "sourcePath": "noao/onedspec/t_slist.x"
+    },
+    "noao.onedspec.specplot": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "ulabels",
+            "kind": "text",
+            "multiple": false,
+            "required": false
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "ulabels",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "0c80d0ea384a4359f6884eb618f672ef0fb8a4b9069edf7f18a62fecd370c17d",
+      "parameterHash": "aa21725c39b056ae5dfe111f3c5302a3baba4d43fd648972ee8812a2a0d3b4e5",
+      "sourcePath": "noao/onedspec/t_specplot.x"
+    },
+    "noao.twodspec.longslit.fceval": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "text",
+            "mode": "single",
+            "default": "output.txt"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "open",
+          "access": "NEW_FILE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "e49b4c6e13770f859f9082883f90b25523dfea516249441587a459b9edda9372",
+      "parameterHash": "d2700e3f826d8ad080420d0abb34f3df96e16803c6fe5fed6e24df74652784ae",
+      "sourcePath": "noao/twodspec/longslit/transform/t_fceval.x"
+    },
+    "noao.twodspec.multispec.findpeaks": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "e49e1ee1c29c47a562cd63ee304695ce959470e0d94137d6c9666b39de5084e1",
+      "parameterHash": "76572552e03216ce78b8d2f76d3f8c93fee90edba7b8e37b5dbb13f73a3785d8",
+      "sourcePath": "noao/twodspec/multispec/t_findpeaks.x"
+    },
+    "noao.twodspec.multispec.msextract": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "single",
+            "default": "output.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_IMAGE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "e1680906b5d2f154550b92da38e3ad9a10f8d8d003190c3912e2fe106d32b5e6",
+      "parameterHash": "1775e2e75eb5657613c79e727f4495d688113f3c2d7540ed9a0d2d49cc93a09e",
+      "sourcePath": "noao/twodspec/multispec/t_msextract.x"
+    },
+    "noao.twodspec.multispec.newimage": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "719f847180e461cadee66c18ce28304ac901faa544af2cd61a007e472824314e",
+      "parameterHash": "1f71ad1a8e913e233e1ff2d5b9c1ceb4b8aeab458548834f539398cb4af5f2fc",
+      "sourcePath": "noao/twodspec/multispec/t_newimage.x"
+    },
+    "noao.twodspec.multispec.modellist": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "efa29d25d490082c5c6de4be691c9143ffcbc564841a254059e2b1fce1ac3d76",
+      "parameterHash": "5c106fff54cb82478ea432e51fbb52804ffd5a32fdb8570841192f9181c206d6",
+      "sourcePath": "noao/twodspec/multispec/t_modellist.x"
+    },
+    "noao.twodspec.multispec.fitgauss5": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "52375d2f7e3dc11a51b0b35da0d210e250e73627b7fbb89b657358f4ee902258",
+      "parameterHash": "7e37a4dd1c8c96bdd97b510c31d2cd85064abb3f4b1886f13ab748be21c2c015",
+      "sourcePath": "noao/twodspec/multispec/t_fitgauss5.x"
+    },
+    "obsolete.radplt": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "6fcf6cc6020501a442ff1255dd913cf686aaffe533536aef00162b5bfa38a8eb",
+      "parameterHash": "bfe0f0ba700f70f21eff28cfe7923ad9393e59ec2075165c610cec1c1b71714d",
+      "sourcePath": "pkg/obsolete/t_radplt.x"
+    },
+    "plot.prow": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "fbfdfc68d3313763bba004a4d4e45d337deefc6705ebf979f344fe16abb45619",
+      "parameterHash": "8b7e68699f50d09663be73fae98ca41c7c80669868aa678826625ab12085f9af",
+      "sourcePath": "pkg/plot/t_prow.x"
+    },
+    "plot.prows": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "6f5f818248abb4decbeac22f1d9c7dedb4be4cf5755cc0d04a3ebd31451527a6",
+      "parameterHash": "28e613d67d6728ec8f2dc4f66b12ce1ab54396027b20be8b296fd728a8a6a1fe",
+      "sourcePath": "pkg/plot/t_prows.x"
+    },
+    "plot.pcol": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "939a86295a99e3c9a41bab77f5f41fdcf6982c994300b2b8286b6aaa49df7e23",
+      "parameterHash": "e81616b4326c8f983288b60dcfc6aa8c481de972710c1d6fe8c829935a1ed859",
+      "sourcePath": "pkg/plot/t_pcol.x"
+    },
+    "plot.pcols": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "fa481a4becc022ebd33e0e773453a350c7f8f3b49a276ae50781ba7fcb8e93ac",
+      "parameterHash": "95286cbedef38916a285d20527f71dff9df01fb5f559b10a8ad8c9f820a8a913",
+      "sourcePath": "pkg/plot/t_pcols.x"
+    },
+    "plot.pradprof": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "b691843f68b479ed57e5e04693856c289b9587993cda85e5a333737921dd6e49",
+      "parameterHash": "04f265cf77e91b7c54e33ab711801dd674d8fda5a0dbb4068ae1f1285b2c2429",
+      "sourcePath": "pkg/plot/t_pradprof.x"
+    },
+    "plot.pvector": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "a38a34be03627024e4b1a9d6ea662681d87db1574c6ad59760bee76970b7ff5f",
+      "parameterHash": "3ec4025fe0a1e450ff045870ce5ea05a8c9ed822faf36dc4b345d22fb3242cb7",
+      "sourcePath": "pkg/plot/t_pvector.x"
+    },
+    "plot.contour": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "b69a5fa6f889463893084fe6f92ed8f0e9c715257c06bb2ce9a72ae31a96b32e",
+      "parameterHash": "0ff594b00845e0708a9b0ffcd94e29db479d4bae52447df18a552b9c7739e933",
+      "sourcePath": "pkg/plot/t_contour.x"
+    },
+    "plot.surface": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "1480f20b0282f8676c375708bba150648e6e18fd2a5086e029c1a6304dcf3c49",
+      "parameterHash": "2d719c0c4858b116594fc745db14834177e991f201b67e72e2b597dc40bc5520",
+      "sourcePath": "pkg/plot/t_surface.x"
+    },
+    "plot.hafton": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "858b403a6d1a9ffb6e2462d15738221a1c00176d048182b6d5f6e3ae813cf64b",
+      "parameterHash": "e79d2d64dd4ba55813ac9e6de0b714e1f907040af73feae25af34a1cafb379f7",
+      "sourcePath": "pkg/plot/t_hafton.x"
+    },
+    "plot.velvect": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "u_image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          },
+          {
+            "name": "v_image",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "u_image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "v_image",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "5a5f78f1bbecdc589293d2257305126e34ca3a4b9e2c442dfa83b0a57c9a0d87",
+      "parameterHash": "0ead5a749b21e3e27b257ad22dff4da3449b096c38681fe94a7a0ff48164638c",
+      "sourcePath": "pkg/plot/t_velvect.x"
+    },
+    "proto.binfil": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "ad196cad28038d0119596ad0aac5a7cfa460bc3e7f5f4f581a4444daf2ab330b",
+      "parameterHash": "02099b24283cbae3e35ee87bf3b1e79ef3fadb2bf714569bd05671aff43f626f",
+      "sourcePath": "pkg/proto/t_binfil.x"
+    },
+    "proto.bscale": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "c17f0e7b4238d8b76741feacc2264edff4aac5110be4b2d1fb269bbef1cea2e4",
+      "parameterHash": "ca38c3af277f004b314c03972bf1aeadf71dbe611aa2bbc114b4f41802929b43",
+      "sourcePath": "pkg/proto/t_bscale.x"
+    },
+    "proto.imcntr": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "0c4b31f6b6a7a9bdba1e83f6f66104895e4a0574f8ad5cf29da2b54d43027fe9",
+      "parameterHash": "00b0fc138a59295197d46223c5d7bf17c970a2b1ca29782f90883be6de2b9cad",
+      "sourcePath": "pkg/proto/t_imcntr.x"
+    },
+    "proto.mkglbhdr": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "single",
+            "default": "output.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "69102466d3f5a074d365b016b134530b1a6527dee747c66610b20c10884fd4a2",
+      "parameterHash": "2fc53d5af113f3e2c83c12a2fe9d7dc8ae507e56ce8c4fb0d1466655f621cfb8",
+      "sourcePath": "pkg/proto/t_mkglbhdr.x"
+    },
+    "proto.mskexpr": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "refimages",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          },
+          {
+            "name": "refmasks",
+            "kind": "image",
+            "multiple": true,
+            "required": false
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "refimages",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "refmasks",
+          "call": "immap",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "bdb6815cbbfbe6679675071378cc3a07bb96eab83cda55e0008dd21972836e37",
+      "parameterHash": "feb52f91446bcaae2f5b911226671dc5c0f581c6ddb9b842c9b1e4454f1d7925",
+      "sourcePath": "pkg/proto/maskexpr/t_mskexpr.x"
+    },
+    "proto.text2mask": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "text",
+            "kind": "text",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "mask",
+            "kind": "image",
+            "mode": "single",
+            "default": "mask.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "text",
+          "call": "open",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "mask",
+          "call": "immap",
+          "access": "NEW_IMAGE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "c95d8b24c097a844749b13676755f902e36523803f5b15dc27897b717f338a56",
+      "parameterHash": "74f7384daea1243ccad06abf2bd2488958946464e06e1d626d6b12797f14e005",
+      "sourcePath": "pkg/proto/t_text2mask.x"
+    },
+    "proto.color.rgbdither": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "red",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          },
+          {
+            "name": "green",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          },
+          {
+            "name": "blue",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "rgb",
+            "kind": "image",
+            "mode": "single",
+            "default": "rgb.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "red",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "green",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "blue",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "rgb",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "4f9397d13c92934e70dfce4d9e90e2b4b0f1a3b39bbe4eb749e35eed6eceea10",
+      "parameterHash": "86625996dbda8bbc0be593fe73301880f938e45a9d55bd781e2006a6889e0221",
+      "sourcePath": "pkg/proto/color/src/t_rgbdither.x"
+    },
+    "proto.color.rgbto8": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "red",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          },
+          {
+            "name": "green",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          },
+          {
+            "name": "blue",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "rgb",
+            "kind": "image",
+            "mode": "single",
+            "default": "rgb.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "red",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "green",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "blue",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "rgb",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "9ae10076217e86223e557175918b126573a3eb3983f0022e3b914921cfbe603c",
+      "parameterHash": "4b11829cfb00ebfa413094a4f3a759a4e82d6ad5c9064f4a5120db0e413ccab7",
+      "sourcePath": "pkg/proto/color/src/t_rgbto8.x"
+    },
+    "proto.vol.im3dtran": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "each",
+            "default": "output_"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_COPY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "3267bee3363fc27b7858fbbc4f64f9a8a7589f420f90d8c804f2797220c5f812",
+      "parameterHash": "9713d2731006f574f58562e845d180fb3279c4b599a796ee00b81129ea615f9e",
+      "sourcePath": "pkg/proto/vol/src/im3dtran/t_im3dtran.x"
+    },
+    "proto.vol.pvol": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "input",
+            "kind": "image",
+            "multiple": false,
+            "required": true
+          }
+        ],
+        "outputs": [
+          {
+            "name": "output",
+            "kind": "image",
+            "mode": "single",
+            "default": "output.fits"
+          }
+        ],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "input",
+          "call": "immap",
+          "access": "READ_ONLY"
+        },
+        {
+          "parameter": "output",
+          "call": "immap",
+          "access": "NEW_IMAGE"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "bd869815f34129e269bdfbcd50b508e42ff92c11fea9b41c3c8c8479df54cbcb",
+      "parameterHash": "15eddd1dd0a72851eda81902540a13ca1a519ba40ebfe282832d30329e9530c3",
+      "sourcePath": "pkg/proto/vol/src/t_pvol.x"
+    },
+    "utilities.translit": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "infile",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "infile",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "3f6ea8ff4e09630c9101bd09438676afc2bc4d5e9c670664ca5a4bbf13c6e833",
+      "parameterHash": "e966b3f0da5475ada31742acd9825feb70f21bb14c8516e877d5c34d8f15af13",
+      "sourcePath": "pkg/utilities/t_translit.x"
+    },
+    "utilities.detab": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "files",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "files",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "dbb291babea82bf0d217d8cef81064f6c609ec449c21db2b5b8f45ce8982e8b1",
+      "parameterHash": "bda1a240604c5c4dc4d8e962ec09b24b606922b10c71501933a258928bc340d9",
+      "sourcePath": "pkg/utilities/t_detab.x"
+    },
+    "utilities.entab": {
+      "profile": {
+        "inputs": [
+          {
+            "name": "files",
+            "kind": "text",
+            "multiple": true,
+            "required": true
+          }
+        ],
+        "outputs": [],
+        "fixed": {}
+      },
+      "evidence": [
+        {
+          "parameter": "files",
+          "call": "open",
+          "access": "READ_ONLY"
+        }
+      ],
+      "issues": [],
+      "hints": [],
+      "complete": true,
+      "sourceHash": "07cb28d3faefbce6bfb0d92c527dc6bab387e588cb37dc5a0ae32ae04977e2f0",
+      "parameterHash": "d93049fbff77953c84cc0572523121463901d7e396c556f54f97d67b99079b1c",
+      "sourcePath": "pkg/utilities/t_entab.x"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+[project]
+name = "giraf"
+version = "0.1.0"
+description = "Local IRAF workflow workbench"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "astropy>=8.0.1",
+    "pillow>=12.3.0",
+    "pyraf>=2.2.4",
+    "giraf-pyraf-compat; sys_platform == 'darwin'",
+    "starlette>=1.6.0",
+    "uvicorn>=0.52.4",
+]
+
+[tool.uv.sources]
+giraf-pyraf-compat = { path = "compat/pyraf-tk" }

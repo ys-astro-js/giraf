@@ -1,0 +1,3629 @@
+{
+  "version": "Community IRAF V2.18.1",
+  "tasks": {
+    "ccdred": [
+      {
+        "name": "pixeltype",
+        "type": "s",
+        "mode": "h",
+        "default": "real real",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Output and calculation pixel datatypes"
+      },
+      {
+        "name": "verbose",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Print log information to the standard output?"
+      },
+      {
+        "name": "logfile",
+        "type": "f",
+        "mode": "h",
+        "default": "logfile",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Text log file"
+      },
+      {
+        "name": "plotfile",
+        "type": "f",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Log metacode plot file"
+      },
+      {
+        "name": "backup",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Backup directory or prefix"
+      },
+      {
+        "name": "instrument",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD instrument file"
+      },
+      {
+        "name": "ssfile",
+        "type": "s",
+        "mode": "h",
+        "default": "subsets",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Subset translation file"
+      },
+      {
+        "name": "graphics",
+        "type": "s",
+        "mode": "h",
+        "default": "stdgraph",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Interactive graphics output device"
+      },
+      {
+        "name": "cursor",
+        "type": "*gcur",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Graphics cursor input"
+      },
+      {
+        "name": "version",
+        "type": "s",
+        "mode": "h",
+        "default": "2: October 1987",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": ""
+      }
+    ],
+    "zerocombine": [
+      {
+        "name": "input",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "List of zero level images to combine"
+      },
+      {
+        "name": "output",
+        "type": "f",
+        "mode": "h",
+        "default": "Zero",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Output zero level name"
+      },
+      {
+        "name": "combine",
+        "type": "s",
+        "mode": "h",
+        "default": "average",
+        "choices": [
+          "average",
+          "median"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Type of combine operation"
+      },
+      {
+        "name": "reject",
+        "type": "s",
+        "mode": "h",
+        "default": "minmax",
+        "choices": [
+          "none",
+          "minmax",
+          "ccdclip",
+          "crreject",
+          "sigclip",
+          "avsigclip",
+          "pclip"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Type of rejection"
+      },
+      {
+        "name": "ccdtype",
+        "type": "s",
+        "mode": "h",
+        "default": "zero",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD image type to combine"
+      },
+      {
+        "name": "process",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Process images before combining?"
+      },
+      {
+        "name": "delete",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Delete input images after combining?"
+      },
+      {
+        "name": "clobber",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Clobber existing output image?"
+      },
+      {
+        "name": "scale",
+        "type": "s",
+        "mode": "h",
+        "default": "none",
+        "choices": [
+          "none",
+          "mode",
+          "median",
+          "mean",
+          "exposure"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Image scaling"
+      },
+      {
+        "name": "statsec",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Image section for computing statistics"
+      },
+      {
+        "name": "nlow",
+        "type": "i",
+        "mode": "h",
+        "default": 0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "minmax: Number of low pixels to reject"
+      },
+      {
+        "name": "nhigh",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "minmax: Number of high pixels to reject"
+      },
+      {
+        "name": "nkeep",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Minimum to keep (pos) or maximum to reject (neg)"
+      },
+      {
+        "name": "mclip",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Use median in sigma clipping algorithms?"
+      },
+      {
+        "name": "lsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 3.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Lower sigma clipping factor"
+      },
+      {
+        "name": "hsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 3.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Upper sigma clipping factor"
+      },
+      {
+        "name": "rdnoise",
+        "type": "s",
+        "mode": "h",
+        "default": "0.",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "ccdclip: CCD readout noise (electrons)"
+      },
+      {
+        "name": "gain",
+        "type": "s",
+        "mode": "h",
+        "default": "1.",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "ccdclip: CCD gain (electrons/DN)"
+      },
+      {
+        "name": "snoise",
+        "type": "s",
+        "mode": "h",
+        "default": "0.",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "ccdclip: Sensitivity noise (fraction)"
+      },
+      {
+        "name": "pclip",
+        "type": "r",
+        "mode": "h",
+        "default": -0.5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "pclip: Percentile clipping parameter"
+      },
+      {
+        "name": "blank",
+        "type": "r",
+        "mode": "h",
+        "default": 0.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Value if there are no pixels"
+      }
+    ],
+    "darkcombine": [
+      {
+        "name": "input",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "List of dark images to combine"
+      },
+      {
+        "name": "output",
+        "type": "f",
+        "mode": "h",
+        "default": "Dark",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Output dark image root name"
+      },
+      {
+        "name": "combine",
+        "type": "s",
+        "mode": "h",
+        "default": "average",
+        "choices": [
+          "average",
+          "median"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Type of combine operation"
+      },
+      {
+        "name": "reject",
+        "type": "s",
+        "mode": "h",
+        "default": "minmax",
+        "choices": [
+          "none",
+          "minmax",
+          "ccdclip",
+          "crreject",
+          "sigclip",
+          "avsigclip",
+          "pclip"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Type of rejection"
+      },
+      {
+        "name": "ccdtype",
+        "type": "s",
+        "mode": "h",
+        "default": "dark",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD image type to combine"
+      },
+      {
+        "name": "process",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Process images before combining?"
+      },
+      {
+        "name": "delete",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Delete input images after combining?"
+      },
+      {
+        "name": "clobber",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Clobber existing output image?"
+      },
+      {
+        "name": "scale",
+        "type": "s",
+        "mode": "h",
+        "default": "exposure",
+        "choices": [
+          "none",
+          "mode",
+          "median",
+          "mean",
+          "exposure"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Image scaling"
+      },
+      {
+        "name": "statsec",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Image section for computing statistics"
+      },
+      {
+        "name": "nlow",
+        "type": "i",
+        "mode": "h",
+        "default": 0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "minmax: Number of low pixels to reject"
+      },
+      {
+        "name": "nhigh",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "minmax: Number of high pixels to reject"
+      },
+      {
+        "name": "nkeep",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Minimum to keep (pos) or maximum to reject (neg)"
+      },
+      {
+        "name": "mclip",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Use median in sigma clipping algorithms?"
+      },
+      {
+        "name": "lsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 3.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Lower sigma clipping factor"
+      },
+      {
+        "name": "hsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 3.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Upper sigma clipping factor"
+      },
+      {
+        "name": "rdnoise",
+        "type": "s",
+        "mode": "h",
+        "default": "0.",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "ccdclip: CCD readout noise (electrons)"
+      },
+      {
+        "name": "gain",
+        "type": "s",
+        "mode": "h",
+        "default": "1.",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "ccdclip: CCD gain (electrons/DN)"
+      },
+      {
+        "name": "snoise",
+        "type": "s",
+        "mode": "h",
+        "default": "0.",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "ccdclip: Sensitivity noise (fraction)"
+      },
+      {
+        "name": "pclip",
+        "type": "r",
+        "mode": "h",
+        "default": -0.5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "pclip: Percentile clipping parameter"
+      },
+      {
+        "name": "blank",
+        "type": "r",
+        "mode": "h",
+        "default": 0.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Value if there are no pixels"
+      }
+    ],
+    "flatcombine": [
+      {
+        "name": "input",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "List of flat field images to combine"
+      },
+      {
+        "name": "output",
+        "type": "f",
+        "mode": "h",
+        "default": "Flat",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Output flat field root name"
+      },
+      {
+        "name": "combine",
+        "type": "s",
+        "mode": "h",
+        "default": "average",
+        "choices": [
+          "average",
+          "median"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Type of combine operation"
+      },
+      {
+        "name": "reject",
+        "type": "s",
+        "mode": "h",
+        "default": "avsigclip",
+        "choices": [
+          "none",
+          "minmax",
+          "ccdclip",
+          "crreject",
+          "sigclip",
+          "avsigclip",
+          "pclip"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Type of rejection"
+      },
+      {
+        "name": "ccdtype",
+        "type": "s",
+        "mode": "h",
+        "default": "flat",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD image type to combine"
+      },
+      {
+        "name": "process",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Process images before combining?"
+      },
+      {
+        "name": "subsets",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Combine images by subset parameter?"
+      },
+      {
+        "name": "delete",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Delete input images after combining?"
+      },
+      {
+        "name": "clobber",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Clobber existing output image?"
+      },
+      {
+        "name": "scale",
+        "type": "s",
+        "mode": "h",
+        "default": "mode",
+        "choices": [
+          "none",
+          "mode",
+          "median",
+          "mean",
+          "exposure"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Image scaling"
+      },
+      {
+        "name": "statsec",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Image section for computing statistics"
+      },
+      {
+        "name": "nlow",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "minmax: Number of low pixels to reject"
+      },
+      {
+        "name": "nhigh",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "minmax: Number of high pixels to reject"
+      },
+      {
+        "name": "nkeep",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Minimum to keep (pos) or maximum to reject (neg)"
+      },
+      {
+        "name": "mclip",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Use median in sigma clipping algorithms?"
+      },
+      {
+        "name": "lsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 3.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Lower sigma clipping factor"
+      },
+      {
+        "name": "hsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 3.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Upper sigma clipping factor"
+      },
+      {
+        "name": "rdnoise",
+        "type": "s",
+        "mode": "h",
+        "default": "0.",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "ccdclip: CCD readout noise (electrons)"
+      },
+      {
+        "name": "gain",
+        "type": "s",
+        "mode": "h",
+        "default": "1.",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "ccdclip: CCD gain (electrons/DN)"
+      },
+      {
+        "name": "snoise",
+        "type": "s",
+        "mode": "h",
+        "default": "0.",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "ccdclip: Sensitivity noise (fraction)"
+      },
+      {
+        "name": "pclip",
+        "type": "r",
+        "mode": "h",
+        "default": -0.5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "pclip: Percentile clipping parameter"
+      },
+      {
+        "name": "blank",
+        "type": "r",
+        "mode": "h",
+        "default": 1.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Value if there are no pixels"
+      }
+    ],
+    "combine": [
+      {
+        "name": "input",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "List of images to combine"
+      },
+      {
+        "name": "output",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "List of output images"
+      },
+      {
+        "name": "plfile",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "List of output pixel list files (optional)"
+      },
+      {
+        "name": "sigma",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "List of sigma images (optional)"
+      },
+      {
+        "name": "ccdtype",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD image type to combine (optional)"
+      },
+      {
+        "name": "subsets",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Combine images by subset parameter?"
+      },
+      {
+        "name": "delete",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Delete input images after combining?"
+      },
+      {
+        "name": "clobber",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Clobber existing output image?"
+      },
+      {
+        "name": "combine",
+        "type": "s",
+        "mode": "h",
+        "default": "average",
+        "choices": [
+          "average",
+          "median"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Type of combine operation"
+      },
+      {
+        "name": "reject",
+        "type": "s",
+        "mode": "h",
+        "default": "none",
+        "choices": [
+          "none",
+          "minmax",
+          "ccdclip",
+          "crreject",
+          "sigclip",
+          "avsigclip",
+          "pclip"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Type of rejection"
+      },
+      {
+        "name": "project",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Project highest dimension of input images?"
+      },
+      {
+        "name": "outtype",
+        "type": "s",
+        "mode": "h",
+        "default": "real",
+        "choices": [
+          "short",
+          "ushort",
+          "integer",
+          "long",
+          "real",
+          "double"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Output image pixel datatype"
+      },
+      {
+        "name": "offsets",
+        "type": "f",
+        "mode": "h",
+        "default": "none",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Input image offsets"
+      },
+      {
+        "name": "masktype",
+        "type": "s",
+        "mode": "h",
+        "default": "none",
+        "choices": [
+          "none",
+          "goodvalue",
+          "badvalue",
+          "goodbits",
+          "badbits"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Mask type"
+      },
+      {
+        "name": "maskvalue",
+        "type": "r",
+        "mode": "h",
+        "default": 0.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Mask value"
+      },
+      {
+        "name": "blank",
+        "type": "r",
+        "mode": "h",
+        "default": 0.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Value if there are no pixels"
+      },
+      {
+        "name": "scale",
+        "type": "s",
+        "mode": "h",
+        "default": "none",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Image scaling"
+      },
+      {
+        "name": "zero",
+        "type": "s",
+        "mode": "h",
+        "default": "none",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Image zero point offset"
+      },
+      {
+        "name": "weight",
+        "type": "s",
+        "mode": "h",
+        "default": "none",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Image weights"
+      },
+      {
+        "name": "statsec",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Image section for computing statistics"
+      },
+      {
+        "name": "lthreshold",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Lower threshold"
+      },
+      {
+        "name": "hthreshold",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Upper threshold"
+      },
+      {
+        "name": "nlow",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": 0,
+        "max": "",
+        "prompt": "minmax: Number of low pixels to reject"
+      },
+      {
+        "name": "nhigh",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": 0,
+        "max": "",
+        "prompt": "minmax: Number of high pixels to reject"
+      },
+      {
+        "name": "nkeep",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Minimum to keep (pos) or maximum to reject (neg)"
+      },
+      {
+        "name": "mclip",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Use median in sigma clipping algorithms?"
+      },
+      {
+        "name": "lsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 3.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Lower sigma clipping factor"
+      },
+      {
+        "name": "hsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 3.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Upper sigma clipping factor"
+      },
+      {
+        "name": "rdnoise",
+        "type": "s",
+        "mode": "h",
+        "default": "0.",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "ccdclip: CCD readout noise (electrons)"
+      },
+      {
+        "name": "gain",
+        "type": "s",
+        "mode": "h",
+        "default": "1.",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "ccdclip: CCD gain (electrons/DN)"
+      },
+      {
+        "name": "snoise",
+        "type": "s",
+        "mode": "h",
+        "default": "0.",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "ccdclip: Sensitivity noise (fraction)"
+      },
+      {
+        "name": "sigscale",
+        "type": "r",
+        "mode": "h",
+        "default": 0.1,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Tolerance for sigma clipping scaling corrections"
+      },
+      {
+        "name": "pclip",
+        "type": "r",
+        "mode": "h",
+        "default": -0.5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "pclip: Percentile clipping parameter"
+      },
+      {
+        "name": "grow",
+        "type": "i",
+        "mode": "h",
+        "default": 0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Radius (pixels) for 1D neighbor rejection"
+      }
+    ],
+    "ccdproc": [
+      {
+        "name": "images",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "List of CCD images to correct"
+      },
+      {
+        "name": "output",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "List of output CCD images"
+      },
+      {
+        "name": "ccdtype",
+        "type": "s",
+        "mode": "h",
+        "default": "object",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD image type to correct"
+      },
+      {
+        "name": "max_cache",
+        "type": "i",
+        "mode": "h",
+        "default": 0,
+        "choices": [],
+        "min": 0,
+        "max": "",
+        "prompt": "Maximum image caching memory (in Mbytes)"
+      },
+      {
+        "name": "noproc",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "List processing steps only?"
+      },
+      {
+        "name": "fixpix",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Fix bad CCD lines and columns?"
+      },
+      {
+        "name": "overscan",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Apply overscan strip correction?"
+      },
+      {
+        "name": "trim",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Trim the image?"
+      },
+      {
+        "name": "zerocor",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Apply zero level correction?"
+      },
+      {
+        "name": "darkcor",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Apply dark count correction?"
+      },
+      {
+        "name": "flatcor",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Apply flat field correction?"
+      },
+      {
+        "name": "illumcor",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Apply illumination correction?"
+      },
+      {
+        "name": "fringecor",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Apply fringe correction?"
+      },
+      {
+        "name": "readcor",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Convert zero level image to readout correction?"
+      },
+      {
+        "name": "scancor",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Convert flat field image to scan correction?"
+      },
+      {
+        "name": "readaxis",
+        "type": "s",
+        "mode": "h",
+        "default": "line",
+        "choices": [
+          "column",
+          "line"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Read out axis (column|line)"
+      },
+      {
+        "name": "fixfile",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "File describing the bad lines and columns"
+      },
+      {
+        "name": "biassec",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Overscan strip image section"
+      },
+      {
+        "name": "trimsec",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Trim data section"
+      },
+      {
+        "name": "zero",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Zero level calibration image"
+      },
+      {
+        "name": "dark",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Dark count calibration image"
+      },
+      {
+        "name": "flat",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Flat field images"
+      },
+      {
+        "name": "illum",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Illumination correction images"
+      },
+      {
+        "name": "fringe",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Fringe correction images"
+      },
+      {
+        "name": "minreplace",
+        "type": "r",
+        "mode": "h",
+        "default": 1.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Minimum flat field value"
+      },
+      {
+        "name": "scantype",
+        "type": "s",
+        "mode": "h",
+        "default": "shortscan",
+        "choices": [
+          "shortscan",
+          "longscan"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Scan type (shortscan|longscan)"
+      },
+      {
+        "name": "nscan",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "Number of short scan lines"
+      },
+      {
+        "name": "interactive",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Fit overscan interactively?"
+      },
+      {
+        "name": "function",
+        "type": "s",
+        "mode": "h",
+        "default": "legendre",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Fitting function"
+      },
+      {
+        "name": "order",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "Number of polynomial terms or spline pieces"
+      },
+      {
+        "name": "sample",
+        "type": "s",
+        "mode": "h",
+        "default": "*",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Sample points to fit"
+      },
+      {
+        "name": "naverage",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Number of sample points to combine"
+      },
+      {
+        "name": "niterate",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": 0,
+        "max": "",
+        "prompt": "Number of rejection iterations"
+      },
+      {
+        "name": "low_reject",
+        "type": "r",
+        "mode": "h",
+        "default": 3.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Low sigma rejection factor"
+      },
+      {
+        "name": "high_reject",
+        "type": "r",
+        "mode": "h",
+        "default": 3.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "High sigma rejection factor"
+      },
+      {
+        "name": "grow",
+        "type": "r",
+        "mode": "h",
+        "default": 0.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Rejection growing radius"
+      }
+    ],
+    "ccdhedit": [
+      {
+        "name": "images",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD images"
+      },
+      {
+        "name": "parameter",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Image header parameter"
+      },
+      {
+        "name": "value",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Parameter value"
+      },
+      {
+        "name": "type",
+        "type": "s",
+        "mode": "h",
+        "default": "string",
+        "choices": [
+          "string",
+          "real",
+          "integer"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Parameter type (string|real|integer)"
+      }
+    ],
+    "ccdlist": [
+      {
+        "name": "images",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD images to listed"
+      },
+      {
+        "name": "ccdtype",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD image type to be listed"
+      },
+      {
+        "name": "names",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "List image names only?"
+      },
+      {
+        "name": "long",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Long format listing?"
+      },
+      {
+        "name": "ccdproc",
+        "type": "pset",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD processing parameters"
+      }
+    ],
+    "ccdgroups": [
+      {
+        "name": "images",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD images to group"
+      },
+      {
+        "name": "output",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Output root group filename"
+      },
+      {
+        "name": "group",
+        "type": "s",
+        "mode": "h",
+        "default": "ccdtype",
+        "choices": [
+          "position",
+          "title",
+          "date",
+          "ccdtype",
+          "subset"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Group type"
+      },
+      {
+        "name": "radius",
+        "type": "r",
+        "mode": "h",
+        "default": 60.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Group position radius (arc sec)"
+      },
+      {
+        "name": "ccdtype",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD image types to select"
+      }
+    ],
+    "ccdmask": [
+      {
+        "name": "image",
+        "type": "f",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Input image"
+      },
+      {
+        "name": "mask",
+        "type": "f",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Output pixel mask"
+      },
+      {
+        "name": "ncmed",
+        "type": "i",
+        "mode": "h",
+        "default": 7,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "Column box size for median level calculation"
+      },
+      {
+        "name": "nlmed",
+        "type": "i",
+        "mode": "h",
+        "default": 7,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "Line box size for median level calculation"
+      },
+      {
+        "name": "ncsig",
+        "type": "i",
+        "mode": "h",
+        "default": 15,
+        "choices": [],
+        "min": 10,
+        "max": "",
+        "prompt": "Column box size for sigma calculation"
+      },
+      {
+        "name": "nlsig",
+        "type": "i",
+        "mode": "h",
+        "default": 15,
+        "choices": [],
+        "min": 10,
+        "max": "",
+        "prompt": "Line box size for sigma calculation"
+      },
+      {
+        "name": "lsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 6.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Low clipping sigma"
+      },
+      {
+        "name": "hsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 6.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "High clipping sigma"
+      },
+      {
+        "name": "ngood",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "Minimum column length of good pixel seqments"
+      },
+      {
+        "name": "linterp",
+        "type": "i",
+        "mode": "h",
+        "default": 2,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "Mask value for line interpolation"
+      },
+      {
+        "name": "cinterp",
+        "type": "i",
+        "mode": "h",
+        "default": 3,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "Mask value for column interpolation"
+      },
+      {
+        "name": "eqinterp",
+        "type": "i",
+        "mode": "h",
+        "default": 2,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "Mask value for equal interpolation"
+      }
+    ],
+    "badpiximage": [
+      {
+        "name": "fixfile",
+        "type": "f",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Bad pixel file"
+      },
+      {
+        "name": "template",
+        "type": "f",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Template image"
+      },
+      {
+        "name": "image",
+        "type": "f",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Bad pixel image to be created"
+      },
+      {
+        "name": "goodvalue",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Value assigned to the good pixels"
+      },
+      {
+        "name": "badvalue",
+        "type": "i",
+        "mode": "h",
+        "default": 0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Value assigned to the bad pixels"
+      }
+    ],
+    "mkfringecor": [
+      {
+        "name": "input",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Input CCD images"
+      },
+      {
+        "name": "output",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Output fringe images (same as input if none given)"
+      },
+      {
+        "name": "ccdtype",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD image type to select"
+      },
+      {
+        "name": "xboxmin",
+        "type": "r",
+        "mode": "h",
+        "default": 5.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Minimum smoothing box size in x at edges"
+      },
+      {
+        "name": "xboxmax",
+        "type": "r",
+        "mode": "h",
+        "default": 0.25,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Maximum smoothing box size in x"
+      },
+      {
+        "name": "yboxmin",
+        "type": "r",
+        "mode": "h",
+        "default": 5.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Minimum moothing box size in y at edges"
+      },
+      {
+        "name": "yboxmax",
+        "type": "r",
+        "mode": "h",
+        "default": 0.25,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Maximum moothing box size in y"
+      },
+      {
+        "name": "clip",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Clip input pixels?"
+      },
+      {
+        "name": "lowsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 2.5,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Low clipping sigma"
+      },
+      {
+        "name": "highsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 2.5,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "High clipping sigma"
+      },
+      {
+        "name": "ccdproc",
+        "type": "pset",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD processing parameters"
+      }
+    ],
+    "mkillumcor": [
+      {
+        "name": "input",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Input CCD images"
+      },
+      {
+        "name": "output",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Output images (same as input if none given)"
+      },
+      {
+        "name": "ccdtype",
+        "type": "s",
+        "mode": "h",
+        "default": "flat",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD image type to select"
+      },
+      {
+        "name": "xboxmin",
+        "type": "r",
+        "mode": "h",
+        "default": 5.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Minimum smoothing box size in x at edges"
+      },
+      {
+        "name": "xboxmax",
+        "type": "r",
+        "mode": "h",
+        "default": 0.25,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Maximum smoothing box size in x"
+      },
+      {
+        "name": "yboxmin",
+        "type": "r",
+        "mode": "h",
+        "default": 5.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Minimum smoothing box size in y at edges"
+      },
+      {
+        "name": "yboxmax",
+        "type": "r",
+        "mode": "h",
+        "default": 0.25,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Maximum smoothing box size in y"
+      },
+      {
+        "name": "clip",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Clip input pixels?"
+      },
+      {
+        "name": "lowsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 2.5,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Low clipping sigma"
+      },
+      {
+        "name": "highsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 2.5,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "High clipping sigma"
+      },
+      {
+        "name": "divbyzero",
+        "type": "r",
+        "mode": "h",
+        "default": 1.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Result for division by zero"
+      },
+      {
+        "name": "ccdproc",
+        "type": "pset",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD processing parameters"
+      }
+    ],
+    "mkillumflat": [
+      {
+        "name": "input",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Input CCD flat field images"
+      },
+      {
+        "name": "output",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Output images (same as input if none given)"
+      },
+      {
+        "name": "ccdtype",
+        "type": "s",
+        "mode": "h",
+        "default": "flat",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD image type to select"
+      },
+      {
+        "name": "xboxmin",
+        "type": "r",
+        "mode": "h",
+        "default": 5.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Minimum smoothing box size in x at edges"
+      },
+      {
+        "name": "xboxmax",
+        "type": "r",
+        "mode": "h",
+        "default": 0.25,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Maximum smoothing box size in x"
+      },
+      {
+        "name": "yboxmin",
+        "type": "r",
+        "mode": "h",
+        "default": 5.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Minimum moothing box size in y at edges"
+      },
+      {
+        "name": "yboxmax",
+        "type": "r",
+        "mode": "h",
+        "default": 0.25,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Maximum moothing box size in y"
+      },
+      {
+        "name": "clip",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Clip input pixels?"
+      },
+      {
+        "name": "lowsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 2.5,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Low clipping sigma"
+      },
+      {
+        "name": "highsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 2.5,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "High clipping sigma"
+      },
+      {
+        "name": "divbyzero",
+        "type": "r",
+        "mode": "h",
+        "default": 1.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Result for division by zero"
+      },
+      {
+        "name": "ccdproc",
+        "type": "pset",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD processing parameters"
+      }
+    ],
+    "mkskycor": [
+      {
+        "name": "input",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Input CCD images"
+      },
+      {
+        "name": "output",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Output images (same as input if none given)"
+      },
+      {
+        "name": "ccdtype",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD image type to select"
+      },
+      {
+        "name": "xboxmin",
+        "type": "r",
+        "mode": "h",
+        "default": 5.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Minimum smoothing box size in x at edges"
+      },
+      {
+        "name": "xboxmax",
+        "type": "r",
+        "mode": "h",
+        "default": 0.25,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Maximum smoothing box size in x"
+      },
+      {
+        "name": "yboxmin",
+        "type": "r",
+        "mode": "h",
+        "default": 5.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Minimum moothing box size in y at edges"
+      },
+      {
+        "name": "yboxmax",
+        "type": "r",
+        "mode": "h",
+        "default": 0.25,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Maximum moothing box size in y"
+      },
+      {
+        "name": "clip",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Clip input pixels?"
+      },
+      {
+        "name": "lowsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 2.5,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Low clipping sigma"
+      },
+      {
+        "name": "highsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 2.5,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "High clipping sigma"
+      },
+      {
+        "name": "ccdproc",
+        "type": "pset",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD processing parameters"
+      }
+    ],
+    "mkskyflat": [
+      {
+        "name": "input",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Input CCD images"
+      },
+      {
+        "name": "output",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Output images (same as input if none given)"
+      },
+      {
+        "name": "ccdtype",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD image type to select"
+      },
+      {
+        "name": "xboxmin",
+        "type": "r",
+        "mode": "h",
+        "default": 5.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Minimum smoothing box size in x at edges"
+      },
+      {
+        "name": "xboxmax",
+        "type": "r",
+        "mode": "h",
+        "default": 0.25,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Maximum smoothing box size in x"
+      },
+      {
+        "name": "yboxmin",
+        "type": "r",
+        "mode": "h",
+        "default": 5.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Minimum moothing box size in y at edges"
+      },
+      {
+        "name": "yboxmax",
+        "type": "r",
+        "mode": "h",
+        "default": 0.25,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Maximum moothing box size in y"
+      },
+      {
+        "name": "clip",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Clip input pixels?"
+      },
+      {
+        "name": "lowsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 2.5,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Low clipping sigma"
+      },
+      {
+        "name": "highsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 2.5,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "High clipping sigma"
+      },
+      {
+        "name": "ccdproc",
+        "type": "pset",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD processing parameters"
+      }
+    ],
+    "ccdinstrument": [
+      {
+        "name": "images",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "List of images"
+      },
+      {
+        "name": "instrument",
+        "type": "s",
+        "mode": "h",
+        "default": ")_.instrument",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "CCD instrument file"
+      },
+      {
+        "name": "ssfile",
+        "type": "s",
+        "mode": "h",
+        "default": ")_.ssfile",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Subset translation file"
+      },
+      {
+        "name": "edit",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Edit instrument translation file?"
+      },
+      {
+        "name": "parameters",
+        "type": "s",
+        "mode": "h",
+        "default": "basic",
+        "choices": [
+          "basic",
+          "common",
+          "all"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Parameters to be displayed"
+      }
+    ],
+    "imheader": [
+      {
+        "name": "images",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "image names"
+      },
+      {
+        "name": "imlist",
+        "type": "s",
+        "mode": "h",
+        "default": "*.imh,*.fits,*.pl,*.qp,*.hhh",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "default image names"
+      },
+      {
+        "name": "longheader",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "print header in multi-line format"
+      },
+      {
+        "name": "userfields",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "print the user fields (instrument parameters)"
+      }
+    ],
+    "imstatistics": [
+      {
+        "name": "images",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "List of input images"
+      },
+      {
+        "name": "fields",
+        "type": "s",
+        "mode": "h",
+        "default": "image,npix,mean,stddev,min,max",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Fields to be printed"
+      },
+      {
+        "name": "lower",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Lower limit for pixel values"
+      },
+      {
+        "name": "upper",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Upper limit for pixel values"
+      },
+      {
+        "name": "nclip",
+        "type": "i",
+        "mode": "h",
+        "default": 0,
+        "choices": [],
+        "min": 0,
+        "max": "",
+        "prompt": "Number of clipping iterations"
+      },
+      {
+        "name": "lsigma",
+        "type": "r",
+        "mode": "h",
+        "default": 3.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Lower side clipping factor in sigma"
+      },
+      {
+        "name": "usigma",
+        "type": "r",
+        "mode": "h",
+        "default": 3.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Upper side clipping factor in sigma"
+      },
+      {
+        "name": "binwidth",
+        "type": "r",
+        "mode": "h",
+        "default": 0.1,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Bin width of histogram in sigma"
+      },
+      {
+        "name": "format",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Format output and print column labels ?"
+      },
+      {
+        "name": "cache",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Cache image in memory ?"
+      }
+    ],
+    "imexamine": [
+      {
+        "name": "input",
+        "type": "s",
+        "mode": "a",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "images to be examined"
+      },
+      {
+        "name": "output",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "output root image name"
+      },
+      {
+        "name": "ncoutput",
+        "type": "i",
+        "mode": "h",
+        "default": 101,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "Number of columns in image output"
+      },
+      {
+        "name": "nloutput",
+        "type": "i",
+        "mode": "h",
+        "default": 101,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "Number of lines in image output"
+      },
+      {
+        "name": "frame",
+        "type": "i",
+        "mode": "q",
+        "default": 1,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "display frame"
+      },
+      {
+        "name": "image",
+        "type": "s",
+        "mode": "q",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "image name"
+      },
+      {
+        "name": "logfile",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "logfile"
+      },
+      {
+        "name": "keeplog",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "log output results"
+      },
+      {
+        "name": "defkey",
+        "type": "s",
+        "mode": "h",
+        "default": "a",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "default key for cursor list input"
+      },
+      {
+        "name": "autoredraw",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "automatically redraw graph"
+      },
+      {
+        "name": "allframes",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "use all frames for displaying new images"
+      },
+      {
+        "name": "nframes",
+        "type": "i",
+        "mode": "h",
+        "default": 0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "number of display frames (0 to autosense)"
+      },
+      {
+        "name": "ncstat",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "number of columns for statistics"
+      },
+      {
+        "name": "nlstat",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "number of lines for statistics"
+      },
+      {
+        "name": "graphcur",
+        "type": "*gcur",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "graphics cursor input"
+      },
+      {
+        "name": "imagecur",
+        "type": "*imcur",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "image display cursor input"
+      },
+      {
+        "name": "wcs",
+        "type": "s",
+        "mode": "h",
+        "default": "logical",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Coordinate system"
+      },
+      {
+        "name": "xformat",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "X axis coordinate format"
+      },
+      {
+        "name": "yformat",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Y axis coordinate format"
+      },
+      {
+        "name": "graphics",
+        "type": "s",
+        "mode": "h",
+        "default": "stdgraph",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "graphics device"
+      },
+      {
+        "name": "display",
+        "type": "s",
+        "mode": "h",
+        "default": "display(image='$1',frame=$2)",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "display command template"
+      },
+      {
+        "name": "use_display",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "enable direct display interaction"
+      }
+    ],
+    "rimexam": [
+      {
+        "name": "banner",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Standard banner"
+      },
+      {
+        "name": "title",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Title"
+      },
+      {
+        "name": "xlabel",
+        "type": "s",
+        "mode": "h",
+        "default": "Radius",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "X-axis label"
+      },
+      {
+        "name": "ylabel",
+        "type": "s",
+        "mode": "h",
+        "default": "Pixel Value",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Y-axis label"
+      },
+      {
+        "name": "fitplot",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Overplot profile fit?"
+      },
+      {
+        "name": "fittype",
+        "type": "s",
+        "mode": "h",
+        "default": "moffat",
+        "choices": [
+          "gaussian",
+          "moffat"
+        ],
+        "min": "",
+        "max": "",
+        "prompt": "Profile type to fit"
+      },
+      {
+        "name": "center",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Center object in aperture?"
+      },
+      {
+        "name": "background",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Fit and subtract background?"
+      },
+      {
+        "name": "radius",
+        "type": "r",
+        "mode": "h",
+        "default": 5.0,
+        "choices": [],
+        "min": 1.0,
+        "max": "",
+        "prompt": "Object radius"
+      },
+      {
+        "name": "buffer",
+        "type": "r",
+        "mode": "h",
+        "default": 5.0,
+        "choices": [],
+        "min": 0.0,
+        "max": "",
+        "prompt": "Background buffer width"
+      },
+      {
+        "name": "width",
+        "type": "r",
+        "mode": "h",
+        "default": 5.0,
+        "choices": [],
+        "min": 1.0,
+        "max": "",
+        "prompt": "Background width"
+      },
+      {
+        "name": "iterations",
+        "type": "i",
+        "mode": "h",
+        "default": 3,
+        "choices": [],
+        "min": 1,
+        "max": "",
+        "prompt": "Number of radius adjustment iterations"
+      },
+      {
+        "name": "xorder",
+        "type": "i",
+        "mode": "h",
+        "default": 0,
+        "choices": [],
+        "min": 0,
+        "max": "",
+        "prompt": "Background x order"
+      },
+      {
+        "name": "yorder",
+        "type": "i",
+        "mode": "h",
+        "default": 0,
+        "choices": [],
+        "min": 0,
+        "max": "",
+        "prompt": "Background y order"
+      },
+      {
+        "name": "magzero",
+        "type": "r",
+        "mode": "h",
+        "default": 25.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Magnitude zero point"
+      },
+      {
+        "name": "beta",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Moffat beta parameter"
+      },
+      {
+        "name": "rplot",
+        "type": "r",
+        "mode": "h",
+        "default": 8.0,
+        "choices": [],
+        "min": 1.0,
+        "max": "",
+        "prompt": "Plotting radius"
+      },
+      {
+        "name": "x1",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "X-axis window limit"
+      },
+      {
+        "name": "x2",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "X-axis window limit"
+      },
+      {
+        "name": "y1",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Y-axis window limit"
+      },
+      {
+        "name": "y2",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Y-axis window limit"
+      },
+      {
+        "name": "pointmode",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "plot points instead of lines?"
+      },
+      {
+        "name": "marker",
+        "type": "s",
+        "mode": "h",
+        "default": "plus",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "point marker character?"
+      },
+      {
+        "name": "szmarker",
+        "type": "r",
+        "mode": "h",
+        "default": 1.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "marker size"
+      },
+      {
+        "name": "logx",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "log scale x-axis"
+      },
+      {
+        "name": "logy",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "log scale y-axis"
+      },
+      {
+        "name": "box",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "draw box around periphery of window"
+      },
+      {
+        "name": "ticklabels",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "label tick marks"
+      },
+      {
+        "name": "majrx",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "number of major divisions along x grid"
+      },
+      {
+        "name": "minrx",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "number of minor divisions along x grid"
+      },
+      {
+        "name": "majry",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "number of major divisions along y grid"
+      },
+      {
+        "name": "minry",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "number of minor divisions along y grid"
+      },
+      {
+        "name": "round",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "round axes to nice values?"
+      }
+    ],
+    "limexam": [
+      {
+        "name": "banner",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Standard banner"
+      },
+      {
+        "name": "title",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Title"
+      },
+      {
+        "name": "xlabel",
+        "type": "s",
+        "mode": "h",
+        "default": "wcslabel",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "X-axis label"
+      },
+      {
+        "name": "ylabel",
+        "type": "s",
+        "mode": "h",
+        "default": "Pixel Value",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Y-axis label"
+      },
+      {
+        "name": "naverage",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Number of lines to average"
+      },
+      {
+        "name": "x1",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "X-axis window limit"
+      },
+      {
+        "name": "x2",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "X-axis window limit"
+      },
+      {
+        "name": "y1",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Y-axis window limit"
+      },
+      {
+        "name": "y2",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Y-axis window limit"
+      },
+      {
+        "name": "pointmode",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "plot points instead of lines?"
+      },
+      {
+        "name": "marker",
+        "type": "s",
+        "mode": "h",
+        "default": "plus",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "point marker character?"
+      },
+      {
+        "name": "szmarker",
+        "type": "r",
+        "mode": "h",
+        "default": 1.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "marker size"
+      },
+      {
+        "name": "logx",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "log scale x-axis"
+      },
+      {
+        "name": "logy",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "log scale y-axis"
+      },
+      {
+        "name": "box",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "draw box around periphery of window"
+      },
+      {
+        "name": "ticklabels",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "label tick marks"
+      },
+      {
+        "name": "majrx",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "number of major divisions along x grid"
+      },
+      {
+        "name": "minrx",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "number of minor divisions along x grid"
+      },
+      {
+        "name": "majry",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "number of major divisions along y grid"
+      },
+      {
+        "name": "minry",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "number of minor divisions along y grid"
+      },
+      {
+        "name": "round",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "round axes to nice values?"
+      }
+    ],
+    "cimexam": [
+      {
+        "name": "banner",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Standard banner"
+      },
+      {
+        "name": "title",
+        "type": "s",
+        "mode": "h",
+        "default": "",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Title"
+      },
+      {
+        "name": "xlabel",
+        "type": "s",
+        "mode": "h",
+        "default": "wcslabel",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "X-axis label"
+      },
+      {
+        "name": "ylabel",
+        "type": "s",
+        "mode": "h",
+        "default": "Pixel Value",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Y-axis label"
+      },
+      {
+        "name": "naverage",
+        "type": "i",
+        "mode": "h",
+        "default": 1,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Number of columns to average"
+      },
+      {
+        "name": "x1",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "X-axis window limit"
+      },
+      {
+        "name": "x2",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "X-axis window limit"
+      },
+      {
+        "name": "y1",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Y-axis window limit"
+      },
+      {
+        "name": "y2",
+        "type": "r",
+        "mode": "h",
+        "default": "INDEF",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "Y-axis window limit"
+      },
+      {
+        "name": "pointmode",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "plot points instead of lines?"
+      },
+      {
+        "name": "marker",
+        "type": "s",
+        "mode": "h",
+        "default": "plus",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "point marker character?"
+      },
+      {
+        "name": "szmarker",
+        "type": "r",
+        "mode": "h",
+        "default": 1.0,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "marker size"
+      },
+      {
+        "name": "logx",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "log scale x-axis"
+      },
+      {
+        "name": "logy",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "log scale y-axis"
+      },
+      {
+        "name": "box",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "draw box around periphery of window"
+      },
+      {
+        "name": "ticklabels",
+        "type": "b",
+        "mode": "h",
+        "default": "yes",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "label tick marks"
+      },
+      {
+        "name": "majrx",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "number of major divisions along x grid"
+      },
+      {
+        "name": "minrx",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "number of minor divisions along x grid"
+      },
+      {
+        "name": "majry",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "number of major divisions along y grid"
+      },
+      {
+        "name": "minry",
+        "type": "i",
+        "mode": "h",
+        "default": 5,
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "number of minor divisions along y grid"
+      },
+      {
+        "name": "round",
+        "type": "b",
+        "mode": "h",
+        "default": "no",
+        "choices": [],
+        "min": "",
+        "max": "",
+        "prompt": "round axes to nice values?"
+      }
+    ]
+  }
+}

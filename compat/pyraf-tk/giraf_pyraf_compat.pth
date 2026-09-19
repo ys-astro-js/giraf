@@ -1,0 +1,1 @@
+import giraf_pyraf_compat; giraf_pyraf_compat.configure()

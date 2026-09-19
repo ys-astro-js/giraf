@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "giraf-pyraf-compat"
+version = "0.1.0"
+description = "PyRAF console compatibility with uv's macOS Tcl/Tk 9"
+requires-python = ">=3.12"
+
+[tool.hatch.build.targets.wheel]
+packages = ["giraf_pyraf_compat"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"giraf_pyraf_compat.pth" = "giraf_pyraf_compat.pth"
