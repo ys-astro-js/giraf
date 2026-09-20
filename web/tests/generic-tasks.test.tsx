@@ -31,7 +31,7 @@ test('generic inspector shows domain independent inputs, all outputs and psets w
  const html=render(spec);expect(html).toContain('Reference');expect(html).toContain('measure.txt');expect(html).toContain('result.fits');expect(html).toContain('전체 설정');expect(html).not.toContain('기기와 패키지');expect(html).not.toContain('기기 변환 파일')
 })
 test('discovered unsupported tasks expose the reason and disable execution',()=>{
- const html=render({...spec,runnable:false,reason:'입출력 정의가 필요합니다.'});expect(html).toContain('입출력 정의가 필요합니다.');expect(html).toMatch(/disabled=""[^>]*>[\s\S]*?실행/)
+ const html=render({...spec,runnable:false,reason:'입출력 정의가 필요합니다.'});expect(html).toContain('입출력 정의가 필요합니다.');expect(html).toMatch(/disabled=""[^>]*aria-label="실행"/)
 })
 
 test('generated ports connect before execution and keep a selected output role through workflow submission',()=>{

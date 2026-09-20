@@ -394,13 +394,13 @@ const GroupNode = memo(function GroupNode({ data }: NodeProps<SubflowNode>) {
         <Button
           className="nodrag nopan subflow-run-button"
           variant="default"
-          size="sm"
+          size="icon"
           aria-label={`${data.group.name} 실행`}
+          title={`${data.group.name} 실행`}
           disabled={groupRunDisabled || !data.count || !runGroup}
           onClick={() => runGroup?.(data.group.id)}
         >
-          <Play data-icon="inline-start" />
-          실행
+          <Play />
         </Button>
       </header>
       <NodeResizeControl

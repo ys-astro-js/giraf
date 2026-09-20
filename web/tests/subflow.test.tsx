@@ -180,6 +180,10 @@ test("native minimap and named group expose edit and run controls", () => {
     "그룹 만들기",
   ])
     expect(html).toContain(token)
+  const runButton = html.match(/<button[^>]*aria-label="보정 실행"[^>]*>[\s\S]*?<\/button>/)?.[0]
+  expect(runButton).toBeDefined()
+  expect(runButton).toContain("size-9")
+  expect(runButton).not.toMatch(/>\s*실행\s*</)
 })
 
 // Direct canvas editing contracts, recorded before this implementation.

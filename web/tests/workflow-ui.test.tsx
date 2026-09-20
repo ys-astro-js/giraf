@@ -106,6 +106,31 @@ test("inspector exposes expression and file selection immediately, with concise 
   expect(html).toContain("작업 삭제")
   expect(html).not.toContain('aria-label="작업 이름"')
 })
+test("inspector run action is a secondary icon button without a visible label", () => {
+  const html = renderToStaticMarkup(
+    <TaskInspector
+      catalog={catalog}
+      map={map}
+      task={task}
+      rows={[]}
+      edit={noop}
+      pick={noop}
+      onOpen={noop}
+      onRun={noop}
+      busy={false}
+      error=""
+      onErrorFocus={noop}
+      saveDefaults={noop}
+      onRemove={noop}
+      reorderInput={noop}
+    />
+  )
+  const runButton = html.match(/<button[^>]*aria-label="실행"[^>]*>[\s\S]*?<\/button>/)?.[0]
+  expect(runButton).toBeDefined()
+  expect(runButton).toContain("size-9")
+  expect(runButton).toContain("bg-secondary")
+  expect(runButton).not.toMatch(/>\s*실행\s*</)
+})
 test("selected workflow node exposes movement and deletion without a selected badge", () => {
   const html = renderToStaticMarkup(
     <TaskMapView

@@ -943,21 +943,14 @@ export function TaskInspector({
           )}
         </div>
         <Button
-          size="sm"
-          variant="outline"
+          size="icon"
+          variant="secondary"
+          aria-label={checking ? "확인 중" : busy ? "실행 중" : "실행"}
+          title={checking ? "확인 중" : busy ? "실행 중" : "실행"}
           disabled={busy || checking || spec.runnable === false}
           onClick={onRun}
         >
-          <Play data-icon="inline-start" />
-          <span
-            className={
-              checking || busy
-                ? "shimmer-duration-2500 motion-safe:shimmer"
-                : undefined
-            }
-          >
-            {checking ? "확인 중" : busy ? "실행 중" : "실행"}
-          </span>
+          <Play />
         </Button>
       </header>
       <div className="inspector-body scroll-fade scroll-fade-4">
