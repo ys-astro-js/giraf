@@ -13,14 +13,13 @@ import {
   FileText,
   Folder,
   FolderClosed,
-  ListClock,
+  Clock,
   SquareFunction,
   SlidersHorizontal,
   Logs,
   CircleX,
   CircleAlert,
   CircleMinus,
-  Clock,
   LoaderCircle,
   RefreshCw,
   Search,
@@ -326,7 +325,7 @@ export function LibrarySidebar(props: Props) {
             <TabsList className="w-full" aria-label="탐색 대상">
               {[
                 { value: "files", label: "파일", icon: FolderClosed },
-                { value: "history", label: "실행 기록", icon: ListClock },
+                { value: "history", label: "실행 기록", icon: Clock },
                 { value: "tasks", label: "작업", icon: SquareFunction },
                 { value: "settings", label: "설정", icon: SlidersHorizontal },
               ].map(({ value, label, icon: Icon }) => (

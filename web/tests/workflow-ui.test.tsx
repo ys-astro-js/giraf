@@ -54,7 +54,7 @@ test('combine inspector promotes process and collapses inactive preprocessing de
  const dark={...spec,name:'darkcombine',preprocess:true,parameters:[p],inputs:[{name:'input',label:'결합할 영상',kind:'image',multiple:true}]}
  const c={...catalog,tasks:[dark],ccdproc:{inputs:[],parameters:[{...p,name:'overscan',default:'no'},{...p,name:'biassec',type:'s'}]}}
  const t=makeInstance(dark,c,prefs,'dark');t.draft.parameters.process='no'
- const html=renderToStaticMarkup(<TaskInspector catalog={c} map={addTask(emptyMap(),t)} task={t} rows={[]} edit={noop} pick={noop} onOpen={noop} onRun={noop} busy={false} error="" onErrorFocus={noop} saveDefaults={noop} onRemove={noop} reorderInput={noop}/> )
+ const html=renderToStaticMarkup(<TaskInspector activeTab="input" catalog={c} map={addTask(emptyMap(),t)} task={t} rows={[]} edit={noop} pick={noop} onOpen={noop} onRun={noop} busy={false} error="" onErrorFocus={noop} saveDefaults={noop} onRemove={noop} reorderInput={noop}/> )
  expect(html).toContain('process');expect(html).not.toContain('결합 전 보정');expect(html).not.toContain('id="preprocess-biassec"')
  expect(html).not.toContain('id="preprocess-overscan"')
 })
@@ -82,7 +82,7 @@ test("parameter editor is a labeled form without a parallel defaults table", () 
 })
 test("inspector exposes expression and file selection immediately, with concise copy", () => {
   const html = renderToStaticMarkup(
-    <TaskInspector
+    <TaskInspector activeTab="input"
       catalog={catalog}
       map={map}
       task={task}
@@ -103,12 +103,12 @@ test("inspector exposes expression and file selection immediately, with concise 
   expect(html).toContain("입력 선택")
   expect(html).not.toContain("이 초안은 자동 저장됩니다")
   expect(html).not.toContain("실효 설정")
-  expect(html).toContain("작업 삭제")
+  expect(html).not.toContain("작업 삭제")
   expect(html).not.toContain('aria-label="작업 이름"')
 })
 test("inspector run action is a secondary icon button without a visible label", () => {
   const html = renderToStaticMarkup(
-    <TaskInspector
+    <TaskInspector activeTab="input"
       catalog={catalog}
       map={map}
       task={task}
@@ -154,7 +154,7 @@ test("selected workflow node exposes movement and deletion without a selected ba
 test("connected input has one source control without file picker, expression or result selection", () => {
   const upstream = { ...task, id: "upstream", label: "zerocombine" }
   const linked = connect(addTask(map, upstream), task.id, "images", { kind: "pending", taskId: upstream.id }, false)
-  const html = renderToStaticMarkup(<TaskInspector catalog={catalog} map={linked} task={task} rows={[]} edit={noop} pick={noop} onOpen={noop} onRun={noop} busy={false} error="" onErrorFocus={noop} saveDefaults={noop} onRemove={noop} reorderInput={noop} />)
+  const html = renderToStaticMarkup(<TaskInspector activeTab="input" catalog={catalog} map={linked} task={task} rows={[]} edit={noop} pick={noop} onOpen={noop} onRun={noop} busy={false} error="" onErrorFocus={noop} saveDefaults={noop} onRemove={noop} reorderInput={noop} />)
   expect(html).toContain("zerocombine 출력")
   expect(html).not.toContain('id="expr-images"')
   expect(html).not.toContain('images 파일 선택')
@@ -197,7 +197,7 @@ test("canvas has no second toolbar even with a saved list preference", () => {
 test("node identity is editable only in inspector while original command stays readable", () => {
  const renamed={...task,label:"과학 영상 보정",description:"Bias와 Dark 적용"};
  const custom={...map,tasks:[renamed]};
- const panel=renderToStaticMarkup(<TaskInspector catalog={catalog} map={custom} task={renamed} rows={[]} edit={noop} pick={noop} onOpen={noop} onRun={noop} busy={false} error="" onErrorFocus={noop} saveDefaults={noop} onRemove={noop} reorderInput={noop}/>);
+ const panel=renderToStaticMarkup(<TaskInspector activeTab="input" catalog={catalog} map={custom} task={renamed} rows={[]} edit={noop} pick={noop} onOpen={noop} onRun={noop} busy={false} error="" onErrorFocus={noop} saveDefaults={noop} onRemove={noop} reorderInput={noop}/>);
  expect(panel).toContain('aria-label="제목과 설명 편집"');
  expect(panel).not.toContain('id="node-title"');
  expect(panel).toContain('과학 영상 보정');

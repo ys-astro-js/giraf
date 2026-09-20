@@ -51,8 +51,10 @@ export function OutputPortEditor({
       <div className="flex items-center justify-between gap-2">
         <h3>출력 포트</h3>
         <Button
-          variant="outline"
-          size="sm"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="포트 추가"
+          title="포트 추가"
           onClick={() => {
             const id = crypto.randomUUID()
             edit((t) => ({
@@ -65,8 +67,7 @@ export function OutputPortEditor({
             setOpen([id])
           }}
         >
-          <Plus data-icon="inline-start" />
-          포트 추가
+          <Plus />
         </Button>
       </div>
       <Accordion value={open} onValueChange={setOpen}>
@@ -85,7 +86,7 @@ export function OutputPortEditor({
                   <Field>
                     <div className="flex items-center justify-between gap-2">
                       <FieldLabel htmlFor={`port-name-${port.id}`}>
-                        {label} 이름
+                        이름
                       </FieldLabel>
                       {!port.id.startsWith("$") && (
                         <Button

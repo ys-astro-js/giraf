@@ -19,7 +19,7 @@ test('GUI file selection accepts image lists but rejects arbitrary text for imag
 });
 test('list producer uses common inspector and output controls without an IRAF help link',()=>{
  const t=makeInstance(creator,cat,prefs,'a')
- const html=renderToStaticMarkup(<TaskInspector catalog={cat} map={{...emptyMap(),tasks:[t]}} task={t} rows={[]} edit={noop} pick={noop} onOpen={noop} onRun={noop} busy={false} error="" onErrorFocus={noop} saveDefaults={noop} onRemove={noop} reorderInput={noop}/>);
+ const html=['input','output','info'].map(activeTab=>renderToStaticMarkup(<TaskInspector activeTab={activeTab} catalog={cat} map={{...emptyMap(),tasks:[t]}} task={t} rows={[]} edit={noop} pick={noop} onOpen={noop} onRun={noop} busy={false} error="" onErrorFocus={noop} saveDefaults={noop} onRemove={noop} reorderInput={noop}/>)).join('');
  expect(html).toContain('Input images');expect(html).toContain('Output image list');expect(html).toContain('images.list');expect(html).not.toContain('iraf.readthedocs.io');
 });
 test('multiple list nodes connect to an image role and preserve bindings through workflow and history',()=>{

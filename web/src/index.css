@@ -889,9 +889,9 @@ textarea {
 .parameter-changes { font-size: 0.875rem; min-width: 0; }
 .parameter-changes summary { cursor: pointer; padding-block: 8px; }
 .parameter-changes dl { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
-.parameter-changes dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.parameter-changes dl > div { display: grid; grid-template-columns: minmax(0, 1fr) fit-content(45%); align-items: start; gap: 12px; }
 .parameter-changes dt, .parameter-changes dd { overflow-wrap: anywhere; }
-.parameter-changes dd { color: var(--muted-foreground); }
+.parameter-changes dd { margin: 0; text-align: end; color: var(--muted-foreground); }
 @media (max-width: 639px) {
   .parameter-editor-dialog[data-slot="dialog-content"] { width: calc(100vw - 16px); max-width: calc(100vw - 16px); height: calc(100dvh - 16px); padding: 16px; gap: 16px; }
   .parameter-editor-toolbar { grid-template-columns: minmax(0, 1fr); gap: 8px; }
@@ -899,7 +899,6 @@ textarea {
 
 .input-slot, .generic-output-field { gap: 8px; }
 
-.inspector-title > .node-command { display: block; overflow-wrap: anywhere; font-size: 0.875rem; }
 
 .map-viewport .workflow-named-port { width:auto; max-width:104px; min-width:36px; padding:0 8px; border-radius:6px; font-size:12px; font-weight:600; }
 .workflow-named-port > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
@@ -957,4 +956,14 @@ textarea {
 @media (hover: none) {
   .library-file-row .library-file-checkbox { opacity: 1; pointer-events: auto; }
   .library-file-row .library-file-icon { opacity: 0; }
+}
+
+/* Inspector navigation stays visible while each task area scrolls independently. */
+.inspector-tabs { flex: 1; min-height: 0; gap: 0; overflow: hidden; }
+.inspector-tabs > .inspector-sections { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }
+.inspector-tabs > .inspector-settings { display: flex; flex-direction: column; min-height: 0; overflow: hidden; gap: 16px; padding: 20px; }
+.inspector-settings > .parameter-editor-body { flex: 1; padding: 0; }
+.inspector-command { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .inspector-tabs > .inspector-sections, .inspector-tabs > .inspector-settings { padding: 16px; }
 }

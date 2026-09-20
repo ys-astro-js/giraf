@@ -28,6 +28,11 @@ import {
   HelpCircle,
   Trash2,
   ChevronDown,
+  Info,
+  SquareArrowRightEnter,
+  SquareArrowRightExit,
+  SlidersVertical,
+  Search,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { CountBadge } from "@/components/count-badge"
@@ -37,6 +42,7 @@ import { TaskResults } from "./task-results"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { SidebarHeader, SidebarInput } from "@/components/ui/sidebar"
 import { Switch } from "@/components/ui/switch"
 import {
   Field,
@@ -98,22 +104,17 @@ export function assigned(
   }
 }
 export { ParamControl, ParameterTable } from "./parameter-fields"
-import { ParameterTable } from "./parameter-fields"
 import { ParameterEditorFields } from "./parameter-editor"
 import {
-  primaryParameterNames,
-  primaryInputNames,
   parameterChanged,
   type ParameterGroup,
 } from "@/lib/parameter-presentation"
 import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 type Props = {
   catalog: Catalog
@@ -190,9 +191,7 @@ export function TaskInspector({
     setIdentityDraft(null)
     requestAnimationFrame(() => identityButton.current?.focus())
   }
-  const [localTab, setLocalTab] = useState("settings")
-  const [editorOpen, setEditorOpen] = useState(false)
-  const [changedOnly, setChangedOnly] = useState(false)
+  const [localTab, setLocalTab] = useState("info")
   const [query, setQuery] = useState(""),
     [expanded, setExpanded] = useState<Record<string, number>>({}),
     [resetValues, setResetValues] = useState<{
@@ -201,7 +200,8 @@ export function TaskInspector({
     } | null>(null)
   const inspectorRef = useRef<HTMLElement>(null)
   const openRequestedInput = useEffectEvent((role: string) => {
-    setEditorOpen(false)
+    setLocalTab("input")
+    onTabChange?.("input")
     setExpanded((previous) => ({ ...previous, [role]: 5 }))
   })
   useEffect(() => {
@@ -611,81 +611,37 @@ export function TaskInspector({
   const corrections =
     spec.name === "ccdproc" ? d.parameters : task.preprocess.parameters
   const changeCorrection = spec.name === "ccdproc" ? change : changePrep
-  const correctionNames = new Set(Object.values(correctionFlags))
-  const primaryNames = primaryParameterNames(spec)
-  const common = spec.parameters.filter(
-    (p) =>
-      primaryNames.includes(p.name) &&
-      !(specialized && correctionNames.has(p.name))
-  )
   const outputFields: OutputSlot[] = spec.outputs?.length
     ? spec.outputs
     : spec.output
       ? [{ ...spec.output, kind: spec.kind, label: spec.output.name }]
       : []
-  const primaryInputs = primaryInputNames(spec)
-  const inputUsed = (s: Slot) =>
-    !!(
-      assigned(map, task, s.name).ids.length ||
-      assigned(map, task, s.name).pending.length ||
-      task.expressions[s.name] ||
-      d.textInputs?.[s.name] ||
-      d.cursorCommands?.[s.name]
-    )
-  const mainInputs = specialized
-    ? displayPorts.filter(
-        (s) =>
-          !s.group &&
-          spec.inputs.some((input) => input.name === s.role) &&
-          !correctionFlags[s.role] &&
-          (!(s.role in { fixfile: 1, illum: 1, fringe: 1 }) ||
-            d.parameters[
-              (
-                {
-                  fixfile: "fixpix",
-                  illum: "illumcor",
-                  fringe: "fringecor",
-                } as Record<string, string>
-              )[s.role]
-            ] === "yes")
-      )
-    : spec.inputs.filter(
-        (s) =>
-          primaryInputs.includes(s.name) || inputUsed(s) || expanded[s.name]
-      )
-  const mappingDefaults: Record<string, string> =
-    specialized && spec.adapter === "generic"
-      ? {
-          exptime: "EXPTIME",
-          subset: "FILTER",
-          imagetyp: "IMAGETYP",
-          darktime: "DARKTIME",
-        }
-      : {}
-  const mappingKeys = [
-    ...new Set([...Object.keys(mappingDefaults), ...Object.keys(task.mapping)]),
-  ]
+  const showCalibration =
+    specialized &&
+    spec.name !== "zerocombine" &&
+    (spec.name === "ccdproc" || d.parameters.process === "yes")
+  const mainInputs =
+    specialized && spec.adapter !== "generic"
+      ? displayPorts.filter(
+          (s) =>
+            !s.group &&
+            spec.inputs.some((input) => input.name === s.role) &&
+            !correctionFlags[s.role] &&
+            (!(s.role in { fixfile: 1, illum: 1, fringe: 1 }) ||
+              d.parameters[
+                (
+                  {
+                    fixfile: "fixpix",
+                    illum: "illumcor",
+                    fringe: "fringecor",
+                  } as Record<string, string>
+                )[s.role]
+              ] === "yes")
+        )
+      : spec.inputs.filter(
+          (input) => !showCalibration || !correctionFlags[input.name]
+        )
   const groups: ParameterGroup[] = [
-    ...(mappingKeys.length
-      ? [
-          {
-            id: "mapping",
-            label: "헤더 매핑",
-            parameters: mappingKeys.map((name) => ({
-              name,
-              type: "s",
-              default: mappingDefaults[name] || "",
-              choices: [],
-              prompt: "",
-              min: "",
-              max: "",
-            })),
-            values: { ...mappingDefaults, ...task.mapping },
-            change: (key: string, value: string) =>
-              edit((t) => ({ ...t, mapping: { ...t.mapping, [key]: value } })),
-          },
-        ]
-      : []),
     {
       id: "task",
       label: spec.taskName || taskDisplayName(spec.name),
@@ -745,34 +701,6 @@ export function TaskInspector({
         name: `${g.label}.${p.name}`,
         value: String(g.values[p.name] ?? p.default),
       }))
-  )
-  const searchMatch = (name: string, help = "") =>
-    query
-      .trim()
-      .toLowerCase()
-      .split(/\s+/)
-      .every((term) =>
-        `${spec.name}.${name} ${help}`.toLowerCase().includes(term)
-      )
-  const editorInputs = [
-    ...spec.inputs,
-    ...(spec.preprocess
-      ? catalog.ccdproc.inputs.filter(
-          (s) => !spec.inputs.some((input) => input.name === s.name)
-        )
-      : []),
-  ].filter(
-    (s) => searchMatch(s.name, s.label) && (!changedOnly || inputUsed(s))
-  )
-  const editorOutputs = outputFields.filter(
-    (s) =>
-      searchMatch(s.name, s.label) &&
-      (!changedOnly ||
-        String(
-          spec.adapter === "generic"
-            ? (d.outputs?.[s.name] ?? s.default)
-            : d.output.name
-        ) !== String(s.default))
   )
   function outputField(output: OutputSlot, prefix = "") {
     const id = `${prefix}generic-output-${output.name}`
@@ -933,14 +861,6 @@ export function TaskInspector({
               </span>
             </>
           )}
-          {task.label !== task.task && (
-            <code
-              className="node-command"
-              title={`${spec.package}.${spec.taskName || taskDisplayName(spec.name)}`}
-            >
-              {taskDisplayName(task.task)}
-            </code>
-          )}
         </div>
         <Button
           size="icon"
@@ -953,213 +873,160 @@ export function TaskInspector({
           <Play />
         </Button>
       </header>
-      <div className="inspector-body scroll-fade scroll-fade-4">
-        {spec.reason && (
-          <Alert>
-            <AlertDescription>{spec.reason}</AlertDescription>
-          </Alert>
-        )}
+      <TooltipProvider delay={0}>
         <Tabs
+          className="inspector-tabs"
           value={activeTab ?? localTab}
           onValueChange={(v) => {
             setLocalTab(String(v))
             onTabChange?.(String(v))
           }}
         >
-          <TabsList className="w-full">
-            <TabsTrigger value="settings">설정</TabsTrigger>
-            <TabsTrigger value="output">결과</TabsTrigger>
-          </TabsList>
-          <TabsContent value="settings" className="inspector-sections">
-            <OutputPortEditor key={task.id} task={task} map={map} spec={spec} edit={edit}/>
-            <Dialog
-              open={editorOpen}
-              onOpenChange={(open) => {
-                setEditorOpen(open)
-                if (!open) {
-                  setQuery("")
-                  setChangedOnly(false)
-                }
-              }}
-            >
-              <DialogTrigger
-                render={<Button variant="outline" className="w-full" />}
-              >
-                전체 설정
-              </DialogTrigger>
-              <DialogContent
-                className="parameter-editor-dialog"
-                aria-describedby="parameter-editor-description"
-              >
-                <DialogHeader className="shrink-0 pr-8">
-                  <DialogTitle>
-                    {taskDisplayName(spec.name)} 전체 설정
-                  </DialogTitle>
-                  <DialogDescription id="parameter-editor-description">
-                    변경한 값은 이 작업에 바로 반영됩니다.
-                  </DialogDescription>
-                </DialogHeader>
-                <FieldGroup className="parameter-editor-toolbar">
-                  <Field>
-                    <FieldLabel htmlFor="parameter-search" className="sr-only">
-                      전체 설정 검색
-                    </FieldLabel>
-                    <Input
-                      id="parameter-search"
-                      autoFocus
-                      placeholder="이름 또는 설명 검색"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
-                  </Field>
-                  <Field orientation="horizontal">
-                    <FieldLabel htmlFor="parameter-changed">
-                      변경한 값만
-                    </FieldLabel>
-                    <Switch
-                      id="parameter-changed"
-                      checked={changedOnly}
-                      onCheckedChange={setChangedOnly}
-                    />
-                  </Field>
-                </FieldGroup>
-                <div className="parameter-editor-body">
-                  <ParameterEditorFields
-                    groups={groups}
-                    query={query}
-                    changedOnly={changedOnly}
-                    hasOtherResults={
-                      !!(editorInputs.length || editorOutputs.length)
-                    }
+          <SidebarHeader className="shrink-0">
+            <TabsList className="w-full" aria-label="작업 상세">
+              {[
+                { value: "info", label: "정보", icon: Info },
+                { value: "input", label: "입력", icon: SquareArrowRightEnter },
+                { value: "output", label: "출력", icon: SquareArrowRightExit },
+                { value: "settings", label: "설정", icon: SlidersVertical },
+              ].map(({ value, label, icon: Icon }) => (
+                <Tooltip key={value}>
+                  <TooltipTrigger render={<TabsTrigger value={value} />}>
+                    <Icon />
+                    <span className="sr-only">{label}</span>
+                  </TooltipTrigger>
+                  <TooltipContent>{label}</TooltipContent>
+                </Tooltip>
+              ))}
+            </TabsList>
+            {(activeTab ?? localTab) === "settings" && (
+              <div className="flex h-9 min-w-0 items-center gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <SidebarInput
+                    id="parameter-search"
+                    className="pl-9"
+                    aria-label="설정 검색"
+                    placeholder="이름 또는 설명 검색"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
                   />
-
-                  {!!editorInputs.length && (
-                    <section className="parameter-editor-section">
-                      <h3>입력</h3>
-                      <FieldGroup>
-                        {editorInputs.map((s) => slot(s, false, "editor-"))}
-                      </FieldGroup>
-                    </section>
-                  )}
-                  {!!editorOutputs.length && (
-                    <section className="parameter-editor-section">
-                      <h3>출력</h3>
-                      <FieldGroup>
-                        {editorOutputs.map((s) => outputField(s, "editor-"))}
-                      </FieldGroup>
-                    </section>
-                  )}
-                  {spec.name === "ccdhedit" &&
-                    String(d.parameters.value) === "" && (
-                      <Alert>
-                        <AlertDescription>
-                          value를 비워 두면 해당 헤더 항목을 삭제합니다.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  {!query.trim() && !changedOnly && (
-                    <Accordion multiple>
-                      {spec.adapter !== "generic" && (
-                        <AccordionItem value="package">
-                          <AccordionTrigger>instrument</AccordionTrigger>
-                          <AccordionContent>
-                            <div className="flex items-center gap-2 py-4">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                  pick(
-                                    {
-                                      name: "instrument",
-                                      label: "instrument",
-                                      multiple: false,
-                                      kind: "text",
-                                    },
-                                    task.instrument,
-                                    (ids) =>
-                                      edit((t) => ({ ...t, instrument: ids }))
-                                  )
-                                }
-                              >
-                                <FolderOpen data-icon="inline-start" />
-                                instrument
-                              </Button>
-                              {task.instrument.length > 0 && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() =>
-                                    edit((t) => ({ ...t, instrument: [] }))
-                                  }
-                                >
-                                  해제
-                                </Button>
-                              )}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      )}
-                      {spec.adapter !== "generic" && (
-                        <AccordionItem value="files">
-                          <AccordionTrigger>파일 처리</AccordionTrigger>
-                          <AccordionContent>
-                            <FieldGroup>
-                              <Field>
-                                <FieldLabel htmlFor="file-policy">
-                                  실행 대상
-                                </FieldLabel>
-                                <Choice
-                                  id="file-policy"
-                                  label="실행 대상"
-                                  value={task.filePolicy.mode}
-                                  options={[
-                                    { value: "copy", label: "사본" },
-                                    { value: "direct", label: "원본 파일" },
-                                  ]}
-                                  onChange={(v) =>
-                                    edit((t) => ({
-                                      ...t,
-                                      filePolicy: {
-                                        ...t.filePolicy,
-                                        mode: v as "copy" | "direct",
-                                      },
-                                    }))
-                                  }
-                                />
-                              </Field>
-                              {task.filePolicy.mode === "direct" && (
-                                <Field className="parameter-field">
-                                  <FieldLabel htmlFor="backup-policy">
-                                    원본 백업
-                                  </FieldLabel>
-                                  <Switch
-                                    id="backup-policy"
-                                    checked={task.filePolicy.backup}
-                                    onCheckedChange={(v) =>
-                                      edit((t) => ({
-                                        ...t,
-                                        filePolicy: {
-                                          ...t.filePolicy,
-                                          backup: v,
-                                        },
-                                      }))
-                                    }
-                                  />
-                                </Field>
-                              )}
-                            </FieldGroup>
-                          </AccordionContent>
-                        </AccordionItem>
-                      )}
-                    </Accordion>
-                  )}
                 </div>
-              </DialogContent>
-            </Dialog>
+                {query && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="검색 초기화"
+                    onClick={() => setQuery("")}
+                  >
+                    <X />
+                  </Button>
+                )}
+              </div>
+            )}
+          </SidebarHeader>
+          {spec.reason && (
+            <Alert>
+              <AlertDescription>{spec.reason}</AlertDescription>
+            </Alert>
+          )}
+          <TabsContent value="info" className="inspector-sections">
             <section className="inspector-section">
-              <h3>입력</h3>
+              <div className="section-heading">
+                <h3>실행 명령어</h3>
+                <div className="flex gap-2">
+                  {!spec.executor && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      render={
+                        <a
+                          href={`https://iraf.readthedocs.io/en/latest/tasks/${spec.package.replaceAll(".", "/")}/${spec.taskName || taskDisplayName(spec.name)}.html`}
+                          target="_blank"
+                          rel="noreferrer"
+                        />
+                      }
+                      aria-label="IRAF 도움말"
+                      title="IRAF 도움말"
+                    >
+                      <HelpCircle />
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={onRemove}
+                    aria-label="작업 삭제"
+                    title="작업 삭제"
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+              </div>
+              <code className="inspector-command">
+                {spec.package
+                  ? `${spec.package}.${spec.taskName || taskDisplayName(spec.name)}`
+                  : spec.name}
+              </code>
+            </section>
+            <section className="inspector-section parameter-changes">
+              <h3>변경한 파라미터</h3>
+              {changedParameters.length ? (
+                <dl>
+                  {changedParameters.map((p) => (
+                    <div key={p.name}>
+                      <dt>{p.name}</dt>
+                      <dd>{p.value || "빈 값"}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                <p className="text-muted-foreground">
+                  변경한 파라미터가 없습니다.
+                </p>
+              )}
+            </section>
+            {spec.name === "ccdhedit" && headerPreview.length > 0 && (
+              <section className="inspector-section">
+                <h3>변경 미리보기</h3>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>파일 / 키</TableHead>
+                      <TableHead>현재</TableHead>
+                      <TableHead>변경 후</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {headerPreview.map((p, i) => (
+                      <TableRow key={i}>
+                        <TableCell>
+                          {p.label}
+                          <br />
+                          {p.key}
+                        </TableCell>
+                        <TableCell>{p.before}</TableCell>
+                        <TableCell>
+                          {String(d.parameters.value) === ""
+                            ? "삭제"
+                            : String(d.parameters.value)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </section>
+            )}
+          </TabsContent>
+          <TabsContent value="input" className="inspector-sections">
+            <section className="inspector-section">
               <FieldGroup>
                 {mainInputs.map((s) => slot(s))}
+                {!mainInputs.length && (
+                  <p className="text-muted-foreground">
+                    입력이 없는 작업입니다.
+                  </p>
+                )}
                 {spec.name === "images.immatch.imalign" &&
                   d.alignmentBinding &&
                   Object.values(d.textInputs || {}).some((v) => v.trim()) &&
@@ -1195,47 +1062,6 @@ export function TaskInspector({
                   )}
               </FieldGroup>
             </section>
-            {!!outputFields.length && (
-              <section className="inspector-section" aria-label="출력 설정">
-                <h3>출력</h3>
-                <FieldGroup>
-                  {outputFields
-                    .filter(
-                      (s) => !s.optional || (d.outputs?.[s.name] ?? s.default)
-                    )
-                    .map((s) => outputField(s))}
-                </FieldGroup>
-              </section>
-            )}
-            {common.length > 0 && (
-              <section className="inspector-section">
-                <h3>주요 설정</h3>
-                <ParameterTable
-                  parameters={common}
-                  values={d.parameters}
-                  change={change}
-                  scope="main"
-                />
-                {spec.name === "ccdhedit" &&
-                  String(d.parameters.value) === "" && (
-                    <FieldDescription>
-                      값을 비워 두면 해당 헤더 항목을 삭제합니다.
-                    </FieldDescription>
-                  )}
-              </section>
-            )}
-            {spec.name === "flatcombine" && (
-              <section className="inspector-section">
-                <Field className="parameter-field">
-                  <FieldLabel htmlFor="flat-subsets">subsets</FieldLabel>
-                  <Switch
-                    id="flat-subsets"
-                    checked={d.parameters.subsets === "yes"}
-                    onCheckedChange={(v) => change("subsets", v ? "yes" : "no")}
-                  />
-                </Field>
-              </section>
-            )}
             {specialized && spec.preprocess && (
               <section className="inspector-section">
                 <FieldGroup>
@@ -1252,124 +1078,91 @@ export function TaskInspector({
                 </FieldGroup>
               </section>
             )}
-            {specialized &&
-              spec.name !== "zerocombine" &&
-              (spec.name === "ccdproc" || d.parameters.process === "yes") && (
-                <CalibrationControls
-                  task={spec.name}
-                  options={d.calibration}
-                  parameters={corrections}
-                  frames={mainFrames}
-                  candidates={Object.fromEntries(
-                    Object.keys(correctionFlags).map((role) => [
-                      role,
-                      selectedFrames(role),
-                    ])
-                  )}
-                  repair={(role) => {
-                    setExpanded((v) => ({ ...v, [role]: 5 }))
-                    requestAnimationFrame(() =>
-                      document.getElementById(`source-${role}`)?.focus()
+            {showCalibration && (
+              <CalibrationControls
+                task={spec.name}
+                options={d.calibration}
+                parameters={corrections}
+                frames={mainFrames}
+                candidates={Object.fromEntries(
+                  Object.keys(correctionFlags).map((role) => [
+                    role,
+                    selectedFrames(role),
+                  ])
+                )}
+                repair={(role) => {
+                  setExpanded((v) => ({ ...v, [role]: 5 }))
+                  requestAnimationFrame(() =>
+                    document.getElementById(`source-${role}`)?.focus()
+                  )
+                }}
+                pending={Object.fromEntries(
+                  Object.keys(correctionFlags).map((role) => [
+                    role,
+                    !!assigned(map, task, role).pending.length ||
+                      !!task.expressions[role],
+                  ])
+                )}
+                customMapping={
+                  !!(
+                    (task.mapping.exptime &&
+                      task.mapping.exptime !== "EXPTIME") ||
+                    (task.mapping.subset && task.mapping.subset !== "FILTER")
+                  )
+                }
+                change={(value) =>
+                  edit((t) => ({
+                    ...t,
+                    draft: { ...t.draft, calibration: value },
+                  }))
+                }
+                changeParameter={changeCorrection}
+                slot={(role) => (
+                  <FieldGroup>
+                    {displayPorts
+                      .filter((s) => s.role === role && !s.group)
+                      .map((input) => slot(input, true))}
+                  </FieldGroup>
+                )}
+                masters={Object.fromEntries(
+                  Object.keys(correctionFlags).map((role) => [
+                    role,
+                    map.tasks.filter(
+                      (t) =>
+                        t.id !== task.id &&
+                        t.task ===
+                          {
+                            zero: "zerocombine",
+                            dark: "darkcombine",
+                            flat: "flatcombine",
+                          }[role]
+                    ),
+                  ])
+                )}
+                connectMaster={(role, id) => {
+                  const parent = map.tasks.find((t) => t.id === id)!
+                  const outputs = outputPorts(map, parent, catalog, allRows)
+                  const ports = displayPorts.filter(
+                    (p) => p.role === role && !p.group
+                  )
+                  for (const input of ports) {
+                    const output = outputs.find((p) =>
+                      groupEqual(p.group, input.group)
                     )
-                  }}
-                  pending={Object.fromEntries(
-                    Object.keys(correctionFlags).map((role) => [
-                      role,
-                      !!assigned(map, task, role).pending.length ||
-                        !!task.expressions[role],
-                    ])
-                  )}
-                  customMapping={
-                    !!(
-                      (task.mapping.exptime &&
-                        task.mapping.exptime !== "EXPTIME") ||
-                      (task.mapping.subset && task.mapping.subset !== "FILTER")
-                    )
+                    onInputSource?.(input.name, {
+                      kind: "pending",
+                      taskId: id,
+                      ...(input.group
+                        ? {
+                            group: input.group,
+                            port: output?.handleId,
+                            outputRole: output?.outputRole,
+                          }
+                        : {}),
+                    })
                   }
-                  change={(value) =>
-                    edit((t) => ({
-                      ...t,
-                      draft: { ...t.draft, calibration: value },
-                    }))
-                  }
-                  changeParameter={changeCorrection}
-                  slot={(role) => (
-                    <FieldGroup>
-                      {displayPorts
-                        .filter((s) => s.role === role && !s.group)
-                        .map((input) => slot(input, true))}
-                    </FieldGroup>
-                  )}
-                  masters={Object.fromEntries(
-                    Object.keys(correctionFlags).map((role) => [
-                      role,
-                      map.tasks.filter(
-                        (t) =>
-                          t.id !== task.id &&
-                          t.task ===
-                            {
-                              zero: "zerocombine",
-                              dark: "darkcombine",
-                              flat: "flatcombine",
-                            }[role]
-                      ),
-                    ])
-                  )}
-                  connectMaster={(role, id) => {
-                    const parent = map.tasks.find((t) => t.id === id)!
-                    const outputs = outputPorts(map, parent, catalog, allRows)
-                    const ports = displayPorts.filter(
-                      (p) => p.role === role && !p.group
-                    )
-                    for (const input of ports) {
-                      const output = outputs.find((p) =>
-                        groupEqual(p.group, input.group)
-                      )
-                      onInputSource?.(input.name, {
-                        kind: "pending",
-                        taskId: id,
-                        ...(input.group
-                          ? {
-                              group: input.group,
-                              port: output?.handleId,
-                              outputRole: output?.outputRole,
-                            }
-                          : {}),
-                      })
-                    }
-                  }}
-                />
-              )}
-            {spec.name === "ccdhedit" && headerPreview.length > 0 && (
-              <section className="inspector-section">
-                <h3>변경 미리보기</h3>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>파일 / 키</TableHead>
-                      <TableHead>현재</TableHead>
-                      <TableHead>변경 후</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {headerPreview.map((p, i) => (
-                      <TableRow key={i}>
-                        <TableCell>
-                          {p.label}
-                          <br />
-                          {p.key}
-                        </TableCell>
-                        <TableCell>{p.before}</TableCell>
-                        <TableCell>
-                          {String(d.parameters.value) === ""
-                            ? "삭제"
-                            : String(d.parameters.value)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </section>
+                }}
+              />
             )}
             {["imheader", "imstatistics"].includes(spec.name) && (
               <Field>
@@ -1387,58 +1180,23 @@ export function TaskInspector({
                 />
               </Field>
             )}
-            {!!changedParameters.length && (
-              <details className="parameter-changes">
-                <summary>변경한 파라미터 {changedParameters.length}개</summary>
-                <dl>
-                  {changedParameters.map((p) => (
-                    <div key={p.name}>
-                      <dt>{p.name}</dt>
-                      <dd>{p.value || "빈 값"}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </details>
-            )}
-            <div className="inspector-secondary">
-              <Button variant="outline" size="sm" onClick={saveDefaults}>
-                기본 설정으로 저장
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setResetValues(
-                    structuredClone({
-                      parameters: d.parameters,
-                      parameterSets: task.parameterSets,
-                    })
-                  )
-                  edit((t) => resetInstanceParameters(t, spec))
-                }}
-              >
-                <RotateCcw data-icon="inline-start" />
-                설정 초기화
-              </Button>
-              {resetValues && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    edit((t) => ({
-                      ...t,
-                      draft: { ...t.draft, parameters: resetValues.parameters },
-                      parameterSets: resetValues.parameterSets,
-                    }))
-                    setResetValues(null)
-                  }}
-                >
-                  초기화 취소
-                </Button>
-              )}
-            </div>
           </TabsContent>
           <TabsContent value="output" className="inspector-sections">
+            {!!outputFields.length && (
+              <section className="inspector-section" aria-label="출력 설정">
+                <FieldGroup>
+                  {outputFields.map((s) => outputField(s))}
+                </FieldGroup>
+              </section>
+            )}
+
+            <OutputPortEditor
+              key={task.id}
+              task={task}
+              map={map}
+              spec={spec}
+              edit={edit}
+            />
             <TaskResults
               key={
                 task.id +
@@ -1482,24 +1240,162 @@ export function TaskInspector({
               </Accordion>
             )}
           </TabsContent>
+          <TabsContent value="settings" className="inspector-settings">
+            <div className="parameter-editor-body">
+              <ParameterEditorFields
+                groups={groups}
+                query={query}
+                changedOnly={false}
+              />
+
+              {spec.name === "ccdhedit" &&
+                String(d.parameters.value) === "" && (
+                  <Alert>
+                    <AlertDescription>
+                      value를 비워 두면 해당 헤더 항목을 삭제합니다.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              {!query.trim() && (
+                <Accordion multiple>
+                  {spec.adapter !== "generic" && (
+                    <AccordionItem value="package">
+                      <AccordionTrigger>instrument</AccordionTrigger>
+                      <AccordionContent>
+                        <div className="flex items-center gap-2 py-4">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              pick(
+                                {
+                                  name: "instrument",
+                                  label: "instrument",
+                                  multiple: false,
+                                  kind: "text",
+                                },
+                                task.instrument,
+                                (ids) =>
+                                  edit((t) => ({ ...t, instrument: ids }))
+                              )
+                            }
+                          >
+                            <FolderOpen data-icon="inline-start" />
+                            instrument
+                          </Button>
+                          {task.instrument.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                edit((t) => ({ ...t, instrument: [] }))
+                              }
+                            >
+                              해제
+                            </Button>
+                          )}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+                  {spec.adapter !== "generic" && (
+                    <AccordionItem value="files">
+                      <AccordionTrigger>파일 처리</AccordionTrigger>
+                      <AccordionContent>
+                        <FieldGroup>
+                          <Field>
+                            <FieldLabel htmlFor="file-policy">
+                              실행 대상
+                            </FieldLabel>
+                            <Choice
+                              id="file-policy"
+                              label="실행 대상"
+                              value={task.filePolicy.mode}
+                              options={[
+                                { value: "copy", label: "사본" },
+                                { value: "direct", label: "원본 파일" },
+                              ]}
+                              onChange={(v) =>
+                                edit((t) => ({
+                                  ...t,
+                                  filePolicy: {
+                                    ...t.filePolicy,
+                                    mode: v as "copy" | "direct",
+                                  },
+                                }))
+                              }
+                            />
+                          </Field>
+                          {task.filePolicy.mode === "direct" && (
+                            <Field className="parameter-field">
+                              <FieldLabel htmlFor="backup-policy">
+                                원본 백업
+                              </FieldLabel>
+                              <Switch
+                                id="backup-policy"
+                                checked={task.filePolicy.backup}
+                                onCheckedChange={(v) =>
+                                  edit((t) => ({
+                                    ...t,
+                                    filePolicy: {
+                                      ...t.filePolicy,
+                                      backup: v,
+                                    },
+                                  }))
+                                }
+                              />
+                            </Field>
+                          )}
+                        </FieldGroup>
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+                </Accordion>
+              )}
+              <div className="inspector-secondary">
+                <Button variant="outline" size="sm" onClick={saveDefaults}>
+                  기본 설정으로 저장
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setResetValues(
+                      structuredClone({
+                        parameters: d.parameters,
+                        parameterSets: task.parameterSets,
+                      })
+                    )
+                    edit((t) => resetInstanceParameters(t, spec))
+                  }}
+                >
+                  <RotateCcw data-icon="inline-start" />
+                  설정 초기화
+                </Button>
+                {resetValues && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      edit((t) => ({
+                        ...t,
+                        draft: {
+                          ...t.draft,
+                          parameters: resetValues.parameters,
+                        },
+                        parameterSets: resetValues.parameterSets,
+                      }))
+                      setResetValues(null)
+                    }}
+                  >
+                    초기화 취소
+                  </Button>
+                )}
+              </div>
+            </div>
+          </TabsContent>
         </Tabs>
-        <footer className="inspector-footer">
-          <Button variant="outline" size="sm" onClick={onRemove}>
-            <Trash2 data-icon="inline-start" />
-            작업 삭제
-          </Button>
-          {!spec.executor && (
-            <a
-              href={`https://iraf.readthedocs.io/en/latest/tasks/${spec.package.replaceAll(".", "/")}/${spec.taskName || spec.name}.html`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <HelpCircle aria-hidden="true" />
-              IRAF 도움말
-            </a>
-          )}
-        </footer>
-      </div>
+      </TooltipProvider>
     </section>
   )
 }

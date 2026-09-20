@@ -9,7 +9,7 @@ const spec:Spec = {name:'demo.measure',taskName:'measure',title:'measure',packag
 const catalog:Catalog={version:'test',tasks:[spec],ccdproc:{parameters:[],inputs:[{name:'zero',label:'Bias',multiple:true,kind:'image'}]},ccdred:[],exam:{}}
 const prefs:Preferences={drafts:{},backend:'cl',mapping:{},instrument:[],packageValues:{}}
 const noop=()=>{}
-const render=(s:Spec)=>{const cat={...catalog,tasks:[s]},task=makeInstance(s,cat,prefs,'a');return renderToStaticMarkup(<TaskInspector catalog={cat} map={{...emptyMap(),tasks:[task]}} task={task} rows={[]} edit={noop} pick={noop} onOpen={noop} onRun={noop} busy={false} error="" onErrorFocus={noop} saveDefaults={noop} onRemove={noop} reorderInput={noop}/>)}
+const render=(s:Spec)=>{const cat={...catalog,tasks:[s]},task=makeInstance(s,cat,prefs,'a');return ['input','output','settings'].map(activeTab=>renderToStaticMarkup(<TaskInspector activeTab={activeTab} catalog={cat} map={{...emptyMap(),tasks:[task]}} task={task} rows={[]} edit={noop} pick={noop} onOpen={noop} onRun={noop} busy={false} error="" onErrorFocus={noop} saveDefaults={noop} onRemove={noop} reorderInput={noop}/>)).join('')}
 test('generic nodes require no CCD task and preserve package sets, outputs and namespace through restore',()=>{
  const task=makeInstance(spec,catalog,prefs,'a');task.draft.outputs={table:'edited.txt',image:'new.fits'};task.parameterSets={datapars:{sigma:4}}
  const target=makeInstance(spec,catalog,prefs,'b')
@@ -28,7 +28,7 @@ test('no input tasks and multiple outputs have complete previews',()=>{
  const task={...spec,inputs:[]};expect(plannedOutputs(task,makeDraft(task),[]).map(p=>p.output)).toEqual(['measure.txt','result.fits'])
 })
 test('generic inspector shows domain independent inputs, all outputs and psets without CCD controls',()=>{
- const html=render(spec);expect(html).toContain('Reference');expect(html).toContain('measure.txt');expect(html).toContain('result.fits');expect(html).toContain('전체 설정');expect(html).not.toContain('기기와 패키지');expect(html).not.toContain('기기 변환 파일')
+ const html=render(spec);expect(html).toContain('Reference');expect(html).toContain('measure.txt');expect(html).toContain('result.fits');expect(html).toContain('설정 검색');expect(html).not.toContain('기기와 패키지');expect(html).not.toContain('기기 변환 파일')
 })
 test('discovered unsupported tasks expose the reason and disable execution',()=>{
  const html=render({...spec,runnable:false,reason:'입출력 정의가 필요합니다.'});expect(html).toContain('입출력 정의가 필요합니다.');expect(html).toMatch(/disabled=""[^>]*aria-label="실행"/)
@@ -98,7 +98,7 @@ test('cursor commands have an editable control and survive workflow and history 
 });
 test('output settings use parameter identifiers as labels and separate output fields from input sources',()=>{
  const html=render({...spec,outputs:[{name:'output',label:'The output photometry file(s) (default: image.mag.?)',kind:'text',mode:'each',default:'output_'},{name:'plotfile',label:'The output plots metacode file',kind:'metacode',mode:'single',default:''}]});
- expect(html).toMatch(/<h3[^>]*>출력<\/h3>/);expect(html).not.toContain('사본에서 실행');expect(html.split('aria-label="출력 설정"')[1].split('</section>')[0]).not.toContain(' · ');
+ expect(html).not.toMatch(/<h3[^>]*>출력<\/h3>/);expect(html).not.toContain('사본에서 실행');expect(html.split('aria-label="출력 설정"')[1].split('</section>')[0]).not.toContain(' · ');
  expect(html).toMatch(/<label[^>]*for="generic-output-output"[^>]*>output<\/label>/);
  expect(html).toMatch(/<label[^>]*for="generic-output-plotfile"[^>]*>plotfile<\/label>/);
 });
@@ -112,6 +112,6 @@ test('legacy task identifiers use the same generic fields without dedicated corr
    expect(html).not.toContain('data-correction-role');
    expect(html).not.toContain('방사형 프로파일');
    expect(html).not.toContain('imexamine 동작');
-   expect(html).toContain('전체 설정');
+   expect(html).toContain('설정 검색');
  }
 });

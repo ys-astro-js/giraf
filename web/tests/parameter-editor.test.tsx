@@ -13,15 +13,15 @@ const spec:Spec={name:'images.immatch.imcombine',package:'images.immatch',title:
 const catalog:Catalog={version:'test',tasks:[spec],ccdproc:{parameters:[],inputs:[]},ccdred:[],exam:{}}
 const prefs:Preferences={drafts:{},backend:'cl',mapping:{},instrument:[],packageValues:{}}
 const noop=()=>{}
-const render=(s=spec,label?:string)=>{const cat={...catalog,tasks:[s]},task=makeInstance(s,cat,prefs,'task');if(label!==undefined)task.label=label;return renderToStaticMarkup(<TaskInspector catalog={cat} map={{...emptyMap(),tasks:[task]}} task={task} rows={[]} edit={noop} pick={noop} onOpen={noop} onRun={noop} busy={false} error="" onErrorFocus={noop} saveDefaults={noop} onRemove={noop} reorderInput={noop}/>)}
+const render=(s=spec,label?:string)=>{const cat={...catalog,tasks:[s]},task=makeInstance(s,cat,prefs,'task');if(label!==undefined)task.label=label;return ['input','output','settings'].map(activeTab=>renderToStaticMarkup(<TaskInspector activeTab={activeTab} catalog={cat} map={{...emptyMap(),tasks:[task]}} task={task} rows={[]} edit={noop} pick={noop} onOpen={noop} onRun={noop} busy={false} error="" onErrorFocus={noop} saveDefaults={noop} onRemove={noop} reorderInput={noop}/>)).join('')}
 
-test('imcombine primary fields exclude optional files and tuning while preserving IRAF scaling inputs',()=>{
+test('imcombine input tab exposes optional files and settings tab exposes tuning',()=>{
  expect(primaryParameterNames(spec)).toEqual(['combine','reject'])
  expect(primaryInputNames(spec)).toEqual(['input','scale','zero'])
  const html=render()
- expect(html).toContain('전체 설정')
+ expect(html).toContain('설정 검색')
  expect(html).toContain('source-scale')
- expect(html).not.toContain('source-headers')
+ expect(html).toContain('source-headers')
  expect(html).not.toContain('main-rdnoise')
  expect(html).not.toContain('고급 IRAF 설정')
 })
@@ -101,10 +101,10 @@ test('presentation selection and filtering preserve complete execution payload i
  expect(before.parameters.rdnoise).toBe('15');expect(before.inputs.headers).toEqual(['header-file']);expect(before.parameterSets['$package'].verbose).toBe('yes')
 })
 
-test('renamed tasks keep their original command visible independently of the title tooltip',()=>{
+test('renamed tasks do not repeat the original command beneath their title',()=>{
  const html=render(spec,'B 필터 합성')
  expect(html).toContain('B 필터 합성')
- expect(html).toContain('<code class="node-command" title="images.immatch.imcombine">imcombine</code>')
- expect(render({...spec,name:'ccdproc',package:'noao.imred.ccdred'},'보정 B 2–5')).toContain('<code class="node-command" title="noao.imred.ccdred.ccdproc">ccdproc</code>')
+ expect(html).not.toContain('<code class="node-command"')
+ expect(render({...spec,name:'ccdproc',package:'noao.imred.ccdred'},'보정 B 2–5')).not.toContain('<code class="node-command"')
  expect(render(spec,spec.name)).not.toContain('<code class="node-command"')
 })

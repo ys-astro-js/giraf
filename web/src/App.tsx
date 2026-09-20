@@ -186,7 +186,7 @@ function App() {
   const [trayOpen, setTrayOpen] = useState(false)
   const [logRequest, setLogRequest] = useState<{id: string; revision: number} | null>(null)
   const [inspectorOpen, setInspectorOpen] = useState(() => readPanelLayout().inspectorOpen ?? true)
-  const [inspectorTab, setInspectorTab] = useState("settings")
+  const [inspectorTab, setInspectorTab] = useState("info")
   const [inputRequest, setInputRequest] = useState<{ taskId: string; role: string; sequence: number } | null>(null)
   const isMobile = useIsMobile()
   const settingsVisible = isMobile ? mobilePanel === "detail" : inspectorOpen
@@ -534,7 +534,7 @@ function App() {
       return next
     })
     setAddOpen(false)
-    setInspectorTab("settings")
+    setInspectorTab("input")
     setInspectorOpen(true)
     setMobilePanel("detail")
     setTaskError("")
@@ -665,14 +665,20 @@ function App() {
   }
   function focusError() {
     const key = taskError.match(/(?:ccdproc\.)?([A-Za-z][\w]*)[:=]/)?.[1]
+    const selectedSpec = catalog?.tasks.find((spec) => spec.name === task?.task)
+    const isInput = selectedSpec?.inputs.some((input) => input.name === key)
+    setInspectorTab(isInput ? "input" : "settings")
+    if (isInput && task && key) {
+      setInputRequest((previous) => ({taskId: task.id, role: key, sequence: (previous?.sequence || 0) + 1}))
+    }
     const find = () =>
       key
         ? document.querySelector(
-            `[id="prep-${key}"], [id="main-${key}"], [id="source-${key}"], [id="expr-${key}"]`
+            `[id="editor-preprocess-${key}"], [id="editor-task-${key}"], [id="source-${key}"], [id="expr-${key}"]`
           )
         : null
     const focus = () => {
-      const el = find() || document.querySelector(".inspector-body input")
+      const el = find() || document.querySelector(".task-inspector [role=tabpanel] input")
       if (el instanceof HTMLElement) {
         el.scrollIntoView({ block: "center" })
         el.focus()
@@ -900,7 +906,7 @@ function App() {
                 setMobilePanel("detail")
               }}
             >
-              {inspectorTab === "output" ? "결과" : "설정"}
+              {{info: "정보", input: "입력", output: "출력", settings: "설정"}[inspectorTab]}
             </Button>
           </nav>
         }
@@ -1000,7 +1006,7 @@ function App() {
                   open={open}
                   remove={remove}
                   onInput={(id, role) => {
-                    setInspectorTab("settings")
+                    setInspectorTab("input")
                     setInputRequest((previous) => ({taskId: id, role, sequence: (previous?.sequence || 0) + 1}))
                   }}
                   onSelect={() => {
