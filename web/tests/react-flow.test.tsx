@@ -165,18 +165,25 @@ test("completed outputs retain provenance, including after source node deletion"
   expect(deleted.connections).toHaveLength(1)
   expect(flowEdges(deleted, catalog)).toEqual([])
 })
-test("filtered nodes hide their edges without changing saved graph; inactive edges remain marked", () => {
+test("search dims unmatched nodes and edges while preserving the graph and inactive states", () => {
   let m = fixture()
   m.tasks[0].label = "Bias"
   m.tasks[1].draft.parameters.zerocor = "yes"
   m = connect(m, "b", "zero", { kind: "pending", taskId: "a" }, false)
   m.tasks[1].draft.parameters.zerocor = "no"
-  expect(
-    flowNodes(m, catalog, "Bias")
-      .filter((n) => !n.hidden)
-      .map((n) => n.id)
-  ).toEqual(["a"])
-  expect(flowEdges(m, catalog, "Bias")[0].hidden).toBe(true)
+  const original = structuredClone(m)
+  const nodes = flowNodes(m, catalog, "bIaS")
+  expect(nodes.every((node) => !node.hidden)).toBe(true)
+  expect(nodes.map((node) => node.style?.opacity)).toEqual([1, 0.3, 0.3])
+  expect(nodes.map((node) => node.position)).toEqual(
+    flowNodes(m, catalog).map((node) => node.position)
+  )
+  expect(flowEdges(m, catalog, "Bias")[0].hidden).toBeFalsy()
+  expect(flowEdges(m, catalog, "Bias")[0].style?.opacity).toBe(0.3)
+  expect(flowNodes(m, catalog).every((node) => node.style?.opacity === 1)).toBe(true)
+  expect(flowEdges(m, catalog)[0].style?.opacity).toBe(1)
+  expect(flowNodes(m, catalog, "no-match").every((node) => !node.hidden && node.style?.opacity === 0.3)).toBe(true)
+  expect(m).toEqual(original)
   expect(flowEdges(m, catalog)[0].className).toBe("workflow-edge-inactive")
 })
 test("legacy scroll offsets convert once while saved RF viewports round-trip", () => {

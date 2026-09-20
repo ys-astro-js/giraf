@@ -60,7 +60,10 @@ test("group persistence, parent ordering and relative coordinates", () => {
   expect(child.position.y + parent.position.y).toBe(100)
   expect(JSON.parse(JSON.stringify(m)).subflows[0].name).toBe("보정")
   expect(() => structuredClone(nodes)).not.toThrow()
-  expect(flowNodes(m, catalog, "no-match").every((n) => n.hidden)).toBe(true)
+  const searched = flowNodes(m, catalog, "no-match")
+  expect(searched.every((n) => !n.hidden)).toBe(true)
+  expect(searched.filter((n) => n.type === "task").every((n) => n.style?.opacity === 0.3)).toBe(true)
+  expect(searched.find((n) => n.id === "a")!.parentId).toBe("group")
 })
 test("parent moves carry children and child moves persist absolute coordinates", () => {
   const m = group(),

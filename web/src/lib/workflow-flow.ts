@@ -73,7 +73,7 @@ export function flowNodes(
 
       initialWidth: geometry.width,
       initialHeight: geometry.height,
-      style: { width: geometry.width },
+      style: { width: geometry.width, opacity: matches(task, search) ? 1 : 0.3 },
       handles: [
         {
           id: "output",
@@ -92,7 +92,6 @@ export function flowNodes(
         })),
       ],
       selected: map.view.selected === task.id,
-      hidden: !matches(task, search),
       dragHandle: ".node-heading",
       ariaLabel: `${task.label} 작업`,
     }
@@ -118,7 +117,6 @@ export function flowNodes(
       },
       initialWidth: group.width,
       initialHeight: group.height,
-      hidden: children.length ? children.every((t) => t.hidden) : !!search,
       dragHandle: ".subflow-heading",
       deletable: false,
       ariaLabel: `${group.name} 그룹`,
@@ -141,7 +139,7 @@ export function flowEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
         target: target.id,
         sourceHandle: connection.source.port && !connection.source.port.startsWith("output-group:") ? connection.source.port : connection.source.group ? "output" : (connection.source.kind !== "files" && connection.source.outputRole && (catalog.tasks.find(s=>s.name===source.task)?.outputs?.length || 0)>1 ? "output:" + connection.source.outputRole : "output"),
         targetHandle: connection.role,
-        hidden: !matches(source, search) || !matches(target, search),
+        style: { opacity: matches(source, search) && matches(target, search) ? 1 : 0.3 },
         className:
           !target.expressions[connection.role] &&
           roleActive(target, connection.role, catalog)
