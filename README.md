@@ -1,8 +1,8 @@
 # GIRAF
 
-![giraf-screenshot](/Users/js/Documents/Astronomy/giraf/giraf-screenshot.png)
+![giraf-screenshot](./giraf-screenshot.png)
 
-GIRAF는 [IRAF](https://iraf-community.github.io)의 영상 처리 작업을 워크플로우로 관리하는 앱입니다. 영상처리 과정의 각 작업을 드래그 앤 드롭으로 연결하며 영상 처리 파이프라인을 더 알기 쉽게 하는 것을 목표로 제작되었습니다.
+GIRAF는 [IRAF](https://iraf-community.github.io)의 파이프라인을 시각화하고 관리하는 앱입니다. IRAF에서 수행하는 작업들을 드래그 앤 드롭으로 연결하며 파이프라인을 더 알기 쉽게 하는 것을 목표로 제작되었습니다.
 
 ## 주요 기능
 
