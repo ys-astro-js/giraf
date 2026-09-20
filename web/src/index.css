@@ -154,19 +154,8 @@
     );
   grid-template-rows: 56px minmax(0, 1fr) var(--tray-height);
 }
-.app-bar {
-  grid-column: 1/-1;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 16px 0 8px;
-  border-bottom: 1px solid var(--border);
-}
-.brand {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
+
+
 .library-content {
   flex: 1;
   min-height: 0;
@@ -203,40 +192,17 @@
   min-height: 0;
   min-width: 0;
 }
-.map-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px 12px;
-}
-.map-toolbar h1 {
-  font-weight: 600;
-}
+
+
 .map-tools {
   display: flex;
   gap: 12px;
   align-items: center;
   padding: 0 20px 12px;
 }
-.map-search {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  max-width: 240px;
-}
-.map-search > svg {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  width: 16px;
-  height: 16px;
-  color: var(--muted-foreground);
-  pointer-events: none;
-}
-.map-search input {
-  padding-left: 32px;
-}
+
+
+
 .map-viewport {
   position: relative;
   flex: 1;
@@ -550,13 +516,8 @@ textarea {
 @media (max-width: 1100px) {
 }
 @media (max-width: 700px) {
-  .app-bar {
-    padding-right: 8px;
-    gap: 8px;
-  }
-  .brand > [aria-label="자료 패널"] {
-    display: none;
-  }
+
+
   .mobile-nav {
     display: flex;
     grid-row: 2;
@@ -565,15 +526,11 @@ textarea {
     justify-content: space-around;
     border-bottom: 1px solid var(--border);
   }
-  .map-toolbar {
-    padding: 12px 16px;
-  }
+
   .map-tools {
     padding: 0 16px 12px;
   }
-  .map-search {
-    max-width: none;
-  }
+
   .inspector-heading,
   .inspector-body {
     padding: 16px;
@@ -598,9 +555,7 @@ textarea {
 }
 
 
-@media (max-width: 700px) {
-  .map-toolbar > h1 { display: none; }
-}
+
 
 /* shadcn panel groups own geometry and keyboard resizing. */
 .giraf-app {
@@ -611,16 +566,16 @@ textarea {
   min-height: 0;
   overflow: hidden;
 }
-.app-bar { height: 56px; flex-shrink: 0; }
+
 .workbench-panels { flex: 1; min-height: 0; min-width: 0; width: 100%; }
 .library, .main-workspace, .inspector-pane, .run-tray { width: 100%; height: 100%; min-height: 0; min-width: 0; }
 .library, .main-workspace, .run-tray { display: flex; flex-direction: column; }
 .inspector-pane { overflow-y: auto; overscroll-behavior: contain; }
 .run-tray { overflow: hidden; }
 .library { position: relative; }
-.map-toolbar { flex-wrap: nowrap; gap: 8px; padding: 12px; min-width: 0; overflow-x: auto; }
-.map-toolbar > button { flex-shrink: 0; }
-.map-search { flex: 1; min-width: 80px; max-width: none; }
+
+
+
 .inspector-title h2 { font-weight: 600; }
 .mobile-nav { display: none; }
 @media (max-width: 767px) {
@@ -836,10 +791,10 @@ textarea {
   --subflow-slate: oklch(0.75 0.03 250);
 }
 .map-viewport .workflow-tools { display:flex; flex-direction:column; gap:12px; }
-.map-viewport .workflow-tools .react-flow__controls { position:static; margin:0; }
-.workflow-group-tool { overflow:hidden; border:1px solid var(--border); border-radius:12px; background:var(--background); }
-.workflow-group-tool .react-flow__controls-button { border-bottom:0; }
-.workflow-group-tool button[aria-pressed="true"] { background:var(--selection); color:var(--selection-foreground); }
+.workflow-tools button[aria-pressed="true"] { background:var(--selection); color:var(--selection-foreground); outline:1px solid var(--primary); outline-offset:-1px; }
+@media (pointer:coarse) {
+  .map-viewport .workflow-tools [data-slot="button"] { width:44px; height:44px; }
+}
 .subflow-selection-bar { display:flex; align-items:center; gap:8px; padding:8px 12px; max-width:calc(100% - 24px); border:1px solid var(--border); border-radius:12px; background:var(--background); font-size:13px; }
 .subflow-selection-bar > span { min-width:0; }
 .map-viewport[data-group-selecting="true"] .react-flow__pane { cursor:crosshair; }
@@ -956,3 +911,36 @@ textarea {
 .workflow-node { display:flex; flex-direction:column; }
 .workflow-node .node-footer { margin-top:auto; padding-right:64px; }
 .workflow-node .node-input { padding-right:64px; }
+
+/* One toolbar, sized against the workspace rather than the window. */
+.workbench-inset { container-type: inline-size; }
+.workbench-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(100px, 320px) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  min-width: 0;
+  flex-shrink: 0;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+.toolbar-leading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.toolbar-folder-compact { display: none; }
+.toolbar-search { min-width: 0; }
+.toolbar-compact-search { display: none; }
+.toolbar-panels { justify-self: end; }
+@container (max-width: 960px) {
+  .toolbar-folder-wide { display: none; }
+  .toolbar-folder-compact { display: inline-flex; }
+}
+@container (max-width: 600px) {
+  .workbench-toolbar { grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding-inline: 8px; }
+  .toolbar-search { display: none; }
+  .toolbar-compact-search { display: flex; justify-content: center; }
+}

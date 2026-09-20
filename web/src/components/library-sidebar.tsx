@@ -11,7 +11,6 @@ import {
   FileImage,
   FileText,
   Folder,
-  FolderOpen,
   RefreshCw,
   Search,
   X,
@@ -72,7 +71,6 @@ type Props = {
   selected: string[]
   onSelect: Dispatch<SetStateAction<string[]>>
   onOpen: (file: Frame) => void
-  onFolder: () => void
   onRefresh: () => Promise<unknown>
   onRefreshCatalog?: () => Promise<unknown>
   onError: (message: string) => void
@@ -169,9 +167,6 @@ function NoFiles({ children }: { children: ReactNode }) {
 
 export function LibrarySidebar(props: Props) {
   const { workspace, selected, onSelect } = props
-  const folderParts = workspace.folder.split("/").filter(Boolean)
-  const folderName = folderParts.at(-1) || workspace.folder || "폴더 열기"
-  const parentFolder = folderParts.at(-2)
   const [tab, setTab] = useState("files")
   const [fileQuery, setFileQuery] = useState("")
   const [taskQuery, setTaskQuery] = useState("")
@@ -303,42 +298,6 @@ export function LibrarySidebar(props: Props) {
             <div className="flex justify-end md:hidden">
               <SidebarTrigger aria-label="사이드바 닫기" />
             </div>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <Tooltip>
-                  <TooltipTrigger
-                    delay={0}
-                    render={
-                      <SidebarMenuButton size="lg" disabled={!props.ready} />
-                    }
-                    onClick={props.onFolder}
-                    disabled={!props.ready}
-                    aria-label="폴더 열기"
-                  >
-                    <FolderOpen />
-                    <span className="flex min-w-0 items-center gap-1">
-                      {parentFolder && (
-                        <>
-                          <span className="max-w-1/2 truncate text-muted-foreground">
-                            {parentFolder}
-                          </span>
-                          <span className="shrink-0 text-muted-foreground">
-                            /
-                          </span>
-                        </>
-                      )}
-                      <span className="truncate">{folderName}</span>
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="right"
-                    className="break-all data-open:animate-none data-closed:animate-none"
-                  >
-                    {workspace.folder || "폴더 열기"}
-                  </TooltipContent>
-                </Tooltip>
-              </SidebarMenuItem>
-            </SidebarMenu>
             <TabsList className="w-full" aria-label="탐색 대상">
               <TabsTrigger value="files">파일</TabsTrigger>
               <TabsTrigger value="tasks">작업</TabsTrigger>

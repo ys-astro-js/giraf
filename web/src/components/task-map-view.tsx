@@ -1,4 +1,3 @@
-import { autoLayoutMap } from "@/lib/subflow"
 import { customOutput, customPortHandle } from "@/lib/output-ports"
 import {groupEqual,groupLabel,matchesGroup,compactPortLabel} from "@/lib/calibration-ports"
 import {ccdTasks, calibrationLabels} from "@/lib/calibration"
@@ -14,6 +13,7 @@ import {
   useRef,
   useState,
   type DragEvent,
+  type ComponentProps,
   type CSSProperties,
 } from "react"
 import {
@@ -21,8 +21,6 @@ import {
   Background,
   MiniMap,
   NodeResizeControl,
-  Controls,
-  ControlButton,
   Handle,
   Panel,
   Position,
@@ -39,25 +37,26 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react"
 import {
+  BroomSparkles,
   LoaderCircle,
   Check,
   Play,
-  Square,
   GripVertical,
-  Group,
+  SquareDashedMousePointer,
   Pencil,
   Maximize2,
   LocateFixed,
+  Scan,
+  Plus,
+  Minus,
   Trash2,
-  Search,
-  Workflow,
   Terminal,
   File,
   X,
 } from "lucide-react"
 import { toast } from "@/components/ui/toast"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Blank } from "@/components/workbench-controls"
 import { type Catalog, type Frame } from "@/lib/workbench"
@@ -88,6 +87,10 @@ import {
 } from "@/lib/workflow-flow"
 
 type Props = {
+  search?: string
+  layoutRevision?: number
+  onAutoLayout?: () => void
+  layoutBusy?: boolean
   map: TaskMap
   catalog: Catalog
   rows: Frame[]
@@ -99,9 +102,7 @@ type Props = {
   remove: (id: string) => void
   onSelect?: () => void
   onInput?: (id: string, role: string) => void
-  onRunWorkflow?: () => void
   onRunSubflow?: (id: string) => void
-  onCancelWorkflow?: () => void
   workflowBusy?: boolean
   runDisabled?: boolean
 }
@@ -414,6 +415,35 @@ const GroupNode = memo(function GroupNode({ data }: NodeProps<SubflowNode>) {
   )
 })
 const nodeTypes = { task: TaskNode, subflow: GroupNode }
+function WorkflowToolButton({ label, ...props }: Omit<ComponentProps<typeof Button>, "title" | "aria-label"> & { label: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<Button {...props} />} aria-label={label} data-slot="button" />
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
+function ZoomControls() {
+  const { zoomIn, zoomOut, fitView } = useReactFlow()
+  const canZoomIn = useStore((state) => state.transform[2] < state.maxZoom)
+  const canZoomOut = useStore((state) => state.transform[2] > state.minZoom)
+
+  return (
+    <ButtonGroup orientation="vertical" aria-label="화면 배율">
+      <WorkflowToolButton variant="outline" size="icon-sm" label="확대" disabled={!canZoomIn} onClick={() => zoomIn()}>
+        <Plus />
+      </WorkflowToolButton>
+      <WorkflowToolButton variant="outline" size="icon-sm" label="화면 맞춤" onClick={() => fitView(fitOptions)}>
+        <Scan />
+      </WorkflowToolButton>
+      <WorkflowToolButton variant="outline" size="icon-sm" label="축소" disabled={!canZoomOut} onClick={() => zoomOut()}>
+        <Minus />
+      </WorkflowToolButton>
+    </ButtonGroup>
+  )
+}
+
 const fitOptions = { padding: 0.2, maxZoom: 1 }
 const ariaLabelConfig = {
   "controls.zoomIn.ariaLabel": "확대",
@@ -426,6 +456,10 @@ const ariaLabelConfig = {
     "Enter 또는 Space로 연결을 선택하고 Delete로 해제합니다. Escape로 선택을 해제합니다.",
 }
 export function TaskMapView({
+  search = "",
+  layoutRevision = 0,
+  onAutoLayout,
+  layoutBusy = false,
   map,
   catalog,
   rows,
@@ -434,9 +468,7 @@ export function TaskMapView({
   remove,
   onSelect,
   onInput,
-  onRunWorkflow,
   onRunSubflow,
-  onCancelWorkflow,
   workflowBusy,
   runDisabled,
 }: Props) {
@@ -448,7 +480,6 @@ export function TaskMapView({
     leaving?: string
   }>({})
   const [editingGroup, setEditingGroup] = useState<string | null>(null)
-  const [search, setSearch] = useState("")
   const [selectedEdges, setSelectedEdges] = useState<string[]>([])
   const [dropChoice, setDropChoice] = useState<DropChoice | null>(null)
   const [flow, setFlow] = useState<ReactFlowInstance<
@@ -712,25 +743,15 @@ export function TaskMapView({
     previousCount.current = map.tasks.length
     if (added && flow) void flow.fitView(fitOptions)
   }, [map.tasks.length, flow])
-  const [layoutBusy, setLayoutBusy] = useState(false)
-  async function autoLayout() {
-    if (layoutBusy) return
-    setLayoutBusy(true)
-    try {
-      const next = await autoLayoutMap(map, catalog, rows)
-      update(current => {
-        // Keep edits made while the engine was loading or calculating.
-        if (current.tasks !== map.tasks || current.connections !== map.connections || current.subflows !== map.subflows)
-          return current
-        return { ...current, tasks: next.tasks, subflows: next.subflows }
-      })
-      requestAnimationFrame(() => { void flow?.fitView(fitOptions) })
-    } catch {
-      toast.add({ title: "자동 배치에 실패했습니다. 다시 시도해 주세요.", type: "error" })
-    } finally {
-      setLayoutBusy(false)
-    }
-  }
+  const fittedLayout = useRef(0)
+  useEffect(() => {
+    if (!flow || fittedLayout.current === layoutRevision) return
+    const frame = requestAnimationFrame(() => {
+      fittedLayout.current = layoutRevision
+      void flow.fitView(fitOptions)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [flow, layoutRevision])
   function revealSelected() {
     if (map.view.selected)
       void flow?.fitView({
@@ -759,37 +780,7 @@ export function TaskMapView({
         }
       }}
     >
-      <header className="map-toolbar scroll-fade-x scroll-fade-3">
-        <h1 className="sr-only">워크플로우</h1>
-        <div className="map-search">
-          <Search aria-hidden="true" />
-          <Input
-            aria-label="작업 검색"
-            placeholder="작업 검색"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Button size="sm" variant="outline" onClick={autoLayout} disabled={layoutBusy} aria-busy={layoutBusy}>
-          <Workflow data-icon="inline-start" />
-          {layoutBusy ? "배치 중…" : "자동 배치"}
-        </Button>
-        {workflowBusy ? (
-          <Button size="sm" variant="outline" onClick={onCancelWorkflow}>
-            <Square data-icon="inline-start" />
-            중단
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            onClick={() => onRunWorkflow?.()}
-            disabled={!map.tasks.length || runDisabled}
-          >
-            <Play data-icon="inline-start" />
-            일괄 실행
-          </Button>
-        )}
-      </header>
+      <h1 className="sr-only">워크플로우</h1>
       {editingGroup !== null && (
         <SubflowEditor
           key={editingGroup}
@@ -929,21 +920,18 @@ export function TaskMapView({
                 maskColor="var(--workflow-minimap-mask)"
               />
               <WorkflowClickConnection />
-              <Panel position="bottom-left" className="workflow-tools">
-                <Controls fitViewOptions={fitOptions}>
-                  <ControlButton
-                    aria-label="선택한 작업 보기"
-                    title="선택한 작업 보기"
+              <Panel position="bottom-left" className="workflow-tools" role="group" aria-label="워크플로우 도구">
+                <ZoomControls />
+                <ButtonGroup orientation="vertical" aria-label="워크플로우 구성">
+                  <WorkflowToolButton variant="outline" size="icon-sm"
+                    label="선택한 작업 보기"
                     disabled={!map.view.selected}
                     onClick={revealSelected}
                   >
                     <LocateFixed />
-                  </ControlButton>
-                </Controls>
-                <div className="workflow-group-tool">
-                  <ControlButton
-                    aria-label="그룹 만들기"
-                    title="그룹 만들기"
+                  </WorkflowToolButton>
+                  <WorkflowToolButton variant="outline" size="icon-sm"
+                    label="그룹 만들기"
                     aria-pressed={selectingGroup}
                     disabled={!map.tasks.some((t) => !t.subflowId)}
                     onClick={() => {
@@ -953,9 +941,17 @@ export function TaskMapView({
                       setGroupSelection([])
                     }}
                   >
-                    <Group />
-                  </ControlButton>
-                </div>
+                    <SquareDashedMousePointer />
+                  </WorkflowToolButton>
+                  <WorkflowToolButton variant="outline" size="icon-sm"
+                    label={layoutBusy ? "배치 중…" : "자동 배치"}
+                    onClick={onAutoLayout}
+                    disabled={layoutBusy || !onAutoLayout}
+                    aria-busy={layoutBusy}
+                  >
+                    {layoutBusy ? <LoaderCircle className="animate-spin" /> : <BroomSparkles />}
+                  </WorkflowToolButton>
+                </ButtonGroup>
               </Panel>
               {selectingGroup && (editingGroup === null || groupFormHidden) && (
                 <Panel position="top-center" className="subflow-selection-bar">

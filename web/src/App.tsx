@@ -1,3 +1,5 @@
+import { WorkbenchToolbar } from "@/components/workbench-toolbar"
+import { autoLayoutMap } from "@/lib/subflow"
 import {updateOutputPort,removeOutputPort} from "@/lib/output-ports"
 import {publishWorkflowRun} from "@/lib/task-map"
 import {connectInputPort} from "@/lib/workflow-flow"
@@ -11,14 +13,10 @@ import {
   ArrowLeft,
   Moon,
   Sun,
-  PanelRight,
-  PanelBottom,
-  CircleHelp,
 } from "lucide-react"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { WorkbenchShell } from "@/components/workbench-shell"
 import {
-  SidebarTrigger,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -149,6 +147,8 @@ function App() {
     [map, setMap] = useState<TaskMap>(emptyMap()),
     [cache, setCache] = useState<Record<string, Frame>>({}),
     [jobs, setJobs] = useState<Job[]>([])
+  const [mapSearch, setMapSearch] = useState("")
+  const [layoutRevision, setLayoutRevision] = useState(0)
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [loadError, setLoadError] = useState(false)
   const [ready, setReady] = useState(false),
@@ -181,8 +181,7 @@ function App() {
     [pendingPayload, setPendingPayload] = useState<unknown>(null),
     [response, setResponse] = useState(""),
     [savedName, setSavedName] = useState(""),
-    [saveSetOpen, setSaveSetOpen] = useState(false),
-    [help, setHelp] = useState(false)
+    [saveSetOpen, setSaveSetOpen] = useState(false)
   const [trayOpen, setTrayOpen] = useState(false)
   const [inspectorOpen, setInspectorOpen] = useState(true)
   const [inspectorTab, setInspectorTab] = useState("settings")
@@ -830,6 +829,25 @@ function App() {
     ],
     [workspace.sets, selectedFiles, map.tasks, jobs]
   )
+  const [layoutBusy, setLayoutBusy] = useState(false)
+  async function autoLayout() {
+    if (layoutBusy || !catalog) return
+    setLayoutBusy(true)
+    try {
+      const next = await autoLayoutMap(map, catalog, rows)
+      update(current => {
+        // Keep edits made while the engine was loading or calculating.
+        if (current.tasks !== map.tasks || current.connections !== map.connections || current.subflows !== map.subflows)
+          return current
+        return { ...current, tasks: next.tasks, subflows: next.subflows }
+      })
+      setLayoutRevision((revision) => revision + 1)
+    } catch {
+      toast.add({ title: "자동 배치에 실패했습니다. 다시 시도해 주세요.", type: "error" })
+    } finally {
+      setLayoutBusy(false)
+    }
+  }
   return (
     <TooltipProvider>
       <WorkbenchShell
@@ -842,47 +860,24 @@ function App() {
         mobilePanel={mobilePanel}
         selection={`${mobilePanel}:${task?.id || ""}`}
         header={
-          <header className="app-bar">
-            <div className="brand">
-              <SidebarTrigger aria-label="사이드바 열기 또는 닫기" />
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setMobilePanel("map")
-                  setTaskError("")
-                }}
-              >
-                GIRAF
-              </Button>
-            </div>
-            <div className="ml-auto flex min-w-0 items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={
-                  settingsVisible ? "설정 패널 닫기" : "설정 패널 열기"
-                }
-                title={settingsVisible ? "설정 패널 닫기" : "설정 패널 열기"}
-                aria-pressed={settingsVisible}
-                onClick={() => {
-                  setInspectorOpen(!settingsVisible)
-                  setMobilePanel(settingsVisible ? "map" : "detail")
-                }}
-              >
-                <PanelRight />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
-                title={trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
-                aria-pressed={trayOpen}
-                onClick={() => setTrayOpen((v) => !v)}
-              >
-                <PanelBottom />
-              </Button>
-            </div>
-          </header>
+          <WorkbenchToolbar
+            folder={workspace.folder}
+            ready={ready && !!catalog}
+            search={mapSearch}
+            onSearch={setMapSearch}
+            onFolder={folder}
+            workflowBusy={workflowActive(workflow)}
+            runDisabled={!ready || !catalog || !map.tasks.length || workflowStarting || busy || !!running}
+            onRun={() => runWorkflow()}
+            onCancel={cancelWorkflow}
+            settingsVisible={settingsVisible}
+            trayOpen={trayOpen}
+            onSettings={(open) => {
+              setInspectorOpen(open)
+              setMobilePanel(open ? "detail" : "map")
+            }}
+            onTray={setTrayOpen}
+          />
         }
         navigation={
           <nav className="mobile-nav" aria-label="작업 영역">
@@ -917,7 +912,6 @@ function App() {
             selected={selectedFiles}
             onSelect={setSelectedFiles}
             onOpen={open}
-            onFolder={folder}
             onRefresh={refresh}
             onError={setError}
             onAddTask={(name) => add(name, [])}
@@ -925,12 +919,6 @@ function App() {
             onSave={() => setSaveSetOpen(true)}
           >
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => setHelp(true)}>
-                  <CircleHelp />
-                  <span>IRAF 지원 정보</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   onClick={() =>
@@ -986,9 +974,11 @@ function App() {
             ) : (
               catalog && (
                 <TaskMapView
-                  onRunWorkflow={() => runWorkflow()}
+                  search={mapSearch}
+                  layoutRevision={layoutRevision}
+                  onAutoLayout={autoLayout}
+                  layoutBusy={layoutBusy}
                   onRunSubflow={runWorkflow}
-                  onCancelWorkflow={cancelWorkflow}
                   workflowBusy={workflowActive(workflow)}
                   runDisabled={workflowStarting || busy || !!running}
                   map={map}
@@ -1561,38 +1551,6 @@ function App() {
               저장
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={help} onOpenChange={setHelp}>
-        <DialogContent
-          className="max-h-[85dvh] overflow-auto"
-          aria-describedby={undefined}
-        >
-          <DialogHeader>
-            <DialogTitle>설치 IRAF와 지원 정보</DialogTitle>
-          </DialogHeader>
-          <p>{catalog?.version}</p>
-          {Object.entries(catalog?.capabilities?.limits || {}).map(([k, v]) => (
-            <p key={k}>{v}</p>
-          ))}
-          <p>
-            파라미터 정의:{" "}
-            {catalog?.capabilities?.fallback?.length
-              ? "일부 저장 스냅샷 사용"
-              : "설치된 .par 파일에서 읽음"}
-          </p>
-          <details>
-            <summary>정의 지문</summary>
-            <code className="break-all">
-              {catalog?.capabilities?.schemaFingerprint}
-            </code>
-          </details>
-          <p>
-            노드 제목을 끌어 이동합니다. 출력 연결점을 끌거나 클릭한 뒤 목표
-            노드를 선택합니다. 연결 가능한 입력이 하나면 즉시 연결되고, 여러
-            개여도 원하는 입력에 바로 연결합니다. 결과는 오른쪽 결과 탭을
-            엽니다. Delete로 삭제하고 Alt+방향키로 이동할 수 있습니다.
-          </p>
         </DialogContent>
       </Dialog>
       {currentJob?.state === "waiting" &&

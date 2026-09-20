@@ -57,7 +57,6 @@ test("file pagination exposes remaining quantity in a Badge with a separate filt
         selected={[]}
         onSelect={noop}
         onOpen={noop}
-        onFolder={noop}
         onRefresh={async () => {}}
         onError={noop}
         onAddTask={noop}
