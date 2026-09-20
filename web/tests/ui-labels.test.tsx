@@ -50,6 +50,7 @@ test("file pagination exposes remaining quantity in a Badge with a separate filt
   const html = renderToStaticMarkup(
     <SidebarProvider>
       <LibrarySidebar
+        onViewLog={()=>{}}
         workspace={{ folder: "/data", files, sets: [] }}
         catalog={null}
         jobs={[]}

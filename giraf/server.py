@@ -151,6 +151,7 @@ def job_info(job):
     result = dict(id=job.name, name=manifest.get('name') or ('영상 결합' if manifest.get('operation') == 'combine' else '전체 전처리'),
                   **status(job), count=len(manifest.get('rows', [])), settings=manifest['settings'],
                   inputs=[dict(name=r['name'], path=r['path']) for r in manifest.get('rows', [])])
+    result['execution'] = workflow_manager.membership(job.name)
     result['products']=[]
     if (job / 'products.json').exists():
         result['products'] = [dict(register(job / p['file'], p['label'], job.name, p.get('asset')), **p) for p in json.loads((job / 'products.json').read_text())]

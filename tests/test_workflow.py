@@ -111,3 +111,40 @@ class ManagerTests(unittest.TestCase):
             with self.assertRaises(ValueError):manager.start(g)
             manager.cancel();manager.thread.join(2)
             self.assertEqual(manager.current()['state'],'cancelled')
+
+    def test_launches_share_persisted_execution_identity_and_new_click_gets_new_identity(self):
+        import tempfile
+        from giraf.workflow import WorkflowManager
+        launched = []
+        def launch(manifest):
+            launched.append(manifest.copy())
+            return {'id': str(len(launched)), 'state': 'completed', 'products': []}
+        with tempfile.TemporaryDirectory() as tmp:
+            manager = WorkflowManager(tmp, lambda p: dict(p, filePlan={'destructive': False}), launch, lambda id: {}, lambda id: None)
+            g = {'nodes': [{'id': 'a', 'label': 'a', 'payload': {}}, {'id': 'b', 'label': 'b', 'payload': {}}], 'links': []}
+            manager.start(g)
+            manager.thread.join(2)
+            first_id = manager.current()['id']
+            self.assertEqual([m['workflowId'] for m in launched], [first_id, first_id])
+            self.assertEqual([m['workflowStep'] for m in launched], [0, 1])
+            manager.start(g)
+            manager.thread.join(2)
+            self.assertNotEqual(launched[2]['workflowId'], first_id)
+            self.assertEqual(launched[2]['workflowId'], launched[3]['workflowId'])
+
+    def test_execution_membership_survives_next_start_and_restart_for_legacy_jobs(self):
+        import json, tempfile
+        from pathlib import Path
+        from giraf.workflow import WorkflowManager
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'current.json').write_text(json.dumps({'id':'old', 'state':'completed', 'jobs':[{'id':'a'}, {'id':'b'}], 'currentJob':None}))
+            make = lambda: WorkflowManager(root, lambda p: dict(p,filePlan={'destructive':False}), lambda m: {'id':'new','state':'completed','products':[]}, lambda id: {}, lambda id: None)
+            manager = make()
+            self.assertEqual(manager.membership('a'), {'id':'old','step':0})
+            self.assertEqual(manager.current()['jobs'][1]['execution'], {'id':'old','step':1})
+            manager.start({'nodes':[{'id':'node','label':'node','payload':{}}], 'links':[]})
+            manager.thread.join(2)
+            restored = make()
+            self.assertEqual(restored.membership('b'), {'id':'old','step':1})
+            self.assertEqual(restored.membership('new')['id'], manager.current()['id'])

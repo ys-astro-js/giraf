@@ -96,15 +96,45 @@ class WorkflowManager:
         self.approved = threading.Event()
         self.thread = None
         self.state = None
+        history = self.root / 'memberships.json'
+        self.memberships = json.loads(history.read_text()) if history.exists() else {}
         path = self.root / 'current.json'
         if path.exists():
             self.state = json.loads(path.read_text())
             if self.state['state'] in ACTIVE:
                 self.state.update(state='failed', message='서버가 재시작되어 워크플로우가 중단되었습니다. 실행 기록을 확인해 주세요.')
 
+        if self.state:
+            self._record_memberships()
+
+    def _record_memberships(self):
+        jobs = list(self.state.get('jobs', []))
+        current = self.state.get('currentJob')
+        if current and not any(job['id'] == current['id'] for job in jobs):
+            jobs.append(current)
+        changed = False
+        for step, job in enumerate(jobs):
+            membership = {'id': self.state['id'], 'step': step}
+            if self.memberships.get(job['id']) != membership:
+                self.memberships[job['id']] = membership
+                changed = True
+        if changed:
+            self.root.mkdir(parents=True, exist_ok=True)
+            temporary = self.root / 'memberships.tmp'
+            temporary.write_text(json.dumps(self.memberships, ensure_ascii=False))
+            temporary.replace(self.root / 'memberships.json')
+
+    def membership(self, job_id):
+        with self.lock:
+            return deepcopy(self.memberships.get(job_id))
+
     def current(self):
         with self.lock:
-            return deepcopy(self.state)
+            result = deepcopy(self.state)
+            if result:
+                for job in result.get('jobs', []) + ([result['currentJob']] if result.get('currentJob') else []):
+                    job['execution'] = self.membership(job['id'])
+            return result
 
     def save(self, patch):
         with self.lock:
@@ -113,6 +143,7 @@ class WorkflowManager:
             tmp = self.root / 'current.tmp'
             tmp.write_text(json.dumps(self.state, ensure_ascii=False))
             tmp.replace(self.root / 'current.json')
+            self._record_memberships()
 
     def start(self, graph):
         workflow_order(graph)
@@ -143,6 +174,8 @@ class WorkflowManager:
                     raise ValueError('중단됨')
         if self.stop.is_set():
             raise ValueError('중단됨')
+        manifest['workflowId'] = self.state['id']
+        manifest['workflowStep'] = len(self.state['jobs'])
         manifest['fileAuthorized'] = True
         self.save({'state': 'running', 'plan': None})
         job = self.launch(manifest)

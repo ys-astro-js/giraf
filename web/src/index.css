@@ -944,3 +944,20 @@ textarea {
   .toolbar-search { display: none; }
   .toolbar-compact-search { display: flex; justify-content: center; }
 }
+
+/* Keep selection in the file icon slot without shifting file names. */
+.library-file-row .library-file-checkbox {
+  opacity: 0;
+  pointer-events: none;
+}
+.library-file-row:is(:hover, :focus-within, [data-selecting="true"]) .library-file-checkbox {
+  opacity: 1;
+  pointer-events: auto;
+}
+.library-file-row:is(:hover, :focus-within, [data-selecting="true"]) .library-file-icon {
+  opacity: 0;
+}
+@media (hover: none) {
+  .library-file-row .library-file-checkbox { opacity: 1; pointer-events: auto; }
+  .library-file-row .library-file-icon { opacity: 0; }
+}

@@ -183,6 +183,7 @@ function App() {
     [savedName, setSavedName] = useState(""),
     [saveSetOpen, setSaveSetOpen] = useState(false)
   const [trayOpen, setTrayOpen] = useState(false)
+  const [logRequest, setLogRequest] = useState<{id: string; revision: number} | null>(null)
   const [inspectorOpen, setInspectorOpen] = useState(true)
   const [inspectorTab, setInspectorTab] = useState("settings")
   const [inputRequest, setInputRequest] = useState<{ taskId: string; role: string; sequence: number } | null>(null)
@@ -909,6 +910,12 @@ function App() {
             catalog={catalog}
             onRefreshCatalog={async()=>{setCatalog(await api<Catalog>("catalog"))}}
             jobs={jobs}
+            currentExecution={workflow}
+            onViewLog={(id) => {
+              setSelectedJob(id)
+              setLogRequest(previous => ({id, revision: (previous?.revision || 0) + 1}))
+              setTrayOpen(true)
+            }}
             ready={ready}
             loadError={loadError}
             selected={selectedFiles}
@@ -1114,6 +1121,8 @@ function App() {
         }
         history={
           <RunHistory
+            key={logRequest?.revision || 0}
+            initialDetail={logRequest ? {id: logRequest.id, kind: "log"} : undefined}
             jobs={jobs}
             onSelect={setSelectedJob}
             onOpen={open}

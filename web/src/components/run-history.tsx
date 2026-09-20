@@ -6,12 +6,12 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@
 import { stateLabel } from "@/lib/task-map"
 import { taskDisplayName, type Job, type Frame } from "@/lib/workbench"
 
-type Props = { jobs: Job[]; onSelect: (id: string) => void; onOpen: (file: Frame) => void; onCancel: (id: string) => void }
+type Props = { initialDetail?: Detail; jobs: Job[]; onSelect: (id: string) => void; onOpen: (file: Frame) => void; onCancel: (id: string) => void }
 type Detail = { id: string; kind: "log" | "files" | "settings" }
 const labels = { log: "로그", files: "결과 파일", settings: "실행 설정" }
 function time(id: string) { return /^\d{8}-\d{6}/.test(id) ? `${id.slice(4,6)}/${id.slice(6,8)} ${id.slice(9,11)}:${id.slice(11,13)}:${id.slice(13,15)}` : id }
-export function RunHistory({jobs,onSelect,onOpen,onCancel}:Props) {
- const [detail,setDetail]=useState<Detail|null>(null)
+export function RunHistory({jobs,onSelect,onOpen,onCancel,initialDetail}:Props) {
+ const [detail,setDetail]=useState<Detail|null>(initialDetail || null)
  const job=detail ? jobs.find(j=>j.id===detail.id) : undefined
  const show=(j:Job,kind:Detail["kind"])=>{ onSelect(j.id);setDetail({id:j.id,kind}) }
  return <section className="run-tray" aria-label="실행 기록과 로그">
