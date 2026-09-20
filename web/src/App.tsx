@@ -863,6 +863,7 @@ function App() {
           <WorkbenchToolbar
             folder={workspace.folder}
             ready={ready && !!catalog}
+            loading={!ready && !loadError}
             search={mapSearch}
             onSearch={setMapSearch}
             onFolder={folder}
@@ -909,6 +910,7 @@ function App() {
             onRefreshCatalog={async()=>{setCatalog(await api<Catalog>("catalog"))}}
             jobs={jobs}
             ready={ready}
+            loadError={loadError}
             selected={selectedFiles}
             onSelect={setSelectedFiles}
             onOpen={open}
@@ -953,7 +955,7 @@ function App() {
         canvas={
           <main className="main-workspace">
             {!ready ? (
-              <div className="p-6">
+              <div className="flex min-h-0 flex-1 flex-col p-6">
                 {loadError ? (
                   <Blank
                     action={
@@ -968,7 +970,7 @@ function App() {
                     작업을 불러오지 못했습니다
                   </Blank>
                 ) : (
-                  <Skeleton className="h-64 w-full" />
+                  <Skeleton role="status" aria-label="워크플로우 불러오는 중" className="min-h-0 w-full flex-1" />
                 )}
               </div>
             ) : (
@@ -1007,7 +1009,23 @@ function App() {
         }
         inspector={
           <div className="inspector-pane">
-            {task && catalog ? (
+            {!ready ? (
+              loadError ? (
+                <Blank>설정을 불러오지 못했습니다.</Blank>
+              ) : (
+                <div role="status" aria-label="설정 불러오는 중" className="flex h-full flex-col gap-6 overflow-hidden p-4">
+                  <Skeleton className="h-6 w-1/2 shrink-0" />
+                  <Skeleton className="h-9 w-full shrink-0" />
+                  {[0, 1, 2, 3].map((field) => (
+                    <div key={field} aria-hidden="true" className="flex flex-col gap-3">
+                      <Skeleton className="h-4 w-1/3" />
+                      <Skeleton className="h-9 w-full" />
+                      <Skeleton className="h-3 w-2/3" />
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : task && catalog ? (
               <>
                 <TaskInspector
                   key={task.id}

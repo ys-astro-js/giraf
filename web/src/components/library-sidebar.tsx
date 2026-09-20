@@ -49,6 +49,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { FieldDescription } from "@/components/ui/field"
 import { Empty, EmptyHeader, EmptyDescription } from "@/components/ui/empty"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Checkbox } from "@/components/ui/checkbox"
 import { CountBadge } from "@/components/count-badge"
 import { FileFilterButton } from "@/components/file-filter-button"
@@ -68,6 +69,7 @@ type Props = {
   catalog: Catalog | null
   jobs: Job[]
   ready: boolean
+  loadError: boolean
   selected: string[]
   onSelect: Dispatch<SetStateAction<string[]>>
   onOpen: (file: Frame) => void
@@ -344,19 +346,28 @@ export function LibrarySidebar(props: Props) {
           </SidebarHeader>
           <SidebarContent
             className="scroll-fade scroll-fade-4"
-            aria-busy={!props.ready || refreshing}
+            aria-busy={(!props.ready && !props.loadError) || refreshing}
           >
+            {props.loadError ? (
+              <NoFiles>자료를 불러오지 못했습니다.</NoFiles>
+            ) : !props.ready || refreshing ? (
+              <div role="status" aria-label="자료 불러오는 중" className="flex flex-col gap-6 p-4">
+                {[0, 1].map((group) => (
+                  <div key={group} aria-hidden="true" className="flex flex-col gap-3">
+                    <Skeleton className="h-4 w-24" />
+                    {[0, 1, 2, 3].map((row) => (
+                      <Skeleton key={row} className="h-8 w-full" />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
             <TabsContent value="files" className="min-h-0">
               <SidebarGroup className="py-0">
                 <SidebarGroupLabel className="justify-between gap-2">
                   <span role="status" className="flex items-center gap-2">
-                    {props.ready ? (
-                      <>
-                        {`파일 ${folder.length + resultCount}개`}
-                      </>
-                    ) : (
-                      "자료 불러오는 중"
-                    )}
+                    {`파일 ${folder.length + resultCount}개`}
                   </span>
                   <div className="flex items-center gap-1">
                     <Button
@@ -396,9 +407,7 @@ export function LibrarySidebar(props: Props) {
                   fileList(folder, "folder")
                 ) : (
                   <NoFiles>
-                    {!props.ready
-                      ? "자료를 불러오는 중입니다."
-                      : narrowed
+                    {narrowed
                         ? "조건에 맞는 폴더 파일이 없습니다."
                         : "이 폴더에 FITS 파일이 없습니다."}
                   </NoFiles>
@@ -456,9 +465,7 @@ export function LibrarySidebar(props: Props) {
                 </SidebarMenu>
                 {!runs.length && (
                   <NoFiles>
-                    {!props.ready
-                      ? "자료를 불러오는 중입니다."
-                      : narrowed
+                    {narrowed
                         ? "조건에 맞는 실행 결과가 없습니다."
                         : "이 폴더에서 실행한 결과가 없습니다."}
                   </NoFiles>
@@ -531,13 +538,15 @@ export function LibrarySidebar(props: Props) {
                           </Button>
                         </>
                       ) : (
-                        "작업 목록을 불러오는 중입니다."
+                        "사용 가능한 작업이 없습니다."
                       )}
                     </NoFiles>
                   )}
                 </SidebarGroupContent>
               </SidebarGroup>
             </TabsContent>
+              </>
+            )}
           </SidebarContent>
           <SidebarFooter className="max-h-[50dvh] overflow-y-auto">
             {selectedSet.size > 0 && (

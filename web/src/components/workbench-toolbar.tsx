@@ -7,6 +7,7 @@ import {
   PanelBottom,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ButtonGroup } from "@/components/ui/button-group"
 import {
@@ -29,6 +30,7 @@ import {
 type Props = {
   folder: string
   ready: boolean
+  loading: boolean
   search: string
   onSearch: (value: string) => void
   onFolder: () => void
@@ -61,7 +63,12 @@ export function WorkbenchToolbar(props: Props) {
     <header className="workbench-toolbar" aria-label="도구 막대">
       <div className="toolbar-leading">
         <SidebarTrigger size="icon" aria-label="사이드바 열기 또는 닫기" />
-        {[false, true].map((compact) => (
+        {props.loading ? (
+          <div role="status" aria-label="폴더 불러오는 중" aria-busy="true">
+            <Skeleton aria-hidden="true" className="toolbar-folder-wide h-9 w-32" />
+            <Skeleton aria-hidden="true" className="toolbar-folder-compact size-9" />
+          </div>
+        ) : [false, true].map((compact) => (
           <Tooltip key={String(compact)}>
             <TooltipTrigger
               render={
