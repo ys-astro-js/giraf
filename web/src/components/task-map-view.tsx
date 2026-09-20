@@ -1,3 +1,4 @@
+import { WorkflowToolButton, WorkflowZoomControls } from "./workflow-tools"
 import { customOutput, customPortHandle } from "@/lib/output-ports"
 import {groupEqual,groupLabel,matchesGroup,compactPortLabel} from "@/lib/calibration-ports"
 import {ccdTasks, calibrationLabels} from "@/lib/calibration"
@@ -13,7 +14,6 @@ import {
   useRef,
   useState,
   type DragEvent,
-  type ComponentProps,
   type CSSProperties,
 } from "react"
 import {
@@ -46,9 +46,6 @@ import {
   Pencil,
   Maximize2,
   LocateFixed,
-  Scan,
-  Plus,
-  Minus,
   Trash2,
   Terminal,
   File,
@@ -88,6 +85,7 @@ import {
 
 type Props = {
   search?: string
+  revealNode?: { id: string; revision: number }
   layoutRevision?: number
   onAutoLayout?: () => void
   layoutBusy?: boolean
@@ -415,35 +413,6 @@ const GroupNode = memo(function GroupNode({ data }: NodeProps<SubflowNode>) {
   )
 })
 const nodeTypes = { task: TaskNode, subflow: GroupNode }
-function WorkflowToolButton({ label, ...props }: Omit<ComponentProps<typeof Button>, "title" | "aria-label"> & { label: string }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<Button {...props} />} aria-label={label} data-slot="button" />
-      <TooltipContent side="right">{label}</TooltipContent>
-    </Tooltip>
-  )
-}
-
-function ZoomControls() {
-  const { zoomIn, zoomOut, fitView } = useReactFlow()
-  const canZoomIn = useStore((state) => state.transform[2] < state.maxZoom)
-  const canZoomOut = useStore((state) => state.transform[2] > state.minZoom)
-
-  return (
-    <ButtonGroup orientation="vertical" aria-label="화면 배율">
-      <WorkflowToolButton variant="outline" size="icon-sm" label="확대" disabled={!canZoomIn} onClick={() => zoomIn()}>
-        <Plus />
-      </WorkflowToolButton>
-      <WorkflowToolButton variant="outline" size="icon-sm" label="화면 맞춤" onClick={() => fitView(fitOptions)}>
-        <Scan />
-      </WorkflowToolButton>
-      <WorkflowToolButton variant="outline" size="icon-sm" label="축소" disabled={!canZoomOut} onClick={() => zoomOut()}>
-        <Minus />
-      </WorkflowToolButton>
-    </ButtonGroup>
-  )
-}
-
 const fitOptions = { padding: 0.2, maxZoom: 1 }
 const ariaLabelConfig = {
   "controls.zoomIn.ariaLabel": "확대",
@@ -458,6 +427,7 @@ const ariaLabelConfig = {
 export function TaskMapView({
   search = "",
   layoutRevision = 0,
+  revealNode,
   onAutoLayout,
   layoutBusy = false,
   map,
@@ -752,6 +722,13 @@ export function TaskMapView({
     })
     return () => cancelAnimationFrame(frame)
   }, [flow, layoutRevision])
+  useEffect(() => {
+    if (!flow || !revealNode) return
+    const frame = requestAnimationFrame(() => {
+      void flow.fitView({ nodes: [{ id: revealNode.id }], padding: 0.35, maxZoom: 1 })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [flow, revealNode])
   function revealSelected() {
     if (map.view.selected)
       void flow?.fitView({
@@ -921,7 +898,7 @@ export function TaskMapView({
               />
               <WorkflowClickConnection />
               <Panel position="bottom-left" className="workflow-tools" role="group" aria-label="워크플로우 도구">
-                <ZoomControls />
+                <WorkflowZoomControls />
                 <ButtonGroup orientation="vertical" aria-label="워크플로우 구성">
                   <WorkflowToolButton variant="outline" size="icon-sm"
                     label="선택한 작업 보기"

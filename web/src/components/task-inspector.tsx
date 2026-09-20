@@ -1,3 +1,4 @@
+import { NodeDependencies } from "./node-dependencies"
 import { OutputPortEditor } from "./output-port-editor"
 import {
   inputPorts,
@@ -32,6 +33,7 @@ import {
   SquareArrowRightEnter,
   SquareArrowRightExit,
   SlidersVertical,
+  Route,
   Search,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -139,6 +141,7 @@ type Props = {
   ) => void
   checking?: boolean
   inputRequest?: { role: string; sequence: number }
+  onSelectNode?: (id: string) => void
   activeTab?: string
   onTabChange?: (value: string) => void
 }
@@ -160,6 +163,7 @@ export function TaskInspector({
   checking,
   inputRequest,
   activeTab,
+  onSelectNode,
   onTabChange,
 }: Props) {
   const spec: Spec = catalog.tasks.find((s) => s.name === task.task) || {
@@ -888,6 +892,7 @@ export function TaskInspector({
                 { value: "info", label: "정보", icon: Info },
                 { value: "input", label: "입력", icon: SquareArrowRightEnter },
                 { value: "output", label: "출력", icon: SquareArrowRightExit },
+                { value: "dependencies", label: "의존성", icon: Route },
                 { value: "settings", label: "설정", icon: SlidersVertical },
               ].map(({ value, label, icon: Icon }) => (
                 <Tooltip key={value}>
@@ -930,6 +935,9 @@ export function TaskInspector({
               <AlertDescription>{spec.reason}</AlertDescription>
             </Alert>
           )}
+          <TabsContent value="dependencies" className="inspector-dependencies">
+            <NodeDependencies map={map} catalog={catalog} task={task} onSelect={onSelectNode} />
+          </TabsContent>
           <TabsContent value="info" className="inspector-sections">
             <section className="inspector-section">
               <div className="section-heading">

@@ -788,7 +788,7 @@ textarea {
   --subflow-slate: oklch(0.75 0.03 250);
 }
 .map-viewport .workflow-tools { display:flex; flex-direction:column; gap:12px; }
-.workflow-tools button[aria-pressed="true"] { background:var(--selection); color:var(--selection-foreground); outline:1px solid var(--primary); outline-offset:-1px; }
+.workflow-tools [data-slot="button"][aria-pressed="true"] { background:var(--selection); color:var(--selection-foreground); outline:1px solid var(--primary); outline-offset:-1px; }
 @media (pointer:coarse) {
   .map-viewport .workflow-tools [data-slot="button"] { width:44px; height:44px; }
 }
@@ -967,3 +967,32 @@ textarea {
 @media (max-width: 640px) {
   .inspector-tabs > .inspector-sections, .inspector-tabs > .inspector-settings { padding: 16px; }
 }
+
+/* Dependency graph shares the workflow canvas primitives. */
+.inspector-tabs > .inspector-dependencies { display: flex; min-height: 0; overflow: hidden; }
+.dependency-panel { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.dependency-canvas { flex: 1; min-height: 240px; }
+.dependency-node { display: block; width: 100%; text-align: center; cursor: pointer; height: 100%; border: 1px solid var(--border); border-radius: 12px; background: var(--background); color: var(--foreground); }
+.dependency-node[data-current="true"] { border-color: var(--dependency-color); background: color-mix(in srgb, var(--dependency-color) 7%, var(--background)); }
+@media (hover: hover) {
+  .dependency-node:not([data-current="true"]):hover { border-color: color-mix(in srgb, var(--dependency-color) 55%, var(--border)); background: color-mix(in srgb, var(--dependency-color) 5%, var(--background)); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dependency-node { transition: background-color 140ms ease, border-color 140ms ease; }
+}
+.dependency-node-label { display: flex; flex-direction: column; justify-content: center; gap: 4px; height: 66px; padding: 10px 12px; }
+.dependency-node-label strong { font-size: 14px; font-weight: 500; }
+.dependency-node-label span { font-size: 12px; color: var(--muted-foreground); }
+.dependency-node-label > *, .dependency-output > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dependency-outputs { display: flex; height: 28px; border-top: 1px solid var(--border); }
+.dependency-output { flex: 1; min-width: 0; display: block; line-height: 28px; padding: 0 6px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dependency-output + .dependency-output { border-left: 1px solid var(--border); }
+.dependency-node .react-flow__handle { width: 5px; height: 5px; min-width: 5px; min-height: 5px; background: var(--muted-foreground); border: 0; }
+.dependency-node:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 12px; }
+.dependency-message { padding: 12px; font-size: 13px; color: var(--muted-foreground); }
+
+.dependency-canvas .dependency-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; left: 0; right: 0; }
+.dependency-tools > [data-slot="button-group"], .dependency-view-tools { pointer-events: auto; }
+.dependency-view-tools { display: flex; gap: 8px; }
+.dependency-canvas .dependency-tools { pointer-events: none; }
+@media (pointer: coarse) { .dependency-tools [data-slot="button"], .dependency-tools [data-slot="toggle-group-item"] { width: 44px; height: 44px; } }

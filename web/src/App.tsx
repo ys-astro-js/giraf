@@ -150,6 +150,7 @@ function App() {
     [jobs, setJobs] = useState<Job[]>([])
   const [mapSearch, setMapSearch] = useState("")
   const [layoutRevision, setLayoutRevision] = useState(0)
+  const [revealNode, setRevealNode] = useState<{ id: string; revision: number }>()
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [loadError, setLoadError] = useState(false)
   const [ready, setReady] = useState(false),
@@ -906,7 +907,7 @@ function App() {
                 setMobilePanel("detail")
               }}
             >
-              {{info: "정보", input: "입력", output: "출력", settings: "설정"}[inspectorTab]}
+              {{info: "정보", input: "입력", output: "출력", dependencies: "의존성", settings: "설정"}[inspectorTab]}
             </Button>
           </nav>
         }
@@ -992,6 +993,7 @@ function App() {
                 <TaskMapView
                   search={mapSearch}
                   layoutRevision={layoutRevision}
+                  revealNode={revealNode}
                   onAutoLayout={autoLayout}
                   layoutBusy={layoutBusy}
                   onRunSubflow={runWorkflow}
@@ -1046,6 +1048,12 @@ function App() {
                   inputRequest={inputRequest?.taskId === task.id ? inputRequest : undefined}
                   activeTab={inspectorTab}
                   onTabChange={setInspectorTab}
+                  onSelectNode={(id) => {
+                    setRevealNode(previous => ({ id, revision: (previous?.revision || 0) + 1 }))
+                    update((m) => ({ ...m, view: { ...m.view, selected: id } }))
+                    setInputRequest(null)
+                    setTaskError("")
+                  }}
                   catalog={catalog}
                   map={map}
                   task={task}

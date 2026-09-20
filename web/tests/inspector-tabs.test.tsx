@@ -71,9 +71,9 @@ function render(activeTab: string, changed = false) {
     />
   )
 }
-test("inspector exposes four named icon tabs and information without disclosures", () => {
+test("inspector exposes five named icon tabs and information without disclosures", () => {
   const html = render("info", true)
-  for (const name of ["정보", "입력", "출력", "설정"])
+  for (const name of ["정보", "입력", "출력", "의존성", "설정"])
     expect(html).toContain(`class="sr-only">${name}</span>`)
   expect(html).toContain("custom.task")
   expect(html).toContain("task.gain")
@@ -110,4 +110,14 @@ test("settings expose catalog parameters with search without synthetic mapping o
   expect(html).not.toContain("전체 설정")
   expect(html).not.toContain("source-input")
   expect(html).not.toContain("generic-output-output")
+})
+
+test("dependencies tab sits immediately before settings and opens the node flow", () => {
+  const html = render("dependencies")
+  expect(html.indexOf('class="sr-only">의존성</span>')).toBeLessThan(
+    html.indexOf('class="sr-only">설정</span>')
+  )
+  expect(html).toContain("lucide-route")
+  expect(html).toContain('aria-label="노드 의존성"')
+  expect(html).not.toContain("parameter-search")
 })
