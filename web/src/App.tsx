@@ -1,3 +1,4 @@
+import { readPanelLayout } from "@/lib/panel-layout"
 import { WorkbenchToolbar } from "@/components/workbench-toolbar"
 import { autoLayoutMap } from "@/lib/subflow"
 import {updateOutputPort,removeOutputPort} from "@/lib/output-ports"
@@ -158,7 +159,7 @@ function App() {
     [addOpen, setAddOpen] = useState(false),
     [query, setQuery] = useState(""),
     [libraryOpen, setLibraryOpen] = useState(
-      () => typeof window !== "undefined" && window.innerWidth >= 1100
+      () => readPanelLayout().libraryOpen ?? (typeof window !== "undefined" && window.innerWidth >= 1100)
     ),
     [mobilePanel, setMobilePanel] = useState("map"),
     [selectedFiles, setSelectedFiles] = useState<string[]>([])
@@ -184,7 +185,7 @@ function App() {
     [saveSetOpen, setSaveSetOpen] = useState(false)
   const [trayOpen, setTrayOpen] = useState(false)
   const [logRequest, setLogRequest] = useState<{id: string; revision: number} | null>(null)
-  const [inspectorOpen, setInspectorOpen] = useState(true)
+  const [inspectorOpen, setInspectorOpen] = useState(() => readPanelLayout().inspectorOpen ?? true)
   const [inspectorTab, setInspectorTab] = useState("settings")
   const [inputRequest, setInputRequest] = useState<{ taskId: string; role: string; sequence: number } | null>(null)
   const isMobile = useIsMobile()

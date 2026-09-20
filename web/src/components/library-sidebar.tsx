@@ -1,3 +1,4 @@
+import { MiddleEllipsis } from "@/components/middle-ellipsis"
 import { taskPackageTree, type TaskPackage } from "@/lib/task-tree"
 import {
   useMemo,
@@ -127,10 +128,7 @@ function FileRow({
           aria-label={`${file.label} 열기`}
         >
           <Icon className="library-file-icon absolute top-1/2 left-3 -translate-y-1/2" />
-          <span className="file-name" aria-hidden="true">
-            <span>{file.label.slice(0, -18)}</span>
-            <span>{file.label.slice(-18)}</span>
-          </span>
+          <MiddleEllipsis text={file.label} />
         </TooltipTrigger>
         <TooltipContent
           side="right"
@@ -278,7 +276,7 @@ export function LibrarySidebar(props: Props) {
             className="[&[aria-expanded=true]>svg:last-child]:rotate-90"
           >
             <Folder />
-            <span>{node.label}</span>
+            <span className="min-w-0 flex-1 truncate">{node.label}</span>
             <ChevronRight className="ml-auto transition-transform" />
           </CollapsibleTrigger>
           <CollapsibleContent>
@@ -480,7 +478,12 @@ export function LibrarySidebar(props: Props) {
                                 onClick={() => onSelect([...new Set(set.ids)])}
                               >
                                 <Folder />
-                                <span>{set.name}</span>
+                                <span
+                                  className="min-w-0 flex-1 truncate"
+                                  title={set.name}
+                                >
+                                  {set.name}
+                                </span>
                               </SidebarMenuButton>
                             </SidebarMenuItem>
                           ))}
@@ -515,8 +518,15 @@ export function LibrarySidebar(props: Props) {
                               >
                                 <ChevronRight />
                                 <span className="flex min-w-0 flex-1 flex-col">
-                                  <span className="flex items-center gap-2">
-                                    <span className="truncate">
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    <span
+                                      className="min-w-0 flex-1 truncate"
+                                      title={
+                                        group.workflow
+                                          ? "워크플로우 실행"
+                                          : `${taskDisplayName(group.jobs[0].task || group.jobs[0].name)} 실행`
+                                      }
+                                    >
                                       {group.workflow
                                         ? "워크플로우 실행"
                                         : `${taskDisplayName(group.jobs[0].task || group.jobs[0].name)} 실행`}
@@ -525,7 +535,10 @@ export function LibrarySidebar(props: Props) {
                                       {group.jobs.length}
                                     </span>
                                   </span>
-                                  <span className="truncate text-muted-foreground">
+                                  <span
+                                    className="truncate text-muted-foreground"
+                                    title={runLabel(group.jobs[0].id)}
+                                  >
                                     {runLabel(group.jobs[0].id)}
                                   </span>
                                 </span>

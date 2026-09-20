@@ -585,10 +585,10 @@ textarea {
 }
 
 /* Sidebar owns offcanvas/Sheet behavior; Resizable reserves its desktop width. */
-.giraf-app { flex-direction: row; }
-.giraf-app > [data-slot="sidebar"] > [data-slot="sidebar-gap"] { display: none; }
+.workbench-body { position: relative; display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.workbench-body > [data-slot="sidebar"] > [data-slot="sidebar-gap"] { display: none; }
 .workbench-inset { height: 100%; min-height: 0; min-width: 0; overflow: hidden; }
-.giraf-app [data-slot="sidebar-container"] { transition-duration: 0s; }
+.workbench-body [data-slot="sidebar-container"] { position: absolute; height: 100%; transition-duration: 0s; }
 
 /* Fade boundaries follow the visible body below the fixed panel heading. */
 .inspector-pane { overflow: hidden; }
@@ -707,9 +707,6 @@ textarea {
 
 .viewer-comparison[hidden] { display: none; }
 
-.file-name { display: flex; min-width: 0; overflow: hidden; }
-.file-name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.file-name > span:last-child { flex-shrink: 0; }
 
 .node-state > svg {width:16px;height:16px;color:var(--foreground);}
 
@@ -912,8 +909,8 @@ textarea {
 .workflow-node .node-footer { margin-top:auto; padding-right:64px; }
 .workflow-node .node-input { padding-right:64px; }
 
-/* One toolbar, sized against the workspace rather than the window. */
-.workbench-inset { container-type: inline-size; }
+/* The shared toolbar spans the full workbench above both sidebars. */
+.giraf-app { container-type: inline-size; }
 .workbench-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(100px, 320px) minmax(0, 1fr);
