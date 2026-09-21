@@ -1,5 +1,5 @@
 import {customPortHandle,customOutput} from "./output-ports"
-import {inputPorts,outputPorts,matchesGroup,portHandle,type CalibrationGroup} from "./calibration-ports"
+import {inputPorts,outputPorts,primaryOutputRole,matchesGroup,portHandle,type CalibrationGroup} from "./calibration-ports"
 import {
   connectionRoles,
   layoutMap,
@@ -120,11 +120,12 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
       t.draft.inputs[s.role]?.length ||
       t.preprocess.inputs[s.role]?.length)
   )
-  const outputs = [...outputPorts(map,t,catalog,rows).filter(slot=>!slot.group).map(slot=>({...slot,name:t.outputPorts?.find(p=>customPortHandle(p.id)===slot.handleId)?.name ?? slot.name})), ...(t.outputPorts || []).filter(p=>!p.id.startsWith('$')).map(port=>({name:port.name,kind:"",default:"",handleId:customPortHandle(port.id),outputRole:port.outputRole,group:undefined,customId:port.id}))]
+  const outputs = [...outputPorts(map,t,catalog,rows).filter(slot => !slot.group).map(slot=>({...slot,name:t.outputPorts?.find(p=>customPortHandle(p.id)===slot.handleId)?.name ?? slot.name})), ...(t.outputPorts || []).filter(p=>!p.id.startsWith('$')).map(port=>({name:port.name,kind:"",default:"",handleId:customPortHandle(port.id),outputRole:port.outputRole,group:undefined,customId:port.id}))]
   const bodyHeight=48*Math.max(roles.length,1)
   const height=Math.max(128+bodyHeight,104+outputs.length*36)
   const outputY=height-24-outputs.length*36
   return {
+    primaryOutputRole:primaryOutputRole(spec),
     roles,
     bodyHeight,
     width:NODE_WIDTH,

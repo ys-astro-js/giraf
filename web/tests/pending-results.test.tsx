@@ -24,7 +24,7 @@ test('failed latest run never silently reuses older output; error names actual c
 })
 test('single-image input requires explicit file selection for multiple results and preserves pinned results',()=>{
  const m=fixture();m.connections[0].role='reference'
- expect(()=>payloadFor(m,'b',cat)).toThrow('파일 선택')
+ expect(()=>payloadFor(m,'b',cat)).toThrow('찾아보기…')
  m.connections[0].source={kind:'result',taskId:'a',runId:'old',ids:['old-file']}
  expect(payloadFor(m,'b',cat).inputs.reference).toEqual(['old-file'])
 })

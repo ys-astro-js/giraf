@@ -7,6 +7,7 @@ import {
   emptyMap,
   makeInstance,
   publishRun,
+  removeLibraryReferences,
 } from "../src/lib/task-map"
 import {
   connectionChoices,
@@ -17,6 +18,11 @@ import {
 } from "../src/lib/node-interaction"
 import { TaskResults } from "../src/components/task-results"
 import { TaskMapView } from "../src/components/task-map-view"
+import { plannedOutputs } from "../src/lib/workbench"
+import { editableOutputPorts } from "../src/lib/output-ports"
+import { outputPorts } from "../src/lib/calibration-ports"
+import { connectFlow, flowEdges } from "../src/lib/workflow-flow"
+import { OutputPortEditor } from "../src/components/output-port-editor"
 import type { Catalog, Preferences, Spec, Frame } from "../src/lib/workbench"
 const image: Spec = {
   name: "ccdproc",
@@ -313,7 +319,8 @@ test("completed status and typed output count share the footer without a result 
   expect(multiNode).not.toContain('node-output-kind');
   expect(multiNode).not.toContain('>FITS<');
   expect(multiNode).not.toContain('>GKI<');
-  expect(multiNode).toContain('zerocombine science 출력 연결');
+  expect(multiNode).toContain('aria-label="zerocombine 출력 연결"');
+  expect(multiNode).not.toContain('zerocombine science 출력 연결');
   expect(multiNode).toContain('zerocombine plots 출력 연결');
   expect(multiNode.split('class="node-output-row"').slice(1).every(row=>row.includes('node-output-summary') && row.includes('1개 항목'))).toBe(true);
 
@@ -341,3 +348,86 @@ test("only actively running nodes are highlighted and completion removes the run
   } else expect(node).not.toContain('node-running-icon');
  }
 });
+
+test('generic inputs stay visible while unused optional outputs stay compact after reload', () => {
+  const spec: Spec = {...combine, name:'images.immatch.imcombine', adapter:'generic', output:null,
+    inputs:[{name:'input', label:'Input', kind:'image', multiple:true, required:true}, {name:'aux',label:'Optional',kind:'text',multiple:false,required:false}],
+    outputs:[{name:'output',kind:'image',default:'combined.fits'}, {name:'nrejmasks',kind:'mask',default:'',optional:true}]}
+  const cat = {...catalog, tasks:[...catalog.tasks,spec]}
+  const task = makeInstance(spec,cat,prefs,'combine')
+  let map = addTask(emptyMap(),task)
+  const compact = nodeGeometry(map,task,cat)
+  expect(compact.roles.map(s=>s.name)).toEqual(['input','aux'])
+  expect(compact.outputs.map(s=>s.name)).toEqual([])
+  expect(compact.primaryOutputRole).toBe("output")
+  expect(editableOutputPorts(task,spec,map).map(p=>p.id)).toEqual(['$default'])
+  expect(outputPorts(map,task,cat,[]).map(p=>p.outputRole)).toEqual([])
+  const editor=renderToStaticMarkup(<OutputPortEditor task={task} map={map} spec={spec} edit={noop}/> )
+  expect(editor).toContain('기본 출력')
+  expect(editor).not.toContain('nrejmasks')
+  const canvas=renderToStaticMarkup(<TaskMapView map={map} catalog={cat} rows={[]} update={noop} add={noop} link={noop} open={noop} remove={noop} removeLink={noop}/> )
+  expect(canvas).toContain('data-handleid="output"')
+  expect(canvas).not.toContain('data-handleid="output:output"')
+  spec.outputs![0].mode = 'single'
+  spec.outputs![0].eachWhen = 'project'
+  task.draft.inputs.input = ['a','b']
+  task.draft.parameters.project = 'no'
+  expect(plannedOutputs(spec,task.draft,[])).toHaveLength(1)
+  task.draft.parameters.project = 'yes'
+  expect(plannedOutputs(spec,task.draft,[])).toHaveLength(2)
+  const restored = JSON.parse(JSON.stringify(map))
+  expect(nodeGeometry(restored,restored.tasks[0],cat).height).toBe(compact.height)
+  task.draft.inputs.aux = ['file']
+  task.draft.outputs!.nrejmasks = 'rejected.pl'
+  expect(nodeGeometry(map,task,cat).roles.map(s=>s.name)).toEqual(['input','aux'])
+  expect(nodeGeometry(map,task,cat).outputs.map(s=>s.name)).toEqual(['nrejmasks'])
+  expect(editableOutputPorts(task,spec,map).map(p=>p.id)).toEqual(['$default','$role:nrejmasks'])
+  task.outputPorts=[{id:'$role:nrejmasks',name:'Rejected',files:['*']},{id:'custom',name:'Selected',files:['*B.fits']}]
+  task.draft.outputs!.nrejmasks=''
+  expect(editableOutputPorts(task,spec,map).map(p=>p.id)).toEqual(['$default','custom'])
+  map.connections.push({id:'old',target:'other',role:'input',source:{kind:'pending',taskId:task.id,outputRole:'nrejmasks'}})
+  expect(editableOutputPorts(task,spec,map).map(p=>p.id)).toEqual(['$default','$role:nrejmasks','custom'])
+  map.connections.push({id:'default',target:'other',role:'input',source:{kind:'pending',taskId:task.id}})
+  expect(nodeGeometry(map,task,cat).primaryOutputRole).toBe('output')
+  expect(editableOutputPorts(task,spec,map)[0]).toMatchObject({name:'',outputRole:'output'})
+  const target=makeInstance(spec,cat,prefs,'other')
+  const linked=connectFlow(addTask({...map,connections:[]},target),cat,[],{source:task.id,target:target.id,sourceHandle:'output',targetHandle:'input'})
+  expect(linked.connections[0].source).toMatchObject({kind:'pending',outputRole:'output'})
+  const completed=publishRun(linked,task.id,{id:'finished',state:'completed',products:[{...product('main'),role:'output'},{...product('sigma'),role:'sigmas'}]})
+  const wire=connectFlow({...completed,connections:[]},cat,[],{source:task.id,target:target.id,sourceHandle:'output',targetHandle:'input'})
+  expect(wire.connections[0].source).toMatchObject({outputRole:'output',ids:['main']})
+  expect(flowEdges(linked,cat)[0].sourceHandle).toBe('output')
+  linked.connections[0].source={kind:'pending',taskId:task.id,outputRole:'output',port:'output:output'}
+  expect(flowEdges(linked,cat)[0].sourceHandle).toBe('output')
+})
+
+test('clearing or deleting input files removes empty references before connecting another node', () => {
+  let map=fixture()
+  map=connect(map,'b','images',{kind:'files',ids:['gone'],label:'Files'},false)
+  map=connect(map,'b','images',{kind:'files',ids:[],label:''},false)
+  expect(map.connections.filter(c=>c.target==='b'&&c.role==='images')).toHaveLength(0)
+  // Older saved maps may contain these empty selections.
+  map.connections.push({id:'empty',target:'b',role:'images',source:{kind:'files',ids:[],label:''}})
+  const render=(m:typeof map)=>renderToStaticMarkup(<TaskMapView map={m} catalog={catalog} rows={[]} update={noop} add={noop} link={noop} open={noop} remove={noop} removeLink={noop}/>)
+  expect(render(map)).not.toContain('파일 0개')
+  map=connect(map,'b','images',{kind:'pending',taskId:'a'})
+  expect(map.connections.some(c=>c.id==='empty')).toBe(false)
+  expect(render(map)).not.toContain('파일 0개')
+  map=connect(map,'b','images',{kind:'files',ids:['gone','keep'],label:'Files'})
+  map.tasks.find(t=>t.id==='b')!.draft.inputs.zero=['gone']
+  map.tasks.find(t=>t.id==='b')!.preprocess.inputs.dark=['gone','keep']
+  const cleaned=removeLibraryReferences(map,new Set(['gone']),new Set())
+  expect(cleaned.tasks.find(t=>t.id==='b')!.draft.inputs.zero).toEqual([])
+  expect(cleaned.tasks.find(t=>t.id==='b')!.preprocess.inputs.dark).toEqual(['keep'])
+  expect(cleaned.connections.find(c=>c.source.kind==='files')?.source).toMatchObject({ids:['keep']})
+  const empty=removeLibraryReferences(cleaned,new Set(['keep']),new Set())
+  expect(empty.connections).toHaveLength(1)
+  expect(empty.connections[0].source).toMatchObject({kind:'pending',taskId:'a'})
+  expect(render(empty)).not.toContain('파일 0개')
+  expect(map.connections.find(c=>c.source.kind==='files')?.source).toMatchObject({ids:['gone','keep']})
+  const withResult=publishRun(empty,'a',{id:'job',state:'completed',products:[product('result')]})
+  withResult.connections[0].source={kind:'result',taskId:'a',runId:'job',ids:['result']}
+  const withoutJob=removeLibraryReferences(withResult,new Set(['result']),new Set(['job']))
+  expect(withoutJob.runs).toHaveLength(0)
+  expect(withoutJob.connections[0].source).toMatchObject({kind:'pending',taskId:'a'})
+})

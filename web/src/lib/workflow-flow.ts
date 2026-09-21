@@ -1,5 +1,5 @@
 import {customOutput, customPortHandle} from "./output-ports"
-import {parsePort,sourceForGroup,targetGroupFor,matchesGroup,groupEqual,inputPorts} from "./calibration-ports"
+import {parsePort,sourceForGroup,targetGroupFor,matchesGroup,groupEqual,inputPorts,primaryOutputRole} from "./calibration-ports"
 import {
   applyNodeChanges,
   Position,
@@ -16,7 +16,7 @@ import {
   nodeOutput,
   roleActive,
 } from "./node-interaction"
-import type { Catalog, Frame } from "./workbench"
+import type { Catalog, Frame, Spec } from "./workbench"
 
 export type TaskFlowNode = Node<
   {
@@ -124,6 +124,14 @@ export function flowNodes(
   })
   return [...groups, ...tasks]
 }
+function outputHandle(source: Source, spec: Spec | undefined) {
+  if (source.kind === "files") return "output"
+  const primary = primaryOutputRole(spec)
+  if (primary && source.outputRole === primary && (!source.port || source.port === "output:" + primary)) return "output"
+  if (source.port && !source.port.startsWith("output-group:")) return source.port
+  if (source.group) return "output"
+  return source.outputRole && (spec?.outputs?.length || 0)>1 ? "output:" + source.outputRole : "output"
+}
 export function flowEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
   return map.connections.flatMap((connection) => {
     const sourceId =
@@ -137,7 +145,7 @@ export function flowEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
         id: connection.id,
         source: source.id,
         target: target.id,
-        sourceHandle: connection.source.port && !connection.source.port.startsWith("output-group:") ? connection.source.port : connection.source.group ? "output" : (connection.source.kind !== "files" && connection.source.outputRole && (catalog.tasks.find(s=>s.name===source.task)?.outputs?.length || 0)>1 ? "output:" + connection.source.outputRole : "output"),
+        sourceHandle: outputHandle(connection.source,catalog.tasks.find(s=>s.name===source.task)),
         targetHandle: connection.role,
         style: { opacity: matches(source, search) && matches(target, search) ? 1 : 0.3 },
         className:
@@ -169,12 +177,12 @@ export function connectFlow(
     : map
   // Keep a frozen result version when only the target of an existing edge changes.
   const prior = map.connections.find((c) => c.id === replacingId)
-  const outputRole=customPort ? customPort.outputRole : sourcePort ? (sourcePort.role === "$primary" ? undefined : sourcePort.role) : connection.sourceHandle?.startsWith("output:") ? connection.sourceHandle.slice(7) : undefined
+  const outputRole=customPort ? customPort.outputRole : sourcePort ? (sourcePort.role === "$primary" ? undefined : sourcePort.role) : connection.sourceHandle?.startsWith("output:") ? connection.sourceHandle.slice(7) : primaryOutputRole(catalog.tasks.find(s=>s.name===map.tasks.find(t=>t.id===connection.source)?.task))
   const source =
     prior &&
     prior.source.kind !== "files" &&
     prior.source.taskId === connection.source &&
-    (prior.source.port || (prior.source.outputRole && (catalog.tasks.find(s=>s.name===map.tasks.find(t=>t.id===connection.source)?.task)?.outputs?.length || 0)>1 ? 'output:'+prior.source.outputRole : 'output')) === connection.sourceHandle &&
+    outputHandle(prior.source,catalog.tasks.find(s=>s.name===map.tasks.find(t=>t.id===connection.source)?.task)) === connection.sourceHandle &&
     prior.source.outputRole === outputRole && JSON.stringify(prior.source.group) === JSON.stringify(sourcePort?.group)
       ? prior.source
       : customPort ? customOutput(base,connection.source,customPort) : nodeOutput(base, connection.source, outputRole,sourcePort?.group)

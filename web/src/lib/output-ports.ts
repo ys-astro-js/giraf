@@ -1,4 +1,4 @@
-import { matchesGroup, type CalibrationGroup } from "./calibration-ports"
+import { activeOutputSlots, primaryOutputRole, matchesGroup, type CalibrationGroup } from "./calibration-ports"
 import { acceptsAsset, type Catalog, type Frame, type Spec } from "./workbench"
 import type { Source, TaskMap } from "./task-map"
 
@@ -16,12 +16,13 @@ export const customPortHandle = (id: string) =>
       : `output-custom:${id}`
 export function editableOutputPorts(
   task: import("./task-map").Instance,
-  spec: Spec
+  spec: Spec,
+  map?: TaskMap
 ): CustomOutputPort[] {
   const base: CustomOutputPort[] = [
-    { id: "$default", name: "", files: ["*"] },
+    { id: "$default", name: "", files: ["*"], outputRole: primaryOutputRole(spec) },
     ...((spec.outputs?.length || 0) > 1
-      ? spec.outputs!.map((s) => ({
+      ? activeOutputSlots(task,spec,map).filter(s=>s.name!==primaryOutputRole(spec)).map((s) => ({
           id: "$role:" + s.name,
           name: s.name,
           files: ["*"],
@@ -33,7 +34,7 @@ export function editableOutputPorts(
     ...base.map(
       (p) => task.outputPorts?.find((saved) => saved.id === p.id) || p
     ),
-    ...(task.outputPorts || []).filter((p) => !base.some((b) => b.id === p.id)),
+    ...(task.outputPorts || []).filter((p) => !p.id.startsWith('$')),
   ]
 }
 

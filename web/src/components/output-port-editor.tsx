@@ -32,7 +32,7 @@ export function OutputPortEditor({
   spec: Spec
   edit: (fn: (task: Instance) => Instance) => void
 }) {
-  const ports = editableOutputPorts(task, spec)
+  const ports = editableOutputPorts(task, spec, map)
   const [open, setOpen] = useState<string[]>([])
   const run = map.runs.filter((r) => r.instanceId === task.id).at(-1)
   const products =

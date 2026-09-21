@@ -4,7 +4,6 @@ The same analyzer is used for source-distributed extensions and to build the
 versioned bundled schema cache. Source facts refine the parameter-derived schema; missing source never blocks
 a node. External profiles are optional overrides for unusual task semantics.
 """
-import hashlib
 import re
 
 
@@ -21,69 +20,23 @@ def arguments(text):
 
 
 def calls(source):
-    for m in re.finditer(r'\b([A-Za-z_]\w*)\s*\(',source):
-        i=m.end();start=i;depth=1;quote=False
-        while i<len(source) and depth:
-            ch=source[i]
-            if ch=='"':quote=not quote
-            if not quote:
-                if ch=='(':depth+=1
-                elif ch==')':depth-=1
+    # Preserve offsets while excluding strings and character literals from
+    # syntax. Diagnostics can contain apparent calls and parentheses.
+    syntax = re.sub(r'''"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*' ''',
+                    lambda m: ' ' * len(m[0]), source, flags=re.X)
+    for m in re.finditer(r'\b([A-Za-z_]\w*)\s*\(',syntax):
+        i=m.end();start=i;depth=1
+        while i<len(syntax) and depth:
+            ch=syntax[i]
+            if ch=='(':depth+=1
+            elif ch==')':depth-=1
             i+=1
         if depth==0:yield m.start(),m.group(1).lower(),arguments(source[start:i-1])
 
 
 def infer_profile(parameters, source):
-    # Strip comments; descriptions are deliberately not used to infer direction.
-    source='\n'.join(line.split('#',1)[0] for line in source.splitlines())
-    body=re.split(r'^end\s*$', source.split('\nbegin',1)[-1], maxsplit=1, flags=re.M)[0]
-    pars={p['name']:p for p in parameters}; values={}; lists=set(); ports={}; evidence=[]; issues=[]; hints=[]
-    def var(s):return re.sub(r'\s+','',s)
-    def origin(s):return values.get(var(s))
-    for pos,fn,args in calls(body):
-        prefix=body[:pos];m=re.search(r'(\w+)\s*=\s*$',prefix);dest=m[1] if m else None
-        if fn=='clgstr' and len(args)>1 and args[0].strip('"') in pars:
-            values[var(args[1])]=args[0].strip('"')
-        elif fn in ('imtopenp','clpopnu','clpopni','clpopns') and dest and args and args[0].strip('"') in pars:
-            values[dest]=args[0].strip('"');lists.add(args[0].strip('"'))
-        elif fn in ('imtopen','fntopnb') and dest and args and origin(args[0]):
-            values[dest]=origin(args[0]);lists.add(origin(args[0]))
-        elif fn in ('imtgetim','clgfil','fntgfnb') and len(args)>1 and origin(args[0]):
-            values[var(args[1])]=origin(args[0])
-        elif fn in ('strcpy','strcat') and len(args)>1 and origin(args[0]):
-            values[var(args[1])]=origin(args[0])
-        elif fn == 'aptmpimage' and len(args) >= 4 and origin(args[1]):
-            role = origin(args[1])
-            hints.append(dict(name=role, naming='prefix', kind='image', mode='each'))
-            evidence.append(dict(parameter=role, call=fn, direction='output', naming='prefix'))
-        elif fn in ('immap','open') and len(args)>1:
-            role=origin(args[0]);mode=args[1]
-            if role:
-                if mode not in ('READ_ONLY','NEW_COPY','NEW_IMAGE','NEW_FILE','APPEND','READ_WRITE'):
-                    issues.append(f'{role}: dynamic access mode');continue
-                if mode in ('APPEND','READ_WRITE'):
-                    issues.append(f'{role}: in-place update');continue
-                direction='inputs' if mode=='READ_ONLY' else 'outputs'
-                kind='image' if fn=='immap' else 'text'
-                if fn=='open' and len(args)>2 and args[2]!='TEXT_FILE':issues.append(f'{role}: binary file');continue
-                prior=ports.get(role)
-                if prior and prior!=(direction,kind):issues.append(f'{role}: conflicting file uses');continue
-                ports[role]=(direction,kind);evidence.append(dict(parameter=role,call=fn,access=mode))
-    inputs=[];outputs=[]
-    for name,p in pars.items():
-        if name not in ports:continue
-        direction,kind=ports[name]
-        if direction=='inputs':inputs.append(dict(name=name,kind=kind,multiple=name in lists,required=p.get('mode','')!='h' and not p.get('default')))
-        else:outputs.append(dict(name=name,kind=kind,mode='each' if name in lists else 'single',default=name+'_' if name in lists else name+('.fits' if kind=='image' else '.txt')))
-    fixed={p['name']:'no' for p in parameters if p['name'] in ('interactive','verify','update') and p['type']=='b'}
-    # Recognized ports are necessary, not sufficient, for arbitrary SPP programs.
-    # Reject directly visible external mutation/commands rather than hiding it in
-    # an ordinary string parameter. Specialized adapters can still implement it.
-    if any(fn == 'oscmd' or (fn in ('imdelete','imrename','delete','rename') and args and origin(args[0])) for _,fn,args in calls(body)):
-        # Temporary-image cleanup is also conservatively excluded here.
-        issues.append('file mutation requires an adapter')
-    complete=bool(ports) and not issues
-    return dict(profile=dict(inputs=inputs,outputs=outputs,fixed=fixed),evidence=evidence,issues=issues,hints=hints,complete=complete,sourceHash=hashlib.sha256(source.encode()).hexdigest())
+    from .spp_schema import analyze_text
+    return analyze_text(parameters, source)
 
 
 def parameter_profile(parameters, preserve_plural=False):
@@ -100,6 +53,9 @@ def parameter_profile(parameters, preserve_plural=False):
         if name in ('mode', '$nargs') or p.get('choices') or typ == 'pset':
             continue
         prompt = p.get('prompt', '').lower().strip()
+        # Terminal streams are settings, not files to select or stage.
+        if p.get('default') in ('STDOUT', 'STDERR') and re.search(r'\blog file\b', prompt):
+            continue
         # A list parameter is a stream of typed values. Cursor lists can use
         # command files; scalar cursors are cursor values, not file names.
         if typ.startswith('*'):
@@ -125,7 +81,9 @@ def parameter_profile(parameters, preserve_plural=False):
             # "Output images or directory" is still an image destination.
             if not re.match(r'^(?:the )?output images? or directory\b', prompt):
                 continue
-        lead = re.sub(r'^(?:the |a |an )', '', prompt)
+        if re.search(r'\b(?:image|mask)\s+(?:scaling|weights?|zero point|offsets?|shifts?|value)\b', prompt) or re.match(r'^integer offsets\b', prompt):
+            continue
+        lead = re.sub(r'^(?:optional\s+)?(?:the |a |an )?', '', prompt)
         lead = re.split(r'\(default\s*:', lead, maxsplit=1)[0]
         lead = re.sub(r'\((?!s\))[^)]*\)', '', lead)
         declared_list = bool(re.match(r'list of ', lead))
@@ -134,6 +92,7 @@ def parameter_profile(parameters, preserve_plural=False):
         noun = r'(?:images?|spectra|spectrum|masks?|files?|textfiles?|tables?|coordinates?|coords|photometry|sky|reference|operand|resultant|results?)\b'
         is_file = bool(re.match(r'(?:(?:input|output|reference|template|resultant|operand|in\/out|modified|new)\s+)*' + noun, lead))
         is_file = is_file or bool(re.search(r'\b(?:image|images|file|files|metacode)\b', lead)) or bool(re.match(r'(?:input|output)\b.*\bimages?\b', lead))
+        is_file = is_file or bool(re.match(r'^output\b.*\bmasks?\b', lead))
         if not is_file:
             continue
         # f validates filenames but does not declare direction or data format.
@@ -143,7 +102,7 @@ def parameter_profile(parameters, preserve_plural=False):
         direction = 'outputs' if output else 'inputs'
         kind = 'metacode' if re.search(r'\b(?:metacode|gki)\b', lead) else 'binary' if re.search(r'\bbinary\b', lead) else 'mask' if re.search(r'\bmask(?:s)?\b', lead) else 'image' if re.search(r'\b(?:images?|spectra|spectrum)\b', lead) else 'text'
         multiple = bool(re.search(r'\b(?:images|spectra|files|lists|tables|textfiles)\b|\(s\)', lead)) or declared_list
-        scalar = bool(re.search(r'\b(?:constant|constants|number|numerical)\b', prompt))
+        scalar = bool(re.search(r'\b(?:constants?|numerical)\b|\bor\s+(?:(?:a|an)\s+)?numbers?\b', prompt))
         item = dict(name=name, kind=kind, label=p.get('prompt') or name)
         if output:
             optional = 'h' in p.get('mode', '') and p.get('default') == ''
@@ -170,9 +129,9 @@ def node_profile(parameters, inferred=None):
     """Use parameter metadata everywhere; refine known roles with source facts."""
     generated = parameter_profile(parameters)
     profile = generated['profile']
-    if inferred and inferred.get('complete'):
+    if inferred and inferred.get('profile'):
         source = inferred['profile']
-        known = {p['name'] for direction in ('inputs', 'outputs') for p in source[direction]}
+        known = {p['name'] for direction in ('inputs', 'outputs') for p in source[direction]} | set(inferred.get('parameterControls', []))
         for direction in ('inputs', 'outputs'):
             by_name = {p['name']: p for p in profile[direction]}
             profile[direction] = [p for p in profile[direction] if p['name'] not in known]
@@ -184,6 +143,7 @@ def node_profile(parameters, inferred=None):
             order = {p['name']: i for i, p in enumerate(parameters)}
             profile[direction].sort(key=lambda p: order[p['name']])
         generated['evidence'] += inferred.get('evidence', [])
+        generated['sourceRoles'] = sorted(known)
     if inferred:
         for hint in inferred.get('hints', []):
             for slot in profile['outputs']:
@@ -236,6 +196,12 @@ def refine_help(generated, parameters, source):
     for match in re.finditer(r'^\.ls\s+(\w+)[^\n]*\n(.*?)(?=^\.l[se]\b|\Z)', section, re.M | re.S):
         name, paragraph = match.groups()
         p = pars.get(name)
+        # Some installed help headings use a singular form of a plural .par name.
+        if p is None and name + 's' in pars:
+            name += 's'
+            p = pars[name]
+        if name in generated.get('sourceRoles', []):
+            continue
         if not p or p['type'] not in ('s', 'f') or p.get('choices'):
             continue
         paragraph = re.sub(r'\\f[BRI]', '', paragraph)

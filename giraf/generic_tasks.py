@@ -110,12 +110,19 @@ def validate_generic(spec, payload, resolve):
     if payload.get('filePolicy', {}).get('mode', 'copy') != 'copy':
         raise ValueError('범용 작업은 사본에서 실행합니다. 파일 처리를 사본으로 선택해 주세요.')
     directory = str(Path(payload.get('workingDirectory') or ROOT).expanduser().resolve())
-    supplied = payload.get('parameters', {})
+    # Retired empty controls may now be managed output destinations.
+    output_roles = {s['name'] for s in spec['outputs']}
+    supplied = {k: v for k, v in payload.get('parameters', {}).items()
+                if k not in output_roles or v != ''}
     # A file can replace a numeric operand, so do not require an unused scalar.
     scalar_names = {s['name'] for s in spec['inputs'] if s.get('scalar')}
     ordinary = [p for p in spec['parameters'] if p['name'] not in scalar_names]
     if set(supplied) - {p['name'] for p in spec['parameters']}: raise ValueError('알 수 없는 파라미터가 있습니다.')
     params = checked_values(ordinary, {k: v for k, v in supplied.items() if k not in scalar_names})
+    spec = deepcopy(spec)
+    for slot in spec['outputs']:
+        if slot.get('eachWhen'):
+            slot['mode'] = 'each' if params.get(slot['eachWhen']) == 'yes' else 'single'
     supplied_sets = payload.get('parameterSets', {})
     if set(supplied_sets) - {s['name'] for s in spec['parameterSets']}: raise ValueError('알 수 없는 파라미터 세트입니다.')
     sets = {s['name']: checked_values(s['parameters'], supplied_sets.get(s['name'], {})) for s in spec['parameterSets']}
@@ -144,7 +151,7 @@ def validate_generic(spec, payload, resolve):
     # A catalog reload can turn an inferred file port back into a parameter.
     # Old drafts retain empty selections for it; discard only those placeholders.
     # Keep rejecting unknown roles or actual file selections rather than losing data.
-    parameter_roles = {p['name'] for p in spec['parameters']} - roles
+    parameter_roles = ({p['name'] for p in spec['parameters']} | output_roles) - roles
     supplied_inputs = {k: v for k, v in supplied_inputs.items()
                        if k not in parameter_roles or v != []}
     expressions = {k: v for k, v in expressions.items()

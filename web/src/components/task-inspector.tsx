@@ -94,7 +94,7 @@ export function assigned(
   role: string
 ): { ids: string[]; pending: string[] } {
   const links = map.connections
-    .filter((c) => c.target === t.id && c.role === role)
+    .filter((c) => c.target === t.id && c.role === role && (c.source.kind !== 'files' || c.source.ids.length>0))
     .map((c) => ({ ...c, source: resolvedSource(map, c.source) }))
   return {
     ids: links.length
@@ -319,7 +319,7 @@ export function TaskInspector({
           ? rows.find((r) => r.id === ids[0])?.label || "파일 1개"
           : ids.length
             ? `파일 ${ids.length}개`
-            : "입력 선택")
+            : "선택…")
     const replace = (next: string[]) => {
       onInputSource?.(s.name, { kind: "files", ids: next, label: s.label })
       if (!onInputSource) reorderInput(s.name, next)
@@ -386,7 +386,7 @@ export function TaskInspector({
                 }
               >
                 <FolderOpen />
-                파일 선택
+                찾아보기…
               </Button>
               <ul className="input-files">
                 {ids.slice(0, limit).map((id, i) => {

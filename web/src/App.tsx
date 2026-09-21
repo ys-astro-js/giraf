@@ -71,6 +71,7 @@ import {
 import {
   emptyMap,
   removeTask,
+  removeLibraryReferences,
   restoreTask,
   addTask,
   makeInstance,
@@ -756,7 +757,7 @@ function App() {
     setCache(previous => Object.fromEntries(Object.entries(previous).filter(([id]) => !fileIds.has(id))))
     setWorkspace(previous => ({...previous, files: previous.files.filter(file => !fileIds.has(file.id))}))
     setJobs(previous => previous.filter(job => !jobIds.has(job.id)).map(job => ({...job, products: job.products.filter(file => !fileIds.has(file.id))})))
-    update(previous => ({...previous, runs: previous.runs.filter(run => !jobIds.has(run.id)).map(run => ({...run, products: run.products.filter(file => !fileIds.has(file.id))}))}))
+    update(previous => removeLibraryReferences(previous,fileIds,jobIds))
     if (asset && fileIds.has(asset.row.id)) setAsset(null)
     setCompare(previous => previous.filter(id => !fileIds.has(id)))
     if (jobIds.has(selectedJob)) { setSelectedJob(""); setLogRequest(null); setTrayOpen(false) }

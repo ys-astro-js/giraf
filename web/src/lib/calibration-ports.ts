@@ -1,4 +1,4 @@
-import type {Catalog,Frame,Slot} from './workbench'
+import type {Catalog,Frame,Slot,Spec} from './workbench'
 import type {Instance,TaskMap,Source} from './task-map'
 import {metadataMode,metadataItems,correctionRoles,correctionFlags,type MetadataMode} from './calibration'
 
@@ -68,6 +68,14 @@ export function inputPorts(map:TaskMap,task:Instance,catalog:Catalog,rows:Frame[
   return [base,...ports]
  })
 }
+export function activeOutputSlots(task:Instance,spec:Spec,map?:TaskMap) {
+ return (spec.outputs || []).filter(slot=>!slot.optional || !!task.draft.outputs?.[slot.name]?.trim() ||
+  map?.connections.some(c=>c.source.kind!=='files' && c.source.taskId===task.id &&
+   (c.source.outputRole===slot.name || c.source.port==='output:'+slot.name)))
+}
+export function primaryOutputRole(spec:Spec|undefined) {
+ return spec?.adapter==='generic' ? (spec.outputs?.find(slot=>!slot.optional) || spec.outputs?.[0])?.name : undefined
+}
 export function outputPorts(map:TaskMap,task:Instance,catalog:Catalog,rows:Frame[]):OutputPort[] {
  const spec=catalog.tasks.find(s=>s.name===task.task)
  if(!spec)return []
@@ -79,7 +87,7 @@ export function outputPorts(map:TaskMap,task:Instance,catalog:Catalog,rows:Frame
   for(const c of map.connections)if(c.source.kind!=='files'&&c.source.taskId===task.id&&c.source.port&&c.source.group&&!known.some(g=>groupEqual(g,c.source.group)))known.push(c.source.group)
   if(known.length)return known.map(group=>({name:groupLabel(group),kind:'image',default:'',group,outputRole,handleId:portHandle('output',outputRole||'$primary',group)}))
  }
- return (spec.outputs?.length||0)>1?spec.outputs!.map(s=>({...s,outputRole:s.name,handleId:'output:'+s.name})):[]
+ return (spec.outputs?.length||0)>1?activeOutputSlots(task,spec,map).filter(s=>s.name!==primaryOutputRole(spec)).map(s=>({...s,outputRole:s.name,handleId:'output:'+s.name})):[]
 }
 export function sourceForGroup(source:Source,group:CalibrationGroup,rows:Frame[]):Source {
  if(source.group && Object.keys(group).some(k=>!(k in source.group!) || source.group![k as keyof CalibrationGroup]!==group[k as keyof CalibrationGroup]))throw Error('서로 다른 Filter 또는 Exposure time 포트는 연결할 수 없습니다.')

@@ -87,6 +87,12 @@ def read_parameters(path):
         explicit_default = len(fields) > 3 and (bool(fields[3]) or fields.quoted[3])
         fields += [''] * max(0, 7 - len(fields))
         name, typ, mode, value, low, high = fields[:6]
+        declared_type = typ
+        file_checks = []
+        if re.fullmatch(r'f[bnrtw]+', typ):
+            checks = dict(b='binary', n='absent', r='readable', t='text', w='writable')
+            file_checks = [checks[flag] for flag in typ[1:]]
+            typ = 'f'
         prompt = ','.join(fields[6:]).strip()
         if not re.fullmatch(r'[A-Za-z_$][\w$]*', name) or any(p['name'] == name for p in result):
             raise ValueError(f'{path}: 잘못되거나 중복된 파라미터 이름 {name}')
@@ -105,6 +111,8 @@ def read_parameters(path):
                            choices=choices, min=low, max=high, prompt=prompt,
                            required='h' not in mode and not explicit_default,
                            hasDefault=explicit_default))
+        if file_checks:
+            result[-1].update(declaredType=declared_type, fileChecks=file_checks)
     return result
 
 def load_installed(snapshot):

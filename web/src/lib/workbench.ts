@@ -2,7 +2,7 @@ import {headerFrame} from "./calibration"
 export type Values = Record<string, string | number | boolean | null>
 export type Param = { mode?:string; required?:boolean; indirect?:string; name:string; type:string; default:string | number | boolean | null; choices:string[]; prompt:string; min:unknown; max:unknown }
 export type Slot = { valueType?:string; cursorType?:string; representation?:string; name:string; label:string; multiple:boolean; required?:boolean; kind:string }
-export type OutputSlot = { optional?:boolean; name:string; kind:string; default:string; mode?:string; label?:string }
+export type OutputSlot = { eachWhen?:string; optional?:boolean; name:string; kind:string; default:string; mode?:string; label?:string }
 export type ParameterSet = { name:string; task:string; parameters:Param[] }
 export type Spec = { executor?:'image-list'; taskName?:string; adapter?:'generic'; runnable?:boolean; reason?:string; description?:string; outputs?:OutputSlot[]; parameterSets?:ParameterSet[]; name:string; title:string; package:string; parameters:Param[]; inputs:Slot[]; output:{ name:string; mode:string; default:string } | null; kind:string; preprocess?:boolean }
 export type Catalog = { version:string; tasks:Spec[]; ccdproc:{parameters:Param[];inputs:Slot[]}; ccdred:Param[]; exam:Record<string,Param[]>; capabilities?:{version:string;schemaFingerprint:string;fallback:string[];limits:Record<string,string>} }
@@ -41,7 +41,8 @@ export function plannedOutputs(task:Spec,draft:Draft,rows:Frame[],_mapping:Value
     const outputs=(task.outputs||[]).flatMap(slot=>{
       const value=draft.outputs?.[slot.name]??slot.default
       if(slot.optional&&!value)return []
-      return slot.mode==='each'?ids.map(id=>{const row=rows.find(r=>r.id===id),stem=(row?.name||row?.label||id).replace(/\.[^.]*$/, '');return {input:row?.label||id,output:value+stem+({image:'.fits',mask:'.pl',text:'.txt',metacode:'.gki',binary:'.bin','image-list':'.list'}[slot.kind]||'')}}):[{input:task.taskName||task.name,output:value}]
+      const each = slot.eachWhen ? draft.parameters[slot.eachWhen] === 'yes' : slot.mode === 'each'
+      return each?ids.map(id=>{const row=rows.find(r=>r.id===id),stem=(row?.name||row?.label||id).replace(/\.[^.]*$/, '');return {input:row?.label||id,output:value+stem+({image:'.fits',mask:'.pl',text:'.txt',metacode:'.gki',binary:'.bin','image-list':'.list'}[slot.kind]||'')}}):[{input:task.taskName||task.name,output:value}]
     })
     return outputs.length?outputs:[{input:task.taskName||task.name,output:'실행 로그'}]
   }

@@ -141,7 +141,7 @@ const TaskNode = memo(function TaskNode({
   const { task, geometry } = data
   const spec = catalog.tasks.find((s) => s.name === task.task)
   const run = map.runs.filter((r) => r.instanceId === id).at(-1)
-  const output = nodeOutput(map, id)
+  const output = nodeOutput(map, id, geometry.primaryOutputRole)
   const primaryName = task.outputPorts?.find(p=>p.id==="$default")?.name.trim() || ""
   const flow = useReactFlow<TaskFlowNode>()
   const clickStart = useStore((state) => state.connectionClickStartHandle)
@@ -152,7 +152,7 @@ const TaskNode = memo(function TaskNode({
   )
   const inputHandles = useRef(new Map<string, HTMLDivElement>())
   const updateNodeInternals = useUpdateNodeInternals()
-  const handlesKey = [primaryName,String(geometry.width),...geometry.roles.map((s) => s.name),...geometry.outputs.map(s=>s.handleId+":"+s.name)].join("|")
+  const handlesKey = [primaryName,String(geometry.primaryOutputRole),String(geometry.width),...geometry.roles.map((s) => s.name),...geometry.outputs.map(s=>s.handleId+":"+s.name)].join("|")
   useEffect(() => {
     updateNodeInternals(id)
   }, [id, handlesKey, updateNodeInternals])
@@ -207,7 +207,9 @@ const TaskNode = memo(function TaskNode({
             const allRows=[...rows,...map.runs.flatMap(r=>r.products)]
             const a = slot.group ? {...assignedRole,ids:assignedRole.ids.filter(id=>{const frame=allRows.find(r=>r.id===id);return frame&&(frame.asset==="image-list"||matchesGroup(frame,slot.group!))})} : assignedRole
             const links = map.connections.filter(
-              (c) => c.target === id && c.role === slot.role && (!slot.group || !c.targetGroup || groupEqual(slot.group,c.targetGroup))
+              (c) => c.target === id && c.role === slot.role &&
+                (c.source.kind !== 'files' || c.source.ids.length>0) &&
+                (!slot.group || !c.targetGroup || groupEqual(slot.group,c.targetGroup))
             )
             const summary =
               (task.draft.textInputs?.[slot.name]?.trim() ? "직접 입력 " + task.draft.textInputs[slot.name].trim().split("\n").length + "행" : "") ||

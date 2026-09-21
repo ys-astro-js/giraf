@@ -172,8 +172,8 @@ export function connect(
   return {
     ...map,
     connections: [
-      ...connections.filter(c => !(c.target === target && c.role === role && JSON.stringify(c.source) === JSON.stringify(source))),
-      { id: uid(), target, role, source: clone(source), ...(targetGroup?{targetGroup}: {}) },
+      ...connections.filter(c => !(c.source.kind === 'files' && !c.source.ids.length) && !(c.target === target && c.role === role && JSON.stringify(c.source) === JSON.stringify(source))),
+      ...(source.kind === 'files' && !source.ids.length ? [] : [{ id: uid(), target, role, source: clone(source), ...(targetGroup?{targetGroup}: {}) }]),
     ],
     tasks: map.tasks.map((t) =>
       t.id !== target
@@ -239,6 +239,31 @@ export function replaceRoleInputs(
 }
 export function disconnect(map: TaskMap, id: string): TaskMap {
   return { ...map, connections: map.connections.filter((c) => c.id !== id) };
+}
+/** Remove confirmed deleted assets without disconnecting an upstream task. */
+export function removeLibraryReferences(map: TaskMap, fileIds: Set<string>, jobIds: Set<string>): TaskMap {
+  const removed = new Set([...fileIds, ...map.runs.filter(run=>jobIds.has(run.id)).flatMap(run=>run.products.map(p=>p.id))]);
+  const inputs = (values: Record<string,string[]>) => Object.fromEntries(
+    Object.entries(values).map(([role,ids])=>[role,ids.filter(id=>!removed.has(id))]));
+  return {
+    ...map,
+    tasks: map.tasks.map(task=>({...task,
+      draft:{...task.draft,inputs:inputs(task.draft.inputs)},
+      preprocess:{...task.preprocess,inputs:inputs(task.preprocess.inputs)},
+    })),
+    runs: map.runs.filter(run=>!jobIds.has(run.id)).map(run=>({...run,products:run.products.filter(p=>!removed.has(p.id))})),
+    connections: map.connections.flatMap(connection=>{
+      const source=connection.source;
+      if(source.kind==='pending') return [connection];
+      const ids=source.ids.filter(id=>!removed.has(id));
+      if(ids.length) return [{...connection,source:{...source,ids}}];
+      if(source.kind==='result' && source.taskId && map.tasks.some(t=>t.id===source.taskId)) {
+        const {runId: _runId, ids: _ids, ...selector}=source;
+        return [{...connection,source:{...selector,kind:'pending' as const,taskId:source.taskId}}];
+      }
+      return [];
+    }),
+  };
 }
 export function replacePending(
   map: TaskMap,
@@ -380,7 +405,7 @@ export function payloadFor(map: TaskMap, id: string, catalog: Catalog) {
         c.source.kind !== "pending" ? c.source.ids : [],
       );
       if (requiredNow && !t.expressions[slot.name] && !slot.multiple && inputs[slot.name].length > 1) {
-        throw Error(`${slot.name}: 이 입력에는 파일 한 개가 필요합니다. 입력 변경 → 파일 → 파일 선택에서 사용할 결과 파일을 선택해 주세요.`);
+        throw Error(`${slot.name}: 파일 한 개가 필요합니다. 입력 항목을 열고 ‘파일’ → ‘찾아보기…’에서 사용할 결과 파일 하나를 선택해 주세요.`);
       }
     }
     inputs[slot.name] ??= [];
@@ -448,6 +473,7 @@ export function restoreRun(
 export function migrateMap(prefs: Preferences, catalog: Catalog): TaskMap {
   if (prefs.taskMap?.version === 1) {
     const map = clone(prefs.taskMap);
+    map.connections = map.connections.filter(c=>c.source.kind!=='files' || c.source.ids.length>0);
     map.tasks = map.tasks.map(t => {
       const spec = catalog.tasks.find(s => s.name === t.task);
       return spec?.adapter === 'generic' ? {...t, draft: makeDraft(spec, t.draft),

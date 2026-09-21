@@ -170,16 +170,17 @@ def discover(root=None, extra_roots=(), descriptors=()):
                             inputs=[], outputs=[], output=None, kind='text', parameters=parameters,
                             parameterSets=sets, loadPackages=pkg['loadPackages'], bootstrap=pkg['bootstrap'],
                             schemaFiles=files, schemaFingerprint=hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest())
-                from .task_schema import node_profile, infer_profile, internal_parameters, refine_help
+                from .task_schema import node_profile, internal_parameters, refine_help
+                from .spp_schema import analyze_source, ANALYSIS_VERSION
                 source_paths = list(folder.glob('t_' + name + '.x')) + list(folder.glob('src/t_' + name + '.x'))
                 inferred = None
                 if source_paths:
                     source_path = source_paths[0]
-                    inferred = infer_profile(parameters, source_path.read_text(errors='replace'))
-                    files[str(source_path.resolve())] = file_hash(source_path)
+                    inferred = analyze_source(parameters, source_path)
+                    files.update(inferred['sourceFiles'])
                 else:
                     entry = generated.get(identity)
-                    if entry and entry['parameterHash'] == file_hash(path):
+                    if entry and entry.get('analysisVersion') == ANALYSIS_VERSION and entry['parameterHash'] == file_hash(path):
                         inferred = entry
                 script = path.with_suffix('.cl')
                 internal = internal_parameters(parameters, script.read_text()) if script.is_file() else []
@@ -187,6 +188,12 @@ def discover(root=None, extra_roots=(), descriptors=()):
                     files[str(script.resolve())] = file_hash(script)
                 spec['internalParameters'] = internal
                 public = [p for p in parameters if p not in internal]
+                for parameter in public:
+                    constraint = (inferred or {}).get('parameterConstraints', {}).get(parameter['name'])
+                    if constraint:
+                        parameter['sourceConstraint'] = constraint
+                        if constraint.get('closed') and not parameter['choices']:
+                            parameter['choices'] = constraint['choices']
                 spec['parameters'] = public
                 automatic = node_profile(public, inferred)
                 help_path = folder / 'doc' / (name + '.hlp')
@@ -198,6 +205,8 @@ def discover(root=None, extra_roots=(), descriptors=()):
                 profile = overrides.get(identity, automatic['profile'])
                 spec['schemaSource'] = 'override' if identity in overrides else 'iraf' if inferred and inferred.get('complete') else 'parameters'
                 spec['ioEvidence'] = automatic['evidence']
+                spec['parameterConstraints'] = inferred.get('parameterConstraints', {}) if inferred else {}
+                spec['sourceAnalysis'] = dict(complete=inferred.get('complete', False), issues=inferred.get('issues', [])) if inferred else dict(complete=False, issues=['No matching source analysis'])
                 spec['sourceHash'] = inferred.get('sourceHash') if inferred else None
                 # Batch defaults remain editable controls. They are not hidden
                 # per-task overrides and do not decide whether a node exists.
