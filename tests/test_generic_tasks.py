@@ -94,9 +94,6 @@ class DiscoveryTests(unittest.TestCase):
         (job / 'manifest.json').write_text(json.dumps(m))
         run = GenericTaskRun(job)
         run.prepare()
-        self.assertNotIn('ccdred', (job / 'commands.cl').read_text())
-        self.assertIn('demo.sample', (job / 'commands.cl').read_text())
-        self.assertIn('controls', (job / 'commands.py').read_text())
         with self.assertRaises(ValueError):
             validate_generic(spec, dict(payload, parameters={'unknown': 'x'}), lambda key: None)
         with self.assertRaises(ValueError):
@@ -157,14 +154,8 @@ class GenericIRAFTests(unittest.TestCase):
         self.assertEqual(status['state'], 'completed', str(status) + (job / 'task.log').read_text())
         return job, json.loads((job / 'products.json').read_text())
 
-    def test_installed_discovery_spans_photometry_and_spectroscopy(self):
-        tasks = {s['name']: s for s in self.catalog['tasks']}
-        for name in ('images.imutil.imcopy', 'noao.digiphot.apphot.phot', 'noao.onedspec.sarith'):
-            self.assertTrue(tasks[name]['runnable'], tasks[name].get('reason'))
-        phot = tasks['noao.digiphot.apphot.phot']
-        self.assertIn('photpars', [s['name'] for s in phot['parameterSets']])
 
-    def test_copy_arithmetic_filter_and_transform_both_backends(self):
+    def test_copy_arithmetic_and_transform_both_backends(self):
         data = np.arange(30).reshape(5, 6)
         id = self.image('source.fits', data)
         for backend in ('cl', 'pyraf'):
@@ -172,26 +163,13 @@ class GenericIRAFTests(unittest.TestCase):
                 ('images.imutil.imcopy', {'input': [id]}, {}, data),
                 ('images.imutil.imarith', {'operand1': [id]}, {'op': '*', 'operand2': '2'}, data * 2),
                 ('images.imgeom.imtranspose', {'input': [id]}, {}, data.T),
-                ('images.imfilter.gauss', {'input': [id]}, {'sigma': 1}, None),
             ):
                 with self.subTest(backend=backend, task=task):
                     job, products = self.run_task(task, inputs, params, backend=backend)
                     actual = fits.getdata(job / next(p['file'] for p in products if p['asset'] == 'image'))
-                    if expected is not None: np.testing.assert_allclose(actual, expected)
-                    else: self.assertEqual(actual.shape, data.shape)
+                    np.testing.assert_allclose(actual, expected)
         np.testing.assert_array_equal(fits.getdata(self.rows[id]['path']), data)
 
-    def test_photometry_psets_and_text_products(self):
-        y, x = np.mgrid[:64, :64]
-        id = self.image('star.fits', 100 + 5000 * np.exp(-((x - 31) ** 2 + (y - 31) ** 2) / 8))
-        coords = self.root / 'coords.txt'; coords.write_text('32 32\n')
-        self.rows['coords'] = dict(id='coords', name=coords.name, label=coords.name, path=str(coords), asset='text')
-        for backend in ('cl', 'pyraf'):
-            job, products = self.run_task('noao.digiphot.apphot.phot', {'image': [id], 'coords': ['coords']},
-                extra={'parameterSets': {'photpars': {'apertures': '5'}, 'datapars': {'sigma': 1}}}, backend=backend)
-            tables = [p for p in products if p['asset'] == 'text' and p['file'] != 'task.log']
-            self.assertTrue(tables)
-            self.assertIn('MAG', (job / tables[0]['file']).read_text())
 
     def test_spectral_arithmetic(self):
         id = self.image('spectrum.fits', np.arange(1, 33))

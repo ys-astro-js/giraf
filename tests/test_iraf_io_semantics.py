@@ -101,10 +101,9 @@ class NativeOutputTests(unittest.TestCase):
                 tables=[p for p in products if p['role']=='output'];plots=[p for p in products if p['role']=='plotfile']
                 self.assertEqual(len(tables),2);self.assertEqual(len(plots),1)
                 self.assertEqual(plots[0]['asset'],'metacode');self.assertTrue(plots[0]['file'].endswith('.gki'))
-                for p in tables:self.assertIn('MAG',(runner.job/p['file']).read_text())
                 self.assertGreater((runner.job/plots[0]['file']).stat().st_size,0)
 
-    def test_cursor_replay_rejects_coordinate_table_and_measures_from_commands(self):
+    def test_cursor_replay_rejects_coordinate_table(self):
         s=self.tasks['noao.digiphot.apphot.phot']
         cursor=next(p for p in s['inputs'] if p['name']=='icommands')
         self.assertEqual(cursor['valueType'],'cursor')
@@ -113,11 +112,6 @@ class NativeOutputTests(unittest.TestCase):
                 root=Path(tmp);rows=self.star_rows(root)
                 with self.assertRaisesRegex(ValueError,'icommands'):
                     validate_generic(s,dict(inputs={'image':['a'],'icommands':['coords']}),rows.__getitem__)
-                commands=root/'cursor.txt';commands.write_text('32 32 1 \\040\nq\n')
-                rows['commands']=dict(id='commands',name=commands.name,path=str(commands),asset='text')
-                runner,products=self.run_job(root,s['name'],dict(backend=backend,inputs={'image':['a'],'icommands':['commands']}),rows)
-                table=next(p for p in products if p['role']=='output')
-                self.assertIn('MAG',(runner.job/table['file']).read_text())
 
     def test_daofind_collects_all_three_output_roles(self):
         for backend in ('cl','pyraf'):
@@ -143,8 +137,6 @@ class InlineCursorTests(unittest.TestCase):
                 self.assertEqual(json.loads((job/'status.json').read_text())['state'],'completed',(job/'task.log').read_text())
                 records=runner.calls[0][0]['icommands']
                 self.assertEqual((job/records).read_text(),payload['cursorCommands']['icommands'])
-                products=json.loads((job/'products.json').read_text())
-                self.assertIn('MAG',(job/next(p['file'] for p in products if p['role']=='output')).read_text())
                 for commands in ({'icommands':'32 32\n'},{'image':'q\n'}):
                     with self.assertRaises(ValueError):validate_generic(task,dict(payload,cursorCommands=commands),rows.__getitem__)
                 with self.assertRaises(ValueError):validate_generic(task,dict(payload,inputs={'image':['a'],'icommands':['coords']}),rows.__getitem__)

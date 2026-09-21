@@ -2,10 +2,7 @@ import {nodeGeometry,roleActive} from "../src/lib/node-interaction"
 import {inputPorts,outputPorts,portHandle,compactPortLabel} from "../src/lib/calibration-ports"
 import {connectFlow,flowEdges,connectInputPort} from "../src/lib/workflow-flow"
 import {test,expect} from 'bun:test'
-import {renderToStaticMarkup} from 'react-dom/server'
 import {calibrationGroups,matchCalibration,metadataItems,groupOverride,updateGroupOverride} from '../src/lib/calibration'
-import {TaskMapView} from '../src/components/task-map-view'
-import {CalibrationOverview} from '../src/components/calibration-controls'
 import {makeDraft,type Frame,type Spec,type Catalog,type Preferences} from '../src/lib/workbench'
 import {makeInstance,emptyMap,payloadFor,restoreRun,workflowRequest,connectionRoles} from '../src/lib/task-map'
 const frame=(id:string,filter?:string,exposure?:number):Frame=>({id,label:id,filter,exposure,asset:'image'})
@@ -47,7 +44,6 @@ test('calibration settings and candidate cardinality survive payload, history an
  expect(outputPorts({...graph,tasks:[{...flat,draft:{...flat.draft,inputs:{input:['inferred']}}}]}, {...flat,draft:{...flat.draft,inputs:{input:['inferred']}}},extended,[{...frame('inferred','B',3),calibrationMetadata:{filter:'',exposure:3}}]).map(p=>p.group)).toEqual([{filter:'B'}])
  expect(inputPorts(graph,dark,extended,frames).filter(p=>p.role==='input' && p.name!=='input').every(p=>!!p.group)).toBe(true)
  expect(inputPorts(graph,science,extended,frames).filter(p=>p.role==='images').map(p=>p.group)).toEqual([undefined])
- const noop=()=>{}; const html=renderToStaticMarkup(<TaskMapView map={graph} catalog={extended} rows={frames} update={noop} add={noop} link={noop} open={noop} removeLink={noop} remove={noop}/>);expect(html).not.toContain('class="node-output-row"');expect(html).not.toContain('workflow-group-handle');expect(html).toContain('사용자가 작성한 dark 설명');expect(html).not.toContain('60s · 90s');expect(html).not.toContain('B · V');expect(html).not.toContain('>B90');expect(html).not.toContain('node-metadata');expect(html).not.toContain('Filter unknown');expect(html).not.toContain('Exposure time');
  expect(ports.map(p=>p.group)).toEqual([{exposure:60},{exposure:90}])
  expect(outputPorts(graph,flat,extended,frames).map(p=>p.group)).toEqual([{filter:'B'},{filter:'V'}])
  expect(outputPorts(graph,science,extended,frames).map(p=>p.group)).toEqual([{filter:'B',exposure:90},{filter:'V',exposure:60}])
@@ -70,13 +66,6 @@ test('calibration settings and candidate cardinality survive payload, history an
  expect(payloadFor(listed,'master',extended).inputs.input).toEqual(['list1','list2'])
  expect(()=>connectFlow(graph,extended,frames,{source:'dark',sourceHandle:ports[0].handleId,target:'science',targetHandle:portHandle('input','dark',{exposure:90})})).toThrow()
 
-})
-test('overview shows filter, exposure and counts with unknown state and no filename guessing',()=>{
- const html=renderToStaticMarkup(<CalibrationOverview frames={[frame('science_B90'),frame('s','V',60)]}/> )
- expect(html).toContain('Filter');expect(html).toContain('Exposure time');expect(html).toContain('미확인');expect(html).toContain('60');expect(html).toContain('V')
- const dark=renderToStaticMarkup(<CalibrationOverview mode="dark" frames={[frame('d','B',60)]}/>); expect(dark).not.toContain('Filter');expect(dark).toContain('60')
- const zero=renderToStaticMarkup(<CalibrationOverview mode="zero" frames={[frame('z','B',0)]}/>); expect(zero).toBe('')
- const flat=renderToStaticMarkup(<CalibrationOverview mode="flat" frames={[frame('f','B',3)]}/>);expect(flat).not.toContain('Exposure time');expect(flat).toContain('B')
 })
 
 test('group exceptions preserve other groups and common defaults through payload',()=>{

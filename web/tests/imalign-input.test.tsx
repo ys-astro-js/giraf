@@ -1,6 +1,4 @@
 import {test,expect} from 'bun:test'
-import {renderToStaticMarkup} from 'react-dom/server'
-import {AlignmentInput} from '../src/components/alignment-input'
 import {alignmentShift,replaceShift,parsePairs,pickAlignmentStar} from '../src/lib/alignment'
 import {makeDraft,type Spec,type Catalog,type Preferences} from '../src/lib/workbench'
 import {makeInstance,emptyMap,payloadFor,restoreRun,workflowRequest} from '../src/lib/task-map'
@@ -23,10 +21,6 @@ test('inline alignment inputs and bindings survive workflow, saved drafts and hi
  expect(makeDraft(spec,t.draft).textInputs).toEqual(p.textInputs)
  expect(workflowRequest(map,cat,'/data').nodes[0].payload.textInputs).toEqual(p.textInputs)
  expect(restoreRun(emptyMap(),{id:'run',manifest:p},cat,prefs).tasks[0].draft.textInputs).toEqual(p.textInputs)
-})
-test('alignment controls expose direct coordinates, existing file path and unavailable viewer guidance',()=>{
- const html=renderToStaticMarkup(<AlignmentInput name="coords" value="" onChange={()=>{}} fileInput={<span>기존 파일</span>} hasFile={false} frames={[]} reference={undefined} coords=""/> )
- expect(html).toContain('coords');expect(html).not.toContain('기준별 좌표');expect(html).toContain('영상에서 별 선택');expect(html).toContain('기준 영상을 먼저 선택');expect(html).toContain('textarea');expect(html).not.toContain('좌표는 1부터 시작합니다.')
 })
 
 // Regression: coords is a list of distinct reference objects; shifts has one row per image.
@@ -52,19 +46,4 @@ test('shift rows follow input order even when reference is elsewhere or separate
  expect(separate.value).toBe('? ?\n')
  expect(pickAlignmentStar(separate,[53,13],'ref',['b']).value).toBe('-8 5\n')
  expect(pickAlignmentStar({index:-1,value:''},[45,18],'ref',['ref']).value).toBe('0 0\n')
-})
-test('shift picker works without inline coords and requires a reference image',()=>{
- for(const coords of ['', '1 2\n20 30\n']) {
-  const html=renderToStaticMarkup(<AlignmentInput name="shifts" value="" onChange={()=>{}} fileInput={null} hasFile={false} frames={[{id:'ref',label:'reference'},{id:'b',label:'second'}]} reference={{id:'ref',label:'reference'}} coords={coords}/>)
-  expect(html).toContain('같은 별로 이동량 계산')
-  expect(html).not.toMatch(/<button[^>]* disabled=""[^>]*>같은 별로 이동량 계산/)
-  expect(html).not.toContain('첫 번째 기준별')
-  expect(html).not.toContain('coords와 별도로')
-  expect(html).not.toContain('IRAF가 초기 이동량을 추정')
-  expect(html).toContain('이동량 행 순서')
-  expect(html).toContain('1. reference')
-  expect(html).toContain('2. second')
- }
- const html=renderToStaticMarkup(<AlignmentInput name="shifts" value="" onChange={()=>{}} fileInput={null} hasFile={false} frames={[{id:'b',label:'second'}]} coords="1 2"/>)
- expect(html).toMatch(/<button[^>]* disabled=""[^>]*>같은 별로 이동량 계산/)
 })

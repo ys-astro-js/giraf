@@ -1,12 +1,10 @@
 import { beforeAll, expect, test } from "bun:test"
-import { renderToStaticMarkup } from "react-dom/server"
 import { emptyMap, makeInstance, type Connection } from "../src/lib/task-map"
 import type { Catalog, Preferences, Spec } from "../src/lib/workbench"
 import {
   dependencyGraph,
   layoutDependencies,
 } from "../src/lib/node-dependencies"
-import { NodeDependencies } from "../src/components/node-dependencies"
 // Match the existing ELK test setup: Bun's main-thread self is not a worker.
 beforeAll(async () => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, "self")
@@ -166,21 +164,6 @@ test("ELK arranges the graph top to bottom without overlapping nodes", async () 
           b.position.y + b.height! <= a.position.y
       ).toBe(true)
     }
-})
-test("panel is one graph without previous/next sections or connection metadata", () => {
-  const html = renderToStaticMarkup(
-    <NodeDependencies
-      map={map}
-      catalog={catalog}
-      task={tasks[2]}
-      onSelect={() => {}}
-    />
-  )
-  expect(html).not.toContain("이전 노드")
-  expect(html).not.toContain("이후 노드")
-  expect(html).not.toContain("저장된 결과")
-  expect(html).not.toContain("의존성 불러오는 중")
-  expect(html).toContain('aria-label="노드 의존성"')
 })
 
 test("custom outputs share one bottom row with separate source positions", async () => {

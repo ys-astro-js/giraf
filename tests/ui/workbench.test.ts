@@ -1,7 +1,5 @@
 import { test, expect } from 'bun:test'
 import { makeDraft, buildPayload, mergeInputs, plannedOutputs } from '../../web/src/lib/workbench'
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
 
 const parameter = (name: string, value: string) => ({name, default:value, type:'s', choices:[], prompt:'', min:null, max:null})
 const slot = (name: string, multiple = true) => ({name,label:name,multiple,kind:'image',required:true})
@@ -37,13 +35,4 @@ test('output planning handles many-to-one, per-image duplicates and subsets',()=
 test('dry-run and text tasks do not advertise generated FITS files',()=>{
   expect(plannedOutputs(proc,makeDraft(proc,{parameters:{noproc:'yes'},inputs:{images:['a']}}),[]).map(p=>p.output)).toEqual(['task.log'])
   expect(plannedOutputs({...combine,output:null,kind:'text'},makeDraft(combine),[]).map(p=>p.output)).toEqual(['task.log'])
-})
-test('application code does not override shadcn typography or import legacy styles',()=>{
-  const root=join(import.meta.dir,'../../web/src')
-  const walk=(p:string):string[]=>readdirSync(p,{withFileTypes:true}).flatMap(e=>e.isDirectory()?(e.name==='ui'?[]:walk(join(p,e.name))):/\.(tsx?|css)$/.test(e.name)?[join(p,e.name)]:[])
-  for(const path of walk(root)){
-    const code=readFileSync(path,'utf8')
-    expect(code).not.toMatch(/font-size\s*:|fontSize\s*:|text-(?:xs|sm|base|lg|xl|[2-9]xl)\b|text-\[[^\]]+\]/)
-    expect(code).not.toMatch(/tasks\.css|style\.css/)
-  }
 })

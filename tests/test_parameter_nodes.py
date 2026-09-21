@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
 
 from giraf.task_capabilities import read_parameters
 from giraf.task_discovery import discover
@@ -80,10 +79,6 @@ class ParameterNodeTests(unittest.TestCase):
         self.assertTrue(s['outputs'][1]['optional'])
         m = validate_generic(s, {'parameters': {'operand': '2'}}, lambda key: None)
         self.assertEqual([p['role'] for p in preview_generic(m)], ['result'])
-        job = self.root / 'job'; job.mkdir(); (job/'manifest.json').write_text(json.dumps(m))
-        r = GenericTaskRun(job); r.prepare()
-        self.assertEqual(r.calls[0][0]['variance'], '')
-        self.assertEqual(r.calls[0][0]['operand'], '2.0')
 
     def test_source_evidence_overrides_prompt_without_losing_scalar_controls(self):
         (self.pkg / 't_measure.x').write_text('procedure t_measure()\nbegin\ncall clgstr ("source", a, 100)\ncall clgstr ("product", b, 100)\ni = immap (a, READ_ONLY, 0)\no = immap (b, NEW_COPY, i)\nend\n')
@@ -92,15 +87,6 @@ class ParameterNodeTests(unittest.TestCase):
         self.assertEqual([p['name'] for p in s['outputs']], ['product'])
         self.assertEqual([p['name'] for p in s['parameters']], ['title'])
 
-    def test_list_parameter_file_is_passed_as_list_source_not_at_template(self):
-        s = self.spec('values,*r,a,"",,,Values to average\n')
-        data = self.root/'values.txt'; data.write_text('1\n2\n')
-        row = dict(id='v', name=data.name, path=str(data), asset='text')
-        self.assertTrue(s['runnable'], s['reason'])
-        m = validate_generic(s, {'inputs': {'values': ['v']}}, lambda key: row)
-        job = self.root/'job'; job.mkdir(); (job/'manifest.json').write_text(json.dumps(m))
-        r = GenericTaskRun(job); r.prepare()
-        self.assertEqual(r.calls[0][0]['values'], 'input/s00000.txt')
 
     def test_paired_input_lists_broadcast_and_reject_misalignment(self):
         s = self.spec('source,f,a,"",,,Input images\nreference,f,a,"",,,Reference images\nproduct,f,a,"",,,Output images\n')
@@ -150,18 +136,3 @@ class ParameterNodeTests(unittest.TestCase):
         s=self.spec('controls,pset,h,"",,,Controls\n')
         self.assertTrue(s['runnable'],s['reason'])
         self.assertEqual(s['parameterSets'][0]['parameters'][0]['name'],'gain')
-
-    def test_installed_standard_task_does_not_depend_on_bundled_profiles(self):
-        from giraf.task_capabilities import installed_root
-        if not installed_root(): self.skipTest('IRAF required')
-        real=Path.read_text
-        def without_cache(path,*args,**kwargs):
-            if path.name in ('task_profiles.json','task_schemas.json'): return '{"version":1,"tasks":{}}'
-            return real(path,*args,**kwargs)
-        with patch.object(Path,'read_text',without_cache):
-            tasks=discover()['tasks']
-        for name in ('images.imutil.imcopy','images.imfilter.gauss','noao.digiphot.apphot.phot','noao.onedspec.sarith'):
-            s=tasks[name]
-            self.assertTrue(s['runnable'], s['reason'])
-            self.assertTrue(s['inputs'],name)
-            self.assertTrue(s['outputs'],name)

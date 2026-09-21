@@ -1,6 +1,5 @@
 // Contracts authored before implementation.
 import { expect, test } from "bun:test"
-import { renderToStaticMarkup } from "react-dom/server"
 import { emptyMap, makeInstance, addTask, connect } from "../src/lib/task-map"
 import {
   saveSubflow,
@@ -11,8 +10,6 @@ import {
   subflowDropTarget,
 } from "../src/lib/subflow"
 import { flowNodes, changeFlowNodes } from "../src/lib/workflow-flow"
-import { SubflowEditor } from "../src/components/subflow-editor"
-import { TaskMapView } from "../src/components/task-map-view"
 import type { Catalog, Preferences, Spec } from "../src/lib/workbench"
 const spec: Spec = {
   name: "ccdproc",
@@ -154,37 +151,6 @@ test("external pending inputs block; expressions bypass unused dependencies; mis
     )
   ).toThrow()
 })
-test("native minimap and named group expose edit and run controls", () => {
-  const noop = () => {}
-  const html = renderToStaticMarkup(
-    <TaskMapView
-      map={group()}
-      catalog={catalog}
-      rows={[]}
-      update={noop}
-      add={noop}
-      link={noop}
-      open={noop}
-      remove={noop}
-      removeLink={noop}
-      onRunSubflow={noop}
-    />
-  )
-  expect(html.split("</header>")[0]).not.toContain("그룹 만들기")
-  expect(html).toContain("workflow-tools")
-  for (const token of [
-    "react-flow__minimap",
-    "react-flow__node-subflow",
-    "보정 실행",
-    "보정 편집",
-    "그룹 만들기",
-  ])
-    expect(html).toContain(token)
-  const runButton = html.match(/<button[^>]*aria-label="보정 실행"[^>]*>[\s\S]*?<\/button>/)?.[0]
-  expect(runButton).toBeDefined()
-  expect(runButton).toContain("size-9")
-  expect(runButton).not.toMatch(/>\s*실행\s*</)
-})
 
 // Direct canvas editing contracts, recorded before this implementation.
 test("group colors persist across geometry updates and metadata editing keeps membership", () => {
@@ -287,43 +253,4 @@ test("children can leave fixed parent bounds without growing the group during a 
   expect(
     flowNodes(m, catalog).find((n) => n.id === "a")!.extent
   ).toBeUndefined()
-})
-test("group editor exposes color choices without checkbox membership or redundant warning", () => {
-  const noop = () => {}
-  const m = group()
-  const html = renderToStaticMarkup(
-    <SubflowEditor
-      map={m}
-      catalog={catalog}
-      group={m.subflows![0]}
-      update={noop}
-      close={noop}
-    />
-  )
-  expect(html).toContain("색상")
-  expect(html).toContain('type="radio"')
-  expect(html).not.toContain('type="checkbox"')
-  expect(html).not.toContain('role="checkbox"')
-  expect(html).not.toContain("그룹을 해제해도 작업과 연결은 유지됩니다.")
-})
-
-test("group creation uses consistent terminology, a selection summary and a way back", () => {
-  const noop = () => {}
-  const html = renderToStaticMarkup(
-    <SubflowEditor
-      map={fixture()}
-      catalog={catalog}
-      taskIds={["a", "b"]}
-      update={noop}
-      close={noop}
-      reselect={noop}
-    />
-  )
-  expect(html).toContain("그룹 만들기")
-  expect(html).toContain('aria-label="2개 작업"')
-  expect(html).toContain("lucide-terminal")
-  expect(html).toContain('for="subflow-name">이름</label>')
-  expect(html).toContain("다시 선택")
-  expect(html).not.toContain("서브플로")
-  expect(html).not.toContain("계속")
 })

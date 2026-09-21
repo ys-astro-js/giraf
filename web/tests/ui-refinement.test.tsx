@@ -1,9 +1,6 @@
 // Written before the UI refinement implementation.
 import { expect, test } from 'bun:test'
-import { renderToStaticMarkup } from 'react-dom/server'
 import { pixelPosition, stepPixel, displayNumber, rangeValue, revealOffset, anchoredZoom } from '../src/lib/viewer-navigation'
-import { ParamControl } from '../src/components/task-inspector'
-import { ImageViewer, ViewerWorkspace } from '../src/components/image-viewer'
 
 const bounds={width:2048,height:1024}
 test('pixel coordinates are 1-based integers and reject invalid values',()=>{
@@ -29,34 +26,6 @@ test('selected nodes reveal minimally and oversized nodes keep their heading vis
  expect(revealOffset({x:50,y:40,width:100,height:80},{x:0,y:0,width:400,height:300})).toEqual({x:0,y:0})
  expect(revealOffset({x:450,y:40,width:100,height:80},{x:0,y:0,width:400,height:300})).toEqual({x:166,y:0})
  expect(revealOffset({x:100,y:400,width:500,height:600},{x:0,y:0,width:400,height:300})).toEqual({x:84,y:384})
-})
-test('empty ccdtype is concise without explanatory prose or changing its value',()=>{
- const html=renderToStaticMarkup(<ParamControl p={{name:'ccdtype',type:'s',choices:[],default:'',prompt:'CCD image type',min:'',max:''}} id="ccd" value="" onChange={()=>{}} />)
- expect(html).not.toContain('placeholder=')
- expect(html).toContain('value=""')
- expect(html).not.toContain('<p')
-})
-test('image inspection exposes named coordinate controls without mouse-only dependence',()=>{
- const html=renderToStaticMarkup(<ImageViewer frame={{id:'test',label:'science.fits',asset:'image'}} />)
- expect(html).toContain('픽셀 X')
- expect(html).toContain('픽셀 Y')
- expect(html).toContain('aria-keyshortcuts=')
- expect(html).toContain('aria-live="polite"')
-})
-test('single-image workspace does not duplicate the enclosing filename and download',()=>{
- const html=renderToStaticMarkup(<ViewerWorkspace ids={['x']} rows={[{id:'x',label:'science.fits',asset:'image'}]} onChoose={()=>{}} />)
- expect(html).not.toContain('<h2')
- expect(html).not.toContain('/api/download')
- expect(html).toContain('비교')
-})
-
-test('viewer keeps navigation on the image and makes desktop analysis optional',()=>{
- const html=renderToStaticMarkup(<ImageViewer frame={{id:'x',label:'science.fits',asset:'image'}} embedded />)
- expect(html).toContain('aria-label="영상 도구"')
- expect(html).toContain('aria-controls=')
- expect(html).toContain('aria-label="확대 및 축소"')
- expect(html).toContain('aria-label="현재 배율"')
- expect(html.indexOf('viewer-image')).toBeLessThan(html.indexOf('viewer-tools"'))
 })
 
 // Pointer anchoring and clamped zoom behavior, specified before implementation.

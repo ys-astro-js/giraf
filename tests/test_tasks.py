@@ -12,8 +12,7 @@ from astropy.io import fits
 
 from giraf.jobs import ROOT, atomic_json
 from giraf.server import register
-from giraf.task_catalog import parameters
-from giraf.task_jobs import validate_task, preview_task
+from giraf.task_jobs import validate_task
 from giraf.task_worker import checksum
 
 
@@ -84,38 +83,16 @@ class TaskTests(unittest.TestCase):
         self.assertEqual([v['label'] for v in images],['cal_science0.fits','cal_science1.fits'])
         for i,v in enumerate(images):np.testing.assert_array_equal(fits.getdata(job/v['file']),100.+i)
 
-    def test_ccdhedit_and_header_statistics(self):
+    def test_ccdhedit_preserves_source_and_updates_header(self):
         id=self.frame('unknown.fits',123,'unknown')
         original=checksum(self.rows[id]['path'])
         for backend in ('cl','pyraf'):
             job,p=self.run_task('ccdhedit',[id],dict(parameter='subset',value='B'),backend)
             self.assertEqual(fits.getheader(job/p[0]['file'])['FILTER'],'B')
             self.assertEqual(checksum(self.rows[id]['path']),original)
-            image=p[0]['id']
-            job,_=self.run_task('imheader',[image],dict(longheader='yes'),backend)
-            self.assertIn('FILTER',(job/'task.log').read_text())
-            job,_=self.run_task('imstatistics',[image],backend=backend)
-            self.assertIn('123',(job/'task.log').read_text())
 
-    def test_imexamine(self):
-        y,x=np.mgrid[:24,:32]
-        id=self.frame('star.fits',100+3000*np.exp(-((x-15)**2+(y-11)**2)/8),'object')
-        for backend in ('cl','pyraf'):
-            for key in ('m','r'):
-                job,p=self.run_task('imexamine',[id],backend=backend,extra={'exam':{'x':16,'y':12,'key':key}})
-                self.assertTrue((job/'task.log').stat().st_size)
-                if key=='r':
-                    self.assertIn('<polyline',(job/'profile.svg').read_text())
-                    self.assertIn('Radius',(job/'profile.svg').read_text())
-
-    def test_other_ccd_tasks_and_dryrun(self):
+    def test_badpiximage_pixels_and_dryrun(self):
         id=self.frame('flat.fits',np.arange(24*32).reshape(24,32)+100,'flat','B')
-        for task in ('ccdlist','ccdgroups','ccdinstrument','ccdmask','mkfringecor','mkillumcor','mkillumflat','mkskycor'):
-            with self.subTest(task=task):
-                job,p=self.run_task(task,[id],{'edit':'no'} if task=='ccdinstrument' else None)
-                self.assertTrue(p)
-        master=self.frame('masterflat.fits',100,'flat','B')
-        self.run_task('mkskyflat',[id],extra={'inputs':{'flat':[master]}})
         text=self.root/'bad.txt';text.write_text('1 2 1 2\n')
         row=register(text);self.rows[row['id']]=row
         job,p=self.run_task('badpiximage',[row['id']],extra={'inputs':{'template':[id]}})

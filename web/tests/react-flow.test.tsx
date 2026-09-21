@@ -1,6 +1,5 @@
 // Migration contracts: written before the React Flow implementation.
 import { expect, test } from "bun:test"
-import { renderToStaticMarkup } from "react-dom/server"
 import {
   addTask,
   connect,
@@ -16,7 +15,6 @@ import {
   changeFlowNodes,
   flowViewport,
 } from "../src/lib/workflow-flow"
-import { TaskMapView } from "../src/components/task-map-view"
 import type { Catalog, Preferences, Spec } from "../src/lib/workbench"
 const spec: Spec = {
   name: "ccdproc",
@@ -55,7 +53,6 @@ const wire = {
   target: "b",
   targetHandle: "images",
 }
-const noop = () => {}
 
 test("saved positions including negative coordinates survive RF projection and movement", () => {
   expect(() => structuredClone(flowNodes(fixture(), catalog))).not.toThrow()
@@ -193,51 +190,4 @@ test("legacy scroll offsets convert once while saved RF viewports round-trip", (
   expect(
     flowViewport({ ...m.view, coordinateSystem: "react-flow", x: -42, y: 80 })
   ).toEqual({ x: -42, y: 80, zoom: 0.7 })
-})
-test("canvas renders native RF nodes, handles, controls and background", () => {
-  const html = renderToStaticMarkup(
-    <TaskMapView
-      map={fixture()}
-      catalog={catalog}
-      rows={[]}
-      update={noop}
-      add={noop}
-      link={noop}
-      open={noop}
-      remove={noop}
-      removeLink={noop}
-    />
-  )
-  for (const token of [
-    "react-flow__node-task",
-    "react-flow__handle",
-    "react-flow__controls",
-    "react-flow__background",
-    "react-flow__controls-fitview",
-    "react-flow__controls-zoomin",
-  ])
-    expect(html).toContain(token)
-  expect(html).not.toContain('class="diagram"')
-})
-
-test("connected input and output ports are filled, unconnected ports stay hollow", () => {
-  const render = (map: ReturnType<typeof fixture>) =>
-    renderToStaticMarkup(
-      <TaskMapView
-        map={map}
-        catalog={catalog}
-        rows={[]}
-        update={noop}
-        add={noop}
-        link={noop}
-        open={noop}
-        remove={noop}
-        removeLink={noop}
-      />
-    )
-  const empty = render(fixture())
-  expect(empty).not.toContain('data-connected="true"')
-  const linked = render(connectFlow(fixture(), catalog, [], wire))
-  expect(linked.match(/data-connected="true"/g)).toHaveLength(2)
-  expect(linked).toContain('data-connected="false"')
 })

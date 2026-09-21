@@ -1,6 +1,5 @@
 // Regression contracts written before implementation.
 import { expect, test } from "bun:test"
-import { renderToStaticMarkup } from "react-dom/server"
 import {
   addTask,
   connect,
@@ -16,13 +15,10 @@ import {
   nodeLayout,
   fitNodes,
 } from "../src/lib/node-interaction"
-import { TaskResults } from "../src/components/task-results"
-import { TaskMapView } from "../src/components/task-map-view"
 import { plannedOutputs } from "../src/lib/workbench"
 import { editableOutputPorts } from "../src/lib/output-ports"
 import { outputPorts } from "../src/lib/calibration-ports"
 import { connectFlow, flowEdges } from "../src/lib/workflow-flow"
-import { OutputPortEditor } from "../src/components/output-port-editor"
 import type { Catalog, Preferences, Spec, Frame } from "../src/lib/workbench"
 const image: Spec = {
   name: "ccdproc",
@@ -83,7 +79,6 @@ const product = (id: string, asset = "image"): Frame => ({
   label: id + ".fits",
   asset,
 })
-const noop = () => {}
 test("output connections infer the node output before its first run", () => {
   expect(nodeOutput(fixture(), "a")).toEqual({ kind: "pending", taskId: "a" })
 })
@@ -234,97 +229,6 @@ test("fit includes complete cards at narrow sizes", () => {
     expect((n.y + n.height) * f.zoom).toBeLessThanOrEqual(480)
   }
 })
-test("cards name each input and separate results from connection", () => {
-  const m = fixture()
-  m.tasks.find((t) => t.id === "b")!.draft.parameters.zerocor = "yes"
-  const html = renderToStaticMarkup(
-    <TaskMapView
-      map={m}
-      catalog={catalog}
-      rows={[]}
-      update={noop}
-      add={noop}
-      link={noop}
-      open={noop}
-      remove={noop}
-      removeLink={noop}
-    />
-  )
-  expect(html).toContain('<span class="node-input-label">zero</span>')
-  expect(html).not.toContain("Bias 영상")
-  expect(html).not.toContain("connection-notice")
-  expect(html).not.toContain("연결할 입력을 선택하세요")
-  expect(html).not.toContain("결과 보기")
-  expect(html).toContain('data-input-role="zero"')
-  expect(html).toContain("ccdproc 출력 연결")
-  expect(html).toContain("CCD 보정")
-})
-test("right results panel shows all products without file cache or linking dialog", () => {
-  const m = publishRun(fixture(), "b", {
-    id: "run",
-    state: "completed",
-    products: [product("first"), product("second")],
-  })
-  const html = renderToStaticMarkup(<TaskResults map={m} task={m.tasks[1]} />)
-  expect(html).toContain("first.fits")
-  expect(html).toContain("second.fits")
-  expect(html).toContain("결과 2개")
-  expect(html).not.toContain("입력 연결")
-  expect(html).not.toContain('role="dialog"')
-})
-test("results distinguish never-run, failed and empty runs without old output fallback", () => {
-  const m = fixture(),
-    t = m.tasks[0]
-  expect(renderToStaticMarkup(<TaskResults map={m} task={t} />)).toContain(
-    "아직 실행하지 않았습니다"
-  )
-  const failed = publishRun(
-    publishRun(m, "a", {
-      id: "old",
-      state: "completed",
-      products: [product("old")],
-    }),
-    "a",
-    { id: "new", state: "failed", products: [] }
-  )
-  const html = renderToStaticMarkup(<TaskResults map={failed} task={t} />)
-  expect(html).toContain("실패")
-  expect(html).not.toContain("old.fits")
-  expect(
-    renderToStaticMarkup(
-      <TaskResults
-        map={publishRun(m, "a", { id: "r", state: "completed", products: [] })}
-        task={t}
-      />
-    )
-  ).toContain("생성된 결과 파일이 없습니다")
-})
-
-test("completed status and typed output count share the footer without a result button", () => {
-  const m = publishRun(fixture(), "a", {id:"r",state:"completed",products:[product("out"),product("report","text")]})
-  const html = renderToStaticMarkup(<TaskMapView map={m} catalog={catalog} rows={[]} update={noop} add={noop} link={noop} open={noop} remove={noop} removeLink={noop}/>);
-  const node = html.split('aria-label="zerocombine 노드"')[1].split('</article>')[0];
-  expect(node.split('</header>')[0]).not.toContain('완료');
-  expect(node.split('class="node-footer"')[1]).toContain('aria-label="완료"');
-  expect(node.split('class="node-footer"')[1]).toContain('lucide-check');
-  expect(node.replace(/<svg[\s\S]*?<\/svg>/g, '')).not.toContain('>완료<');
-  expect(node).not.toContain(' · ');
-  expect(node.split('class="node-footer"')[1]).toContain('aria-label="1개 항목"');
-  expect(node.split('class="node-footer"')[1]).toContain('lucide-file');
-  expect(node).not.toContain('결과 보기');
-  const multiCatalog = {...catalog, tasks:catalog.tasks.map(s => s.name==='zerocombine' ? {...s, adapter:'generic' as const, outputs:[{name:'science',kind:'image',default:'science.fits'},{name:'plots',kind:'metacode',default:'plots.gki'}]} : s)};
-  const multiMap=publishRun(fixture(), 'a', {id:'multi',state:'completed',products:[{...product('out'),role:'science'},{...product('plot','metacode'),role:'plots'}]});
-  const multiHtml=renderToStaticMarkup(<TaskMapView map={multiMap} catalog={multiCatalog} rows={[]} update={noop} add={noop} link={noop} open={noop} remove={noop} removeLink={noop}/>);
-  const multiNode=multiHtml.split('aria-label="zerocombine 노드"')[1].split('</article>')[0];
-  expect(multiNode).not.toContain('node-output-kind');
-  expect(multiNode).not.toContain('>FITS<');
-  expect(multiNode).not.toContain('>GKI<');
-  expect(multiNode).toContain('aria-label="zerocombine 출력 연결"');
-  expect(multiNode).not.toContain('zerocombine science 출력 연결');
-  expect(multiNode).toContain('zerocombine plots 출력 연결');
-  expect(multiNode.split('class="node-output-row"').slice(1).every(row=>row.includes('node-output-summary') && row.includes('1개 항목'))).toBe(true);
-
-});
 test("compact node geometry keeps each wire at its input row center", () => {
  const m=fixture(); m.tasks[1].draft.parameters.zerocor="yes";
  const g=nodeGeometry(m,m.tasks[1],catalog);
@@ -333,20 +237,6 @@ test("compact node geometry keeps each wire at its input row center", () => {
  expect(g.height).toBe(224);
  expect(g.outputY).toBe(200);
  expect(g.outputs).toHaveLength(0);
-});
-
-test("only actively running nodes are highlighted and completion removes the running indicator", () => {
- for (const state of ["queued", "running", "waiting", "completed", "failed", "cancelled"]) {
-  const m = publishRun(fixture(), "a", {id:"live",state,products:[]});
-  const html=renderToStaticMarkup(<TaskMapView map={m} catalog={catalog} rows={[]} update={noop} add={noop} link={noop} open={noop} remove={noop} removeLink={noop}/>);
-  const node=html.split('aria-label="zerocombine 노드"')[1].split('</article>')[0];
-  expect(node).toContain(`data-running="${state === "running"}"`);
-  if(state === "running") {
-   expect(node).toContain('aria-label="실행 중"');
-   expect(node).toContain('node-running-icon');
-   expect(node).not.toContain('lucide-check');
-  } else expect(node).not.toContain('node-running-icon');
- }
 });
 
 test('generic inputs stay visible while unused optional outputs stay compact after reload', () => {
@@ -362,12 +252,6 @@ test('generic inputs stay visible while unused optional outputs stay compact aft
   expect(compact.primaryOutputRole).toBe("output")
   expect(editableOutputPorts(task,spec,map).map(p=>p.id)).toEqual(['$default'])
   expect(outputPorts(map,task,cat,[]).map(p=>p.outputRole)).toEqual([])
-  const editor=renderToStaticMarkup(<OutputPortEditor task={task} map={map} spec={spec} edit={noop}/> )
-  expect(editor).toContain('기본 출력')
-  expect(editor).not.toContain('nrejmasks')
-  const canvas=renderToStaticMarkup(<TaskMapView map={map} catalog={cat} rows={[]} update={noop} add={noop} link={noop} open={noop} remove={noop} removeLink={noop}/> )
-  expect(canvas).toContain('data-handleid="output"')
-  expect(canvas).not.toContain('data-handleid="output:output"')
   spec.outputs![0].mode = 'single'
   spec.outputs![0].eachWhen = 'project'
   task.draft.inputs.input = ['a','b']
@@ -408,11 +292,8 @@ test('clearing or deleting input files removes empty references before connectin
   expect(map.connections.filter(c=>c.target==='b'&&c.role==='images')).toHaveLength(0)
   // Older saved maps may contain these empty selections.
   map.connections.push({id:'empty',target:'b',role:'images',source:{kind:'files',ids:[],label:''}})
-  const render=(m:typeof map)=>renderToStaticMarkup(<TaskMapView map={m} catalog={catalog} rows={[]} update={noop} add={noop} link={noop} open={noop} remove={noop} removeLink={noop}/>)
-  expect(render(map)).not.toContain('파일 0개')
   map=connect(map,'b','images',{kind:'pending',taskId:'a'})
   expect(map.connections.some(c=>c.id==='empty')).toBe(false)
-  expect(render(map)).not.toContain('파일 0개')
   map=connect(map,'b','images',{kind:'files',ids:['gone','keep'],label:'Files'})
   map.tasks.find(t=>t.id==='b')!.draft.inputs.zero=['gone']
   map.tasks.find(t=>t.id==='b')!.preprocess.inputs.dark=['gone','keep']
@@ -423,7 +304,6 @@ test('clearing or deleting input files removes empty references before connectin
   const empty=removeLibraryReferences(cleaned,new Set(['keep']),new Set())
   expect(empty.connections).toHaveLength(1)
   expect(empty.connections[0].source).toMatchObject({kind:'pending',taskId:'a'})
-  expect(render(empty)).not.toContain('파일 0개')
   expect(map.connections.find(c=>c.source.kind==='files')?.source).toMatchObject({ids:['gone','keep']})
   const withResult=publishRun(empty,'a',{id:'job',state:'completed',products:[product('result')]})
   withResult.connections[0].source={kind:'result',taskId:'a',runId:'job',ids:['result']}

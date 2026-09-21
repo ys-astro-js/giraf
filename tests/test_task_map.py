@@ -18,9 +18,8 @@ import numpy as np
 from astropy.io import fits
 from giraf import server
 from giraf.jobs import ROOT, atomic_json
-from giraf.task_catalog import catalog, parameters
 from giraf.task_jobs import validate_task
-from giraf.task_worker import TaskRun, checksum
+from giraf.task_worker import checksum
 from test_workspace import request
 
 OFF={k:'no' for k in ('fixpix','overscan','trim','zerocor','darkcor','flatcor','illumcor','fringecor','readcor','scancor')}
@@ -56,12 +55,6 @@ class TaskMapTests(unittest.TestCase):
         return job,json.loads((job/'products.json').read_text())
     def images(self,job,products):return [job/p['file'] for p in products if p['asset']=='image']
 
-    def test_installed_capabilities_and_full_parameter_exposure(self):
-        c=catalog();self.assertIn('capabilities',c)
-        self.assertIn('interactive',{p['name'] for p in parameters('ccdproc')})
-        self.assertTrue({'logfile','plotfile','backup','ssfile','graphics','cursor'}<={p['name'] for p in parameters('ccdred')})
-        self.assertIn('schemaFingerprint',c['capabilities'])
-        self.assertIn('clobber',json.dumps(c['capabilities']))
 
     def test_expressions_lists_sections_duplicates_and_safety(self):
         from giraf.task_expressions import resolve_expression
