@@ -508,8 +508,14 @@ export function TaskInspector({
       const frames = inputIds.map((id) => allRows.find((row) => row.id === id))
       return (
         <AlignmentInput
-          key={JSON.stringify([task.id, s.name, referenceIds, inputIds])}
+          key={JSON.stringify([task.id, s.name, inputIds])}
           name={s.name}
+          backend={task.backend}
+          onUseReference={(frame) => {
+            if (referenceIds.length === 1 && referenceIds[0] === frame.id) return
+            if (onInputSource) onInputSource("reference", {kind:"files", ids:[frame.id], label:frame.label})
+            else reorderInput("reference", [frame.id])
+          }}
           reference={allRows.find((row) => row.id === referenceIds[0])}
           frames={
             frames.every((f) => f && f.asset !== "text")

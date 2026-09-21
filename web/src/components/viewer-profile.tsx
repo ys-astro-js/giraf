@@ -1,4 +1,4 @@
-import { useId } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 
 function tickLabel(value: number) {
   if (value === 0) return "0"
@@ -20,6 +20,16 @@ export function Profile({
   axis: "X" | "Y"
 }) {
   const titleId = useId()
+  const figure = useRef<HTMLElement>(null)
+  const [width, setWidth] = useState(320)
+  useEffect(() => {
+    if (!figure.current) return
+    const observer = new ResizeObserver(([entry]) =>
+      setWidth(Math.max(240, entry.contentRect.width))
+    )
+    observer.observe(figure.current)
+    return () => observer.disconnect()
+  }, [])
   let minimum = Infinity
   let maximum = -Infinity
   for (const value of values) {
@@ -30,7 +40,7 @@ export function Profile({
   }
   const hasData = Number.isFinite(minimum)
   const left = 76
-  const right = 540
+  const right = width - 20
   const top = 20
   const bottom = 128
   const x = (index: number) =>
@@ -66,34 +76,18 @@ export function Profile({
     values.length === 0
       ? []
       : [...new Set([1, Math.round((values.length + 1) / 2), values.length])]
-  const selectedValue = values[selected - 1]
   const hasSelection =
     Number.isInteger(selected) && selected >= 1 && selected <= values.length
 
   return (
-    <figure className="min-w-0 flex-1">
+    <figure ref={figure} className="min-w-0 flex-1">
       <figcaption className="mb-1 flex items-baseline justify-between gap-3 text-sm">
         <span>{label}</span>
-        {hasSelection && (
-          <span className="flex flex-wrap justify-end gap-x-3 text-xs text-muted-foreground tabular-nums">
-            <span>
-              {axis} {selected}
-            </span>
-            <span>
-              {selectedValue !== null &&
-              selectedValue !== undefined &&
-              Number.isFinite(selectedValue)
-                ? `${tickLabel(selectedValue)} ADU`
-                : "값 없음"}
-            </span>
-          </span>
-        )}
       </figcaption>
       <svg
         role="img"
         aria-labelledby={titleId}
-        viewBox="0 0 560 164"
-        preserveAspectRatio="none"
+        viewBox={`0 0 ${width} 164`}
         className="h-40 w-full overflow-visible text-xs tabular-nums"
       >
         <title id={titleId}>

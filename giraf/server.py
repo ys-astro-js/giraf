@@ -7,6 +7,8 @@ import io
 import json
 import math
 import threading
+import subprocess
+import sys
 
 import numpy as np
 from astropy.io import fits
@@ -397,6 +399,13 @@ async def api(request: Request):
                     workspace['overrides'].setdefault(id, {}).update(changes)
                 save()
             return JSONResponse({'ok': True})
+        if action == 'alignment-star':
+            if request.method != 'POST': raise ValueError('POST 요청이 필요합니다.')
+            from .alignment import measure_alignment_star
+            path = get_file(payload['id'])
+            row = dict(registry[payload['id']], path=str(path))
+            x, y = await run_in_threadpool(measure_alignment_star, row, payload['x'], payload['y'], payload.get('backend', 'cl'))
+            return JSONResponse(dict(x=x, y=y))
         if action == 'info':
             return JSONResponse(await run_in_threadpool(image_info, q['id']))
         if action == 'image':
@@ -437,6 +446,23 @@ async def api(request: Request):
                 info['log'] = (job / 'worker.log').read_text(errors='replace')[-24000:] if (job / 'worker.log').exists() else ''
                 if (job/'task.log').exists():info['log']=(job/'task.log').read_text(errors='replace')[-80000:]
             return JSONResponse(info)
+        if action == 'reveal':
+            if request.method != 'POST':
+                return JSONResponse({'error': 'POST 요청이 필요합니다.'}, status_code=405)
+            path = get_file(payload['id'])
+            if not path.is_file():
+                raise ValueError('파일을 찾을 수 없습니다. 파일 목록을 새로 불러와 주세요.')
+            if sys.platform == 'darwin':
+                command = ['open', '-R', str(path)]
+            elif sys.platform == 'win32':
+                command = ['explorer', '/select,', str(path)]
+            else:
+                command = ['xdg-open', str(path.parent)]
+            try:
+                await run_in_threadpool(subprocess.run, command, check=True, capture_output=True, timeout=10)
+            except (OSError, subprocess.SubprocessError) as exc:
+                raise ValueError('파일 위치를 열지 못했습니다. 파일 관리자를 확인한 뒤 다시 시도해 주세요.') from exc
+            return JSONResponse({'ok': True})
         if action == 'download':
             path = get_file(q['id'])
             name = registry[q['id']]['label']

@@ -16,6 +16,9 @@ import { RunHistory } from "@/components/run-history"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   FolderOpen,
+  Columns2,
+  Image,
+  TableProperties,
   Link2,
   ArrowLeft,
   Moon,
@@ -29,11 +32,11 @@ import {
   SidebarMenuButton,
 } from "@/components/ui/sidebar"
 import { toast, Toaster } from "@/components/ui/toast"
+import { ButtonGroup } from "@/components/ui/button-group"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   Table,
   TableHeader,
@@ -53,12 +56,13 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useTheme } from "@/components/theme-provider"
 import { FilePicker, type PickerRequest } from "@/components/file-picker"
+import { RevealFile, ViewerToolButton } from "@/components/viewer-controls"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ViewerWorkspace } from "@/components/image-viewer"
 import {
   Choice,
   Blank,
   Failure,
-  Download,
 } from "@/components/workbench-controls"
 import { TaskInspector, assigned } from "@/components/task-inspector"
 import { subflowRequest, moveTaskToSubflow } from "@/lib/subflow"
@@ -177,6 +181,7 @@ function App() {
       role?: string
       taskId?: string
     } | null>(null),
+    [assetView, setAssetView] = useState("image"),
     [assetText, setAssetText] = useState(""),
     [headers, setHeaders] = useState<
       { key: string; value: string; comment: string; hdu: number }[]
@@ -658,6 +663,7 @@ function App() {
   }
   function open(row: Frame, role?: string) {
     setCompare([row.id])
+    setAssetView("image")
     setAsset({ row, role, taskId: task?.id })
   }
   function link(target = map.view.selected, source?: Source) {
@@ -1491,26 +1497,23 @@ function App() {
         }}
       >
         <DialogContent className="asset-dialog" aria-describedby={undefined}>
-          <Tabs defaultValue="image" className="asset-tabs">
+          <div className="asset-content">
             <header className="asset-topbar">
               <DialogTitle className="asset-title" title={asset?.row.label}>
                 {asset && !["plot", "text", "image-list"].includes(asset.row.asset || "image") ? <Button variant="ghost" className="viewer-filename" onClick={() => chooseViewerImage()} title="영상 변경"><span>{asset.row.label}</span></Button> : asset?.row.label}
               </DialogTitle>
               {asset &&
                 !["plot", "text", "image-list"].includes(asset.row.asset || "image") && (
-                  <TabsList>
-                    <TabsTrigger value="image">영상</TabsTrigger>
-                    <TabsTrigger value="header">헤더</TabsTrigger>
-                  </TabsList>
+                  <ToggleGroup aria-label="파일 보기" variant="outline" spacing={0} value={[assetView]} onValueChange={(values) => { if (values.length) setAssetView(values[0]) }}>
+                    <ToggleGroupItem value="image" aria-label="영상" title="영상"><Image /></ToggleGroupItem>
+                    <ToggleGroupItem value="header" aria-label="헤더" title="헤더"><TableProperties /></ToggleGroupItem>
+                  </ToggleGroup>
                 )}
               {asset && (
-                <div className="asset-actions">
-                  {!["plot", "text", "image-list"].includes(asset.row.asset || "image") && <Button variant="ghost" size="sm" onClick={() => chooseViewerImage(true)}>비교</Button>}
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    aria-label="입력으로 사용"
-                    title="입력으로 사용"
+                <ButtonGroup className="asset-actions" aria-label="파일 동작">
+                  {!["plot", "text", "image-list"].includes(asset.row.asset || "image") && <ViewerToolButton label="영상 비교" onClick={() => chooseViewerImage(true)}><Columns2 /></ViewerToolButton>}
+                  <ViewerToolButton
+                    label="입력으로 사용"
                     onClick={() => {
                       const row = asset.row
                       setAsset(null)
@@ -1523,10 +1526,10 @@ function App() {
                       } as Source)
                     }}
                   >
-                    <Link2 />입력으로 사용
-                  </Button>
-                  <Download id={asset.row.id} />
-                </div>
+                    <Link2 />
+                  </ViewerToolButton>
+                  <RevealFile id={asset.row.id} />
+                </ButtonGroup>
               )}
             </header>
             {asset && (
@@ -1541,7 +1544,7 @@ function App() {
                   <pre className="asset-text">{assetText}</pre>
                 ) : (
                   <>
-                    <TabsContent value="image" className="asset-image-panel">
+                    <section aria-label="영상" hidden={assetView !== "image"} className="asset-image-panel">
                       <ViewerWorkspace
                         comparisonInHeader
                         ids={compare}
@@ -1553,8 +1556,8 @@ function App() {
                         rows={rows}
                         onChoose={chooseViewerImage}
                       />
-                    </TabsContent>
-                    <TabsContent value="header" className="asset-header-panel">
+                    </section>
+                    <section aria-label="헤더" hidden={assetView !== "header"} className="asset-header-panel">
                       <Button
                         className="my-3"
                         variant="outline"
@@ -1586,12 +1589,12 @@ function App() {
                           ))}
                         </TableBody>
                       </Table>
-                    </TabsContent>
+                    </section>
                   </>
                 )}
               </>
             )}
-          </Tabs>
+          </div>
         </DialogContent>
       </Dialog>
       <Dialog

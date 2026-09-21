@@ -1,4 +1,4 @@
-import { useId, useState } from "react"
+import { useId, useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field"
@@ -9,10 +9,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { ImageViewer } from "./image-viewer"
-import { Choice } from "./workbench-controls"
-import { parsePairs, pickAlignmentStar, type Pair } from "@/lib/alignment"
-import type { Frame } from "@/lib/workbench"
+import { Trash2, X, Plus, Minus, Scan, LoaderCircle } from "lucide-react"
+import { ViewerToolButton } from "./viewer-controls"
+import { cn } from "@/lib/utils"
+import { ImageViewer, type ViewerViewport } from "./image-viewer"
+import {
+  parsePairs,
+  alignmentRows,
+  shiftsFromStars,
+  type Pair,
+} from "@/lib/alignment"
+import { api, type Frame } from "@/lib/workbench"
 
 export function AlignmentInput({
   name,
@@ -20,8 +27,10 @@ export function AlignmentInput({
   onChange,
   fileInput,
   hasFile,
-  reference,
+  reference: suppliedReference,
   frames,
+  backend,
+  onUseReference,
 }: {
   name: "coords" | "shifts"
   value: string
@@ -30,23 +39,94 @@ export function AlignmentInput({
   hasFile: boolean
   reference?: Frame
   frames: Frame[]
+  backend: string
+  onUseReference: (frame: Frame) => void
   coords: string
 }) {
+  const reference = frames[0] || suppliedReference
+  const [measuring, setMeasuring] = useState(false)
+  const [measurementError, setMeasurementError] = useState("")
+  const request = useRef(0)
+  const pending = useRef(false)
+  useEffect(
+    () => () => {
+      ++request.current
+    },
+    []
+  )
+  function closePicker(nextOpen: boolean) {
+    if (!nextOpen) {
+      ++request.current
+      pending.current = false
+      setMeasuring(false)
+    }
+    setOpen(nextOpen)
+  }
+  async function measure(
+    frame: Frame | undefined,
+    x: number,
+    y: number,
+    apply: (point: Pair) => void
+  ) {
+    if (!frame || pending.current) return
+    const sequence = ++request.current
+    pending.current = true
+    setMeasuring(true)
+    setMeasurementError("")
+    try {
+      const point = await api<{ x: number; y: number }>("alignment-star", {
+        id: frame.id,
+        x,
+        y,
+        backend,
+      })
+      if (sequence === request.current) apply([point.x, point.y])
+    } catch (error) {
+      if (sequence === request.current)
+        setMeasurementError((error as Error).message)
+    } finally {
+      if (sequence === request.current) {
+        pending.current = false
+        setMeasuring(false)
+      }
+    }
+  }
   const id = useId(),
     isCoords = name === "coords"
   const [mode, setMode] = useState(hasFile ? "file" : "direct")
-  const [open, setOpen] = useState(false),
-    [index, setIndex] = useState("-1")
+  const [open, setOpen] = useState(false)
+  const [selected, setSelected] = useState<number | null>(null)
   const [anchor, setAnchor] = useState<Pair>()
+  const [points, setPoints] = useState<Record<number, Pair>>({})
+  const [viewport, setViewport] = useState<ViewerViewport>({
+    scale: 1,
+    x: 0,
+    y: 0,
+  })
+  const rows = alignmentRows(value)
+  function pickStar(index: number, point: Pair) {
+    if (!reference) return
+    const nextAnchor = index === -1 ? point : anchor
+    const nextPoints = index === -1 ? points : { ...points, [index]: point }
+    setAnchor(nextAnchor)
+    setPoints(nextPoints)
+    if (!nextAnchor) return
+    onChange(
+      shiftsFromStars(
+        nextAnchor,
+        nextPoints,
+        reference.id,
+        frames.map((f) => f.id)
+      )
+    )
+  }
   const pairs = parsePairs(value)
-  const pickingReference = !isCoords && (!anchor || index === "-1")
   const invalid =
     !!value.trim() &&
     (!pairs ||
       (isCoords
         ? pairs.some((p) => p.some((v) => v < 1))
         : frames.length > 0 && pairs.length !== frames.length))
-  const frame = isCoords || pickingReference ? reference : frames[Number(index)]
   return (
     <Field data-invalid={invalid || undefined}>
       <FieldLabel htmlFor={id}>{name}</FieldLabel>
@@ -78,17 +158,19 @@ export function AlignmentInput({
             variant="outline"
             disabled={isCoords ? !reference : !reference || !frames.length}
             onClick={() => {
-              setIndex("-1")
+              if (reference) onUseReference(reference)
+              setMeasurementError("")
+              setSelected(null)
               setAnchor(undefined)
+              setPoints({})
+              setViewport({ scale: 1, x: 0, y: 0 })
               setOpen(true)
             }}
           >
             {isCoords ? "영상에서 별 선택" : "같은 별로 이동량 계산"}
           </Button>
           {!reference && (
-            <FieldDescription>
-              기준 영상을 먼저 선택해 주세요.
-            </FieldDescription>
+            <FieldDescription>기준 영상을 먼저 선택해 주세요.</FieldDescription>
           )}
           {!isCoords && frames.length > 0 && (
             <ol
@@ -113,74 +195,331 @@ export function AlignmentInput({
           )}
         </TabsContent>
       </Tabs>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={closePicker}>
         <DialogContent
-          className="alignment-picker max-h-[90dvh] gap-3 overflow-auto sm:max-w-4xl"
+          className={cn(
+            "alignment-picker",
+            !isCoords && "alignment-picker-shifts"
+          )}
           aria-describedby={undefined}
         >
-          <DialogHeader>
-            <DialogTitle>
-              {isCoords || pickingReference
-                ? "기준 영상에서 별 선택"
-                : "입력 영상에서 같은 별 선택"}
-            </DialogTitle>
-          </DialogHeader>
-          {!isCoords && !pickingReference && frames.some((f) => f.id !== reference?.id) && (
-            <Choice
-              label="입력 영상"
-              value={index}
-              options={frames.flatMap((f, i) => f.id === reference?.id ? [] : [{
-                value: String(i),
-                label: `${i + 1}. ${f.label}`,
-              }])}
-              onChange={setIndex}
-            />
-          )}
-          <ImageViewer
-            frame={frame}
-            onPick={(x, y) => {
-              if (isCoords)
-                onChange(
-                  `${value.trimEnd()}${value.trim() ? "\n" : ""}${x} ${y}\n`
-                )
-              else if (reference) {
-                const next = pickAlignmentStar(
-                  { anchor, index: Number(index), value },
-                  [x, y], reference.id, frames.map((f) => f.id)
-                )
-                setAnchor(next.anchor)
-                setIndex(String(next.index))
-                onChange(next.value)
-              }
-            }}
-          />
-          <p role="status" className="text-sm whitespace-pre-wrap tabular-nums">
-            {isCoords
-              ? `선택한 기준별 ${pairs?.length || 0}개`
-              : value.trim() || "아직 선택한 이동량이 없습니다."}
-          </p>
-          <div className="flex justify-end gap-2">
-            {!isCoords && anchor && (
-              <Button variant="outline" onClick={() => setIndex("-1")}>
-                기준별 다시 선택
-              </Button>
+          <DialogHeader className="alignment-picker-header">
+            <DialogTitle>{name}</DialogTitle>
+            {measuring && (
+              <span role="status" aria-label="별 중심 측정 중">
+                <LoaderCircle className="size-4 animate-spin" />
+              </span>
             )}
-            <Button
-              variant="outline"
-              disabled={!value.trim()}
-              onClick={() => {
-                if (isCoords) onChange(value.trimEnd().split("\n").slice(0, -1).join("\n"))
-                else {
-                  onChange("")
-                  setAnchor(undefined)
-                  setIndex("-1")
+            {isCoords && (
+              <span
+                className="min-w-0 flex-1 truncate text-sm"
+                title={reference?.label}
+              >
+                {reference?.label}
+              </span>
+            )}
+            <div
+              className="alignment-navigation"
+              role="group"
+              aria-label="전체 영상 확대 및 이동"
+            >
+              <ViewerToolButton
+                label="전체 영상 축소"
+                onClick={() =>
+                  setViewport((v) => {
+                    const scale = Math.max(0.1, v.scale / 1.25)
+                    return {
+                      ...v,
+                      scale,
+                      x: (v.x * scale) / v.scale,
+                      y: (v.y * scale) / v.scale,
+                    }
+                  })
                 }
+              >
+                <Minus />
+              </ViewerToolButton>
+              <ViewerToolButton
+                label="전체 영상 확대"
+                onClick={() =>
+                  setViewport((v) => {
+                    const scale = Math.min(32, v.scale * 1.25)
+                    return {
+                      ...v,
+                      scale,
+                      x: (v.x * scale) / v.scale,
+                      y: (v.y * scale) / v.scale,
+                    }
+                  })
+                }
+              >
+                <Plus />
+              </ViewerToolButton>
+              <ViewerToolButton
+                label="전체 영상 맞춤"
+                onClick={() => setViewport({ scale: 1, x: 0, y: 0 })}
+              >
+                <Scan />
+              </ViewerToolButton>
+            </div>
+          </DialogHeader>
+          {open &&
+            (isCoords ? (
+              <div className="alignment-coords">
+                <div className="alignment-reference">
+                  <ImageViewer
+                    frame={reference}
+                    embedded
+                    selectionMode
+                    navigationTools={false}
+                    viewport={viewport}
+                    onViewportChange={setViewport}
+                    markers={rows.flatMap((row, i) =>
+                      row.point
+                        ? [
+                            {
+                              x: row.point[0],
+                              y: row.point[1],
+                              label: String(i + 1),
+                            },
+                          ]
+                        : []
+                    )}
+                    selectedMarker={
+                      selected === null ? undefined : String(selected + 1)
+                    }
+                    onPick={(x, y) => {
+                      void measure(reference, x, y, ([x, y]) => {
+                        const next = rows.map((row) => row.text)
+                        if (selected === null) next.push(`${x} ${y}`)
+                        else next[selected] = `${x} ${y}`
+                        onChange(next.join("\n") + "\n")
+                        setSelected(null)
+                      })
+                    }}
+                  />
+                </div>
+                <aside
+                  className="alignment-coordinate-list"
+                  aria-label="선택한 기준별"
+                >
+                  {selected !== null && (
+                    <div className="flex items-center justify-between px-2 text-sm">
+                      <span>{selected + 1}번 위치 변경</span>
+                      <ViewerToolButton
+                        label="위치 변경 취소"
+                        onClick={() => setSelected(null)}
+                      >
+                        <X />
+                      </ViewerToolButton>
+                    </div>
+                  )}
+                  {rows.length ? (
+                    <table className="w-full text-right text-sm tabular-nums">
+                      <thead>
+                        <tr className="text-muted-foreground">
+                          <th className="text-left font-normal">별</th>
+                          <th className="font-normal">X</th>
+                          <th className="font-normal">Y</th>
+                          <th>
+                            <span className="sr-only">삭제</span>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((row, i) => (
+                          <tr
+                            key={i}
+                            className={cn(selected === i && "bg-accent")}
+                          >
+                            <td className="text-left">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                aria-label={`${i + 1}번 별 위치 변경`}
+                                aria-pressed={selected === i}
+                                onClick={() =>
+                                  setSelected(selected === i ? null : i)
+                                }
+                              >
+                                {i + 1}
+                              </Button>
+                            </td>
+                            {row.point ? (
+                              <>
+                                <td>{row.point[0]}</td>
+                                <td>{row.point[1]}</td>
+                              </>
+                            ) : (
+                              <td colSpan={2} className="text-destructive">
+                                좌표 확인 필요
+                              </td>
+                            )}
+                            <td>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={`${i + 1}번 별 삭제`}
+                                disabled={measuring}
+                                title="별 삭제"
+                                onClick={() => {
+                                  onChange(
+                                    rows
+                                      .filter((_, j) => j !== i)
+                                      .map((row) => row.text)
+                                      .join("\n")
+                                  )
+                                  setSelected(
+                                    selected === i
+                                      ? null
+                                      : selected !== null && selected > i
+                                        ? selected - 1
+                                        : selected
+                                  )
+                                }}
+                              >
+                                <Trash2 />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">0개</p>
+                  )}
+                </aside>
+              </div>
+            ) : (
+              <div
+                className="alignment-frame-grid"
+                data-count={
+                  frames.filter((f) => f.id !== reference?.id).length + 1
+                }
+              >
+                {[
+                  { frame: reference, index: -1 },
+                  ...frames.flatMap((frame, index) =>
+                    frame.id === reference?.id ? [] : [{ frame, index }]
+                  ),
+                ].map(({ frame, index }) => {
+                  const point = index === -1 ? anchor : points[index]
+                  const shift =
+                    index >= 0 ? value.trim().split("\n")[index] : undefined
+                  return (
+                    <section
+                      key={index}
+                      className="alignment-frame"
+                      aria-label={
+                        index === -1 ? "기준 영상" : `입력 영상 ${index + 1}`
+                      }
+                    >
+                      <header className="flex min-w-0 items-center gap-2 px-2 text-xs">
+                        <span className="shrink-0 text-muted-foreground">
+                          {index === -1 ? "ref" : index + 1}
+                        </span>
+                        <span
+                          className="min-w-0 flex-1 truncate"
+                          title={frame?.label}
+                        >
+                          {frame?.label}
+                        </span>
+                      </header>
+                      <ImageViewer
+                        frame={frame}
+                        embedded
+                        selectionMode
+                        navigationTools={false}
+                        viewport={viewport}
+                        onViewportChange={setViewport}
+                        markers={
+                          point
+                            ? [{ x: point[0], y: point[1], label: "1" }]
+                            : []
+                        }
+                        imageOverlay={
+                          point || shift ? (
+                            <div
+                              className="alignment-frame-values"
+                              role="status"
+                            >
+                              {point && (
+                                <>
+                                  <span>X {point[0]}</span>
+                                  <span>Y {point[1]}</span>
+                                </>
+                              )}
+                              {shift && (
+                                <>
+                                  <span>ΔX {shift.split(/\s+/)[0]}</span>
+                                  <span>ΔY {shift.split(/\s+/)[1]}</span>
+                                </>
+                              )}
+                              {point && index >= 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label={`${frame?.label} 별 선택 지우기`}
+                                  disabled={measuring}
+                                  title="별 선택 지우기"
+                                  onClick={() => {
+                                    const next = { ...points }
+                                    delete next[index]
+                                    setPoints(next)
+                                    if (anchor && reference)
+                                      onChange(
+                                        shiftsFromStars(
+                                          anchor,
+                                          next,
+                                          reference.id,
+                                          frames.map((f) => f.id)
+                                        )
+                                      )
+                                  }}
+                                >
+                                  <Trash2 />
+                                </Button>
+                              )}
+                            </div>
+                          ) : undefined
+                        }
+                        onPick={(x, y) => {
+                          void measure(frame, x, y, (point) =>
+                            pickStar(index, point)
+                          )
+                        }}
+                      />
+                    </section>
+                  )
+                })}
+              </div>
+            ))}
+          {measurementError && (
+            <p role="alert" className="px-3 py-2 text-sm text-destructive">
+              {measurementError}
+            </p>
+          )}
+          <footer className="alignment-picker-footer">
+            <ViewerToolButton
+              label="전체 비우기"
+              disabled={measuring || !value.trim()}
+              onClick={() => {
+                onChange("")
+                setSelected(null)
+                setAnchor(undefined)
+                setPoints({})
               }}
             >
-              {isCoords ? "마지막 행 지우기" : "이동량 비우기"}
+              <Trash2 />
+            </ViewerToolButton>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => closePicker(false)}
+            >
+              완료
             </Button>
-            <Button onClick={() => setOpen(false)}>완료</Button>
-          </div>
+          </footer>
         </DialogContent>
       </Dialog>
     </Field>

@@ -1,12 +1,18 @@
 type Point = { x: number; y: number }
 type Size = { width: number; height: number }
-export function pixelPosition(x: string, y: string, size: Size): Point | null {
+export function pixelPosition(
+  x: string,
+  y: string,
+  size: Size,
+  subpixel = false
+): Point | null {
   const px = Number(x),
     py = Number(y)
   return x.trim() &&
     y.trim() &&
-    Number.isInteger(px) &&
-    Number.isInteger(py) &&
+    Number.isFinite(px) &&
+    Number.isFinite(py) &&
+    (subpixel || (Number.isInteger(px) && Number.isInteger(py))) &&
     px >= 1 &&
     py >= 1 &&
     px <= size.width &&
@@ -89,5 +95,26 @@ export function anchoredZoom(
         view.height / 2 -
         (anchor.y - view.height / 2 - pan.y) * ratio,
     },
+  }
+}
+
+/** Convert canvas position to FITS coordinates; pixel inspection still uses integer indices. */
+export function imagePosition(
+  point: Point,
+  placement: Point & Size,
+  image: Size,
+  subpixel = false
+): Point | null {
+  if (placement.width <= 0 || placement.height <= 0) return null
+  const x = ((point.x - placement.x) / placement.width) * image.width
+  const y = ((point.y - placement.y) / placement.height) * image.height
+  if (x < 0 || y < 0 || x >= image.width || y >= image.height) return null
+  if (!subpixel)
+    return { x: Math.floor(x) + 1, y: image.height - Math.floor(y) }
+  return {
+    x: Number(Math.max(1, Math.min(image.width, x + 0.5)).toFixed(3)),
+    y: Number(
+      Math.max(1, Math.min(image.height, image.height - y + 0.5)).toFixed(3)
+    ),
   }
 }

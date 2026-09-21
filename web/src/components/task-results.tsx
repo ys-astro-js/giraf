@@ -1,9 +1,10 @@
+import { RevealFile } from "@/components/viewer-controls"
 import { matchesFileName } from "@/lib/file-library"
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ImageViewer } from "@/components/image-viewer"
-import { Blank, Download, Failure } from "@/components/workbench-controls"
+import { Blank, Failure } from "@/components/workbench-controls"
 import { api, type Frame, type Job } from "@/lib/workbench"
 import { stateLabel, type TaskMap, type Instance } from "@/lib/task-map"
 
@@ -35,11 +36,11 @@ function ResultPreview({ frame }: { frame: Frame }) {
           <Button variant="outline" onClick={() => setAttempt((v) => v + 1)}>
             다시 불러오기
           </Button>
-          <Download id={frame.id} />
+          <RevealFile id={frame.id} />
         </>
       ) : ["text", "image-list"].includes(frame.asset || "") ? (
         <>
-          <Download id={frame.id} />
+          <RevealFile id={frame.id} />
           {text === null ? (
             <p role="status">결과를 불러오는 중입니다.</p>
           ) : (
@@ -48,7 +49,7 @@ function ResultPreview({ frame }: { frame: Frame }) {
         </>
       ) : frame.asset === "plot" ? (
         <>
-          <Download id={frame.id} />
+          <RevealFile id={frame.id} />
           <img
             key={attempt}
             src={"/api/plot?id=" + encodeURIComponent(frame.id)}
@@ -59,22 +60,15 @@ function ResultPreview({ frame }: { frame: Frame }) {
           />
         </>
       ) : frame.asset === "metacode" || frame.asset === "binary" ? (
-        <><p>{frame.asset === "metacode" ? "IRAF graphics metacode (GKI)" : "Binary file"}</p><Download id={frame.id} /></>
+        <><p>{frame.asset === "metacode" ? "IRAF graphics metacode (GKI)" : "Binary file"}</p><RevealFile id={frame.id} /></>
       ) : !frame.asset || frame.asset === "image" ? (
         <>
-          <ImageViewer key={`${frame.id}:${attempt}`} frame={frame} />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setAttempt((v) => v + 1)}
-          >
-            영상 다시 불러오기
-          </Button>
+          <ImageViewer key={`${frame.id}:${attempt}`} frame={frame} onReload={() => setAttempt(value => value + 1)} />
         </>
       ) : (
         <>
-          <p>이 파일은 미리보기를 지원하지 않습니다. 저장해서 확인해 주세요.</p>
-          <Download id={frame.id} />
+          <p>이 파일은 미리보기를 지원하지 않습니다. 파일 위치를 열어 확인해 주세요.</p>
+          <RevealFile id={frame.id} />
         </>
       )}
     </div>

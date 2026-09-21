@@ -40,15 +40,52 @@ export function pickAlignmentStar(
     return {
       anchor: point,
       index: first < 0 ? 0 : first,
-      value: frameIds.map((id) => id === referenceId ? alignmentShift(point, point).join(" ") : "? ?").join("\n") + "\n",
+      value:
+        frameIds
+          .map((id) =>
+            id === referenceId ? alignmentShift(point, point).join(" ") : "? ?"
+          )
+          .join("\n") + "\n",
     }
   }
   const { anchor, index } = selection
   const value = replaceShift(
-    selection.value, index,
+    selection.value,
+    index,
     alignmentShift(anchor, frameIds[index] === referenceId ? anchor : point),
     frameIds.length
   )
   const next = frameIds.findIndex((id, i) => i > index && id !== referenceId)
   return { anchor, value, index: next < 0 ? index : next }
+}
+
+export function alignmentRows(value: string) {
+  return value
+    .split("\n")
+    .map((text) => text.trim())
+    .filter(Boolean)
+    .map((text) => {
+      const pair = parsePairs(text)?.[0]
+      return { text, point: pair && pair.every((n) => n >= 1) ? pair : null }
+    })
+}
+
+export function shiftsFromStars(
+  anchor: Pair,
+  points: Record<number, Pair>,
+  referenceId: string,
+  frameIds: string[]
+) {
+  return (
+    frameIds
+      .map((id, index) => {
+        const point = id === referenceId ? anchor : points[index]
+        return point
+          ? alignmentShift(anchor, point)
+              .map((n) => Number(n.toFixed(3)))
+              .join(" ")
+          : "? ?"
+      })
+      .join("\n") + "\n"
+  )
 }
