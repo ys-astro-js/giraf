@@ -49,6 +49,7 @@ type Props = {
 
 export function WorkbenchToolbar(props: Props) {
   const status = props.executionStatus
+  const showFolder = !props.workflowBusy && status?.state !== "running" && status?.state !== "waiting"
   const progressPercent = status?.progressFraction !== undefined && Number.isFinite(status.progressFraction)
     ? Math.round(Math.max(0, Math.min(1, status.progressFraction)) * 100)
     : undefined
@@ -56,45 +57,11 @@ export function WorkbenchToolbar(props: Props) {
   return (
     <header className="workbench-toolbar" aria-label="도구 막대">
       <div className="toolbar-leading">
-        <SidebarTrigger size="icon" aria-label="사이드바 열기 또는 닫기" />
-        {props.loading ? (
-          <div role="status" aria-label="폴더 불러오는 중" aria-busy="true">
-            <Skeleton aria-hidden="true" className="toolbar-folder-wide h-9 w-32" />
-            <Skeleton aria-hidden="true" className="toolbar-folder-compact size-9" />
-          </div>
-        ) : [false, true].map((compact) => (
-          <Tooltip key={String(compact)}>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size={compact ? "icon" : "default"}
-                  className={
-                    compact
-                      ? "toolbar-folder-compact"
-                      : "toolbar-folder-wide max-w-48 min-w-0"
-                  }
-                  disabled={!props.ready}
-                />
-              }
-              onClick={props.onFolder}
-              disabled={!props.ready}
-              aria-label="폴더 열기"
-            >
-              <FolderOpen data-icon={compact ? undefined : "inline-start"} />
-              {!compact && (
-                <span className="truncate">
-                  {props.folder.split("/").filter(Boolean).at(-1) ||
-                    props.folder ||
-                    "폴더 열기"}
-                </span>
-              )}
-            </TooltipTrigger>
-            <TooltipContent className="max-w-80 break-all">
-              {props.folder || "폴더 열기"}
-            </TooltipContent>
-          </Tooltip>
-        ))}
+        <SidebarTrigger
+          variant="outline"
+          size="icon"
+          aria-label="사이드바 열기 또는 닫기"
+        />
         <Button
           size="icon"
           variant={props.workflowBusy ? "outline" : "default"}
@@ -107,8 +74,25 @@ export function WorkbenchToolbar(props: Props) {
         </Button>
       </div>
       <div className="toolbar-status text-sm" role="status" aria-live="polite" aria-atomic="true">
-        {status && (
-          <div className="toolbar-status-content" data-state={status.state} title={status.label}>
+        <div className="toolbar-status-content" data-state={status?.state || "idle"} title={status?.label}>
+          {showFolder && (props.loading ? (
+            <Skeleton aria-label="폴더 불러오는 중" className="h-6 w-32" />
+          ) : (
+            <Tooltip>
+              <TooltipTrigger
+                render={<Button variant="ghost" size={status ? "icon-xs" : "xs"} className={status ? undefined : "min-w-0 flex-1 justify-start"} disabled={!props.ready} />}
+                onClick={props.onFolder}
+                disabled={!props.ready}
+                aria-label="폴더 열기"
+              >
+                <FolderOpen data-icon={status ? undefined : "inline-start"} />
+                {!status && <span className="truncate">{props.folder.split("/").filter(Boolean).at(-1) || props.folder || "폴더 열기"}</span>}
+              </TooltipTrigger>
+              <TooltipContent className="max-w-80 break-all">{props.folder || "폴더 열기"}</TooltipContent>
+            </Tooltip>
+          ))}
+          {status ? (
+            <>
             {progressPercent !== undefined && (
               <span
                 className="toolbar-status-fill"
@@ -129,13 +113,14 @@ export function WorkbenchToolbar(props: Props) {
             {status.progress && (
               <span className="toolbar-status-progress text-muted-foreground tabular-nums">{status.progress}</span>
             )}
-          </div>
-        )}
+            </>
+          ) : <span className="sr-only">실행 대기</span>}
+        </div>
       </div>
       <ButtonGroup className="toolbar-panels" aria-label="패널 표시">
         <Button
           size="icon"
-          variant="ghost"
+          variant="outline"
           aria-label={props.trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
           title={props.trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
           onClick={() => props.onTray(!props.trayOpen)}
@@ -144,7 +129,7 @@ export function WorkbenchToolbar(props: Props) {
         </Button>
         <Button
           size="icon"
-          variant="ghost"
+          variant="outline"
           aria-label={
             props.settingsVisible ? "설정 패널 닫기" : "설정 패널 열기"
           }

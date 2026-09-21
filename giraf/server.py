@@ -11,6 +11,7 @@ import threading
 import numpy as np
 from astropy.io import fits
 from PIL import Image
+from send2trash import send2trash
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
@@ -84,6 +85,64 @@ def get_file(id):
     if id not in registry:
         raise ValueError('파일을 다시 불러와 주세요.')
     return Path(registry[id]['path'])
+
+
+def delete_library(kind, ids):
+    if kind not in ('files', 'jobs') or not isinstance(ids, list) or not ids or any(not isinstance(id, str) for id in ids):
+        raise ValueError('삭제할 항목을 선택해 주세요.')
+    ids = list(dict.fromkeys(ids))
+    with lock:
+        current = workflow_manager.current()
+        if (current and current.get('state') in ('running', 'waiting', 'cancelling')) or any(
+            status(p.parent)['state'] in ('queued', 'running', 'waiting') for p in RUNS.glob('*/manifest.json')
+        ):
+            raise ValueError('실행이 끝난 뒤 삭제해 주세요.')
+        paths = []
+        for id in ids:
+            if kind == 'files':
+                path = get_file(id)
+                if not path.is_file():
+                    raise ValueError('파일을 찾을 수 없습니다. 목록을 새로고침해 주세요.')
+            else:
+                path = (RUNS / id).resolve()
+                if path.parent != RUNS.resolve() or not (path / 'manifest.json').is_file() or (RUNS / id).is_symlink():
+                    raise ValueError('실행 기록을 찾을 수 없습니다.')
+            paths.append(path)
+        # Validate the whole request first; a failed trash operation never falls back to permanent deletion.
+        moved_ids, moved_paths, failed_ids = [], [], []
+        for id, path in zip(ids, paths):
+            try:
+                send2trash(str(path))
+            except OSError:
+                failed_ids.append(id)
+            else:
+                moved_ids.append(id)
+                moved_paths.append(path)
+        if not moved_ids:
+            raise ValueError('휴지통으로 이동하지 못했습니다. 파일 권한과 휴지통을 확인한 뒤 다시 시도해 주세요.')
+        ids, paths = moved_ids, moved_paths
+        removed = set(ids) if kind == 'files' else {
+            id for id, row in {**workspace.get('file_refs', {}), **registry}.items()
+            if any(Path(row['path']).resolve().is_relative_to(path) for path in paths)
+        }
+        for manifest in RUNS.glob('*/products.json'):
+            products = json.loads(manifest.read_text())
+            kept = [p for p in products if (manifest.parent / p['file']).resolve() not in paths]
+            if kept != products: atomic_json(manifest, kept)
+        for id in removed:
+            registry.pop(id, None)
+            workspace.get('file_refs', {}).pop(id, None)
+            workspace['overrides'].pop(id, None)
+        for item in workspace['sets']:
+            item['ids'] = [id for id in item['ids'] if id not in removed]
+        if current:
+            def remaining_job(job):
+                if not job or (kind == 'jobs' and job['id'] in ids): return None
+                return dict(job, products=[p for p in job.get('products', []) if p.get('id') not in removed])
+            workflow_manager.save({'jobs': [kept for job in current.get('jobs', []) if (kept := remaining_job(job))],
+                                   'currentJob': remaining_job(current.get('currentJob'))})
+        save()
+        return {'fileIds': sorted(removed), 'jobIds': ids if kind == 'jobs' else [], 'failedIds': failed_ids}
 
 
 @lru_cache(maxsize=5)
@@ -291,18 +350,9 @@ async def api(request: Request):
             with lock:
                 workspace['folder'] = folder; save()
             return JSONResponse({'ok': True})
-        if action == 'save-set':
-            ids = [i for i in payload['ids'] if i in registry]
-            name = str(payload['name']).strip()[:80]
-            if not ids or not name:
-                raise ValueError('묶음 이름과 영상을 선택해 주세요.')
-            with lock:
-                item = dict(name=name, ids=ids, folder=workspace['folder'])
-                for id in ids:
-                    workspace.setdefault('file_refs',{})[id]={k:registry[id].get(k) for k in ('path','label','job','asset')}
-                workspace['sets'] = [s for s in workspace['sets'] if not (s['name'] == name and s['folder'] == workspace['folder'])] + [item]
-                save()
-            return JSONResponse(item)
+        if action in ('delete-files', 'delete-jobs'):
+            if request.method != 'POST': raise ValueError('POST 요청이 필요합니다.')
+            return JSONResponse(await run_in_threadpool(delete_library, action.removeprefix('delete-'), payload.get('ids')))
         if action == 'metadata':
             with lock:
                 for id in payload['ids']:

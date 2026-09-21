@@ -1,6 +1,7 @@
+import { DeleteSelectionButton } from "@/components/delete-selection-button"
 import { acceptsAsset } from "@/lib/workbench"
 import { useEffect, useMemo, useRef, useState } from "react"
-import { FolderOpen, FileImage, ArrowUp, Check, Save, X } from "lucide-react"
+import { FolderOpen, FileImage, ArrowUp, Check, X } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,6 @@ import {
   TableCell,
 } from "@/components/ui/table"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
-import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api, type Frame, type Slot, type Workspace } from "@/lib/workbench"
 import { Blank, Failure } from "@/components/workbench-controls"
@@ -49,14 +49,14 @@ export function FilePicker({
   rows,
   remember,
   onClose,
-  onSaved,
+  onDelete,
 }: {
   request: PickerRequest
   workspace: Workspace
   rows: Frame[]
   remember: (rows: Frame[]) => void
   onClose: () => void
-  onSaved: () => void
+  onDelete: (ids: string[]) => Promise<void>
 }) {
   const [location, setLocation] = useState(workspace.folder)
   const [path, setPath] = useState(workspace.folder),
@@ -68,10 +68,7 @@ export function FilePicker({
     [filters, setFilters] = useState(defaultFileFilters),
     [selection, setSelection] = useState(new Set(request.initial))
   const [preview, setPreview] = useState<Frame | null>(null),
-    [text, setText] = useState(""),
-    [setName, setSetName] = useState(""),
-    [saving, setSaving] = useState(false),
-    [saveOpen, setSaveOpen] = useState(false)
+    [text, setText] = useState("")
   const [browseAttempt, setBrowseAttempt] = useState(0)
   const last = useRef(""),
     rememberRef = useRef(remember)
@@ -126,7 +123,9 @@ export function FilePicker({
               .map((id) => lookup.get(id))
               .filter((r): r is Frame => !!r)
     return filterFiles(
-      source.filter((r) => acceptsAsset(request.slot.kind, r.asset) && !r.error),
+      source.filter(
+        (r) => acceptsAsset(request.slot.kind, r.asset) && !r.error
+      ),
       query,
       filters
     )
@@ -162,18 +161,6 @@ export function FilePicker({
     setQuery("")
     setTab("folder")
     setPreview(null)
-  }
-  async function saveSet() {
-    setSaving(true)
-    try {
-      await api("save-set", { name: setName, ids: [...selection] })
-      setSaveOpen(false)
-      onSaved()
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setSaving(false)
-    }
   }
   const directories = tab === "folder" && !query ? data?.directories || [] : []
   return (
@@ -247,31 +234,6 @@ export function FilePicker({
                 {s.name}
               </Button>
             ))}
-            {!request.folderOnly && workspace.sets.length > 0 && (
-              <>
-                <Separator />
-                {workspace.sets.map((s) => (
-                  <Button
-                    key={s.folder + s.name}
-                    variant="ghost"
-                    className="justify-start"
-                    onClick={() => {
-                      const ids = s.ids.filter(
-                        (id) => acceptsAsset(request.slot.kind, lookup.get(id)?.asset)
-                      )
-                      setSelection(
-                        new Set(request.slot.multiple ? ids : ids.slice(0, 1))
-                      )
-                      setTab("selection")
-                      setQuery("")
-                      setFilters(defaultFileFilters)
-                    }}
-                  >
-                    <span className="truncate">{s.name}</span>
-                  </Button>
-                ))}
-              </>
-            )}
           </aside>
           <div className="picker-main">
             {!request.folderOnly && (
@@ -321,6 +283,64 @@ export function FilePicker({
                   )}
                 </FieldGroup>
               </>
+            )}
+            {!request.folderOnly && (
+              <div
+                className="flex flex-wrap items-center justify-between gap-4"
+                role="group"
+                aria-label="파일 선택 관리"
+              >
+                <div className="flex items-center gap-3">
+                  {request.slot.multiple && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy || !list.length}
+                      onClick={() =>
+                        setSelection(
+                          (current) =>
+                            new Set([
+                              ...current,
+                              ...list.map((file) => file.id),
+                            ])
+                        )
+                      }
+                    >
+                      전체 선택
+                    </Button>
+                  )}
+                  <span className="text-sm text-muted-foreground" role="status">
+                    {selection.size}개 선택
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={!selection.size}
+                    onClick={() => setSelection(new Set())}
+                  >
+                    선택 해제
+                  </Button>
+                  <DeleteSelectionButton
+                    ids={[...selection]}
+                    label="선택한 파일 삭제"
+                    disabled={busy}
+                    description="휴지통에서 복원할 수 있습니다."
+                    onDelete={async (ids) => {
+                      await onDelete(ids)
+                      setSelection(
+                        (current) =>
+                          new Set(
+                            [...current].filter((id) => !ids.includes(id))
+                          )
+                      )
+                      if (preview && ids.includes(preview.id)) setPreview(null)
+                      setBrowseAttempt((value) => value + 1)
+                    }}
+                  />
+                </div>
+              </div>
             )}
             <div className="picker-list" tabIndex={0} aria-label="파일 목록">
               {busy ? (
@@ -447,42 +467,7 @@ export function FilePicker({
             </div>
           </div>
         </div>
-        {saveOpen && (
-          <FieldGroup className="shrink-0 flex-row items-end gap-2">
-            <Field>
-              <FieldLabel htmlFor="selection-name">묶음 이름</FieldLabel>
-              <Input
-                id="selection-name"
-                value={setName}
-                onChange={(e) => setSetName(e.target.value)}
-              />
-            </Field>
-            <Button disabled={!setName.trim() || saving} onClick={saveSet}>
-              저장
-            </Button>
-          </FieldGroup>
-        )}
         <DialogFooter className="picker-footer">
-          {!request.folderOnly && (
-            <div className="mr-auto flex items-center gap-2">
-              <Button
-                variant="ghost"
-                disabled={!selection.size}
-                onClick={() => setSelection(new Set())}
-              >
-                선택 해제
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="선택 묶음 저장"
-                disabled={!selection.size}
-                onClick={() => setSaveOpen((v) => !v)}
-              >
-                <Save />
-              </Button>
-            </div>
-          )}
           <Button variant="outline" onClick={onClose}>
             취소
           </Button>
@@ -503,9 +488,7 @@ export function FilePicker({
             {request.folderOnly ? (
               "이 폴더 열기"
             ) : (
-              <>
-                {`${selection.size}개 선택`}
-              </>
+              <>{`${selection.size}개 선택`}</>
             )}
           </Button>
         </DialogFooter>

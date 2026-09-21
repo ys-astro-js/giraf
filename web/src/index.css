@@ -958,9 +958,9 @@ textarea {
   min-width: 0;
   min-height: 36px;
   max-width: 100%;
-  padding: 6px 12px;
+  padding: 5px 12px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
+  border-radius: 9999px;
   background: var(--muted);
 }
 .toolbar-status-name { min-width: 0; flex: 1; overflow-wrap: anywhere; }
@@ -979,12 +979,7 @@ textarea {
 .toolbar-status-content > svg { color: var(--muted-foreground); }
 .toolbar-status-content[data-state="completed"] > svg { color: var(--primary); }
 .toolbar-status-content[data-state="failed"] > svg { color: var(--destructive); }
-.toolbar-folder-compact { display: none; }
 .toolbar-panels { justify-self: end; }
-@container (max-width: 960px) {
-  .toolbar-folder-wide { display: none; }
-  .toolbar-folder-compact { display: inline-flex; }
-}
 @container (max-width: 600px) {
   .workbench-toolbar { gap: 8px; padding-inline: 8px; }
 }
@@ -993,7 +988,6 @@ textarea {
   .workbench-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
   .toolbar-panels { grid-column: 2; grid-row: 1; }
   .toolbar-status { grid-column: 1 / -1; grid-row: 2; padding-block: 0 8px; }
-  .toolbar-status:empty { display: none; }
 }
 
 /* Keep selection in the file icon slot without shifting file names. */
@@ -1001,16 +995,16 @@ textarea {
   opacity: 0;
   pointer-events: none;
 }
-.library-file-row:is(:hover, :focus-within, [data-selecting="true"]) .library-file-checkbox {
+.library-file-row:is(:has(:focus-visible), [data-selecting="true"]) .library-file-checkbox {
   opacity: 1;
   pointer-events: auto;
 }
-.library-file-row:is(:hover, :focus-within, [data-selecting="true"]) .library-file-icon {
+.library-file-row:is(:has(:focus-visible), [data-selecting="true"]) .library-file-icon {
   opacity: 0;
 }
-@media (hover: none) {
-  .library-file-row .library-file-checkbox { opacity: 1; pointer-events: auto; }
-  .library-file-row .library-file-icon { opacity: 0; }
+@media (hover: hover) {
+  .library-file-row:hover .library-file-checkbox { opacity: 1; pointer-events: auto; }
+  .library-file-row:hover .library-file-icon { opacity: 0; }
 }
 
 /* Inspector navigation stays visible while each task area scrolls independently. */

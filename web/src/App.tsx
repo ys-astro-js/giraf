@@ -181,9 +181,7 @@ function App() {
     [taskError, setTaskError] = useState(""),
     [plan, setPlan] = useState<Plan | null>(null),
     [pendingPayload, setPendingPayload] = useState<unknown>(null),
-    [response, setResponse] = useState(""),
-    [savedName, setSavedName] = useState(""),
-    [saveSetOpen, setSaveSetOpen] = useState(false)
+    [response, setResponse] = useState("")
   const [trayOpen, setTrayOpen] = useState(false)
   const [logRequest, setLogRequest] = useState<{id: string; revision: number} | null>(null)
   const [inspectorOpen, setInspectorOpen] = useState(() => readPanelLayout().inspectorOpen ?? true)
@@ -517,6 +515,7 @@ function App() {
       return next
     })
     setAddOpen(false)
+    if (ids === selectedFiles) setSelectedFiles([])
     setInspectorTab("input")
     setInspectorOpen(true)
     setMobilePanel("detail")
@@ -749,6 +748,23 @@ function App() {
     }))
     setSaveState("새 작업에 적용할 설정 저장 중")
   }
+  async function deleteLibrary(kind: "files" | "jobs", ids: string[]) {
+    const removed = await api<{fileIds: string[]; jobIds: string[]; failedIds: string[]}>(`delete-${kind}`, {ids})
+    const fileIds = new Set(removed.fileIds)
+    const jobIds = new Set(removed.jobIds)
+    setSelectedFiles(previous => previous.filter(id => !fileIds.has(id)))
+    setCache(previous => Object.fromEntries(Object.entries(previous).filter(([id]) => !fileIds.has(id))))
+    setWorkspace(previous => ({...previous, files: previous.files.filter(file => !fileIds.has(file.id))}))
+    setJobs(previous => previous.filter(job => !jobIds.has(job.id)).map(job => ({...job, products: job.products.filter(file => !fileIds.has(file.id))})))
+    update(previous => ({...previous, runs: previous.runs.filter(run => !jobIds.has(run.id)).map(run => ({...run, products: run.products.filter(file => !fileIds.has(file.id))}))}))
+    if (asset && fileIds.has(asset.row.id)) setAsset(null)
+    setCompare(previous => previous.filter(id => !fileIds.has(id)))
+    if (jobIds.has(selectedJob)) { setSelectedJob(""); setLogRequest(null); setTrayOpen(false) }
+    setWorkflow(previous => previous ? {...previous, jobs: previous.jobs.filter(job => !jobIds.has(job.id)), currentJob: previous.currentJob && jobIds.has(previous.currentJob.id) ? null : previous.currentJob} : null)
+    // The deletion succeeded even if refreshing the remaining library fails.
+    try { await refresh() } catch { setError("휴지통으로 이동했습니다. 남은 목록을 불러오지 못해 새로고침이 필요합니다.") }
+    if (removed.failedIds.length) throw new Error("일부 항목을 휴지통으로 옮기지 못했습니다.")
+  }
   function template() {
     if (!catalog) return
     let next = map
@@ -774,12 +790,6 @@ function App() {
   }
   const sourceOptions = useMemo<{ key: string; label: string; description?: string; count?: number; source: Source }[]>(
     () => [
-      ...workspace.sets.map((s, i) => ({
-        key: "set:" + i,
-        label: s.name,
-        description: "저장한 선택",
-        source: { kind: "files", ids: s.ids, label: s.name } as Source,
-      })),
       ...(selectedFiles.length
         ? [
             {
@@ -815,7 +825,7 @@ function App() {
           }))
       ),
     ],
-    [workspace.sets, selectedFiles, map.tasks, jobs]
+    [selectedFiles, map.tasks, jobs]
   )
   const [layoutBusy, setLayoutBusy] = useState(false)
   async function autoLayout() {
@@ -911,7 +921,8 @@ function App() {
             onError={setError}
             onAddTask={(name) => add(name, [])}
             onUse={() => setAddOpen(true)}
-            onSave={() => setSaveSetOpen(true)}
+            onDeleteFiles={ids => deleteLibrary("files", ids)}
+            onDeleteJobs={ids => deleteLibrary("jobs", ids)}
           >
             <SidebarMenu>
               <SidebarMenuItem>
@@ -1134,7 +1145,7 @@ function App() {
           rows={rows}
           remember={remember}
           onClose={() => setPicker(null)}
-          onSaved={() => refresh().catch((e) => setError(e.message))}
+          onDelete={ids => deleteLibrary("files", ids)}
         />
       )}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -1540,38 +1551,6 @@ function App() {
               </DialogFooter>
             </>
           )}
-        </DialogContent>
-      </Dialog>
-      <Dialog open={saveSetOpen} onOpenChange={setSaveSetOpen}>
-        <DialogContent aria-describedby={undefined}>
-          <DialogHeader>
-            <DialogTitle>선택 묶음 저장</DialogTitle>
-          </DialogHeader>
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="saved-name">묶음 이름</FieldLabel>
-              <Input
-                id="saved-name"
-                value={savedName}
-                onChange={(e) => setSavedName(e.target.value)}
-              />
-            </Field>
-          </FieldGroup>
-          <DialogFooter>
-            <Button
-              disabled={!savedName.trim()}
-              onClick={() =>
-                api("save-set", { name: savedName, ids: selectedFiles })
-                  .then(() => {
-                    setSaveSetOpen(false)
-                    return refresh()
-                  })
-                  .catch((e) => setError(e.message))
-              }
-            >
-              저장
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
       {currentJob?.state === "waiting" &&

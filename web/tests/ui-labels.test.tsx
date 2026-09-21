@@ -62,7 +62,8 @@ test("file pagination exposes remaining quantity in a Badge with a separate filt
         onError={noop}
         onAddTask={noop}
         onUse={noop}
-        onSave={noop}
+        onDeleteFiles={async () => {}}
+        onDeleteJobs={async () => {}}
       >
         {null}
       </LibrarySidebar>
@@ -72,7 +73,7 @@ test("file pagination exposes remaining quantity in a Badge with a separate filt
   expect(html).toContain('aria-label="파일 필터"')
   expect(html).toMatch(/더 보기\s*<span[^>]*data-slot="badge"[^>]*>4<\/span>/)
   expect(html).not.toContain("더 보기 (4)")
-  expect(html).toContain("파일 84개")
+  expect(html).toContain("84개 항목")
   expect(html.match(/data-slot="badge"/g)).toHaveLength(1)
 })
 

@@ -49,7 +49,10 @@ test('idle toolbar does not claim that any task is running or complete', () => {
   const html = renderStatus()
   expect(html).not.toContain('실행 중')
   expect(html).not.toContain('완료')
-  expect(html).not.toContain('toolbar-status-content')
+  expect(html).toContain('toolbar-status-content')
+  expect(html).toContain('data-state="idle"')
+  expect(html).not.toContain('animate-spin')
+  expect(html).not.toContain('role="progressbar"')
 })
 
 // Progress boundaries are specified before changing the status implementation.
@@ -61,4 +64,18 @@ test('background progress stays within bounds and unknown progress is not fabric
   }
   const html = renderStatus({ name: 'ccdproc', label: '실행 준비 중', state: 'running' })
   expect(html).not.toContain('role="progressbar"')
+})
+
+test('folder picker lives inside the status area and is hidden throughout execution', () => {
+  const idle = renderStatus()
+  expect(idle.indexOf('aria-label="폴더 열기"')).toBeGreaterThan(idle.indexOf('toolbar-status-content'))
+  expect(idle).toContain('data')
+  for (const state of ['running', 'waiting'] as const) {
+    expect(renderStatus({name:'ccdproc',label:'실행 중',state})).not.toContain('aria-label="폴더 열기"')
+  }
+  for (const state of ['completed', 'failed', 'cancelled'] as const) {
+    const html = renderStatus({name:'ccdproc',label:'결과',state})
+    expect(html).toContain('aria-label="폴더 열기"')
+    expect(html).toContain('ccdproc')
+  }
 })

@@ -67,7 +67,7 @@ test("file tab offers four destinations and excludes generated outputs and setti
             { id: "source", label: "source.fits" },
             { id: "output", label: "output.fits", job: "run" },
           ],
-          sets: [],
+          sets: [{name: "obsolete saved set", ids: ["source"], folder: "/data"}],
         }}
         catalog={null}
         jobs={[]}
@@ -80,7 +80,8 @@ test("file tab offers four destinations and excludes generated outputs and setti
         onError={() => {}}
         onAddTask={() => {}}
         onUse={() => {}}
-        onSave={() => {}}
+        onDeleteFiles={async () => {}}
+        onDeleteJobs={async () => {}}
         onViewLog={() => {}}
       >
         <span>실행 엔진</span>
@@ -91,12 +92,18 @@ test("file tab offers four destinations and excludes generated outputs and setti
     expect(html).toContain(`>${label}</span>`)
   for (const icon of [
     "folder-closed",
-    "list-clock",
     "square-function",
     "sliders-horizontal",
   ])
     expect(html).toContain(`lucide-${icon}`)
   expect(html).toContain("source.fits")
+  expect(html).not.toContain("표시된 파일 전체 선택")
+  expect(html).toContain("파일 선택 모드")
+  expect(html).toContain("1개 항목")
+  expect(html).not.toContain("선택한 파일 삭제")
+  expect(html).not.toContain("저장한 선택")
+  expect(html).not.toContain("obsolete saved set")
+  expect(html).not.toContain("묶음 저장")
   expect(html).not.toContain("output.fits")
   expect(html).not.toContain("실행 엔진")
   expect(html).not.toContain("열린 폴더")

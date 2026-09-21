@@ -1,3 +1,4 @@
+import { DeleteSelectionButton } from "@/components/delete-selection-button"
 import { MiddleEllipsis } from "@/components/middle-ellipsis"
 import { taskPackageTree, type TaskPackage } from "@/lib/task-tree"
 import {
@@ -34,7 +35,6 @@ import {
   SidebarTrigger,
   SidebarInput,
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarGroupContent,
   SidebarMenu,
   SidebarMenuItem,
@@ -44,7 +44,6 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
-  SidebarSeparator,
 } from "@/components/ui/sidebar"
 import {
   Collapsible,
@@ -99,7 +98,8 @@ type Props = {
   onError: (message: string) => void
   onAddTask: (name: string) => void
   onUse: () => void
-  onSave: () => void
+  onDeleteFiles: (ids: string[]) => Promise<void>
+  onDeleteJobs: (ids: string[]) => Promise<void>
   children: ReactNode
 }
 
@@ -192,6 +192,17 @@ export function LibrarySidebar(props: Props) {
   const [filters, setFilters] = useState<FileFilters>(defaultFileFilters)
   const [runOpen, setRunOpen] = useState<Record<string, boolean>>({})
   const [limits, setLimits] = useState<Record<string, number>>({})
+  const [selectionMode, setSelectionMode] = useState<
+    "files" | "history" | null
+  >(null)
+  const [previousSelected, setPreviousSelected] = useState(selected)
+  if (previousSelected !== selected) {
+    setPreviousSelected(selected)
+    if (selectionMode === "files" && previousSelected.length && !selected.length)
+      setSelectionMode(null)
+  }
+  const selecting = selectionMode !== null
+  const [selectedRuns, setSelectedRuns] = useState<string[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const selectedSet = useMemo(() => new Set(selected), [selected])
   const filterCount =
@@ -204,7 +215,18 @@ export function LibrarySidebar(props: Props) {
     [workspace.files]
   )
   const folder = filterFiles(source.folder, fileQuery, filters)
+  const selectionFiles =
+    tab === "files" ? folder : props.jobs.flatMap((job) => job.products)
   const executions = groupExecutions(props.jobs, props.currentExecution)
+  const deletableRuns = executions.filter(
+    (group) =>
+      !group.jobs.some((job) =>
+        ["queued", "running", "waiting"].includes(job.state)
+      )
+  )
+  const runSelection = deletableRuns.filter((group) =>
+    selectedRuns.includes(group.id)
+  )
   const limit = (key: string) => limits[key] || 80
   const bands = [
     ...new Set(
@@ -230,8 +252,11 @@ export function LibrarySidebar(props: Props) {
               key={file.id}
               file={file}
               selected={selectedSet.has(file.id)}
-              selecting={selectedSet.size > 0}
-              onSelect={onSelect}
+              selecting={selectionMode === "files"}
+              onSelect={(value) => {
+                setSelectionMode("files")
+                onSelect(value)
+              }}
               onOpen={props.onOpen}
             />
           ))}
@@ -315,7 +340,12 @@ export function LibrarySidebar(props: Props) {
       <Sidebar collapsible="offcanvas" aria-label="자료와 작업 탐색">
         <Tabs
           value={tab}
-          onValueChange={(value) => setTab(String(value))}
+          onValueChange={(value) => {
+            setTab(String(value))
+            setSelectionMode(null)
+            setSelectedRuns([])
+            onSelect([])
+          }}
           className="flex min-h-0 flex-1 flex-col gap-0"
         >
           <SidebarHeader>
@@ -358,7 +388,7 @@ export function LibrarySidebar(props: Props) {
                 {(tab === "files" ? fileQuery : taskQuery) && (
                   <Button
                     variant="ghost"
-                    size="icon-sm"
+                    size="icon"
                     aria-label="검색 초기화"
                     onClick={() => {
                       if (tab === "files") {
@@ -379,45 +409,170 @@ export function LibrarySidebar(props: Props) {
                 )}
               </div>
             )}
-            {(tab === "files" || tab === "tasks") && (
-              <SidebarGroup className="p-0">
-                <SidebarGroupLabel className="justify-between gap-2">
-                  <span role="status">
-                    {tab === "files"
-                      ? `파일 ${folder.length}개`
-                      : `작업 ${matchingTasks.length}개`}
-                  </span>
-                  {(tab === "files" || props.onRefreshCatalog) && (
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label={
-                        tab === "files" ? "자료 새로고침" : "작업 목록 새로고침"
-                      }
-                      disabled={!props.ready || refreshing}
-                      onClick={async () => {
-                        setRefreshing(true)
-                        try {
-                          if (tab === "files") await props.onRefresh()
-                          else await props.onRefreshCatalog?.()
-                        } catch (error) {
-                          props.onError(
-                            error instanceof Error
-                              ? error.message
-                              : "목록을 새로고침하지 못했습니다."
-                          )
-                        } finally {
-                          setRefreshing(false)
+            {tab !== "settings" && (
+              <div
+                className="flex min-h-9 min-w-0 flex-wrap items-center justify-between gap-x-1 gap-y-1"
+                role="group"
+                aria-label={
+                  tab === "files"
+                    ? "파일 관리"
+                    : tab === "history"
+                      ? "실행 기록 관리"
+                      : "작업 관리"
+                }
+              >
+                {selecting ? (
+                  <>
+                    <div className="flex min-w-0 items-center gap-2 pl-3">
+                      <Checkbox
+                        title="전체 선택"
+                        aria-label={
+                          selectionMode === "files"
+                            ? "표시된 파일 전체 선택"
+                            : "실행 기록 전체 선택"
                         }
-                      }}
-                    >
-                      <RefreshCw
-                        className={refreshing ? "animate-spin" : undefined}
+                        disabled={
+                          !props.ready ||
+                          (selectionMode === "files"
+                            ? !selectionFiles.length
+                            : !deletableRuns.length)
+                        }
+                        checked={
+                          selectionMode === "files"
+                            ? selectionFiles.length > 0 &&
+                              selectionFiles.every((file) =>
+                                selectedSet.has(file.id)
+                              )
+                            : deletableRuns.length > 0 &&
+                              runSelection.length === deletableRuns.length
+                        }
+                        indeterminate={
+                          selectionMode === "files"
+                            ? selectionFiles.some((file) =>
+                                selectedSet.has(file.id)
+                              ) &&
+                              !selectionFiles.every((file) =>
+                                selectedSet.has(file.id)
+                              )
+                            : runSelection.length > 0 &&
+                              runSelection.length < deletableRuns.length
+                        }
+                        onCheckedChange={(checked) => {
+                          if (selectionMode === "files")
+                            onSelect((ids) =>
+                              checked
+                                ? [
+                                    ...new Set([
+                                      ...ids,
+                                      ...selectionFiles.map((file) => file.id),
+                                    ]),
+                                  ]
+                                : ids.filter(
+                                    (id) =>
+                                      !selectionFiles.some(
+                                        (file) => file.id === id
+                                      )
+                                  )
+                            )
+                          else
+                            setSelectedRuns(
+                              checked
+                                ? deletableRuns.map((group) => group.id)
+                                : []
+                            )
+                        }}
                       />
-                    </Button>
-                  )}
-                </SidebarGroupLabel>
-              </SidebarGroup>
+                      <span
+                        className="text-xs whitespace-nowrap text-muted-foreground"
+                        role="status"
+                        aria-label={`${selectionMode === "files" ? selected.length : runSelection.length}개 선택`}
+                      >
+                        {`${selectionMode === "files" ? selected.length : runSelection.length}개 항목`}
+                      </span>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        size="default"
+                        variant="ghost"
+                        onClick={() => {
+                          setSelectionMode(null)
+                          setSelectedRuns([])
+                          onSelect([])
+                        }}
+                      >
+                        완료
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex min-w-0 items-center gap-1 pl-3">
+                      <span
+                        role="status"
+                        className="text-xs whitespace-nowrap text-muted-foreground"
+                      >
+                        {`${tab === "files" ? folder.length : tab === "history" ? executions.length : matchingTasks.length}개 항목`}
+                      </span>
+                      {(tab === "files" ||
+                        (tab === "tasks" && props.onRefreshCatalog)) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={
+                            tab === "files"
+                              ? "자료 새로고침"
+                              : "작업 목록 새로고침"
+                          }
+                          disabled={!props.ready || refreshing}
+                          onClick={async () => {
+                            setRefreshing(true)
+                            try {
+                              if (tab === "files") await props.onRefresh()
+                              else await props.onRefreshCatalog?.()
+                            } catch (error) {
+                              props.onError(
+                                error instanceof Error
+                                  ? error.message
+                                  : "목록을 새로고침하지 못했습니다."
+                              )
+                            } finally {
+                              setRefreshing(false)
+                            }
+                          }}
+                        >
+                          <RefreshCw
+                            className={refreshing ? "animate-spin" : undefined}
+                          />
+                        </Button>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {tab !== "tasks" && (
+                        <Button
+                          size="default"
+                          variant="ghost"
+                          aria-label={
+                            tab === "files"
+                              ? "파일 선택 모드"
+                              : "실행 기록 선택 모드"
+                          }
+                          disabled={
+                            !props.ready ||
+                            (tab === "files"
+                              ? !folder.length
+                              : !deletableRuns.length)
+                          }
+                          onClick={() =>
+                            setSelectionMode(tab as "files" | "history")
+                          }
+                        >
+                          선택
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </SidebarHeader>
           <SidebarContent
@@ -466,30 +621,6 @@ export function LibrarySidebar(props: Props) {
                       </NoFiles>
                     )}
                   </SidebarGroup>
-                  {workspace.sets.length > 0 && (
-                    <SidebarGroup>
-                      <SidebarGroupLabel>저장한 선택</SidebarGroupLabel>
-                      <SidebarGroupContent>
-                        <SidebarMenu>
-                          {workspace.sets.map((set, index) => (
-                            <SidebarMenuItem key={index}>
-                              <SidebarMenuButton
-                                onClick={() => onSelect([...new Set(set.ids)])}
-                              >
-                                <Folder />
-                                <span
-                                  className="min-w-0 flex-1 truncate"
-                                  title={set.name}
-                                >
-                                  {set.name}
-                                </span>
-                              </SidebarMenuButton>
-                            </SidebarMenuItem>
-                          ))}
-                        </SidebarMenu>
-                      </SidebarGroupContent>
-                    </SidebarGroup>
-                  )}
                 </TabsContent>
                 <TabsContent value="history" className="min-h-0">
                   <SidebarGroup>
@@ -506,42 +637,64 @@ export function LibrarySidebar(props: Props) {
                                 }))
                               }
                             >
-                              <CollapsibleTrigger
-                                render={
-                                  <SidebarMenuButton
-                                    size="lg"
-                                    className="pr-3!"
-                                  />
-                                }
-                                className="[&[aria-expanded=true]>svg]:rotate-90"
+                              <div
+                                className="library-file-row relative"
+                                data-selecting={selectionMode === "history"}
                               >
-                                <ChevronRight />
-                                <span className="flex min-w-0 flex-1 flex-col">
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    <span
-                                      className="min-w-0 flex-1 truncate"
-                                      title={
-                                        group.workflow
+                                <CollapsibleTrigger
+                                  render={
+                                    <SidebarMenuButton
+                                      size="lg"
+                                      className="pr-3! pl-10"
+                                      isActive={runSelection.includes(group)}
+                                    />
+                                  }
+                                  className="[&[aria-expanded=true]>svg]:rotate-90"
+                                >
+                                  <ChevronRight className="library-file-icon absolute top-1/2 left-3 -translate-y-1/2" />
+                                  <span className="flex min-w-0 flex-1 flex-col">
+                                    <span className="flex min-w-0 items-center gap-2">
+                                      <span
+                                        className="min-w-0 flex-1 truncate"
+                                        title={
+                                          group.workflow
+                                            ? "워크플로우 실행"
+                                            : `${taskDisplayName(group.jobs[0].task || group.jobs[0].name)} 실행`
+                                        }
+                                      >
+                                        {group.workflow
                                           ? "워크플로우 실행"
-                                          : `${taskDisplayName(group.jobs[0].task || group.jobs[0].name)} 실행`
-                                      }
+                                          : `${taskDisplayName(group.jobs[0].task || group.jobs[0].name)} 실행`}
+                                      </span>
+                                      <span className="ml-auto shrink-0 text-muted-foreground">
+                                        {group.jobs.length}
+                                      </span>
+                                    </span>
+                                    <span
+                                      className="truncate text-muted-foreground"
+                                      title={runLabel(group.jobs[0].id)}
                                     >
-                                      {group.workflow
-                                        ? "워크플로우 실행"
-                                        : `${taskDisplayName(group.jobs[0].task || group.jobs[0].name)} 실행`}
-                                    </span>
-                                    <span className="ml-auto shrink-0 text-muted-foreground">
-                                      {group.jobs.length}
+                                      {runLabel(group.jobs[0].id)}
                                     </span>
                                   </span>
-                                  <span
-                                    className="truncate text-muted-foreground"
-                                    title={runLabel(group.jobs[0].id)}
-                                  >
-                                    {runLabel(group.jobs[0].id)}
-                                  </span>
-                                </span>
-                              </CollapsibleTrigger>
+                                </CollapsibleTrigger>
+                                <Checkbox
+                                  className="library-file-checkbox absolute! top-1/2 left-3 -translate-y-1/2"
+                                  aria-label={`${runLabel(group.jobs[0].id)} 실행 선택`}
+                                  disabled={!deletableRuns.includes(group)}
+                                  checked={runSelection.includes(group)}
+                                  onCheckedChange={(checked) => {
+                                    setSelectionMode("history")
+                                    setSelectedRuns((ids) =>
+                                      toggleFileSelection(
+                                        ids,
+                                        group.id,
+                                        checked
+                                      )
+                                    )
+                                  }}
+                                />
+                              </div>
                               <CollapsibleContent>
                                 <SidebarMenuSub className="mr-0 pr-0">
                                   {group.jobs.map((job) => {
@@ -647,42 +800,60 @@ export function LibrarySidebar(props: Props) {
               </>
             )}
           </SidebarContent>
-          <SidebarFooter className="max-h-[50dvh] overflow-y-auto">
-            {selectedSet.size > 0 && tab !== "settings" && (
-              <>
-                <div
-                  className="flex flex-col gap-2 px-2"
-                  role="region"
-                  aria-label="선택한 파일 작업"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span role="status" className="flex items-center gap-2">
-                      {`${selectedSet.size}개 선택`}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => onSelect([])}
-                    >
-                      해제
-                    </Button>
-                  </div>
-                  <Button size="sm" className="w-full" onClick={props.onUse}>
+          {selecting && (
+            <SidebarFooter>
+              <div
+                className="flex min-h-9 flex-wrap items-center justify-end gap-4"
+                role="group"
+                aria-label={
+                  selectionMode === "files"
+                    ? "선택한 파일 작업"
+                    : "선택한 실행 기록 작업"
+                }
+              >
+                {selectionMode === "files" && (
+                  <Button
+                    className="min-w-0 flex-1"
+                    disabled={!selected.length}
+                    onClick={props.onUse}
+                  >
                     작업에 사용
                   </Button>
-                  <Button
-                    size="sm"
-                    className="w-full"
-                    variant="outline"
-                    onClick={props.onSave}
-                  >
-                    묶음 저장
-                  </Button>
-                </div>
-                <SidebarSeparator />
-              </>
-            )}
-          </SidebarFooter>
+                )}
+                <DeleteSelectionButton
+                  ids={
+                    selectionMode === "files"
+                      ? selected
+                      : runSelection.map((group) => group.id)
+                  }
+                  label={
+                    selectionMode === "files"
+                      ? "선택한 파일 삭제"
+                      : "선택한 실행 기록 삭제"
+                  }
+                  description={
+                    selectionMode === "files"
+                      ? "휴지통에서 복원할 수 있습니다."
+                      : "산출물도 함께 이동합니다. 원본 파일은 유지됩니다."
+                  }
+                  onDelete={async (ids) => {
+                    if (selectionMode === "files")
+                      await props.onDeleteFiles(ids)
+                    else {
+                      await props.onDeleteJobs(
+                        executions
+                          .filter((group) => ids.includes(group.id))
+                          .flatMap((group) => group.jobs.map((job) => job.id))
+                      )
+                    }
+                    onSelect([])
+                    setSelectedRuns([])
+                    setSelectionMode(null)
+                  }}
+                />
+              </div>
+            </SidebarFooter>
+          )}
         </Tabs>
       </Sidebar>
     </TooltipProvider>

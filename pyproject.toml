@@ -11,6 +11,7 @@ dependencies = [
     "giraf-pyraf-compat; sys_platform == 'darwin'",
     "starlette>=1.6.0",
     "uvicorn>=0.52.4",
+    "send2trash>=1.8.3",
 ]
 
 [tool.uv.sources]
