@@ -741,6 +741,10 @@ textarea {
   overflow: hidden;
   box-shadow: none;
 }
+/* Let empty group backgrounds hit the canvas instead of the node's nopan wrapper. */
+.map-viewport .react-flow__node-subflow { pointer-events: none !important; }
+.map-viewport:not([data-group-selecting="true"]) .subflow-heading,
+.map-viewport:not([data-group-selecting="true"]) .subflow-resize { pointer-events: auto; }
 .subflow-node {
   width: 100%; height: 100%;
   border: 1px solid color-mix(in srgb, var(--group-color) 55%, var(--border));
