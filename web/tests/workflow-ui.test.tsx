@@ -161,12 +161,12 @@ test("connected input has one source control without file picker, expression or 
   expect(html).not.toContain('결과 선택')
   expect(html).not.toContain('zerocombine 열기')
 })
-test("workflow toolbar combines navigation, folder, search, run and panel controls", () => {
- const html=renderToStaticMarkup(<TooltipProvider><SidebarProvider><WorkbenchToolbar folder="/data/observations" ready search="" onSearch={noop} onFolder={noop} workflowBusy={false} runDisabled={false} onRun={noop} onCancel={noop} settingsVisible trayOpen={false} onSettings={noop} onTray={noop}/></SidebarProvider></TooltipProvider>)
+test("workflow toolbar combines navigation, folder, run and panel controls", () => {
+ const html=renderToStaticMarkup(<TooltipProvider><SidebarProvider><WorkbenchToolbar folder="/data/observations" ready onFolder={noop} workflowBusy={false} runDisabled={false} onRun={noop} onCancel={noop} settingsVisible trayOpen={false} onSettings={noop} onTray={noop}/></SidebarProvider></TooltipProvider>)
  expect(html).toContain('aria-label="도구 막대"')
  expect(html).toContain('폴더 열기')
  expect(html).toContain('observations')
- expect(html).toContain('작업 검색')
+ expect(html).not.toContain('작업 검색')
  expect(html).not.toContain('자동 배치')
  expect(html).toContain('aria-label="일괄 실행"')
  expect(html).not.toMatch(/>\s*일괄 실행\s*</)
@@ -178,18 +178,18 @@ test("workflow toolbar combines navigation, folder, search, run and panel contro
  expect(panels).toContain('하단 패널 열기')
  expect(panels).toContain('설정 패널 닫기')
  expect(html.indexOf('폴더 열기')).toBeLessThan(html.indexOf('aria-label="일괄 실행"'))
- expect(html.indexOf('aria-label="일괄 실행"')).toBeLessThan(html.indexOf('작업 검색'))
  expect(html.indexOf('하단 패널 열기')).toBeLessThan(html.indexOf('설정 패널 닫기'))
  expect(html).not.toContain('GIRAF')
 })
 
-test("canvas has no second toolbar even with a saved list preference", () => {
+test("canvas contains workflow search without a second toolbar even with a saved list preference", () => {
  const listMap={...map,view:{...map.view,mode:"list" as const}}
- const html=renderToStaticMarkup(<TaskMapView map={listMap} catalog={catalog} rows={[]} update={noop} add={noop} link={noop} open={noop} removeLink={noop} remove={noop} />)
+ const html=renderToStaticMarkup(<TaskMapView search="ccdproc" onSearch={noop} map={listMap} catalog={catalog} rows={[]} update={noop} add={noop} link={noop} open={noop} removeLink={noop} remove={noop} />)
  expect(html).not.toContain("목록 보기")
  expect(html).not.toContain("작업 추가")
  expect(html).not.toContain('map-toolbar')
- expect(html).not.toContain('작업 검색')
+ expect(html).toContain('aria-label="작업 검색"')
+ expect(html).toContain('value="ccdproc"')
  expect(html).toContain('자동 배치')
  expect(html).not.toContain('일괄 실행')
 })

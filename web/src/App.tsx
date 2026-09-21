@@ -873,8 +873,6 @@ function App() {
             folder={workspace.folder}
             ready={ready && !!catalog}
             loading={!ready && !loadError}
-            search={mapSearch}
-            onSearch={setMapSearch}
             onFolder={folder}
             workflowBusy={workflowActive(workflow)}
             runDisabled={!ready || !catalog || !map.tasks.length || workflowStarting || busy || !!running}
@@ -992,6 +990,7 @@ function App() {
               catalog && (
                 <TaskMapView
                   search={mapSearch}
+                  onSearch={setMapSearch}
                   layoutRevision={layoutRevision}
                   revealNode={revealNode}
                   onAutoLayout={autoLayout}

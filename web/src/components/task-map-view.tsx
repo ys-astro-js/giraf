@@ -37,6 +37,7 @@ import {
   type ReactFlowInstance,
 } from "@xyflow/react"
 import {
+  Search,
   BroomSparkles,
   LoaderCircle,
   Check,
@@ -54,6 +55,7 @@ import {
 import { toast } from "@/components/ui/toast"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Blank } from "@/components/workbench-controls"
 import { type Catalog, type Frame } from "@/lib/workbench"
@@ -85,6 +87,7 @@ import {
 
 type Props = {
   search?: string
+  onSearch?: (value: string) => void
   revealNode?: { id: string; revision: number }
   layoutRevision?: number
   onAutoLayout?: () => void
@@ -426,6 +429,7 @@ const ariaLabelConfig = {
 }
 export function TaskMapView({
   search = "",
+  onSearch,
   layoutRevision = 0,
   revealNode,
   onAutoLayout,
@@ -758,6 +762,21 @@ export function TaskMapView({
       }}
     >
       <h1 className="sr-only">워크플로우</h1>
+      {onSearch && (
+        <div className="workflow-search">
+          <InputGroup>
+            <InputGroupInput
+              aria-label="작업 검색"
+              placeholder="작업 검색"
+              value={search}
+              onChange={(event) => onSearch(event.target.value)}
+            />
+            <InputGroupAddon>
+              <Search aria-hidden="true" />
+            </InputGroupAddon>
+          </InputGroup>
+        </div>
+      )}
       {editingGroup !== null && (
         <SubflowEditor
           key={editingGroup}

@@ -1,6 +1,5 @@
 import {
   FolderOpen,
-  Search,
   Play,
   Square,
   PanelRight,
@@ -11,17 +10,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { ButtonGroup } from "@/components/ui/button-group"
 import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group"
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-  PopoverTitle,
-} from "@/components/ui/popover"
-import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
@@ -31,8 +19,6 @@ type Props = {
   folder: string
   ready: boolean
   loading: boolean
-  search: string
-  onSearch: (value: string) => void
   onFolder: () => void
   workflowBusy: boolean
   runDisabled: boolean
@@ -45,20 +31,6 @@ type Props = {
 }
 
 export function WorkbenchToolbar(props: Props) {
-  const searchInput = (
-    <InputGroup>
-      <InputGroupAddon>
-        <Search aria-hidden="true" />
-      </InputGroupAddon>
-      <InputGroupInput
-        aria-label="작업 검색"
-        placeholder="작업 검색"
-        value={props.search}
-        onChange={(event) => props.onSearch(event.target.value)}
-        disabled={!props.ready}
-      />
-    </InputGroup>
-  )
   return (
     <header className="workbench-toolbar" aria-label="도구 막대">
       <div className="toolbar-leading">
@@ -111,27 +83,6 @@ export function WorkbenchToolbar(props: Props) {
         >
           {props.workflowBusy ? <Square /> : <Play />}
         </Button>
-      </div>
-      <div className="toolbar-search">{searchInput}</div>
-      <div className="toolbar-compact-search">
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button
-                variant={props.search ? "secondary" : "ghost"}
-                size="icon"
-              />
-            }
-            aria-label="작업 검색"
-            title="작업 검색"
-          >
-            <Search />
-          </PopoverTrigger>
-          <PopoverContent align="start">
-            <PopoverTitle className="sr-only">작업 검색</PopoverTitle>
-            {searchInput}
-          </PopoverContent>
-        </Popover>
       </div>
       <ButtonGroup className="toolbar-panels" aria-label="패널 표시">
         <Button
