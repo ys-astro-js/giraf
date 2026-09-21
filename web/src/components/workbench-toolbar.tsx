@@ -1,5 +1,10 @@
 import {
   FolderOpen,
+  LoaderCircle,
+  CirclePause,
+  CircleCheck,
+  CircleAlert,
+  CircleStop,
   Play,
   Square,
   PanelRight,
@@ -15,7 +20,19 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip"
 
+import type { ExecutionStatus } from "@/lib/execution-status"
+export type { ExecutionStatus } from "@/lib/execution-status"
+
+const statusIcons = {
+  running: LoaderCircle,
+  waiting: CirclePause,
+  completed: CircleCheck,
+  failed: CircleAlert,
+  cancelled: CircleStop,
+}
+
 type Props = {
+  executionStatus?: ExecutionStatus
   folder: string
   ready: boolean
   loading: boolean
@@ -31,6 +48,11 @@ type Props = {
 }
 
 export function WorkbenchToolbar(props: Props) {
+  const status = props.executionStatus
+  const progressPercent = status?.progressFraction !== undefined && Number.isFinite(status.progressFraction)
+    ? Math.round(Math.max(0, Math.min(1, status.progressFraction)) * 100)
+    : undefined
+  const StatusIcon = status ? statusIcons[status.state] : LoaderCircle
   return (
     <header className="workbench-toolbar" aria-label="도구 막대">
       <div className="toolbar-leading">
@@ -83,6 +105,32 @@ export function WorkbenchToolbar(props: Props) {
         >
           {props.workflowBusy ? <Square /> : <Play />}
         </Button>
+      </div>
+      <div className="toolbar-status text-sm" role="status" aria-live="polite" aria-atomic="true">
+        {status && (
+          <div className="toolbar-status-content" data-state={status.state} title={status.label}>
+            {progressPercent !== undefined && (
+              <span
+                className="toolbar-status-fill"
+                role="progressbar"
+                aria-label={`${status.name} 진행률`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={progressPercent}
+                style={{ width: `${progressPercent}%` }}
+              />
+            )}
+            <StatusIcon
+              aria-hidden="true"
+              className={status.state === "running" ? "size-4 shrink-0 motion-safe:animate-spin" : "size-4 shrink-0"}
+            />
+            <span className="toolbar-status-name font-medium">{status.name}</span>
+            <span className="sr-only">{status.label}</span>
+            {status.progress && (
+              <span className="toolbar-status-progress text-muted-foreground tabular-nums">{status.progress}</span>
+            )}
+          </div>
+        )}
       </div>
       <ButtonGroup className="toolbar-panels" aria-label="패널 표시">
         <Button

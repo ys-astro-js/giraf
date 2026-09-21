@@ -766,6 +766,7 @@ export function TaskMapView({
         <div className="workflow-search">
           <InputGroup>
             <InputGroupInput
+              className="h-full"
               aria-label="작업 검색"
               placeholder="작업 검색"
               value={search}

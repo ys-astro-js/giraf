@@ -1,5 +1,6 @@
+import { resolveExecutionStatus, type ExecutionReference } from "@/lib/execution-status"
 import { readPanelLayout } from "@/lib/panel-layout"
-import { WorkbenchToolbar } from "@/components/workbench-toolbar"
+import { WorkbenchToolbar, type ExecutionStatus } from "@/components/workbench-toolbar"
 import { autoLayoutMap } from "@/lib/subflow"
 import {updateOutputPort,removeOutputPort} from "@/lib/output-ports"
 import {publishWorkflowRun} from "@/lib/task-map"
@@ -81,7 +82,6 @@ import {
   payloadFor,
   migrateMap,
   connectionRoles,
-  stateLabel,
   type TaskMap,
   type Source,
   type Instance,
@@ -194,7 +194,9 @@ function App() {
   const [workflow, setWorkflow] = useState<WorkflowRun | null>(null)
   const [workflowStarting, setWorkflowStarting] = useState(false)
   const workflowLock = useRef(false)
-  const notifiedRuns = useRef(new Set<string>())
+  const [lastExecution, setLastExecution] = useState<ExecutionReference>()
+  const [preparingName, setPreparingName] = useState("")
+  const [workflowName, setWorkflowName] = useState("워크플로우")
   const [checking, setChecking] = useState(false)
   const runLock = useRef(false)
   const saveRevision = useRef(0)
@@ -306,6 +308,9 @@ function App() {
         const w = await api<WorkflowRun | null>("workflow")
         if (disposed) return
         setWorkflow(w)
+        if (w && workflowActive(w)) {
+          setLastExecution(current => current?.kind === "workflow" && current.id === w.id ? current : {kind: "workflow", id: w.id})
+        }
         const current = w
           ? [...w.jobs, ...(w.currentJob ? [w.currentJob] : [])]
           : []
@@ -347,6 +352,8 @@ function App() {
   async function runWorkflow(subflowId?: string) {
     if (!catalog || workflowLock.current || workflowActive(workflow)) return
     workflowLock.current = true
+    setLastExecution(undefined)
+    setWorkflowName(subflowId ? map.subflows?.find((s) => s.id === subflowId)?.name || "워크플로우" : "워크플로우")
     setWorkflowStarting(true)
     setError("")
     try {
@@ -354,6 +361,7 @@ function App() {
         "workflow-run",
         subflowId ? subflowRequest(map, catalog, workspace.folder, subflowId) : workflowRequest(map, catalog, workspace.folder)
       )
+      setLastExecution({kind: "workflow", id: w.id})
       setWorkflow(w)
     } catch (e) {
       setError((e as Error).message)
@@ -375,58 +383,32 @@ function App() {
       setError("")
     }
   }, [error])
-  const notifiedWorkflow = useRef<string | null>(null)
-  useEffect(() => {
-    if (!workflow) return
-    const toastId = `workflow-${workflow.id}`
-    const activeNow = workflowActive(workflow)
-    if (notifiedWorkflow.current !== workflow.id) {
-      notifiedWorkflow.current = workflow.id
-      if (!activeNow) return
-      toast.add({
-        id: toastId,
-        title: "워크플로우 실행 중",
-        type: "loading",
-        timeout: 0,
-      })
-    }
-    toast.update(toastId, {
-      title: activeNow
-        ? `${workflow.done}/${workflow.total} ${workflow.message || "실행 준비 중"}`
-        : workflow.message,
-      type: activeNow
-        ? "loading"
-        : workflow.state === "completed"
-          ? "success"
-          : workflow.state === "failed"
-            ? "error"
-            : "info",
-      timeout: activeNow ? 0 : 5000,
-    })
-  }, [workflow?.id, workflow?.state, workflow?.done, workflow?.message])
   useEffect(() => {
     if (!taskError) return
     toast.add({ title: taskError, type: "error" })
     setTaskError("")
   }, [taskError])
-  useEffect(() => {
-    for (const j of jobs) {
-      if (!notifiedRuns.current.has(j.id) || active(j)) continue
-      notifiedRuns.current.delete(j.id)
-      const completed = j.state === "completed"
-      const failed = j.state === "failed" || j.state === "partial"
-      toast.update(`task-${j.id}`, {
-        title: completed
-          ? `${j.name} 완료`
-          : failed
-            ? `${j.name} 실행 실패`
-            : `${j.name} ${stateLabel(j.state)}`,
-        description: failed ? j.message : undefined,
-        type: completed ? "success" : failed ? "error" : "info",
-        timeout: failed ? 8000 : 5000,
-      })
+  let preparing: ExecutionStatus | undefined
+  if (workflowStarting) {
+    preparing = { name: workflowName, label: "실행 준비 중", state: "running" }
+  } else if (busy || checking || plan) {
+    preparing = {
+      name: preparingName,
+      label: plan && !busy ? "실행 확인 대기" : "실행 준비 중",
+      state: plan && !busy ? "waiting" : "running",
     }
-  }, [jobs])
+  }
+  const currentWorkflowTask = map.tasks.find((t) => t.id === workflow?.currentTask)
+  const executionStatus = resolveExecutionStatus({
+    preparing,
+    workflow: workflow && {
+      ...workflow,
+      name: workflowName,
+      currentTaskName: currentWorkflowTask?.label || currentWorkflowTask?.task || workflow.currentJob?.name || "",
+    },
+    jobs,
+    lastExecution,
+  })
   const running = jobs
     .filter(active)
     .map((j) => j.id)
@@ -616,16 +598,11 @@ function App() {
     })
   }
   async function start(payload: unknown) {
+    setLastExecution(undefined)
     setBusy(true)
     try {
       const j = await api<Job>("task-run", payload)
-      notifiedRuns.current.add(j.id)
-      toast.add({
-        id: `task-${j.id}`,
-        title: `${j.name} 실행 중`,
-        type: "loading",
-        timeout: 0,
-      })
+      setLastExecution({kind: "job", id: j.id})
       setJobs((old) => [j, ...old])
       setSelectedJob(j.id)
       setTrayOpen(true)
@@ -643,6 +620,8 @@ function App() {
     if (!catalog || !task || runLock.current || workflowActive(workflow)) return
     runLock.current = true
     setTaskError("")
+    setLastExecution(undefined)
+    setPreparingName(task.label || task.task)
     setChecking(true)
     try {
       const payload = {
@@ -874,6 +853,7 @@ function App() {
             ready={ready && !!catalog}
             loading={!ready && !loadError}
             onFolder={folder}
+            executionStatus={executionStatus}
             workflowBusy={workflowActive(workflow)}
             runDisabled={!ready || !catalog || !map.tasks.length || workflowStarting || busy || !!running}
             onRun={() => runWorkflow()}
