@@ -1,4 +1,5 @@
 import { useState, useSyncExternalStore } from "react"
+import { AnimatedCount } from "@/components/animated-count"
 import { CircleX, TriangleAlert, Trash2, X } from "lucide-react"
 import {
   copyDiagnosticRunId,
@@ -72,8 +73,8 @@ export function DiagnosticsButton({
                   severity === "warning" ? "text-warning" : "text-destructive"
                 }
               />
-              <span className="diagnostics-count tabular-nums">
-                {counts[severity] > 999 ? "999+" : counts[severity]}
+              <span className="diagnostics-count tabular-nums" aria-hidden="true">
+                <AnimatedCount value={Math.min(999, counts[severity])} suffix={counts[severity] > 999 ? "+" : undefined} entranceDelay={220} />
               </span>
             </PopoverTrigger>
           )

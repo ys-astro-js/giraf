@@ -1,4 +1,5 @@
 import { useJobDiagnostics } from "@/hooks/use-job-diagnostics"
+import { workflowDocument } from "@/lib/workflow-document"
 import { DiagnosticsButton } from "@/components/diagnostics-button"
 import { resolveDiagnosticNode } from "@/lib/diagnostics"
 import { WorkflowSelector, type WorkflowAction } from "@/components/workflow-selector"
@@ -348,12 +349,11 @@ function App() {
     } finally { setDocumentBusy(false) }
   }
   function exportDocument() {
-    const {_document, ...preferences} = prefsRef.current
-    const exported = {format: "giraf-workflow", version: 1, name: _document?.name || "워크플로우", taskMap: mapRef.current, preferences}
+    const exported = workflowDocument(prefsRef.current, mapRef.current)
     const url = URL.createObjectURL(new Blob([JSON.stringify(exported, null, 2)], {type: "application/json"}))
     const anchor = document.createElement("a")
     anchor.href = url
-    anchor.download = `${(_document?.name || "워크플로우").replace(/[\\/:*?"<>|]/g, "_")}.json`
+    anchor.download = `${exported.name.replace(/[\\/:*?"<>|]/g, "_")}.json`
     anchor.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
