@@ -1,3 +1,4 @@
+import { collectResponseDiagnostics, diagnostics } from "./diagnostics"
 import {headerFrame} from "./calibration"
 export type Values = Record<string, string | number | boolean | null>
 export type Param = { mode?:string; required?:boolean; indirect?:string; name:string; type:string; default:string | number | boolean | null; choices:string[]; prompt:string; min:unknown; max:unknown }
@@ -59,10 +60,18 @@ export function plannedOutputs(task:Spec,draft:Draft,rows:Frame[],_mapping:Value
   return [{input:`${ids.length}개`,output:name}]
 }
 export async function api<T>(action:string,payload?:unknown):Promise<T>{
-  const response=await fetch('/api/'+action,payload===undefined?{cache:'no-store'}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
-  const data=await response.json()
-  if(!response.ok)throw new Error(data.error||data.errors?.join('\n')||'요청 실패')
-  return data
+  const nodeId = payload && typeof payload === "object" && "instanceId" in payload && typeof payload.instanceId === "string" ? payload.instanceId : undefined
+  try {
+    const response=await fetch('/api/'+action,payload===undefined?{cache:'no-store'}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    const data=await response.json()
+    collectResponseDiagnostics(action, data, diagnostics, {nodeId})
+    if(!response.ok)throw new Error(data.error||data.errors?.join('\n')||'요청 실패')
+    return data
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!diagnostics.hasMessage(message, "error", nodeId) && !message.split("\n").every(part => diagnostics.hasMessage(part, "error", nodeId))) diagnostics.report({severity:'error', message, source:`요청: ${action.split('?')[0]}`, nodeId})
+    throw error
+  }
 }
 export const primaryParameters=new Set(['combine', 'reject', 'ccdtype', 'process', 'subsets', 'scale', 'statsec', 'rdnoise', 'gain', 'zerocor', 'darkcor', 'flatcor', 'fixpix', 'overscan', 'trim', 'illumcor', 'fringecor', 'readcor', 'scancor', 'noproc', 'parameter', 'value', 'type', 'longheader', 'fields', 'nlow', 'nhigh', 'pixeltype', 'verbose', 'biassec', 'trimsec', 'names', 'long', 'group', 'ncstat', 'nlstat'])
 

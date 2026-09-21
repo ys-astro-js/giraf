@@ -33,6 +33,7 @@ const statusIcons = {
 }
 
 type Props = {
+  diagnostics?: React.ReactNode
   workflowSelector?: React.ReactNode
   executionStatus?: ExecutionStatus
   folder: string
@@ -75,6 +76,7 @@ export function WorkbenchToolbar(props: Props) {
           {props.workflowBusy ? <Square /> : <Play />}
         </Button>
       </div>
+      <div className="toolbar-center">
       <div className="toolbar-status text-sm" role="status" aria-live="polite" aria-atomic="true">
         <div className="toolbar-status-content" data-state={showExecution ? status.state : "idle"} title={showExecution ? status.label : undefined}>
           {!showExecution && <>
@@ -83,12 +85,12 @@ export function WorkbenchToolbar(props: Props) {
           ) : (
             <Tooltip>
               <TooltipTrigger
-                render={<Button variant="ghost" size="xs" className="min-w-0" disabled={!props.ready} />}
+                render={<Button variant="ghost" size="xs" className="min-w-0 text-sm" disabled={!props.ready} />}
                 onClick={props.onFolder}
                 disabled={!props.ready}
                 aria-label="폴더 열기"
               >
-                <FolderOpen data-icon="inline-start" />
+                <FolderOpen data-icon="inline-start" className="size-4" />
                 {<span className="truncate">{props.folder.split("/").filter(Boolean).at(-1) || props.folder || "폴더 열기"}</span>}
               </TooltipTrigger>
               <TooltipContent className="max-w-80 break-all">{props.folder || "폴더 열기"}</TooltipContent>
@@ -124,6 +126,8 @@ export function WorkbenchToolbar(props: Props) {
             </>
           ) : <span className="sr-only">실행 대기</span>}
         </div>
+      </div>
+      {props.diagnostics}
       </div>
       <ButtonGroup className="toolbar-panels" aria-label="패널 표시">
         <Button

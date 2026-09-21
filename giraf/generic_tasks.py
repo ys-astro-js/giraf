@@ -197,10 +197,11 @@ def validate_generic(spec, payload, resolve):
             row['sha256'] = file_hash(path); sources[id] = row
     if pairs.get('shifts') and len(pairs['shifts']) != len(inputs.get('input', [])):
         raise ValueError('shifts: 입력 영상 순서대로 영상마다 한 행을 입력해 주세요.')
+    warnings = []
     binding = payload.get('alignmentBinding')
     if binding and any(text_inputs.get(k, '').strip() for k in ('coords', 'shifts')):
         if not isinstance(binding, dict) or binding.get('reference') != inputs.get('reference') or (text_inputs.get('shifts', '').strip() and binding.get('input') != inputs.get('input')):
-            raise ValueError('영상 선택 또는 순서가 변경되었습니다. 기준별 좌표와 이동량을 다시 확인해 주세요.')
+            warnings.append('영상 선택 또는 순서가 변경되었습니다. 기준별 좌표와 이동량을 다시 확인해 주세요.')
     provided_outputs = payload.get('outputs', {})
     if set(provided_outputs) - {s['name'] for s in spec['outputs']}: raise ValueError('알 수 없는 출력 역할입니다.')
     outputs = {}
@@ -214,7 +215,7 @@ def validate_generic(spec, payload, resolve):
         outputs[slot['name']] = name
     m = dict(operation='task', adapter='generic', task=spec['name'], name=spec['name'], backend=backend,
              definition=deepcopy(spec), mapping=payload.get('mapping', {}), parameters=params, parameterSets=sets, inputs=inputs, outputs=outputs,
-             output={'name': next(iter(outputs.values()), '')}, rows=list(sources.values()), expressions=expressions, cursorCommands=cursor_commands, textInputs=text_inputs, alignmentBinding=binding,
+             output={'name': next(iter(outputs.values()), '')}, rows=list(sources.values()), expressions=expressions, cursorCommands=cursor_commands, textInputs=text_inputs, alignmentBinding=binding, warnings=warnings,
              inputLists=list(input_lists.values()), workingDirectory=directory, filePolicy=dict(mode='copy', backup=True), instanceId=payload.get('instanceId'),
              settings=dict(task=spec['name'], backend=backend, **params))
     if input_lists: m['inputSelections']=deepcopy(supplied_inputs)
@@ -383,6 +384,9 @@ class GenericTaskRun:
             from .image_lists import execute_image_list
             return execute_image_list(self)
         self.state('입력과 파라미터 준비 중'); self.prepare()
+        with (self.job / 'task.log').open('a') as log:
+            for warning in self.m.get('warnings', []):
+                log.write(f'WARNING: {warning}\n')
         backend = self.m['backend']; binary = shutil.which('irafcl')
         if backend == 'cl' and not binary: raise ValueError('IRAF CL을 찾지 못했습니다.')
         outcomes = []; products = []

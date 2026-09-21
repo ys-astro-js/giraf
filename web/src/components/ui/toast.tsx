@@ -1,13 +1,24 @@
 "use client"
 
 import * as React from "react"
+import { diagnostics } from "@/lib/diagnostics"
 import { Toast as ToastPrimitive } from "@base-ui/react/toast"
 import { cn } from "cn"
 
 import { Button } from "@/components/ui/button"
 import { XIcon, CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
-const toast = ToastPrimitive.createToastManager()
+const toastManager = ToastPrimitive.createToastManager()
+// Preserve the toast API while retaining transient warnings and errors in the session log.
+const toast = {
+  ...toastManager,
+  add: ((options) => {
+    if ((options.type === "warning" || options.type === "error") && typeof options.title === "string" && !diagnostics.hasMessage(options.title, options.type)) {
+      diagnostics.report({ severity: options.type, message: options.title, source: "앱" })
+    }
+    return toastManager.add(options)
+  }) as typeof toastManager.add,
+}
 
 function ToastProvider({ ...props }: ToastPrimitive.Provider.Props) {
   return <ToastPrimitive.Provider {...props} />

@@ -1,3 +1,6 @@
+import { useJobDiagnostics } from "@/hooks/use-job-diagnostics"
+import { DiagnosticsButton } from "@/components/diagnostics-button"
+import { resolveDiagnosticNode } from "@/lib/diagnostics"
 import { WorkflowSelector, type WorkflowAction } from "@/components/workflow-selector"
 import { resolveExecutionStatus, type ExecutionReference } from "@/lib/execution-status"
 import { readPanelLayout } from "@/lib/panel-layout"
@@ -192,6 +195,7 @@ function App() {
   const [inputRequest, setInputRequest] = useState<{ taskId: string; role: string; sequence: number } | null>(null)
   const isMobile = useIsMobile()
   const settingsVisible = isMobile ? mobilePanel === "detail" : inspectorOpen
+  useJobDiagnostics(jobs)
   const [workflow, setWorkflow] = useState<WorkflowRun | null>(null)
   const [workflowStarting, setWorkflowStarting] = useState(false)
   const workflowLock = useRef(false)
@@ -932,6 +936,17 @@ function App() {
         selection={`${mobilePanel}:${task?.id || ""}`}
         header={
           <WorkbenchToolbar
+            diagnostics={<DiagnosticsButton
+              resolveNode={entry => resolveDiagnosticNode(entry, map)}
+              onNavigate={id => {
+                setMapSearch("")
+                update(m => ({...m, view: {...m.view, selected: id}}))
+                setInputRequest(null)
+                setInspectorOpen(true)
+                setMobilePanel("map")
+                setRevealNode(previous => ({id, revision: (previous?.revision || 0) + 1}))
+              }}
+            />}
             workflowSelector={<WorkflowSelector document={prefs._document}
               disabled={!ready || documentBusy || workflowStarting || workflowActive(workflow) || busy || !!running}
               onSave={saveDocument} onChange={changeDocument} onExport={exportDocument} />}

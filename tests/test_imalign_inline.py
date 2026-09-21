@@ -32,11 +32,13 @@ class InlineAlignmentTests(unittest.TestCase):
         for backend in ('cl','pyraf'):
             with self.subTest(backend=backend):
                 self.payload['backend']=backend
+                self.payload['alignmentBinding']={'reference':['b'],'input':['a','b']}
                 manifest=self.validate()
                 self.assertEqual(manifest['textInputs'],self.payload['textInputs'])
                 job=self.root/backend;job.mkdir();(job/'manifest.json').write_text(json.dumps(manifest))
                 runner=GenericTaskRun(job);runner.execute()
                 self.assertEqual(json.loads((job/'status.json').read_text())['state'],'completed',(job/'task.log').read_text())
+                self.assertIn('WARNING: 영상 선택 또는 순서가 변경되었습니다.', (job/'task.log').read_text())
                 self.assertEqual((job/'lists/coords.txt').read_text(),'32 32\n18 44\n')
                 self.assertEqual((job/'lists/shifts.txt').read_text(),'0 0\n-8 5\n')
                 products=json.loads((job/'products.json').read_text())
@@ -64,8 +66,12 @@ class InlineAlignmentTests(unittest.TestCase):
         self.payload['textInputs']['output']='x'
         with self.assertRaises(ValueError):self.validate()
 
-    def test_stale_image_binding_rejected(self):
+    def test_stale_image_binding_warns_without_blocking(self):
         self.payload['alignmentBinding']={'reference':['a'],'input':['a','b']}
-        self.validate()
-        self.payload['inputs']['input']=['b','a']
-        with self.assertRaisesRegex(ValueError,'다시'):self.validate()
+        self.assertEqual(self.validate()['warnings'], [])
+        for inputs in ({'reference':['a'],'input':['b','a']}, {'reference':['b'],'input':['a','b']}):
+            with self.subTest(inputs=inputs):
+                self.payload['inputs']=inputs
+                manifest=self.validate()
+                self.assertEqual({key: manifest['inputs'][key] for key in inputs}, inputs)
+                self.assertEqual(manifest['warnings'], ['영상 선택 또는 순서가 변경되었습니다. 기준별 좌표와 이동량을 다시 확인해 주세요.'])

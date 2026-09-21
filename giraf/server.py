@@ -323,7 +323,7 @@ async def api(request: Request):
             manifest=await run_in_threadpool(validate_task,payload,resolve)
             for row in manifest['rows']:registry[row['id']]=row
             if action=='task-validate':
-                return JSONResponse(dict(preview=await run_in_threadpool(preview_task,manifest),filePlan=manifest['filePlan'],effective=manifest,errors=[]))
+                return JSONResponse(dict(preview=await run_in_threadpool(preview_task,manifest),filePlan=manifest['filePlan'],effective=manifest,errors=[],warnings=manifest.get('warnings', [])))
             authorize_file_plan(manifest,payload.get('fileConfirmation'))
             job=await run_in_threadpool(start_task,manifest,workspace['folder'])
             return JSONResponse(job_info(job))

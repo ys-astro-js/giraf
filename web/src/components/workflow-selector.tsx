@@ -58,9 +58,9 @@ export function WorkflowSelector(props: Props) {
     setOpen(value)
     if (value) { setEditing(false); setName(props.document?.name || "새 워크플로우"); setQuery(""); setError(""); void reload() }
   }}>
-    <PopoverTrigger render={<Button variant="ghost" size="xs" className="min-w-0" disabled={props.disabled} />}
+    <PopoverTrigger render={<Button variant="ghost" size="xs" className="min-w-0 text-sm" disabled={props.disabled} />}
       aria-label={`워크플로우 선택: ${props.document?.name || "새 워크플로우"}`} title={props.document?.name}>
-      <Workflow data-icon="inline-start" /><span className="truncate">{props.document?.name || "새 워크플로우"}</span>
+      <Workflow data-icon="inline-start" className="size-4" /><span className="truncate">{props.document?.name || "새 워크플로우"}</span>
     </PopoverTrigger>
     <PopoverContent className="w-80 max-w-[calc(100vw-24px)] max-h-[min(32rem,var(--available-height))] gap-0 overflow-hidden rounded-xl p-0" sideOffset={8} initialFocus={search}>
       <PopoverTitle className="sr-only">워크플로우</PopoverTitle>
