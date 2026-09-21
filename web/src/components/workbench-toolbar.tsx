@@ -1,5 +1,6 @@
 import {
   FolderOpen,
+  ChevronRight,
   LoaderCircle,
   CirclePause,
   CircleCheck,
@@ -32,6 +33,7 @@ const statusIcons = {
 }
 
 type Props = {
+  workflowSelector?: React.ReactNode
   executionStatus?: ExecutionStatus
   folder: string
   ready: boolean
@@ -49,7 +51,7 @@ type Props = {
 
 export function WorkbenchToolbar(props: Props) {
   const status = props.executionStatus
-  const showFolder = !props.workflowBusy && status?.state !== "running" && status?.state !== "waiting"
+  const showExecution = status?.state === "running" || status?.state === "waiting"
   const progressPercent = status?.progressFraction !== undefined && Number.isFinite(status.progressFraction)
     ? Math.round(Math.max(0, Math.min(1, status.progressFraction)) * 100)
     : undefined
@@ -74,24 +76,30 @@ export function WorkbenchToolbar(props: Props) {
         </Button>
       </div>
       <div className="toolbar-status text-sm" role="status" aria-live="polite" aria-atomic="true">
-        <div className="toolbar-status-content" data-state={status?.state || "idle"} title={status?.label}>
-          {showFolder && (props.loading ? (
+        <div className="toolbar-status-content" data-state={showExecution ? status.state : "idle"} title={showExecution ? status.label : undefined}>
+          {!showExecution && <>
+          {props.loading ? (
             <Skeleton aria-label="폴더 불러오는 중" className="h-6 w-32" />
           ) : (
             <Tooltip>
               <TooltipTrigger
-                render={<Button variant="ghost" size={status ? "icon-xs" : "xs"} className={status ? undefined : "min-w-0 flex-1 justify-start"} disabled={!props.ready} />}
+                render={<Button variant="ghost" size="xs" className="min-w-0" disabled={!props.ready} />}
                 onClick={props.onFolder}
                 disabled={!props.ready}
                 aria-label="폴더 열기"
               >
-                <FolderOpen data-icon={status ? undefined : "inline-start"} />
-                {!status && <span className="truncate">{props.folder.split("/").filter(Boolean).at(-1) || props.folder || "폴더 열기"}</span>}
+                <FolderOpen data-icon="inline-start" />
+                {<span className="truncate">{props.folder.split("/").filter(Boolean).at(-1) || props.folder || "폴더 열기"}</span>}
               </TooltipTrigger>
               <TooltipContent className="max-w-80 break-all">{props.folder || "폴더 열기"}</TooltipContent>
             </Tooltip>
-          ))}
-          {status ? (
+          )}
+          <ChevronRight aria-hidden="true" className="size-3.5 shrink-0" />
+          {props.loading ? (
+            <Skeleton aria-label="워크플로우 불러오는 중" className="h-6 w-32" />
+          ) : props.workflowSelector}
+          </>}
+          {showExecution ? (
             <>
             {progressPercent !== undefined && (
               <span

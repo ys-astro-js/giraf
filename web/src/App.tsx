@@ -1,3 +1,4 @@
+import { WorkflowSelector, type WorkflowAction } from "@/components/workflow-selector"
 import { resolveExecutionStatus, type ExecutionReference } from "@/lib/execution-status"
 import { readPanelLayout } from "@/lib/panel-layout"
 import { WorkbenchToolbar, type ExecutionStatus } from "@/components/workbench-toolbar"
@@ -149,6 +150,7 @@ function App() {
     [map, setMap] = useState<TaskMap>(emptyMap()),
     [cache, setCache] = useState<Record<string, Frame>>({}),
     [jobs, setJobs] = useState<Job[]>([])
+  const [documentBusy, setDocumentBusy] = useState(false)
   const [mapSearch, setMapSearch] = useState("")
   const [layoutRevision, setLayoutRevision] = useState(0)
   const [revealNode, setRevealNode] = useState<{ id: string; revision: number }>()
@@ -234,8 +236,11 @@ function App() {
         try {
           const pending = localStorage.getItem("giraf-pending-draft")
           if (pending) {
-            recovered = JSON.parse(pending)
-            changed.current = true
+            const recovery = JSON.parse(pending)
+            if (recovery._document?.path === p._document?.path) {
+              recovered = recovery
+              changed.current = true
+            }
           }
         } catch {
           /* Ignore a malformed browser recovery copy. */
@@ -247,6 +252,7 @@ function App() {
           packageValues: { ...defaults(c.ccdred), ...recovered.packageValues },
         }
         setCatalog(c)
+        setSaveState(pref._document?.saved ? "저장됨" : "작업을 추가하면 자동 저장됩니다")
         setPrefs(pref)
         setMap(migrateMap(pref, c))
         setWorkspace(w)
@@ -286,7 +292,8 @@ function App() {
           if (revision !== saveRevision.current) return
           await api("task-preferences", value)
           if (revision === saveRevision.current) {
-            localStorage.removeItem("giraf-pending-draft")
+            try { localStorage.removeItem("giraf-pending-draft") } catch { /* Storage may be unavailable. */ }
+            changed.current = false
             setSaveState("저장됨")
           }
         })
@@ -297,6 +304,55 @@ function App() {
     }, 350)
     return () => clearTimeout(timer)
   }, [map, prefs, ready])
+  async function saveDocument(name?: string) {
+    const revision = ++saveRevision.current
+    const value = { ...prefsRef.current, taskMap: mapRef.current }
+    if (name !== undefined && value._document) value._document = {...value._document, name}
+    setSaveState("저장 중")
+    saving.current = saving.current.catch(() => {}).then(async () => {
+      await api("task-preferences", value)
+      if (revision === saveRevision.current) {
+        changed.current = false
+        try { localStorage.removeItem("giraf-pending-draft") } catch { /* Storage may be unavailable. */ }
+        setSaveState("저장됨")
+        if (name !== undefined) setPrefs(current => ({...current, _document: value._document}))
+      }
+    })
+    try { await saving.current }
+    catch (error) { setSaveState("저장 실패"); throw error }
+  }
+  function applyDocument(value: Preferences) {
+    if (!catalog) return
+    changed.current = false
+    const next = {...initial, ...value, drafts: value.drafts || {}, packageValues: {...defaults(catalog.ccdred), ...value.packageValues}}
+    prefsRef.current = next
+    mapRef.current = migrateMap(next, catalog)
+    setPrefs(next)
+    setMap(mapRef.current)
+    setSaveState(value._document?.saved ? "저장됨" : "작업을 추가하면 자동 저장됩니다")
+    setLastExecution(undefined)
+    setSelectedFiles([])
+    setLayoutRevision(revision => revision + 1)
+  }
+  async function changeDocument(action: WorkflowAction) {
+    if (documentBusy) return
+    setDocumentBusy(true)
+    try {
+      if (changed.current) await saveDocument()
+      else await saving.current
+      applyDocument(await api<Preferences>("workflow-documents", action))
+    } finally { setDocumentBusy(false) }
+  }
+  function exportDocument() {
+    const {_document, ...preferences} = prefsRef.current
+    const exported = {format: "giraf-workflow", version: 1, name: _document?.name || "워크플로우", taskMap: mapRef.current, preferences}
+    const url = URL.createObjectURL(new Blob([JSON.stringify(exported, null, 2)], {type: "application/json"}))
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = `${(_document?.name || "워크플로우").replace(/[\\/:*?"<>|]/g, "_")}.json`
+    anchor.click()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
   useEffect(() => {
     if (!ready) return
     let disposed = false
@@ -352,7 +408,7 @@ function App() {
     if (!catalog || workflowLock.current || workflowActive(workflow)) return
     workflowLock.current = true
     setLastExecution(undefined)
-    setWorkflowName(subflowId ? map.subflows?.find((s) => s.id === subflowId)?.name || "워크플로우" : "워크플로우")
+    setWorkflowName(subflowId ? map.subflows?.find((s) => s.id === subflowId)?.name || "워크플로우" : prefs._document?.name || "워크플로우")
     setWorkflowStarting(true)
     setError("")
     try {
@@ -575,10 +631,25 @@ function App() {
       initial: [],
       apply: () => {},
       folderOnly: true,
-      applyFolder: (path) =>
-        api("folder", { path })
-          .then(refresh)
-          .catch((e) => setError(e.message)),
+      applyFolder: async (path) => {
+        const previousFolder = workspace.folder
+        let moved = false
+        setDocumentBusy(true)
+        try {
+          if (changed.current) await saveDocument()
+          else await saving.current
+          await api("folder", {path})
+          moved = true
+          await refresh()
+          applyDocument(await api<Preferences>("task-preferences"))
+        } catch (e) {
+          if (moved) {
+            try { await api("folder", {path: previousFolder}); await refresh() }
+            catch { setReady(false); setLoadError(true) }
+          }
+          setError((e as Error).message)
+        } finally { setDocumentBusy(false) }
+      },
     })
   }
   function open(row: Frame, role?: string) {
@@ -849,6 +920,7 @@ function App() {
   }
   return (
     <TooltipProvider>
+      <div className="contents" inert={documentBusy || undefined}>
       <WorkbenchShell
         libraryOpen={libraryOpen}
         onLibraryOpen={setLibraryOpen}
@@ -860,8 +932,11 @@ function App() {
         selection={`${mobilePanel}:${task?.id || ""}`}
         header={
           <WorkbenchToolbar
+            workflowSelector={<WorkflowSelector document={prefs._document}
+              disabled={!ready || documentBusy || workflowStarting || workflowActive(workflow) || busy || !!running}
+              onSave={saveDocument} onChange={changeDocument} onExport={exportDocument} />}
             folder={workspace.folder}
-            ready={ready && !!catalog}
+            ready={ready && !!catalog && !documentBusy && !workflowStarting && !workflowActive(workflow) && !busy && !running}
             loading={!ready && !loadError}
             onFolder={folder}
             executionStatus={executionStatus}
@@ -1658,6 +1733,7 @@ function App() {
             </DialogContent>
           </Dialog>
         )}
+      </div>
     </TooltipProvider>
   )
 }

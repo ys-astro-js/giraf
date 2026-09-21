@@ -20,6 +20,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.concurrency import run_in_threadpool
 
+from .workflow_documents import WorkflowDocuments
 from .jobs import ROOT, RUNS, start, status, atomic_json
 from .model import Settings, inspect_file, scan, validate
 from .combine import validate_combination
@@ -255,18 +256,53 @@ async def api(request: Request):
         payload = await request.json() if request.method == 'POST' else {}
         if action == 'catalog':
             return JSONResponse(catalog())
-        if action == 'task-preferences':
-            if request.method=='POST':
-                # Validate parameter names/types at execution; drafts may be incomplete.
-                with lock:
-                    refs=workspace.setdefault('file_refs',{})
-                    for id,row in registry.items():
-                        refs[id]={k:row.get(k) for k in ('path','label','job','asset')}
-                    workspace['task_preferences']=payload
+        if action in ('task-preferences', 'workflow-documents'):
+            with lock:
+                store = WorkflowDocuments(workspace['folder'])
+                selected = workspace.setdefault('workflow_documents', {})
+                current = selected.get(workspace['folder'])
+                if action == 'workflow-documents' and request.method == 'GET':
+                    return JSONResponse(store.list())
+                if action == 'workflow-documents':
+                    if (workflow_manager.current() or {}).get('state') in ('running', 'waiting', 'confirmation', 'cancelling'):
+                        raise ValueError('실행을 마친 뒤 워크플로우를 전환해 주세요.')
+                    op = payload.get('operation')
+                    if op == 'open': data = store.read(payload['path'])
+                    elif op == 'new': data = store.new()
+                    elif op == 'import': data = store.import_document(payload['document'])
+                    else: raise ValueError('지원하지 않는 워크플로우 동작입니다.')
+                    selected[workspace['folder']] = data
                     save()
-            data=dict(workspace.get('task_preferences', {}))
-            data['files']=[register(r['path'],r.get('label'),r.get('job'),r.get('asset')) for r in workspace.get('file_refs',{}).values() if Path(r['path']).is_file()]
-            return JSONResponse(data)
+                    return JSONResponse(data)
+                if request.method == 'POST':
+                    if '_document' not in payload:
+                        payload = {**payload, '_document': (current or store.new())['_document']}
+                    store.write(payload)
+                    refs = workspace.setdefault('file_refs', {})
+                    for id, row in registry.items():
+                        refs[id] = {k: row.get(k) for k in ('path', 'label', 'job', 'asset')}
+                    if not current or current['_document']['path'] == payload['_document']['path']:
+                        selected[workspace['folder']] = payload
+                    save()
+                    data = payload
+                else:
+                    if current:
+                        path = current['_document']['path']
+                        data = store.read(path) if Path(path).is_file() else current
+                    else:
+                        choices = store.list()
+                        data = store.read(choices[0]['path']) if choices else store.new()
+                        # Migrate the old global draft exactly once, in its original folder.
+                        legacy = workspace.get('task_preferences')
+                        if legacy and legacy.get('taskMap'):
+                            data = {**legacy, '_document': {**store.new()['_document'], 'name': '워크플로우'}}
+                            store.write(data)
+                            workspace.pop('task_preferences', None)
+                        selected[workspace['folder']] = data
+                        save()
+                data = dict(data)
+                data['files'] = [register(r['path'], r.get('label'), r.get('job'), r.get('asset')) for r in workspace.get('file_refs', {}).values() if Path(r['path']).is_file()]
+                return JSONResponse(data)
         if action == 'workflow':
             return JSONResponse(workflow_manager.current())
         if action in ('workflow-run', 'workflow-cancel', 'workflow-confirm'):

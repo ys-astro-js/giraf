@@ -954,7 +954,7 @@ textarea {
   justify-content: flex-start;
   text-align: start;
   width: 100%;
-  gap: 8px;
+  gap: 8px 2px;
   min-width: 0;
   min-height: 36px;
   max-width: 100%;
@@ -1045,3 +1045,8 @@ textarea {
 .dependency-view-tools { display: flex; gap: 8px; }
 .dependency-canvas .dependency-tools { pointer-events: none; }
 @media (pointer: coarse) { .dependency-tools [data-slot="button"], .dependency-tools [data-slot="toggle-group-item"] { width: 44px; height: 44px; } }
+
+/* Navigation and active execution share the same status area. */
+.toolbar-status-content { justify-content: center; }
+.toolbar-status-content:is([data-state="running"], [data-state="waiting"]) { column-gap: 8px; }
+.toolbar-status-content > [data-slot="button"] { max-width: calc(50% - 18px); }
