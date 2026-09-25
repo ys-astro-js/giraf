@@ -16,18 +16,20 @@ import {
   useSyncExternalStore,
   type DragEvent,
   type CSSProperties,
+  type ComponentProps,
 } from "react"
 import {
   applyNodeChanges,
   Background,
   MiniMap,
   NodeResizeControl,
-  Handle,
+  Handle as FlowHandle,
   Panel,
   Position,
   ReactFlow,
   SelectionMode,
   useReactFlow,
+  useNodeId,
   useConnection,
   useStore,
   useUpdateNodeInternals,
@@ -84,6 +86,7 @@ import {
 import {
   changeFlowNodes,
   connectFlow,
+  connectionFeedback,
   flowEdges,
   flowNodes,
   connectInputPort,
@@ -119,6 +122,7 @@ type Props = {
 }
 type DropChoice = { source: Source; target: string; roles: string[] }
 type NodeContext = Pick<Props, "map" | "catalog" | "rows" | "onInput"> & {
+  validateConnection: (connection: FlowConnection) => ReturnType<typeof connectionFeedback>
   currentIssues: Diagnostic[]
   selectingGroup: boolean
   dragPreview: { entering?: string; leaving?: string }
@@ -131,6 +135,44 @@ type NodeContext = Pick<Props, "map" | "catalog" | "rows" | "onInput"> & {
   finishDrop: (target: string, source: Source, role: string) => void
 }
 const WorkflowContext = createContext<NodeContext | null>(null)
+function ConnectionHandleAnchor({ onClick, ...props }: ComponentProps<typeof FlowHandle>) {
+  // Tooltip's click-to-dismiss handler would override React Flow's click connector.
+  void onClick
+  return <FlowHandle {...props} />
+}
+function Handle(props: ComponentProps<typeof FlowHandle>) {
+  const { validateConnection } = useContext(WorkflowContext)!
+  const from = useConnection(state => state.inProgress ? state.fromHandle : null)
+  // Handles receive their node id from React Flow's enclosing node context.
+  const nodeId = useNodeId()!
+  const near = useConnection(state => state.inProgress && state.toHandle?.nodeId === nodeId &&
+    state.toHandle?.id === props.id && state.toHandle?.type === props.type)
+  const [hovered, setHovered] = useState(false)
+  const feedback = useMemo(() => {
+    if (!from || from.type === props.type) return null
+    const source = from.type === "source" ? from : {nodeId, id: props.id}
+    const target = from.type === "target" ? from : {nodeId, id: props.id}
+    return validateConnection({source: source.nodeId, sourceHandle: source.id ?? null, target: target.nodeId, targetHandle: target.id ?? null})
+  }, [from, nodeId, props.id, props.type, validateConnection])
+  const isOrigin = from?.nodeId === nodeId && from.id === props.id && from.type === props.type
+  const state = feedback ? (feedback.valid ? "available" : "unavailable") : isOrigin ? "origin" : from ? "irrelevant" : undefined
+  return <Tooltip open={!!feedback && !feedback.valid && (near || hovered)}>
+    <TooltipTrigger render={<ConnectionHandleAnchor {...props}
+      data-connection-state={state}
+      aria-label={`${props["aria-label"] ?? "포트"}${feedback ? `: ${feedback.valid ? "연결 가능" : "연결 불가"}` : ""}`}
+      title={from ? undefined : props.title}
+      style={{...props.style, ...(feedback ? {pointerEvents: "all"} : {})}}
+      onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}
+      onFocus={() => setHovered(true)} onBlur={() => setHovered(false)}>
+      {feedback && !feedback.valid ? <><span className="connection-port-symbol" aria-hidden="true"><Ban /></span>{props.children && props.type === "source" && <span className="connection-port-name">{props.children}</span>}</> : props.children}
+    </ConnectionHandleAnchor>} />
+    <TooltipContent className="pointer-events-none" side={props.type === "target" ? "left" : "right"}>
+      <span className="connection-port-feedback" role="status">
+        {!feedback?.valid && feedback?.message}
+      </span>
+    </TooltipContent>
+  </Tooltip>
+}
 const TaskNode = memo(function TaskNode({
   id,
   data,
@@ -168,6 +210,7 @@ const TaskNode = memo(function TaskNode({
   const primaryName = task.outputPorts?.find(p=>p.id==="$default")?.name.trim() || ""
   const flow = useReactFlow<TaskFlowNode>()
   const clickStart = useStore((state) => state.connectionClickStartHandle)
+  const connecting = useConnection(state => state.inProgress)
   const connectionTarget = useConnection((connection) =>
     connection.inProgress && connection.isValid && connection.toNode?.id === id
       ? (connection.toHandle?.id ?? null)
@@ -292,7 +335,7 @@ const TaskNode = memo(function TaskNode({
                   className={`workflow-input-handle${slot.group ? " workflow-group-handle" : ""}`}
                   aria-label={`${task.label} ${slot.role} ${slot.group ? groupLabel(slot.group)+" " : ""}입력 연결`}
                 >{slot.group && <span>{compactPortLabel(slot.group)}</span>}</Handle>
-                <Tooltip>
+                <Tooltip disabled={connecting}>
                   <TooltipTrigger render={<button />}
                     className="node-input nodrag nopan"
                     data-input-role={slot.name}
@@ -300,8 +343,9 @@ const TaskNode = memo(function TaskNode({
                     aria-label={`${task.label} ${slot.role} ${slot.group ? groupLabel(slot.group) : ""}${pickable ? "에 연결" : " 설정"}`}
                     onClick={(e) => {
                       e.stopPropagation()
-                      if (clickStart && enabled && isConnectable)
-                        inputHandles.current.get(slot.name)?.click()
+                      if (clickStart) {
+                        if (enabled && isConnectable) inputHandles.current.get(slot.name)?.click()
+                      }
                       else if (pickable && dropChoice)
                         finishDrop(id, dropChoice.source, slot.name)
                       else {
@@ -655,26 +699,17 @@ export function TaskMapView({
     setSelectingGroup(false)
     setGroupSelection([])
   }
-  const isValidConnection = useCallback(
-    (connection: FlowConnection | Edge) => {
-      try {
-        connectFlow(
-          map,
-          catalog,
-          rows,
-          {
-            ...connection,
-            sourceHandle: connection.sourceHandle ?? null,
-            targetHandle: connection.targetHandle ?? null,
-          },
-          reconnecting.current
-        )
-        return true
-      } catch {
-        return false
-      }
-    },
+  const validateConnection = useCallback(
+    (connection: FlowConnection) => connectionFeedback(map, catalog, rows, connection, reconnecting.current),
     [map, catalog, rows]
+  )
+  const isValidConnection = useCallback(
+    (connection: FlowConnection | Edge) => validateConnection({
+      ...connection,
+      sourceHandle: connection.sourceHandle ?? null,
+      targetHandle: connection.targetHandle ?? null,
+    }).valid,
+    [validateConnection]
   )
   function finishConnection(connection: FlowConnection, replacingId?: string) {
     try {
@@ -835,6 +870,7 @@ export function TaskMapView({
           <WorkflowContext.Provider
             value={{
               map,
+              validateConnection,
               currentIssues,
               catalog,
               rows,

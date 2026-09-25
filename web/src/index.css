@@ -242,6 +242,21 @@
 .map-viewport .react-flow__handle.clickconnecting { outline: 3px solid var(--primary); outline-offset: 3px; }
 .workflow-output-handle svg { width: 16px; height: 16px; pointer-events: none; }
 .map-viewport .react-flow__handle.connectingto.valid { background: var(--primary); border-color: var(--primary); }
+.map-viewport .react-flow__handle[data-connection-state="available"] { border-color: var(--primary); color: var(--primary); background: var(--background); outline: 1px solid var(--primary); outline-offset: 2px; }
+.map-viewport .react-flow__handle[data-connection-state="unavailable"] { border: 0; color: var(--muted-foreground); background: var(--background); cursor: not-allowed; }
+.map-viewport .workflow-input-handle[data-connection-state="unavailable"] { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
+.map-viewport .react-flow__handle[data-connection-state="origin"] { outline: 2px solid var(--primary); outline-offset: 3px; }
+.map-viewport .react-flow__handle[data-connection-state="irrelevant"] { background: var(--background); border-color: color-mix(in oklch, var(--foreground) 35%, var(--background)); color: color-mix(in oklch, var(--foreground) 35%, var(--background)); }
+.map-viewport .react-flow__handle[data-connection-state="irrelevant"][data-connected="true"] { background: color-mix(in oklch, var(--foreground) 35%, var(--background)); color: var(--background); }
+.map-viewport .react-flow__handle[data-connection-state="unavailable"].connectingto { color: var(--destructive); }
+.connection-port-symbol { display: inline-flex; pointer-events: none; }
+.connection-port-symbol svg { width: 16px; height: 16px; }
+.connection-port-name { display: contents; pointer-events: none; }
+.connection-port-name > svg { display: none; }
+.connection-port-feedback { display: flex; flex-direction: column; gap: 4px; max-width: 30ch; overflow-wrap: anywhere; }
+/* A portaled tooltip must not steal the pointer from the canvas during a drag. */
+div:has(> [data-slot="tooltip-content"] .connection-port-feedback) { pointer-events: none; }
+.node-input-row:has([data-connection-state="available"]) .node-input-label { color: var(--primary); }
 .map-viewport .react-flow__edge.workflow-edge-inactive .react-flow__edge-path { stroke-dasharray: 5 5; }
 .map-viewport .react-flow__edge.workflow-edge-error .react-flow__edge-path { stroke: var(--destructive); stroke-width: 3; }
 .map-viewport .react-flow__edge.workflow-edge-warning .react-flow__edge-path { stroke: var(--warning); stroke-width: 3; }

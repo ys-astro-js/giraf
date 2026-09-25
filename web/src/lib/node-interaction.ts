@@ -49,18 +49,19 @@ export function connectionChoices(
   catalog: Catalog,
   source: Source,
   target: string,
-  rows: Frame[]
+  rows: Frame[],
+  targetRole?: string
 ): Slot[] {
   const t = map.tasks.find((t) => t.id === target),
     spec = catalog.tasks.find((s) => s.name === t?.task)
   if (!t || !spec)
-    throw Error("목표 작업이 없습니다. 다른 노드를 선택해 주세요.")
+    throw Error("연결할 작업을 찾을 수 없습니다.")
   if (!source || !["files", "result", "pending"].includes(source.kind))
     throw Error("연결할 출력을 다시 선택해 주세요.")
   const parent = source.kind !== "files" ? source.taskId : undefined
   if (parent) {
     if (!map.tasks.some((t) => t.id === parent))
-      throw Error("출발 작업이 삭제되었습니다. 출력을 다시 선택해 주세요.")
+      throw Error("출력 작업이 삭제되었습니다.")
     const reaches = (id: string, seen = new Set<string>()): boolean =>
       id === parent ||
       (!seen.has(id) &&
@@ -73,7 +74,9 @@ export function connectionChoices(
         )))
     if (reaches(target))
       throw Error(
-        "자기 자신이나 앞선 작업으로 순환 연결할 수 없습니다. 다른 목표 노드를 선택해 주세요."
+        target === parent
+          ? "자기 자신의 출력은 입력으로 연결할 수 없습니다."
+          : "앞선 작업으로 연결하면 순환이 생깁니다."
       )
   }
   let kinds: string[],
@@ -87,7 +90,7 @@ export function connectionChoices(
       : [s.kind]
   } else {
     if (!Array.isArray(source.ids) || !source.ids.length)
-      throw Error("연결할 결과가 없습니다. 출력이 있는 노드를 선택해 주세요.")
+      throw Error("이 출력에는 연결할 파일이 없습니다.")
     const products = [...rows, ...map.runs.flatMap((r) => r.products)]
     const selected = source.ids.map((id) => products.find((p) => p.id === id))
     if (selected.some((p) => !p))
@@ -97,7 +100,21 @@ export function connectionChoices(
     kinds = [...new Set(selected.map((p) => p!.asset || "image"))]
     count = selected.length
   }
-  const roles = connectionRoles(spec, catalog).filter(
+  const inputs = connectionRoles(spec, catalog)
+  if (targetRole) {
+    const slot = inputs.find(s => s.name === targetRole)
+    if (!slot) throw Error("입력 포트를 찾을 수 없습니다.")
+    if (!roleActive(t, slot.name, catalog))
+      throw Error(`${slot.name} 입력이 비활성 상태입니다. 설정에서 켜 주세요.`)
+    const compatible = source.kind === "pending"
+      ? kinds.some(k => acceptsAsset(slot.kind, k))
+      : kinds.every(k => acceptsAsset(slot.kind, k))
+    if (!compatible)
+      throw Error(`${slot.name}에는 ${slot.kind} 자료가 필요합니다. 이 출력은 ${kinds.join(", ")} 형식입니다.`)
+    if (!slot.multiple && count !== 1)
+      throw Error(`${slot.name}에는 파일 1개만 연결할 수 있습니다. 현재 출력은 ${count}개입니다.`)
+  }
+  const roles = inputs.filter(
     (s) =>
       roleActive(t, s.name, catalog) &&
       (source.kind === "pending" ? kinds.some(k => acceptsAsset(s.kind, k)) : kinds.every((k) => acceptsAsset(s.kind, k))) &&

@@ -158,6 +158,21 @@ export function flowEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
     ]
   })
 }
+/** Preview and commit deliberately share every connection rule. */
+export function connectionFeedback(
+  map: TaskMap,
+  catalog: Catalog,
+  rows: Frame[],
+  connection: FlowConnection,
+  replacingId?: string
+): { valid: boolean; message: string } {
+  try {
+    connectFlow(map, catalog, rows, connection, replacingId)
+    return { valid: true, message: "연결 가능" }
+  } catch (error) {
+    return { valid: false, message: (error as Error).message }
+  }
+}
 export function connectFlow(
   map: TaskMap,
   catalog: Catalog,
@@ -196,7 +211,7 @@ export function connectInputPort(map:TaskMap,catalog:Catalog,rows:Frame[],target
  const group=parsed?.group||targetGroupFor(target,roleName,incoming)
  const all=[...rows,...map.runs.flatMap(r=>r.products)]
  const source=group && !(incoming.kind==='files'&&!incoming.ids.length)?sourceForGroup(incoming,group,all):incoming
- if(!(source.kind==='files'&&!source.ids.length) && !connectionChoices(map,catalog,source,targetId,rows).some(s=>s.name===roleName))throw Error('이 입력에는 연결할 수 없습니다.')
+ if(!(source.kind==='files'&&!source.ids.length) && !connectionChoices(map,catalog,source,targetId,rows,roleName).some(s=>s.name===roleName))throw Error('이 입력에는 연결할 수 없습니다.')
  const spec=catalog.tasks.find(s=>s.name===target.task)!
  const multiple=spec.inputs.find(s=>s.name===roleName)?.multiple ?? catalog.ccdproc.inputs.find(s=>s.name===roleName)?.multiple ?? false
  if(group&&append&&multiple){

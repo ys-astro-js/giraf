@@ -19,7 +19,7 @@ import {
 import { plannedOutputs } from "../src/lib/workbench"
 import { editableOutputPorts } from "../src/lib/output-ports"
 import { outputPorts } from "../src/lib/calibration-ports"
-import { connectFlow, flowEdges } from "../src/lib/workflow-flow"
+import { connectFlow, flowEdges, connectionFeedback } from "../src/lib/workflow-flow"
 import type { Catalog, Preferences, Spec, Frame } from "../src/lib/workbench"
 const image: Spec = {
   name: "ccdproc",
@@ -75,6 +75,33 @@ function fixture() {
     m = addTask(m, makeInstance(s, catalog, prefs, id))
   return m
 }
+test("port feedback shares validation, explains rejection, and leaves the map untouched", () => {
+  const map = fixture()
+  const before = JSON.stringify(map)
+  const wire = {source: "a", sourceHandle: "output", target: "b", targetHandle: "images"}
+  expect(connectionFeedback(map, catalog, [], wire)).toEqual({valid: true, message: "연결 가능"})
+  expect(connectionFeedback(map, catalog, [], {...wire, targetHandle: "zero"})).toMatchObject({valid: false, message: expect.stringContaining("비활성")})
+  expect(connectionFeedback(map, catalog, [], {...wire, target: "a", targetHandle: "input"}).message).toContain("자기 자신")
+  expect(connectionFeedback(map, catalog, [], {...wire, targetHandle: "missing"}).message).toContain("입력")
+  expect(JSON.stringify(map)).toBe(before)
+})
+test("incompatible types and scalar cardinality have distinct actionable feedback", () => {
+  let map = fixture()
+  const wire = {source: "text", sourceHandle: "output", target: "b", targetHandle: "images"}
+  expect(connectionFeedback(map, catalog, [], wire)).toMatchObject({valid: false, message: expect.stringContaining("image")})
+  expect(connectionFeedback(map, catalog, [], wire).message).toContain("text")
+  map.tasks[1].draft.parameters.zerocor = "yes"
+  map = publishRun(map, "a", {id: "r", state: "completed", products: [product("x"), product("y")]})
+  expect(connectionFeedback(map, catalog, [], {...wire, source: "a", targetHandle: "zero"})).toMatchObject({valid: false, message: expect.stringContaining("1개")})
+  expect(() => connectFlow(map, catalog, [], {...wire, source: "a", targetHandle: "zero"})).toThrow("1개")
+})
+test("cycle feedback and reconnect preview use the same replacement graph as committing", () => {
+  const map = connectFlow(fixture(), catalog, [], {source: "a", sourceHandle: "output", target: "c", targetHandle: "input"})
+  const reverse = {source: "c", sourceHandle: "output", target: "a", targetHandle: "input"}
+  expect(connectionFeedback(map, catalog, [], reverse)).toMatchObject({valid: false, message: expect.stringContaining("순환")})
+  expect(connectionFeedback(map, catalog, [], reverse, map.connections[0].id).valid).toBe(true)
+  expect(map.connections).toHaveLength(1)
+})
 const product = (id: string, asset = "image"): Frame => ({
   id,
   label: id + ".fits",
