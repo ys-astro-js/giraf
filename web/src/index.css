@@ -246,6 +246,7 @@
 .map-viewport .react-flow__handle { width: 12px; height: 12px; border: 2px solid var(--muted-foreground); background: var(--background); }
 .map-viewport .workflow-output-handle { width:28px; height:28px; display:flex; align-items:center; justify-content:center; background:var(--background); border-color:var(--foreground); color:var(--foreground); }
 .map-viewport .react-flow__handle[data-connected="true"] { background: var(--foreground); border-color: var(--foreground); color: var(--background); }
+.map-viewport .react-flow__handle[data-highlighted="true"] { background: var(--workflow-port-fill); border-color: transparent; color: var(--background); }
 .map-viewport .react-flow__handle.clickconnecting { outline: 3px solid var(--primary); outline-offset: 3px; }
 .workflow-output-handle svg { width: 16px; height: 16px; pointer-events: none; }
 .map-viewport .react-flow__handle.connectingto.valid { background: var(--primary); border-color: var(--primary); }
@@ -265,8 +266,23 @@
 div:has(> [data-slot="tooltip-content"] .connection-port-feedback) { pointer-events: none; }
 .node-input-row:has([data-connection-state="available"]) .node-input-label { color: var(--primary); }
 .map-viewport .react-flow__edge.workflow-edge-inactive .react-flow__edge-path { stroke-dasharray: 5 5; }
+.map-viewport .react-flow__edge.selected .react-flow__edge-path { stroke: var(--xy-edge-stroke); }
 .map-viewport .react-flow__edge.workflow-edge-error .react-flow__edge-path { stroke: var(--destructive); stroke-width: 3; }
 .map-viewport .react-flow__edge.workflow-edge-warning .react-flow__edge-path { stroke: var(--warning); stroke-width: 3; }
+.map-viewport:has(.react-flow__edge.selected) .react-flow__edge:not(.selected) { opacity: 0.15; }
+.map-viewport .react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3;
+  opacity: 1 !important;
+}
+@media (hover: hover) and (pointer: fine) {
+  .map-viewport:has(.react-flow__edge:hover) .react-flow__edge:not(:hover):not(.selected) { opacity: 0.15; }
+  .map-viewport .react-flow__edge:hover { opacity: 1 !important; }
+  .map-viewport .react-flow__edge:hover .react-flow__edge-path {
+    stroke-width: 3;
+    /* Temporarily reveal even a connection dimmed by the search filter. */
+    opacity: 1 !important;
+  }
+}
 .workflow-drop-choice { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); }
 .workflow-node {
   position: relative;
@@ -275,6 +291,7 @@ div:has(> [data-slot="tooltip-content"] .connection-port-feedback) { pointer-eve
   background: var(--background);
   cursor: default;
 }
+.workflow-node:hover,
 .workflow-node[data-selected="true"] { border-color: var(--foreground); outline: 1px solid var(--foreground); }
 .workflow-node[data-diagnostic="error"] { border-color: var(--destructive); }
 .workflow-node[data-diagnostic="warning"] { border-color: var(--warning); }

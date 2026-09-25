@@ -932,7 +932,7 @@ function App() {
     [selectedFiles, map.tasks, jobs]
   )
   const [layoutBusy, setLayoutBusy] = useState(false)
-  async function autoLayout() {
+  async function autoLayout(straight = false) {
     if (layoutBusy || !catalog) return
     setLayoutBusy(true)
     try {
@@ -941,7 +941,8 @@ function App() {
         // Keep edits made while the engine was loading or calculating.
         if (current.tasks !== map.tasks || current.connections !== map.connections || current.subflows !== map.subflows)
           return current
-        return { ...current, tasks: next.tasks, subflows: next.subflows }
+        return { ...current, tasks: next.tasks, subflows: next.subflows, edgeRoutes: next.edgeRoutes,
+          view: { ...current.view, ...(straight ? { edgeStyle: "smoothstep" as const } : {}) } }
       })
       setLayoutRevision((revision) => revision + 1)
     } catch {
@@ -1108,7 +1109,8 @@ function App() {
                   layoutRevision={layoutRevision}
                   revealNode={revealNode}
                   revealConnection={revealConnection}
-                  onAutoLayout={autoLayout}
+                  onAutoLayout={() => void autoLayout()}
+                  onStraightEdges={() => void autoLayout(true)}
                   layoutBusy={layoutBusy}
                   onRunSubflow={runWorkflow}
                   workflowBusy={workflowActive(workflow)}

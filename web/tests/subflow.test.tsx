@@ -9,7 +9,7 @@ import {
   moveTaskToSubflow,
   subflowDropTarget,
 } from "../src/lib/subflow"
-import { flowNodes, changeFlowNodes } from "../src/lib/workflow-flow"
+import { flowNodes, flowEdges, changeFlowNodes, flowPortColors } from "../src/lib/workflow-flow"
 import type { Catalog, Preferences, Spec } from "../src/lib/workbench"
 const spec: Spec = {
   name: "ccdproc",
@@ -45,6 +45,37 @@ const fixture = () =>
   )
 const group = (m = fixture()) =>
   saveSubflow(m, catalog, { id: "group", name: "보정", taskIds: ["a", "b"] })
+test("both edge modes highlight selected connections and match their ports", () => {
+  let map = connect(fixture(), "b", "images", { kind: "pending", taskId: "a" })
+  map = connect(map, "c", "images", { kind: "pending", taskId: "a" })
+  map = saveSubflow(map, catalog, { id: "source", name: "출발", taskIds: ["a"], color: "rose" })
+  map = saveSubflow(map, catalog, { id: "target", name: "대상", taskIds: ["b"], color: "blue" })
+  for (const edgeStyle of ["default", "smoothstep"] as const) {
+    map.view.edgeStyle = edgeStyle
+    for (const selected of ["", "c"]) {
+      map.view.selected = selected
+      expect(flowEdges(map, catalog)[0].style).not.toHaveProperty("--xy-edge-stroke")
+    }
+    for (const selected of ["a", "b"]) {
+      map.view.selected = selected
+      expect(flowEdges(map, catalog)[0].style).toMatchObject({ "--xy-edge-stroke": "var(--subflow-blue)" })
+      expect(flowPortColors(flowEdges(map, catalog), "b", "target", "images")).toEqual(["var(--subflow-blue)"])
+      expect(flowPortColors(flowEdges(map, catalog), "b", "target", "unrelated")).toEqual([])
+    }
+  }
+  map.view.selected = "a"
+  const edges = flowEdges(map, catalog)
+  expect(flowPortColors(edges, "a", "source", "output")).toEqual(["var(--subflow-blue)"])
+  const branched = saveSubflow(map, catalog, { id: "other", name: "다른 대상", taskIds: ["c"], color: "rose" })
+  expect(flowPortColors(flowEdges(branched, catalog), "a", "source", "output")).toEqual(["var(--subflow-blue)", "var(--subflow-rose)"])
+  expect(edges.find(e => e.target === "b")!.style).toMatchObject({ "--xy-edge-stroke": "var(--subflow-blue)" })
+  expect(edges.find(e => e.target === "c")!.style).not.toHaveProperty("--xy-edge-stroke")
+  const recolored = updateSubflow(map, "target", { name: "대상", color: "violet" })
+  expect(flowEdges(recolored, catalog)[0].style).toMatchObject({ "--xy-edge-stroke": "var(--subflow-violet)" })
+  expect(flowEdges(dissolveSubflow(map, "target"), catalog)[0].style).not.toHaveProperty("--xy-edge-stroke")
+  map.view.selected = ""
+  expect(flowEdges(map, catalog)[0].style).not.toHaveProperty("--xy-edge-stroke")
+})
 test("group persistence, parent ordering and relative coordinates", () => {
   const m = group(),
     nodes = flowNodes(m, catalog),
@@ -52,6 +83,11 @@ test("group persistence, parent ordering and relative coordinates", () => {
     child = nodes.find((n) => n.id === "a")!
   expect(nodes[0].id).toBe("group")
   expect(child.parentId).toBe("group")
+  const wired = connect(m, "b", "images", { kind: "pending", taskId: "a" })
+  const edge = flowEdges(wired, catalog)[0]
+  expect(parent.zIndex).toBeLessThan(edge.zIndex!)
+  expect(child.zIndex).toBeGreaterThan(edge.zIndex!)
+  expect(nodes.find(n => n.id === "c")!.zIndex).toBeGreaterThan(edge.zIndex!)
   expect(child.extent).toBeUndefined()
   expect(child.position.x + parent.position.x).toBe(0)
   expect(child.position.y + parent.position.y).toBe(100)

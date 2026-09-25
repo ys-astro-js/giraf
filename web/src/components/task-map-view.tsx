@@ -1,4 +1,5 @@
-import { WorkflowToolButton, WorkflowZoomControls } from "./workflow-tools"
+import { WorkflowToolButton, WorkflowZoomControls, WorkflowEdgeStyleButton } from "./workflow-tools"
+import { WorkflowEdge } from "./workflow-edge"
 import { customOutput, customPortHandle } from "@/lib/output-ports"
 import {groupEqual,groupLabel,matchesGroup,compactPortLabel} from "@/lib/calibration-ports"
 import {ccdTasks, calibrationLabels} from "@/lib/calibration"
@@ -20,6 +21,7 @@ import {
 } from "react"
 import {
   applyNodeChanges,
+  ConnectionLineType,
   Background,
   MiniMap,
   NodeResizeControl,
@@ -51,6 +53,7 @@ import {
   Maximize2,
   LocateFixed,
   Trash2,
+  Unplug,
   Terminal,
   File,
   X,
@@ -88,6 +91,7 @@ import {
   connectFlow,
   connectionFeedback,
   flowEdges,
+  flowPortColors,
   flowNodes,
   connectInputPort,
   flowViewport,
@@ -97,12 +101,15 @@ import {
   type WorkflowNode,
 } from "@/lib/workflow-flow"
 
+const workflowEdgeTypes = { default: WorkflowEdge, smoothstep: WorkflowEdge }
+
 type Props = {
   search?: string
   onSearch?: (value: string) => void
   revealNode?: { id: string; revision: number }
   layoutRevision?: number
   onAutoLayout?: () => void
+  onStraightEdges?: () => void
   layoutBusy?: boolean
   map: TaskMap
   catalog: Catalog
@@ -124,6 +131,7 @@ type DropChoice = { source: Source; target: string; roles: string[] }
 type NodeContext = Pick<Props, "map" | "catalog" | "rows" | "onInput"> & {
   validateConnection: (connection: FlowConnection) => ReturnType<typeof connectionFeedback>
   currentIssues: Diagnostic[]
+  edges: Edge[]
   selectingGroup: boolean
   dragPreview: { entering?: string; leaving?: string }
   editGroup: (id: string) => void
@@ -141,10 +149,13 @@ function ConnectionHandleAnchor({ onClick, ...props }: ComponentProps<typeof Flo
   return <FlowHandle {...props} />
 }
 function Handle(props: ComponentProps<typeof FlowHandle>) {
-  const { validateConnection } = useContext(WorkflowContext)!
+  const { validateConnection, edges } = useContext(WorkflowContext)!
   const from = useConnection(state => state.inProgress ? state.fromHandle : null)
   // Handles receive their node id from React Flow's enclosing node context.
   const nodeId = useNodeId()!
+  const colors = flowPortColors(edges, nodeId, props.type, props.id)
+  const portFill = colors.length === 1 ? colors[0] : colors.length > 1
+    ? `conic-gradient(${colors.map((color, index) => `${color} ${index * 100 / colors.length}% ${(index + 1) * 100 / colors.length}%`).join(", ")})` : undefined
   const near = useConnection(state => state.inProgress && state.toHandle?.nodeId === nodeId &&
     state.toHandle?.id === props.id && state.toHandle?.type === props.type)
   const [hovered, setHovered] = useState(false)
@@ -159,9 +170,10 @@ function Handle(props: ComponentProps<typeof FlowHandle>) {
   return <Tooltip open={!!feedback && !feedback.valid && (near || hovered)}>
     <TooltipTrigger render={<ConnectionHandleAnchor {...props}
       data-connection-state={state}
+      data-highlighted={!!portFill}
       aria-label={`${props["aria-label"] ?? "포트"}${feedback ? `: ${feedback.valid ? "연결 가능" : "연결 불가"}` : ""}`}
       title={from ? undefined : props.title}
-      style={{...props.style, ...(feedback ? {pointerEvents: "all"} : {})}}
+      style={{...props.style, "--workflow-port-fill": portFill, ...(feedback ? {pointerEvents: "all"} : {})} as CSSProperties}
       onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}
       onFocus={() => setHovered(true)} onBlur={() => setHovered(false)}>
       {feedback && !feedback.valid ? <><span className="connection-port-symbol" aria-hidden="true"><Ban /></span>{props.children && props.type === "source" && <span className="connection-port-name">{props.children}</span>}</> : props.children}
@@ -496,6 +508,7 @@ export function TaskMapView({
   revealNode,
   revealConnection,
   onAutoLayout,
+  onStraightEdges,
   layoutBusy = false,
   map,
   catalog,
@@ -520,6 +533,7 @@ export function TaskMapView({
   }>({})
   const [editingGroup, setEditingGroup] = useState<string | null>(null)
   const [selectedEdges, setSelectedEdges] = useState<string[]>([])
+  const [edgeActionPosition, setEdgeActionPosition] = useState<{ x: number; y: number } | null>(null)
   const [dropChoice, setDropChoice] = useState<DropChoice | null>(null)
   const [flow, setFlow] = useState<ReactFlowInstance<
     WorkflowNode,
@@ -872,6 +886,7 @@ export function TaskMapView({
               map,
               validateConnection,
               currentIssues,
+              edges,
               catalog,
               rows,
               choose,
@@ -897,7 +912,23 @@ export function TaskMapView({
               nodes={nodes}
               edges={edges}
               nodeTypes={nodeTypes}
+              edgeTypes={workflowEdgeTypes}
+              // Groups < edges < task nodes/ports, including selected edges and grouped tasks.
+              zIndexMode="manual"
+              connectionLineType={map.view.edgeStyle === "smoothstep" ? ConnectionLineType.SmoothStep : ConnectionLineType.Bezier}
               onNodesChange={onNodesChange}
+              onEdgeClick={(event) => {
+                const bounds = (event.currentTarget as Element).closest(".react-flow")?.getBoundingClientRect()
+                if (!bounds) return
+                const edgeBounds = (event.currentTarget as Element).getBoundingClientRect()
+                const x = event.clientX || edgeBounds.x + edgeBounds.width / 2
+                const y = event.clientY || edgeBounds.y + edgeBounds.height / 2
+                setEdgeActionPosition({
+                  x: Math.max(8, Math.min(x - bounds.x + 12, bounds.width - 40)),
+                  y: Math.max(8, Math.min(y - bounds.y + 12, bounds.height - 40)),
+                })
+              }}
+              onMoveStart={() => setEdgeActionPosition(null)}
               onNodeDragStart={(_, node) => previewGroupDrop(node)}
               onNodeDrag={(_, node) => previewGroupDrop(node)}
               onNodeDragStop={(_, node) => finishGroupDrop(node)}
@@ -931,7 +962,13 @@ export function TaskMapView({
                 )
                   choose(node.id)
               }}
-              onPaneClick={() => setDropChoice(null)}
+              onPaneClick={() => {
+                setDropChoice(null)
+                setEdgeActionPosition(null)
+                setSelectedEdges([])
+                if (!selectingGroup)
+                  update(m => ({ ...m, view: { ...m.view, selected: "" } }))
+              }}
               onConnect={(connection) => finishConnection(connection)}
               isValidConnection={isValidConnection}
               onReconnectStart={(_, edge) => {
@@ -985,6 +1022,15 @@ export function TaskMapView({
               <Panel position="bottom-left" className="workflow-tools" role="group" aria-label="워크플로우 도구">
                 <WorkflowZoomControls />
                 <ButtonGroup orientation="vertical" aria-label="워크플로우 구성">
+                  <WorkflowEdgeStyleButton
+                    straight={map.view.edgeStyle === "smoothstep"}
+                    disabled={layoutBusy || !onStraightEdges}
+                    onClick={() => {
+                      if (map.view.edgeStyle === "smoothstep")
+                        update(m => ({ ...m, view: { ...m.view, edgeStyle: "default" } }))
+                      else onStraightEdges?.()
+                    }}
+                  />
                   <WorkflowToolButton variant="outline" size="icon-sm"
                     label="선택한 작업 보기"
                     disabled={!map.view.selected}
@@ -1024,20 +1070,21 @@ export function TaskMapView({
                   </span>
                 </Panel>
               )}
-              {!selectingGroup && !!selectedEdges.length && (
-                <Panel position="top-right">
-                  <Button
+              {!selectingGroup && !!selectedEdges.length && edgeActionPosition && (
+                <Panel position="top-left" style={{ left: edgeActionPosition.x, top: edgeActionPosition.y, margin: 0 }}>
+                  <WorkflowToolButton
                     variant="outline"
-                    size="sm"
+                    size="icon-sm"
+                    label="연결 해제"
                     onClick={() => {
                       void flow?.deleteElements({
                         edges: selectedEdges.map((id) => ({ id })),
                       })
+                      setEdgeActionPosition(null)
                     }}
                   >
-                    <X data-icon="inline-start" />
-                    연결 해제
-                  </Button>
+                    <Unplug />
+                  </WorkflowToolButton>
                 </Panel>
               )}
               {!nodes.some((n) => !n.hidden) && (

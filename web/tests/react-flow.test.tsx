@@ -54,6 +54,16 @@ const wire = {
   targetHandle: "images",
 }
 
+test("deselecting the last node clears selection instead of restoring the previous node", () => {
+  const map = fixture()
+  map.view.selected = "a"
+  const cleared = changeFlowNodes(map, catalog, [{ type: "select", id: "a", selected: false }])
+  expect(cleared.view.selected).toBe("")
+  expect(flowNodes(cleared, catalog).some(node => node.selected)).toBe(false)
+  const moved = changeFlowNodes(cleared, catalog, [{ type: "position", id: "b", position: { x: 10, y: 20 } }])
+  expect(moved.view.selected).toBe("")
+})
+
 test("saved positions including negative coordinates survive RF projection and movement", () => {
   expect(() => structuredClone(flowNodes(fixture(), catalog))).not.toThrow()
   const m = fixture()

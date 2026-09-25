@@ -2,6 +2,8 @@ import { beforeAll, expect, test } from "bun:test"
 import { emptyMap, makeInstance, connect } from "../src/lib/task-map"
 import { saveSubflow, autoLayoutMap } from "../src/lib/subflow"
 import type { Catalog, Spec, Preferences } from "../src/lib/workbench"
+import { nodeGeometry } from "../src/lib/node-interaction"
+import { flowEdges } from "../src/lib/workflow-flow"
 // Bun exposes `self` in its main thread; ELK otherwise mistakes it for a worker.
 beforeAll(async () => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, "self")
@@ -15,7 +17,7 @@ const spec: Spec = {
   package: "images",
   parameters: [],
   inputs: [{ name: "input", label: "input", kind: "image", multiple: true }],
-  output: null,
+  output: { name: "output", mode: "each", default: "s_" },
   kind: "image",
 }
 const catalog: Catalog = {
@@ -112,6 +114,28 @@ test("empty maps retain metadata", async () => {
   const map = emptyMap()
   expect(await autoLayoutMap(map, catalog)).toEqual(map)
 })
+
+test("ELK routes retain absolute port endpoints across groups and reach the renderer", async () => {
+  let map = fixture()
+  map = saveSubflow(map, catalog, { id: "dark", name: "Dark", taskIds: ["dark1", "dark2"] })
+  map.view.edgeStyle = "smoothstep"
+  const next = await autoLayoutMap(map, catalog)
+  for (const edge of flowEdges(next, catalog)) {
+    const points = edge.data?.points as { x: number; y: number }[]
+    expect(points.length).toBeGreaterThanOrEqual(2)
+    const source = next.tasks.find(t => t.id === edge.source)!
+    const target = next.tasks.find(t => t.id === edge.target)!
+    const geometry = nodeGeometry(next, source, catalog)
+    const output = edge.sourceHandle === "output" ? { x: geometry.outputX, y: geometry.outputY } : geometry.outputs.find(p => p.handleId === edge.sourceHandle)!
+    expect(points[0].x).toBeCloseTo(source.position!.x + output.x)
+    expect(points[0].y).toBeCloseTo(source.position!.y + output.y)
+    expect(points.at(-1)!.x).toBeCloseTo(target.position!.x)
+    expect(points.at(-1)!.y).toBeCloseTo(target.position!.y + nodeGeometry(next, target, catalog).inputY("input"))
+    for (let i = 1; i < points.length; i++)
+      expect(points[i].x === points[i - 1].x || points[i].y === points[i - 1].y).toBe(true)
+  }
+})
+
 test("multiple output ports preserve data and fit inside group bounds", async () => {
   let map = fixture()
   map.tasks[0].outputPorts = [{id: "custom", name: "Master", files: ["*.fits"]}]

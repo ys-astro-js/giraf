@@ -17,6 +17,7 @@ import {
   roleActive,
 } from "./node-interaction"
 import type { Catalog, Frame, Spec } from "./workbench"
+import { subflowColor } from "./subflow"
 
 export type TaskFlowNode = Node<
   {
@@ -49,6 +50,7 @@ export function flowNodes(
     return {
       id: task.id,
       type: "task",
+      zIndex: map.view.selected === task.id ? 3 : 2,
       // React Flow clones connection state at completion; node data must be cloneable.
       data: {
         task,
@@ -109,6 +111,7 @@ export function flowNodes(
     return {
       id: group.id,
       type: "subflow",
+      zIndex: 0,
       data: { group, count: children.length, minWidth, minHeight },
       position: group.position,
       style: {
@@ -140,14 +143,25 @@ export function flowEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
     const target = map.tasks.find((t) => t.id === connection.target)
     // File inputs and results whose source was deleted are still shown in the input summary.
     if (!source || !target) return []
+    const sourceHandle = outputHandle(connection.source,catalog.tasks.find(s=>s.name===source.task))
+    const route = map.edgeRoutes?.[connection.id]
+    const targetGroup = map.view.selected === source.id || map.view.selected === target.id
+      ? map.subflows?.find(group => group.id === target.subflowId) : undefined
     return [
       {
         id: connection.id,
+        zIndex: 1,
+        type: map.view.edgeStyle === "smoothstep" ? "smoothstep" : "default",
+        data: route && route.source === source.id && route.target === target.id && route.sourceHandle === sourceHandle && route.targetHandle === connection.role
+          ? { points: route.points } : undefined,
         source: source.id,
         target: target.id,
-        sourceHandle: outputHandle(connection.source,catalog.tasks.find(s=>s.name===source.task)),
+        sourceHandle,
         targetHandle: connection.role,
-        style: { opacity: matches(source, search) && matches(target, search) ? 1 : 0.3 },
+        style: {
+          opacity: matches(source, search) && matches(target, search) ? 1 : 0.3,
+          ...(targetGroup ? { "--xy-edge-stroke": subflowColor(targetGroup.color) } : {}),
+        },
         className:
           !target.expressions[connection.role] &&
           roleActive(target, connection.role, catalog)
@@ -291,7 +305,7 @@ export function changeFlowNodes(
       ...map.view,
       selected:
         nodes.find((n) => n.type === "task" && n.selected)?.id ??
-        map.view.selected,
+        "",
     },
   }
 }
@@ -302,4 +316,14 @@ export function flowViewport(view: TaskMap["view"]) {
     y: view.coordinateSystem === "react-flow" ? view.y : -view.y,
     zoom: view.zoom,
   }
+}
+
+/** A shared output can carry several destination colors; retain each rather than choosing an arbitrary one. */
+export function flowPortColors(edges: Edge[], nodeId: string, type: "source" | "target", handle: string | null | undefined): string[] {
+  return [...new Set(edges.filter(edge => edge[type] === nodeId &&
+    (type === "source" ? edge.sourceHandle : edge.targetHandle) === handle)
+    .flatMap(edge => {
+      const color = (edge.style as Record<string, unknown> | undefined)?.["--xy-edge-stroke"]
+      return typeof color === "string" ? [color] : []
+    }))]
 }

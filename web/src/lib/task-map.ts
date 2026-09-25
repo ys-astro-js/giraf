@@ -67,6 +67,13 @@ export type Subflow = {
   height: number;
 };
 export type TaskMap = {
+  edgeRoutes?: Record<string, {
+    source: string;
+    target: string;
+    sourceHandle?: string | null;
+    targetHandle?: string | null;
+    points: { x: number; y: number }[];
+  }>;
   subflows?: Subflow[];
   version: 1;
   tasks: Instance[];
@@ -75,6 +82,7 @@ export type TaskMap = {
   view: {
     selected: string;
     coordinateSystem?: "react-flow";
+    edgeStyle?: "default" | "smoothstep";
     mode: "map" | "list";
     zoom: number;
     x: number;

@@ -30,6 +30,20 @@ export function WorkflowToolButton({
 }
 
 const defaultFitOptions = { padding: 0.2, maxZoom: 1 }
+export function WorkflowEdgeStyleButton({ straight, onClick, disabled = false }: { straight: boolean; onClick: () => void; disabled?: boolean }) {
+  return (
+    <WorkflowToolButton variant="outline" size="icon-sm"
+      label={straight ? "곡선 연결선으로 변경" : "직선 연결선으로 변경"}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d={straight ? "M4 18C16 18 8 6 20 6" : "M4 18H12V6H20"} />
+      </svg>
+    </WorkflowToolButton>
+  )
+}
+
 export function WorkflowZoomControls({
   orientation = "vertical",
   fitOptions = defaultFitOptions,

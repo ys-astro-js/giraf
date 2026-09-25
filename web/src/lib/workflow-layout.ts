@@ -7,6 +7,10 @@ import type { Catalog, Frame } from "./workbench"
 const options: LayoutOptions = {
   "elk.algorithm": "layered",
   "elk.direction": "RIGHT",
+  "elk.edgeRouting": "ORTHOGONAL",
+  "elk.layered.mergeEdges": "false",
+  "elk.spacing.edgeEdge": "16",
+  "elk.layered.spacing.edgeEdgeBetweenLayers": "16",
   "elk.hierarchyHandling": "INCLUDE_CHILDREN",
   "elk.spacing.nodeNode": "64",
   "elk.layered.spacing.nodeNodeBetweenLayers": "112",
@@ -41,11 +45,15 @@ export async function autoLayoutMap(
       id: taskId(task.id), width: geometry.width, height: geometry.height,
       layoutOptions: { "elk.portConstraints": "FIXED_POS" },
       ports: [
+        {
+          id: portId(task.id, "out", "output"), x: geometry.outputX, y: geometry.outputY,
+          width: 0, height: 0, layoutOptions: { "elk.port.side": "EAST" },
+        },
         ...geometry.roles.map(role => ({
           id: portId(task.id, "in", role.role), x: 0, y: geometry.inputY(role.name),
           width: 0, height: 0, layoutOptions: { "elk.port.side": "WEST" },
         })),
-        ...geometry.outputs.map(port => ({
+        ...geometry.outputs.filter(port => port.handleId !== "output").map(port => ({
           id: portId(task.id, "out", port.handleId), x: port.x, y: port.y,
           width: 0, height: 0, layoutOptions: { "elk.port.side": "EAST" },
         })),
@@ -55,18 +63,24 @@ export async function autoLayoutMap(
     const parent = task.subflowId ? groups.get(task.subflowId) : undefined
     ;(parent?.children ?? children).push(node)
   }
-  const endpoint = (id: string, side: string, handle: string) => {
+  const endpoint = (id: string, side: string, handle: string, edgeId: string) => {
     const node = nodes.get(id)!
     const port = portId(id, side, handle)
-    return node.ports?.some(p => p.id === port) ? port : node.id
+    const original = node.ports?.find(p => p.id === port)
+    if (!original) return node.id
+    // Distinct ELK ports prevent shared UI handles from merging into a hyperedge.
+    const routedPort = { ...original, id: JSON.stringify(["route-port", edgeId, side]) }
+    node.ports!.push(routedPort)
+    return routedPort.id
   }
   const elk = new ELK()
+  const edges = flowEdges(map, catalog)
   const graph = await elk.layout({
     id: "root", layoutOptions: options, children,
-    edges: flowEdges(map, catalog).map(edge => ({
+    edges: edges.map(edge => ({
       id: JSON.stringify(["edge", edge.id]),
-      sources: [endpoint(edge.source, "out", edge.sourceHandle ?? "output")],
-      targets: [endpoint(edge.target, "in", edge.targetHandle ?? "")],
+      sources: [endpoint(edge.source, "out", edge.sourceHandle ?? "output", edge.id)],
+      targets: [endpoint(edge.target, "in", edge.targetHandle ?? "", edge.id)],
     })),
   })
   const placed = new Map<string, ElkNode>()
@@ -78,8 +92,29 @@ export async function autoLayoutMap(
     }
   }
   collect(graph)
+  const edgeRoutes: NonNullable<TaskMap["edgeRoutes"]> = {}
+  const originals = new Map(edges.map(edge => [JSON.stringify(["edge", edge.id]), edge]))
+  function collectRoutes(parent: ElkNode, x = 0, y = 0) {
+    for (const edge of parent.edges ?? []) {
+      const original = originals.get(edge.id)
+      if (!original || !edge.sections?.length) continue
+      const container = edge.container ? placed.get(edge.container) : undefined
+      const offsetX = container?.x ?? x, offsetY = container?.y ?? y
+      const points = edge.sections.flatMap(section =>
+        [section.startPoint, ...(section.bendPoints ?? []), section.endPoint]
+          .map(p => ({ x: p.x + offsetX, y: p.y + offsetY })))
+      edgeRoutes[original.id] = {
+        source: original.source, target: original.target,
+        sourceHandle: original.sourceHandle, targetHandle: original.targetHandle, points,
+      }
+    }
+    for (const child of parent.children ?? [])
+      collectRoutes(child, x + (child.x ?? 0), y + (child.y ?? 0))
+  }
+  collectRoutes(graph)
   return {
     ...map,
+    edgeRoutes,
     tasks: map.tasks.map(task => {
       const node = placed.get(taskId(task.id))!
       return { ...task, position: { x: node.x!, y: node.y! } }
