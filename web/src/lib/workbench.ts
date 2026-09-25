@@ -85,16 +85,19 @@ export function plannedOutputs(task:Spec,draft:Draft,rows:Frame[],_mapping:Value
   }
   return [{input:`${ids.length}개`,output:productName(name,task.kind)}]
 }
-export async function api<T>(action:string,payload?:unknown):Promise<T>{
+export async function api<T>(action:string,payload?:unknown,signal?:AbortSignal):Promise<T>{
   const nodeId = payload && typeof payload === "object" && "instanceId" in payload && typeof payload.instanceId === "string" ? payload.instanceId : undefined
   try {
-    const response=await fetch('/api/'+action,payload===undefined?{cache:'no-store'}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    const response=await fetch('/api/'+action,payload===undefined?{cache:'no-store',signal}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal})
     const data=await response.json()
+    signal?.throwIfAborted()
     if (response.ok && !data?.error && !(Array.isArray(data?.errors) && data.errors.length)) diagnostics.resolveScope(requestDiagnosticScope(action, nodeId))
     collectResponseDiagnostics(action, data, diagnostics, {nodeId, ok: response.ok})
     if(!response.ok)throw new Error(data.error||data.errors?.join('\n')||'요청 실패')
     return data
   } catch (error) {
+    // Query cancellation is navigation/lifecycle, not a failed user operation.
+    if (signal?.aborted) throw error
     const message = error instanceof Error ? error.message : String(error)
     if (!diagnostics.hasMessage(message, "error", nodeId) && !message.split("\n").every(part => diagnostics.hasMessage(part, "error", nodeId))) diagnostics.report({severity:'error', message, source:`요청: ${action.split('?')[0]}`, nodeId, scope: requestDiagnosticScope(action, nodeId)})
     throw error

@@ -87,7 +87,7 @@ class ProductStorageTests(unittest.TestCase):
                 self.assertEqual(server.get_file(row['id']).name, p['label'])
                 request = Request({'type': 'http', 'method': 'GET', 'path': '/api/download',
                                    'path_params': {'action': 'download'}, 'query_string': ('id=' + row['id']).encode(), 'headers': []})
-                response = asyncio.run(server.api(request))
+                response = asyncio.run(server.download_endpoint(request))
                 self.assertIn(p['label'], unquote(response.headers['content-disposition']))
                 from tests.test_workspace import request as api_request
                 with patch.object(server.sys, 'platform', 'darwin'), patch.object(server.subprocess, 'run') as reveal:
@@ -122,7 +122,7 @@ class ProductStorageTests(unittest.TestCase):
             row = server.register(job / products[0]['file'], products[0]['label'], job.name, 'image')
             request = Request({'type': 'http', 'method': 'GET', 'path_params': {'action': 'download'},
                                'query_string': ('id=' + row['id']).encode(), 'headers': []})
-            response = asyncio.run(server.api(request))
+            response = asyncio.run(server.download_endpoint(request))
             self.assertEqual(response.headers['content-disposition'], 'attachment; filename="same.fts"')
 
     def test_invalid_names_are_rejected_before_execution(self):

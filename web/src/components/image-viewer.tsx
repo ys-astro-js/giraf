@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, useId, useMemo } from "react"
+import { useQueries, useQuery } from "@tanstack/react-query"
+import { imageInfoQueryOptions, pixelQueryOptions } from "@/lib/image-queries"
 import {
   Plus,
   Minus,
@@ -40,7 +42,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Profile } from "@/components/viewer-profile"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { api, type Frame } from "@/lib/workbench"
+import type { Frame } from "@/lib/workbench"
 import { Blank } from "@/components/workbench-controls"
 
 import {
@@ -52,25 +54,6 @@ import {
 export type ViewerViewport = { scale: number; x: number; y: number }
 export type ViewerMarker = { x: number; y: number; label: string }
 
-type ImageInfo = {
-  width: number
-  height: number
-  mean: number
-  median: number
-  std: number
-  min: number
-  max: number
-  low: number
-  high: number
-  header: string
-}
-type Pixel = {
-  x: number
-  y: number
-  value: number
-  row: (number | null)[]
-  column: (number | null)[]
-}
 export function ImageViewer({
   frame,
   onPick,
@@ -110,15 +93,28 @@ export function ImageViewer({
     !!onPick && !selectionMode
   )
   const [retry, setRetry] = useState(0)
-  const [loading, setLoading] = useState(false)
+  const [imageLoading, setLoading] = useState(false)
   const [coordinates, setCoordinates] = useState<[string, string]>(["", ""]),
     [coordinateError, setCoordinateError] = useState("")
-  const [info, setInfo] = useState<ImageInfo | null>(null),
-    [error, setError] = useState(""),
+  const [imageError, setError] = useState(""),
     [stretch, setStretch] = useState("asinh"),
-    [range, setRange] = useState<[string, string]>(["", ""]),
-    [applied, setApplied] = useState<[number, number] | null>(null),
-    [pixel, setPixel] = useState<Pixel | null>(null)
+    [editedRange, setRange] = useState<[string, string] | null>(null),
+    [applied, setApplied] = useState<[number, number] | null>(null)
+  const [pixelSelection, setPixelSelection] = useState<{
+    id: string; x: number; y: number
+  } | null>(null)
+  const infoQuery = useQuery(imageInfoQueryOptions(frame?.id))
+  const pixelQuery = useQuery(pixelQueryOptions(
+    !onPick && pixelSelection?.id === frame?.id ? pixelSelection?.id : undefined,
+    pixelSelection?.x ?? 0,
+    pixelSelection?.y ?? 0
+  ))
+  const info = infoQuery.data
+  const range: [string, string] = editedRange ?? (info
+    ? [displayNumber(info.low), displayNumber(info.high)] : ["", ""])
+  const pixel = pixelSelection?.id === frame?.id && !onPick ? pixelQuery.data : undefined
+  const error = infoQuery.error?.message || pixelQuery.error?.message || imageError
+  const loading = !!frame && (infoQuery.isLoading || imageLoading)
   const [localScale, setLocalScale] = useState(1),
     [localPan, setLocalPan] = useState({ x: 0, y: 0 }),
     [image, setImage] = useState<HTMLImageElement | null>(null),
@@ -160,42 +156,21 @@ export function ImageViewer({
       y: number
       startX: number
       startY: number
-    } | null>(null),
-    pixelSequence = useRef(0)
+    } | null>(null)
   useEffect(() => {
-    let cancelled = false
-    ++pixelSequence.current
     if (cursorGuides.current) cursorGuides.current.hidden = true
     setCoordinates(["", ""])
     setCoordinateError("")
-    setLoading(!!frame)
-    setInfo(null)
+    setLoading(false)
     setImage(null)
-    setPixel(null)
+    setPixelSelection(null)
     setCross(null)
     setLocalScale(1)
     setLocalPan({ x: 0, y: 0 })
     setApplied(null)
+    setRange(null)
     setRangeError("")
     setError("")
-    if (frame)
-      api<ImageInfo>("info?id=" + frame.id)
-        .then((r) => {
-          if (!cancelled) {
-            setInfo(r)
-            setRange([displayNumber(r.low), displayNumber(r.high)])
-          }
-        })
-        .catch((e) => {
-          if (!cancelled) {
-            setError(e.message)
-            setLoading(false)
-          }
-        })
-    return () => {
-      cancelled = true
-      ++pixelSequence.current
-    }
   }, [frame?.id, retry])
   useEffect(() => {
     if (!frame || !info) return
@@ -227,7 +202,7 @@ export function ImageViewer({
     return () => {
       cancelled = true
     }
-  }, [frame?.id, info, stretch, applied, sharedRange])
+  }, [frame?.id, info, stretch, applied, sharedRange, retry])
   useEffect(() => {
     if (!box.current) return
     const observer = new ResizeObserver((entries) => {
@@ -335,19 +310,11 @@ export function ImageViewer({
     setCross({ x, y })
     setCoordinates([String(x), String(y)])
     setCoordinateError("")
-    setPixel(null)
     if (onPick) {
       if (commit) onPick(x, y)
       return
     }
-    const seq = ++pixelSequence.current
-    api<Pixel>(`pixel?id=${frame.id}&x=${x}&y=${y}`)
-      .then((p) => {
-        if (seq === pixelSequence.current) setPixel(p)
-      })
-      .catch((e) => {
-        if (seq === pixelSequence.current) setError(e.message)
-      })
+    setPixelSelection({ id: frame.id, x, y })
   }
   function pick(clientX: number, clientY: number) {
     if (!info || !frame || !canvas.current) return
@@ -589,8 +556,8 @@ export function ImageViewer({
                           onChange={(event) => {
                             setRange((value) =>
                               i === 0
-                                ? [event.target.value, value[1]]
-                                : [value[0], event.target.value]
+                                ? [event.target.value, (value ?? range)[1]]
+                                : [(value ?? range)[0], event.target.value]
                             )
                             setRangeError("")
                           }}
@@ -882,6 +849,7 @@ export function ImageViewer({
               onClick={() => {
                 setError("")
                 setRetry((v) => v + 1)
+                void infoQuery.refetch()
               }}
             >
               다시 시도
@@ -907,27 +875,20 @@ export function ViewerWorkspace({
   onStatistics?: () => void
 }) {
   const [view, setView] = useState("split"),
-    [same, setSame] = useState(false),
-    [range, setRange] = useState<[number, number] | undefined>()
-  useEffect(() => {
-    let cancelled = false
-    if (same && ids.length > 1)
-      Promise.all(ids.map((id) => api<ImageInfo>("info?id=" + id)))
-        .then((infos) => {
-          if (!cancelled)
-            setRange([
-              Math.min(...infos.map((i) => i.low)),
-              Math.max(...infos.map((i) => i.high)),
-            ])
-        })
-        .catch(() => {
-          if (!cancelled) setRange(undefined)
-        })
-    else setRange(undefined)
-    return () => {
-      cancelled = true
-    }
-  }, [same, ids])
+    [same, setSame] = useState(false)
+  const comparison = useQueries({
+    queries: same && ids.length > 1
+      ? [...new Set(ids)].map(imageInfoQueryOptions)
+      : [],
+  })
+  const low = comparison.length && comparison.every(result => result.isSuccess)
+    ? Math.min(...comparison.map(result => result.data!.low)) : undefined
+  const high = low !== undefined
+    ? Math.max(...comparison.map(result => result.data!.high)) : undefined
+  const range = useMemo<[number, number] | undefined>(
+    () => low !== undefined && high !== undefined ? [low, high] : undefined,
+    [low, high]
+  )
   return (
     <div className="viewer-workspace">
       <div

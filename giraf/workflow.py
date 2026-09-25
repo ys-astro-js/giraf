@@ -1,5 +1,6 @@
 """Server-owned sequential execution of a snapshot of the workflow graph."""
 from copy import deepcopy
+from graphlib import CycleError, TopologicalSorter
 from pathlib import Path
 import json
 import re
@@ -28,12 +29,18 @@ def workflow_order(graph):
         if link['source'] not in incoming or link['target'] not in incoming:
             raise ValueError('없는 작업에 연결되어 있습니다. 연결을 다시 설정해 주세요.')
         incoming[link['target']].add(link['source'])
+    sorter = TopologicalSorter(incoming)
+    try:
+        sorter.prepare()
+    except CycleError as exc:
+        raise ValueError('순환 연결이 있습니다. 되돌아가는 연결을 해제해 주세요.') from exc
     order = []
-    while len(order) < len(ids):
-        ready = [id for id in ids if id not in order and incoming[id].issubset(order)]
-        if not ready:
-            raise ValueError('순환 연결이 있습니다. 되돌아가는 연결을 해제해 주세요.')
+    positions = {id: index for index, id in enumerate(ids)}
+    while sorter.is_active():
+        # Keep the existing input order within each ready batch.
+        ready = sorted(sorter.get_ready(), key=positions.__getitem__)
         order.extend(ready)
+        sorter.done(*ready)
     return order
 
 

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from uuid import uuid4
 from .jobs import atomic_json
+from .document_schema import ImportedPreferences, PortableDocument, Preferences
 
 
 class WorkflowDocuments:
@@ -23,25 +24,16 @@ class WorkflowDocuments:
         return path
 
     def validate(self, data):
-        if not isinstance(data, dict):
-            raise ValueError('워크플로우 파일을 확인해 주세요.')
-        graph = data.get('taskMap')
-        if not isinstance(graph, dict) or not all(isinstance(graph.get(key), list) for key in ('tasks', 'connections')):
-            raise ValueError('올바른 GIRAF 워크플로우 파일을 선택해 주세요.')
-        if any(not isinstance(task, dict) or not isinstance(task.get('id'), str) for task in graph['tasks']):
-            raise ValueError('워크플로우 작업 정보를 확인해 주세요.')
-        return data
+        return Preferences.model_validate(data).model_dump(by_alias=True, exclude_unset=True)
 
     def read(self, value):
         path = self.path(value)
-        data = self.validate(json.loads(path.read_text()))
-        if data.get('format') != 'giraf-workflow' or data.get('version') != 1:
-            raise ValueError('지원하지 않는 워크플로우 파일입니다.')
-        return {**data['preferences'], 'taskMap': data['taskMap'],
-                '_document': {'path': str(path), 'name': data['name'], 'saved': True}}
+        data = PortableDocument.model_validate_json(path.read_text()).model_dump(exclude_unset=True)
+        return self.validate({**data.get('preferences', {}), 'taskMap': data['taskMap'],
+                              '_document': {'path': str(path), 'name': data['name'], 'saved': True}})
 
     def write(self, data):
-        self.validate(data)
+        data = self.validate(data)
         meta = data['_document']
         name = str(meta['name']).strip()
         if not name or len(name) > 120:
@@ -53,39 +45,19 @@ class WorkflowDocuments:
                            'preferences': {k: v for k, v in data.items() if k not in ('_document', 'taskMap', 'files')}})
 
     def import_document(self, data):
-        if isinstance(data, dict) and data.get('format') == 'giraf-workflow':
-            if data.get('version') != 1:
-                raise ValueError('지원하지 않는 워크플로우 파일입니다.')
-            if not isinstance(data.get('preferences', {}), dict):
-                raise ValueError('워크플로우 설정 정보를 확인해 주세요.')
-            data = {**data.get('preferences', {}), 'taskMap': data.get('taskMap'),
-                    '_document': {'name': data.get('name', '불러온 워크플로우')}}
-        self.validate(data)
-        graph = data['taskMap']
-        if graph.get('version') != 1:
-            raise ValueError('지원하지 않는 워크플로우 버전입니다.')
-        if not isinstance(graph.get('runs', []), list) or not isinstance(graph.get('view', {}), dict):
-            raise ValueError('워크플로우 화면 정보를 확인해 주세요.')
-        for task in graph['tasks']:
-            if not isinstance(task.get('task'), str) or not isinstance(task.get('label'), str):
-                raise ValueError('워크플로우 작업 정보를 확인해 주세요.')
-            if not all(isinstance(task.get(key), dict) for key in ('draft', 'preprocess', 'mapping', 'packageValues', 'expressions', 'filePolicy')):
-                raise ValueError('워크플로우 설정 정보를 확인해 주세요.')
-            if not isinstance(task.get('instrument', []), list):
-                raise ValueError('워크플로우 설정 정보를 확인해 주세요.')
-            if not all(isinstance(task['draft'].get(key), dict) for key in ('parameters', 'inputs', 'output', 'exam')):
-                raise ValueError('워크플로우 입력 정보를 확인해 주세요.')
-        for connection in graph['connections']:
-            if not isinstance(connection, dict) or not isinstance(connection.get('source'), dict):
-                raise ValueError('워크플로우 연결 정보를 확인해 주세요.')
-            source = connection['source']
-            if source.get('kind') not in ('files', 'result', 'pending') or (source['kind'] in ('files', 'result') and not isinstance(source.get('ids'), list)):
-                raise ValueError('워크플로우 연결 정보를 확인해 주세요.')
-        graph = {**graph, 'runs': graph.get('runs', []), 'view': {**self.new()['taskMap']['view'], **graph.get('view', {})}}
-        data = {**data, 'taskMap': graph}
+        if isinstance(data, dict) and 'format' in data:
+            portable = PortableDocument.model_validate(data).model_dump(exclude_unset=True)
+            data = {**portable.get('preferences', {}), 'taskMap': portable['taskMap'],
+                    '_document': {'name': portable['name']}}
+        data = ImportedPreferences.model_validate(data).model_dump(by_alias=True, exclude_unset=True)
         draft = self.new()
+        graph = data['taskMap']
+        graph = {**graph, 'runs': graph.get('runs', []),
+                 'view': {**draft['taskMap']['view'], **graph.get('view', {})}}
         draft.update(data)
-        draft['_document'] = {**self.new()['_document'], 'name': data.get('_document', {}).get('name', '불러온 워크플로우')}
+        draft['taskMap'] = graph
+        draft['_document'] = {**self.new()['_document'],
+                              'name': data.get('_document', {}).get('name', '불러온 워크플로우')}
         self.write(draft)
         return self.read(draft['_document']['path'])
 

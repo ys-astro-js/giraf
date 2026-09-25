@@ -8,6 +8,16 @@ def graph():
             'links': [{'source': 'a', 'target': 'c', 'role': 'zero', 'kind': 'image', 'multiple': False}, {'source': 'b', 'target': 'c', 'role': 'images', 'kind': 'image', 'multiple': True}]}
 
 class WorkflowTests(unittest.TestCase):
+    def test_ready_batches_keep_original_node_order(self):
+        g = {'nodes': [{'id': id} for id in ['z', 'y', 'a', 'b', 'free']],
+             'links': [{'source': 'a', 'target': 'y'}, {'source': 'b', 'target': 'z'}]}
+        self.assertEqual(workflow_order(g), ['a', 'b', 'free', 'z', 'y'])
+        g['links'].append(g['links'][0].copy())
+        self.assertEqual(workflow_order(g), ['a', 'b', 'free', 'z', 'y'])
+        g['nodes'].append({'id': 'a'})
+        with self.assertRaisesRegex(ValueError, '중복'):
+            workflow_order(g)
+
     def test_topology_and_cycle_and_missing_source(self):
         g=graph(); self.assertEqual(workflow_order(g), ['a','b','c'])
         g['links'].append(dict(source='c',target='a',role='input',kind='image',multiple=True))

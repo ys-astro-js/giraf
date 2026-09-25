@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react"
-import { api, type Job } from "@/lib/workbench"
+import { type Job } from "@/lib/workbench"
+import { useQueryClient } from "@tanstack/react-query"
+import { jobQueryOptions } from "@/lib/queries"
 import { diagnostics, jobDiagnosticContext } from "@/lib/diagnostics"
 
 export function jobsNeedingDiagnostics(
@@ -18,6 +20,7 @@ export function jobsNeedingDiagnostics(
 
 // Workflow summaries omit logs. Read each finished run once without opening its tray.
 export function useJobDiagnostics(jobs: Job[]) {
+  const queryClient = useQueryClient()
   const pending = useRef<string[]>([])
   const observed = useRef(new Set<string>())
   const workers = useRef(0)
@@ -34,7 +37,7 @@ export function useJobDiagnostics(jobs: Job[]) {
           const id = pending.current.shift()!
           // api records request failures as well as the returned log diagnostics.
           try {
-            await api<Job>(`job?id=${encodeURIComponent(id)}&details=1`)
+            await queryClient.fetchQuery(jobQueryOptions(id))
           } catch {
             /* Already reported. */
           }
@@ -44,5 +47,5 @@ export function useJobDiagnostics(jobs: Job[]) {
       }
     }
     while (pending.current.length && workers.current < 3) void drain()
-  }, [jobs])
+  }, [jobs, queryClient])
 }

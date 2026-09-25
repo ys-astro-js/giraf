@@ -1,3 +1,5 @@
+import { useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query"
+import { apiQueryOptions, jobQueryOptions, activeJob } from "@/lib/queries"
 import { useJobDiagnostics } from "@/hooks/use-job-diagnostics"
 import { workflowDocument } from "@/lib/workflow-document"
 import { DiagnosticsButton } from "@/components/diagnostics-button"
@@ -149,9 +151,17 @@ const initial: Preferences = {
   instrument: [],
   packageValues: {},
 }
-const active = (j: Job) => ["queued", "running", "waiting"].includes(j.state)
+const active = activeJob
+const workflowOptions = apiQueryOptions<WorkflowRun | null>("workflow")
+function combineJobs(results: UseQueryResult<Job>[]) {
+  return {
+    jobs: results.flatMap(result => result.data ? [result.data] : []),
+    error: results.find(result => result.error)?.error,
+  }
+}
 
 function App() {
+  const queryClient = useQueryClient()
   const [catalog, setCatalog] = useState<Catalog | null>(null),
     [workspace, setWorkspace] = useState<Workspace>({
       folder: "",
@@ -170,7 +180,7 @@ function App() {
   const [revealNode, setRevealNode] = useState<{ id: string; revision: number }>()
   const [revealConnection, setRevealConnection] = useState<{ id: string; revision: number }>()
   const [loadAttempt, setLoadAttempt] = useState(0)
-  const [loadError, setLoadError] = useState(false)
+  const [loadFailure, setLoadError] = useState(false)
   const [ready, setReady] = useState(false),
     [error, setError] = useState(""),
     [, setSaveState] = useState("저장됨"),
@@ -209,7 +219,22 @@ function App() {
   const isMobile = useIsMobile()
   const settingsVisible = isMobile ? mobilePanel === "detail" : inspectorOpen
   useJobDiagnostics(jobs)
-  const [workflow, setWorkflow] = useState<WorkflowRun | null>(null)
+  const workflowMutation = useMutation({
+    mutationFn: ({ action, payload }: { action: string; payload: unknown }) => api<WorkflowRun>(action, payload),
+    onMutate: () => queryClient.cancelQueries({ queryKey: workflowOptions.queryKey }),
+    onSuccess: value => queryClient.setQueryData(workflowOptions.queryKey, value),
+  })
+  const workflowQuery = useQuery({
+    ...workflowOptions,
+    enabled: ready && !workflowMutation.isPending,
+    refetchInterval: 1200,
+    refetchIntervalInBackground: true,
+  })
+  const workflow = workflowQuery.data ?? null
+  const setWorkflow = useCallback((value: WorkflowRun | null | ((previous: WorkflowRun | null) => WorkflowRun | null)) => {
+    queryClient.setQueryData(workflowOptions.queryKey, previous =>
+      typeof value === "function" ? value(previous ?? null) : value)
+  }, [queryClient])
   const [workflowStarting, setWorkflowStarting] = useState(false)
   const workflowLock = useRef(false)
   const [lastExecution, setLastExecution] = useState<ExecutionReference>()
@@ -266,65 +291,68 @@ function App() {
     []
   )
   const refresh = useCallback(async () => {
-    const w = await api<Workspace>("workspace")
+    const options = apiQueryOptions<Workspace>("workspace")
+    await queryClient.cancelQueries({ queryKey: options.queryKey })
+    const w = await queryClient.fetchQuery(options)
     setWorkspace(w)
     remember(w.files)
-  }, [remember])
+  }, [remember, queryClient])
+  // Hydrate the editable document once; background queries must never reset edits.
+  const bootstrap = useQuery({
+    queryKey: ["workbench-bootstrap", loadAttempt],
+    enabled: !ready,
+    staleTime: Infinity,
+    gcTime: 0,
+    queryFn: ({ signal }) => Promise.all([
+      api<Catalog>("catalog", undefined, signal),
+      api<Preferences & { files: Frame[] }>("task-preferences", undefined, signal),
+      api<Workspace>("workspace", undefined, signal),
+      api<Job[]>("jobs", undefined, signal),
+    ]),
+  })
+  const loadError = loadFailure || bootstrap.isError
   useEffect(() => {
-    let done = false
-    setLoadError(false)
-    Promise.all([
-      api<Catalog>("catalog"),
-      api<Preferences & { files: Frame[] }>("task-preferences"),
-      api<Workspace>("workspace"),
-      api<Job[]>("jobs"),
-    ])
-      .then(([c, p, w, j]) => {
-        if (done) return
-        let recovered = p
-        try {
-          const pending = localStorage.getItem("giraf-pending-draft")
-          if (pending) {
-            const recovery = JSON.parse(pending)
-            if (recovery._document?.path === p._document?.path) {
-              recovered = recovery
-              changed.current = true
-            }
-          }
-        } catch {
-          /* Ignore a malformed browser recovery copy. */
+    if (ready || !bootstrap.data || loadError) return
+    const [c, p, w, j] = bootstrap.data
+    let recovered = p
+    try {
+      const pending = localStorage.getItem("giraf-pending-draft")
+      if (pending) {
+        const recovery = JSON.parse(pending)
+        if (recovery._document?.path === p._document?.path) {
+          recovered = recovery
+          changed.current = true
         }
-        const pref = {
-          ...initial,
-          ...recovered,
-          drafts: recovered.drafts || {},
-          packageValues: { ...defaults(c.ccdred), ...recovered.packageValues },
-        }
-        setCatalog(c)
-        setSaveState(pref._document?.saved ? "저장됨" : "작업을 추가하면 자동 저장됩니다")
-        setPrefs(pref)
-        setMap(reconcileRuns(migrateMap(pref, c), j))
-        setWorkspace(w)
-        setJobs(j)
-        remember([
-          ...(p.files || []),
-          ...w.files,
-          ...j.flatMap((j) => j.products || []),
-        ])
-        setReady(true)
-      })
-      .catch(() => {
-        if (!done) setLoadError(true)
-      })
-    return () => {
-      done = true
+      }
+    } catch {
+      /* Ignore a malformed browser recovery copy. */
     }
-  }, [remember, loadAttempt])
-  function update(fn: (m: TaskMap) => TaskMap) {
+    const pref = {
+      ...initial,
+      ...recovered,
+      drafts: recovered.drafts || {},
+      packageValues: { ...defaults(c.ccdred), ...recovered.packageValues },
+    }
+    // The server snapshot initializes the independently editable document once.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCatalog(c)
+    setSaveState(pref._document?.saved ? "저장됨" : "작업을 추가하면 자동 저장됩니다")
+    setPrefs(pref)
+    setMap(reconcileRuns(migrateMap(pref, c), j))
+    setWorkspace(w)
+    setJobs(j)
+    remember([
+      ...(p.files || []),
+      ...w.files,
+      ...j.flatMap((j) => j.products || []),
+    ])
+    setReady(true)
+  }, [bootstrap.data, ready, loadError, remember])
+  const update = useCallback((fn: (m: TaskMap) => TaskMap) => {
     changed.current = true
     setSaveState("저장 중")
     setMap(fn)
-  }
+  }, [])
   useEffect(() => {
     if (!ready || !changed.current) return
     const revision = ++saveRevision.current
@@ -402,57 +430,36 @@ function App() {
     anchor.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
+  const publishedWorkflowJobs = useRef("")
   useEffect(() => {
-    if (!ready) return
-    let disposed = false
-    let timer: ReturnType<typeof setTimeout>
-    let previous = ""
-    async function pollWorkflow() {
-      try {
-        const w = await api<WorkflowRun | null>("workflow")
-        if (disposed) return
-        setWorkflow(w)
-        if (w && workflowActive(w)) {
-          setLastExecution(current => current?.kind === "workflow" && current.id === w.id ? current : {kind: "workflow", id: w.id})
-        }
-        const current = w
-          ? [...w.jobs, ...(w.currentJob ? [w.currentJob] : [])]
-          : []
-        const signature = JSON.stringify(current)
-        if (current.length && signature !== previous) {
-          previous = signature
-          setJobs((old) =>
-            [
-              ...current,
-              ...old.filter((j) => !current.some((n) => n.id === j.id)),
-            ].filter((j, i, all) => all.findIndex((n) => n.id === j.id) === i)
-          )
-          remember(current.flatMap((j) => j.products || []))
-          update((m) =>
-            current.reduce((next, j) => {
-              if (!j.manifest?.instanceId) return next
-              return catalog
-                ? publishWorkflowRun(next, j.manifest.instanceId, j, catalog)
-                : publishRun(next, j.manifest.instanceId, j)
-            }, m)
-          )
-        }
-        if (w?.currentJob && w.state === "waiting") {
-          setSelectedJob(w.currentJob.id)
-          setTrayOpen(true)
-        }
-      } catch (e) {
-        if (!disposed) setError((e as Error).message)
-      } finally {
-        if (!disposed) timer = setTimeout(pollWorkflow, 1200)
-      }
+    if (!ready || !workflow) return
+    if (workflowActive(workflow)) {
+      // Publish the external run into the editor's execution history.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLastExecution(current => current?.kind === "workflow" && current.id === workflow.id
+        ? current : {kind: "workflow", id: workflow.id})
     }
-    pollWorkflow()
-    return () => {
-      disposed = true
-      clearTimeout(timer)
+    const current = [...workflow.jobs, ...(workflow.currentJob ? [workflow.currentJob] : [])]
+    const signature = JSON.stringify(current)
+    if (current.length && signature !== publishedWorkflowJobs.current) {
+      publishedWorkflowJobs.current = signature
+      setJobs(old => [...current, ...old.filter(job => !current.some(next => next.id === job.id))]
+        .filter((job, index, all) => all.findIndex(next => next.id === job.id) === index))
+      remember(current.flatMap(job => job.products || []))
+      update(map => current.reduce((next, job) => {
+        if (!job.manifest?.instanceId) return next
+        return catalog ? publishWorkflowRun(next, job.manifest.instanceId, job, catalog)
+          : publishRun(next, job.manifest.instanceId, job)
+      }, map))
     }
-  }, [ready, remember, catalog])
+    if (workflow.currentJob && workflow.state === "waiting") {
+      setSelectedJob(workflow.currentJob.id)
+      setTrayOpen(true)
+    }
+  }, [ready, workflow, catalog, remember, update])
+  useEffect(() => {
+    if (workflowQuery.error) toast.add({ title: workflowQuery.error.message, type: "error" })
+  }, [workflowQuery.error])
   async function runWorkflow(subflowId?: string) {
     if (!catalog || workflowLock.current || workflowActive(workflow)) return
     workflowLock.current = true
@@ -461,12 +468,11 @@ function App() {
     setWorkflowStarting(true)
     setError("")
     try {
-      const w = await api<WorkflowRun>(
-        "workflow-run",
-        subflowId ? subflowRequest(map, catalog, workspace.folder, subflowId) : workflowRequest(map, catalog, workspace.folder)
-      )
+      const w = await workflowMutation.mutateAsync({
+        action: "workflow-run",
+        payload: subflowId ? subflowRequest(map, catalog, workspace.folder, subflowId) : workflowRequest(map, catalog, workspace.folder),
+      })
       setLastExecution({kind: "workflow", id: w.id})
-      setWorkflow(w)
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -476,7 +482,7 @@ function App() {
   }
   async function cancelWorkflow() {
     try {
-      setWorkflow(await api<WorkflowRun>("workflow-cancel", {}))
+      await workflowMutation.mutateAsync({ action: "workflow-cancel", payload: {} })
     } catch (e) {
       setError((e as Error).message)
     }
@@ -513,59 +519,35 @@ function App() {
     jobs,
     lastExecution,
   })
-  const running = jobs
-    .filter(active)
-    .map((j) => j.id)
-    .join(",")
+  const running = jobs.some(active)
+  const observedJobs = useMemo(() => [...new Set([
+    ...jobs.filter(active).map(job => job.id),
+    ...(selectedJob ? [selectedJob] : []),
+  ])], [jobs, selectedJob])
+  const jobResults = useQueries({
+    queries: observedJobs.map(id => ({ ...jobQueryOptions(id), enabled: ready })),
+    combine: combineJobs,
+  })
+  const appliedJobs = useRef(new Map<string, Job>())
   useEffect(() => {
-    if (!running) return
-    let done = false
-    const poll = async () => {
-      try {
-        const j = await Promise.all(
-          running
-            .split(",")
-            .map((id) => api<Job>("job?id=" + id + "&details=1"))
-        )
-        if (done) return
-        setJobs((old) => old.map((o) => j.find((n) => n.id === o.id) || o))
-        remember(j.flatMap((j) => j.products || []))
-        update((m) =>
-          j.reduce(
-            (m, j) =>
-              j.manifest?.instanceId
-                ? publishRun(m, j.manifest.instanceId, j)
-                : m,
-            m
-          )
-        )
-        if (j.some((j) => !active(j))) await refresh()
-      } catch (e) {
-        if (!done) setError((e as Error).message)
-      }
-    }
-    poll()
-    const timer = setInterval(poll, 1200)
-    return () => {
-      done = true
-      clearInterval(timer)
-    }
-  }, [running, refresh, remember])
+    const incoming = jobResults.jobs.filter(job => appliedJobs.current.get(job.id) !== job)
+    if (!incoming.length) return
+    // Opening historical logs must not publish that run over the current graph.
+    const tracked = incoming.filter(job => {
+      const previous = appliedJobs.current.get(job.id) || jobs.find(current => current.id === job.id)
+      return active(job) || (previous && active(previous))
+    })
+    const completed = tracked.some(job => !active(job))
+    incoming.forEach(job => appliedJobs.current.set(job.id, job))
+    setJobs(old => old.map(job => incoming.find(next => next.id === job.id) || job))
+    remember(incoming.flatMap(job => job.products || []))
+    if (tracked.length) update(map => tracked.reduce((next, job) => job.manifest?.instanceId
+      ? publishRun(next, job.manifest.instanceId, job) : next, map))
+    if (completed) void refresh().catch(error => setError(error.message))
+  }, [jobResults.jobs, jobs, refresh, remember, update])
   useEffect(() => {
-    if (!selectedJob) return
-    let done = false
-    api<Job>("job?id=" + selectedJob + "&details=1")
-      .then((j) => {
-        if (!done) {
-          setJobs((old) => old.map((o) => (o.id === j.id ? j : o)))
-          remember(j.products || [])
-        }
-      })
-      .catch((e) => setError(e.message))
-    return () => {
-      done = true
-    }
-  }, [selectedJob, remember])
+    if (jobResults.error) toast.add({ title: jobResults.error.message, type: "error" })
+  }, [jobResults.error])
   useEffect(() => {
     if (!asset) return
     setAssetText("")
@@ -1106,7 +1088,7 @@ function App() {
                     action={
                       <Button
                         variant="outline"
-                        onClick={() => setLoadAttempt((v) => v + 1)}
+                        onClick={() => { setLoadError(false); setLoadAttempt((v) => v + 1) }}
                       >
                         다시 시도
                       </Button>
@@ -1370,11 +1352,10 @@ function App() {
             <Button
               onClick={async () => {
                 try {
-                  setWorkflow(
-                    await api<WorkflowRun>("workflow-confirm", {
-                      token: workflow?.plan?.token,
-                    })
-                  )
+                  await workflowMutation.mutateAsync({
+                    action: "workflow-confirm",
+                    payload: { token: workflow?.plan?.token },
+                  })
                 } catch (e) {
                   setError((e as Error).message)
                 }

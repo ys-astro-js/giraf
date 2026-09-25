@@ -1,6 +1,6 @@
 """Local workbench API. Files are referenced by registered IDs, never shell text."""
 from __future__ import annotations
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 import hashlib
 import io
@@ -16,6 +16,9 @@ from PIL import Image
 from send2trash import send2trash
 from starlette.applications import Starlette
 from starlette.requests import Request
+from starlette.exceptions import HTTPException
+from pydantic import TypeAdapter, ValidationError
+from typing import Any
 from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Route, Mount
 from starlette.staticfiles import StaticFiles
@@ -253,248 +256,377 @@ workflow_manager = WorkflowManager(ROOT / '.workflow', workflow_prepare,
     lambda id: job_info(RUNS / id), workflow_cancel_job)
 
 
-async def api(request: Request):
-    try:
-        # Local browser only: reject cross-origin mutating requests.
-        if request.method == 'POST':
+# Validate the JSON envelope before endpoint code accesses it.
+payload_adapter = TypeAdapter(dict[str, Any])
+
+
+async def request_payload(request):
+    return payload_adapter.validate_python(await request.json(), strict=True)
+
+
+class LocalOriginMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope['type'] == 'http' and scope['method'] == 'POST' and scope['path'].startswith('/api/'):
+            request = Request(scope)
             origin = request.headers.get('origin')
             if origin and origin != str(request.base_url).rstrip('/'):
-                return JSONResponse({'error': '허용하지 않는 요청 출처입니다.'}, status_code=403)
-        action = request.path_params['action']
-        q = request.query_params
-        payload = await request.json() if request.method == 'POST' else {}
-        if action == 'catalog':
-            return JSONResponse(catalog())
-        if action == 'workflow-diagnostics':
-            if request.method != 'POST': raise ValueError('POST 요청이 필요합니다.')
-            def resolve_diagnostic(id):
-                row = registry.get(id)
-                if row is None:
-                    row = workspace.get('file_refs', {}).get(id)
-                return row
-            return JSONResponse({'diagnostics': await run_in_threadpool(workflow_diagnostics, payload, resolve_diagnostic)})
-        if action in ('task-preferences', 'workflow-documents'):
-            with lock:
-                store = WorkflowDocuments(workspace['folder'])
-                selected = workspace.setdefault('workflow_documents', {})
-                current = selected.get(workspace['folder'])
-                if action == 'workflow-documents' and request.method == 'GET':
-                    return JSONResponse(store.list())
-                if action == 'workflow-documents':
-                    if (workflow_manager.current() or {}).get('state') in ('running', 'waiting', 'confirmation', 'cancelling'):
-                        raise ValueError('실행을 마친 뒤 워크플로우를 전환해 주세요.')
-                    op = payload.get('operation')
-                    if op == 'open': data = store.read(payload['path'])
-                    elif op == 'new': data = store.new()
-                    elif op == 'import': data = store.import_document(payload['document'])
-                    else: raise ValueError('지원하지 않는 워크플로우 동작입니다.')
-                    selected[workspace['folder']] = data
-                    save()
-                    return JSONResponse(data)
-                if request.method == 'POST':
-                    if '_document' not in payload:
-                        payload = {**payload, '_document': (current or store.new())['_document']}
-                    store.write(payload)
-                    refs = workspace.setdefault('file_refs', {})
-                    for id, row in registry.items():
-                        refs[id] = {k: row.get(k) for k in ('path', 'label', 'job', 'asset')}
-                    if not current or current['_document']['path'] == payload['_document']['path']:
-                        selected[workspace['folder']] = payload
-                    save()
-                    data = payload
-                else:
-                    if current:
-                        path = current['_document']['path']
-                        data = store.read(path) if Path(path).is_file() else current
-                    else:
-                        choices = store.list()
-                        data = store.read(choices[0]['path']) if choices else store.new()
-                        # Migrate the old global draft exactly once, in its original folder.
-                        legacy = workspace.get('task_preferences')
-                        if legacy and legacy.get('taskMap'):
-                            data = {**legacy, '_document': {**store.new()['_document'], 'name': '워크플로우'}}
-                            store.write(data)
-                            workspace.pop('task_preferences', None)
-                        selected[workspace['folder']] = data
-                        save()
-                data = dict(data)
-                data['files'] = [register(r['path'], r.get('label'), r.get('job'), r.get('asset')) for r in workspace.get('file_refs', {}).values() if Path(r['path']).is_file()]
-                return JSONResponse(data)
-        if action == 'workflow':
-            return JSONResponse(workflow_manager.current())
-        if action in ('workflow-run', 'workflow-cancel', 'workflow-confirm'):
-            if request.method != 'POST': raise ValueError('POST 요청이 필요합니다.')
-            if action == 'workflow-run':
-                if any(status(p.parent)['state'] in ('queued','running','waiting') for p in RUNS.glob('*/manifest.json')):
-                    raise ValueError('실행 중인 작업이 끝난 뒤 워크플로우를 실행해 주세요.')
-                return JSONResponse(workflow_manager.start(payload))
-            if action == 'workflow-cancel': workflow_manager.cancel()
-            else: workflow_manager.confirm(payload.get('token'))
-            return JSONResponse(workflow_manager.current())
-        if action in ('task-validate','task-run'):
-            if action == 'task-run' and (workflow_manager.current() or {}).get('state') in ('running','waiting','confirmation','cancelling'):
-                raise ValueError('워크플로우가 실행 중입니다.')
-            def resolve(id):
-                path=get_file(id)
-                return register(path,registry[id].get('label'),registry[id].get('job'),registry[id].get('asset'))
-            manifest=await run_in_threadpool(validate_task,payload,resolve)
-            for row in manifest['rows']:registry[row['id']]=row
-            if action=='task-validate':
-                return JSONResponse(dict(preview=await run_in_threadpool(preview_task,manifest),filePlan=manifest['filePlan'],effective=manifest,errors=[],warnings=manifest.get('warnings', [])))
-            authorize_file_plan(manifest,payload.get('fileConfirmation'))
-            job=await run_in_threadpool(start_task,manifest,workspace['folder'])
-            return JSONResponse(job_info(job))
-        if action=='header':
-            path=get_file(q['id'])
-            with fits.open(path) as hdus:
-                return JSONResponse(dict(cards=[dict(hdu=i,key=c.keyword,value=str(c.value),comment=c.comment) for i,h in enumerate(hdus) for c in h.header.cards]))
-        if action in ('task-respond','task-cancel','task-graphics'):
-            id=payload.get('id') if request.method=='POST' else q.get('id')
-            job=(RUNS/str(id)).resolve()
-            if job.parent!=RUNS.resolve() or not (job/'manifest.json').exists():raise ValueError('실행을 찾을 수 없습니다.')
-            if action=='task-graphics':
-                path=job/'interactive.svg'
-                if not path.exists():raise ValueError('아직 그래픽이 없습니다.')
-                return FileResponse(path,media_type='image/svg+xml',headers={'Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'"})
-            if request.method!='POST':raise ValueError('POST 요청이 필요합니다.')
-            if action=='task-cancel':
-                if status(job)['state'] not in ('queued','running','waiting'):raise ValueError('진행 중인 실행이 아닙니다.')
-                (job/'cancel').write_text('사용자 중단 요청')
+                response = JSONResponse({'error': '허용하지 않는 요청 출처입니다.'}, status_code=403)
+                await response(scope, receive, send)
+                return
+        await self.app(scope, receive, send)
+
+
+async def validation_error(request, exc):
+    issues = [
+        {'field': '.'.join(str(part) for part in error['loc']) or 'inputs',
+         'message': error['msg']}
+        for error in exc.errors(include_url=False, include_context=False, include_input=False)
+    ]
+    return JSONResponse({'error': '입력 형식을 확인해 주세요.', 'issues': issues}, status_code=400)
+
+
+async def api_error(request, exc):
+    import re
+    message = str(exc)
+    match = re.search(r'(?:ccdproc\.)?([A-Za-z][\w]*)[:=]', message)
+    field = match.group(1) if match else 'inputs'
+    return JSONResponse({'error': message, 'issues': [{'field': field, 'message': message}]}, status_code=400)
+
+
+async def http_error(request, exc):
+    return JSONResponse({'error': str(exc.detail)}, status_code=exc.status_code, headers=exc.headers)
+
+
+async def catalog_endpoint(request: Request):
+    return JSONResponse(catalog())
+
+
+async def workflow_diagnostics_endpoint(request: Request):
+    payload = await request_payload(request) if request.method == 'POST' else {}
+    def resolve_diagnostic(id):
+        row = registry.get(id)
+        if row is None:
+            row = workspace.get('file_refs', {}).get(id)
+        return row
+    return JSONResponse({'diagnostics': await run_in_threadpool(workflow_diagnostics, payload, resolve_diagnostic)})
+
+
+async def task_preferences_endpoint(request: Request, *, action):
+    payload = await request_payload(request) if request.method == 'POST' else {}
+    with lock:
+        store = WorkflowDocuments(workspace['folder'])
+        selected = workspace.setdefault('workflow_documents', {})
+        current = selected.get(workspace['folder'])
+        if action == 'workflow-documents' and request.method == 'GET':
+            return JSONResponse(store.list())
+        if action == 'workflow-documents':
+            if (workflow_manager.current() or {}).get('state') in ('running', 'waiting', 'confirmation', 'cancelling'):
+                raise ValueError('실행을 마친 뒤 워크플로우를 전환해 주세요.')
+            op = payload.get('operation')
+            if op == 'open': data = store.read(payload['path'])
+            elif op == 'new': data = store.new()
+            elif op == 'import': data = store.import_document(payload['document'])
+            else: raise ValueError('지원하지 않는 워크플로우 동작입니다.')
+            selected[workspace['folder']] = data
+            save()
+            return JSONResponse(data)
+        if request.method == 'POST':
+            if '_document' not in payload:
+                payload = {**payload, '_document': (current or store.new())['_document']}
+            store.write(payload)
+            refs = workspace.setdefault('file_refs', {})
+            for id, row in registry.items():
+                refs[id] = {k: row.get(k) for k in ('path', 'label', 'job', 'asset')}
+            if not current or current['_document']['path'] == payload['_document']['path']:
+                selected[workspace['folder']] = payload
+            save()
+            data = payload
+        else:
+            if current:
+                path = current['_document']['path']
+                data = store.read(path) if Path(path).is_file() else current
             else:
-                interaction=json.loads((job/'interaction.json').read_text())
-                if interaction['state']!='waiting' or payload.get('requestId')!=interaction['id']:raise ValueError('이전 입력 요청입니다. 현재 세션을 다시 확인해 주세요.')
-                value=str(payload.get('value',''))
-                if len(value)>200000 or '\x00' in value or (interaction['kind']!='editor' and any(c in value for c in '\n\r')):raise ValueError('응답 형식과 길이를 확인해 주세요.')
-                if interaction['kind']=='cursor':
-                    import re
-                    if not re.fullmatch(r'[-+\d.eE]+\s+[-+\d.eE]+\s+\d+\s+\S(?:\s+.*)?',value):raise ValueError('커서는 x y wcs key [명령] 형식입니다.')
-                with lock:
-                    folder=job/'responses';folder.mkdir(exist_ok=True);path=folder/(interaction['id']+'.json')
-                    if path.exists():raise ValueError('이미 응답한 요청입니다.')
-                    atomic_json(path,{'value':value})
-            return JSONResponse({'ok':True})
-        if action == 'text':
-            path=get_file(q['id'])
-            if registry[q['id']].get('asset') not in ('text','image-list'): raise ValueError('텍스트 결과를 선택해 주세요.')
-            return JSONResponse({'text':path.read_text(errors='replace')[:200000]})
-        if action == 'plot':
-            path=get_file(q['id'])
-            if registry[q['id']].get('asset')!='plot':raise ValueError('그래프 결과를 선택해 주세요.')
-            return FileResponse(path,media_type='image/svg+xml',headers={'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'"})
-        if action == 'workspace':
-            rows = await run_in_threadpool(files)
-            return JSONResponse(dict(folder=workspace['folder'], sets=workspace['sets'], files=rows))
-        if action == 'browse':
-            path = Path(q.get('path', workspace['folder'])).expanduser().resolve()
-            if not path.is_dir():
-                raise ValueError('폴더를 찾을 수 없습니다.')
-            dirs = sorted([p for p in path.iterdir() if p.is_dir() and not p.name.startswith('.')], key=lambda p: p.name.lower())
-            count = sum(p.is_file() and p.suffix.lower() in ('.fits', '.fit', '.fts') for p in path.iterdir())
-            extensions=('.fits','.fit','.fts','.pl','.txt','.dat','.list','.log','.gki','.bin')
-            entries=await run_in_threadpool(lambda:[register(p) for p in sorted(path.iterdir()) if p.is_file() and p.suffix.lower() in extensions])
-            roots=[('작업 폴더',ROOT),('홈',Path.home()),('다운로드',Path.home()/'Downloads'),('문서',Path.home()/'Documents')]
-            return JSONResponse(dict(path=str(path), parent=str(path.parent),
-                breadcrumbs=[dict(name=p.name or '/',path=str(p)) for p in [*reversed(path.parents),path]],
-                shortcuts=[dict(name=n,path=str(p)) for n,p in roots if p.is_dir()],
-                directories=[dict(name=p.name, path=str(p)) for p in dirs], files=entries, fits=count))
-        if action == 'folder':
-            folder = str(Path(payload['path']).expanduser().resolve())
-            await run_in_threadpool(scan, folder)
-            with lock:
-                workspace['folder'] = folder; save()
-            return JSONResponse({'ok': True})
-        if action in ('delete-files', 'delete-jobs'):
-            if request.method != 'POST': raise ValueError('POST 요청이 필요합니다.')
-            return JSONResponse(await run_in_threadpool(delete_library, action.removeprefix('delete-'), payload.get('ids')))
-        if action == 'metadata':
-            with lock:
-                for id in payload['ids']:
-                    get_file(id)
-                    changes = {k:v for k,v in payload['changes'].items() if k in ('kind','filter','exposure')}
-                    workspace['overrides'].setdefault(id, {}).update(changes)
+                choices = store.list()
+                data = store.read(choices[0]['path']) if choices else store.new()
+                # Migrate the old global draft exactly once, in its original folder.
+                legacy = workspace.get('task_preferences')
+                if legacy and legacy.get('taskMap'):
+                    data = {**legacy, '_document': {**store.new()['_document'], 'name': '워크플로우'}}
+                    store.write(data)
+                    workspace.pop('task_preferences', None)
+                selected[workspace['folder']] = data
                 save()
-            return JSONResponse({'ok': True})
-        if action == 'alignment-star':
-            if request.method != 'POST': raise ValueError('POST 요청이 필요합니다.')
-            from .alignment import measure_alignment_star
-            path = get_file(payload['id'])
-            row = dict(registry[payload['id']], path=str(path))
-            x, y = await run_in_threadpool(measure_alignment_star, row, payload['x'], payload['y'], payload.get('backend', 'cl'))
-            return JSONResponse(dict(x=x, y=y))
-        if action == 'info':
-            return JSONResponse(await run_in_threadpool(image_info, q['id']))
-        if action == 'image':
-            png = await run_in_threadpool(image_png, q['id'], q.get('low'), q.get('high'), q.get('stretch', 'asinh'))
-            return Response(png, media_type='image/png')
-        if action == 'pixel':
-            a, _ = data_for(q['id'])
-            x, y = int(q['x']), int(q['y'])
-            if not (1 <= x <= a.shape[1] and 1 <= y <= a.shape[0]):
-                raise ValueError('영상 밖의 좌표입니다.')
-            return JSONResponse(dict(x=x, y=y, value=clean_float(a[y-1,x-1]),
-                                     row=[clean_float(v) for v in a[y-1]], column=[clean_float(v) for v in a[:,x-1]]))
-        if action in ('validate', 'run'):
-            operation = payload.get('operation', 'reduction')
-            settings = {k:v for k,v in payload.get('settings', {}).items() if k not in ('master_bias', 'master_darks', 'master_flats')}
-            refs = payload.get('calibrations', {})
-            settings['master_bias'] = str(get_file(refs['bias'][0])) if refs.get('bias') else ''
-            settings['master_darks'] = [str(get_file(id)) for id in refs.get('dark', [])]
-            settings['master_flats'] = [str(get_file(id)) for id in refs.get('flat', [])]
-            s = Settings(**settings)
-            rows = await run_in_threadpool(resolve_rows, payload['ids'], workspace['overrides'])
-            errors, warnings = (validate_combination if operation == 'combine' else validate)(rows, s)
-            if action == 'validate' or errors:
-                return JSONResponse(dict(errors=errors, warnings=warnings), status_code=400 if action == 'run' and errors else 200)
-            job = await run_in_threadpool(start, rows, s, operation, str(payload.get('name', '')).strip()[:100], workspace['folder'])
-            return JSONResponse(job_info(job))
-        if action == 'jobs':
-            return JSONResponse([job_info(p.parent) for p in sorted(RUNS.glob('*/manifest.json'), reverse=True)])
-        if action == 'job':
-            id = q['id']
-            job = (RUNS / id).resolve()
-            if job.parent != RUNS.resolve() or not (job / 'manifest.json').exists():
-                raise ValueError('실행을 찾을 수 없습니다.')
-            info = job_info(job)
-            if q.get('details'):
-                script='commands.cl' if info.get('backend')=='cl' else 'commands.py'
-                info['commands'] = (job / script).read_text() if (job / script).exists() else ''
-                info['log'] = (job / 'worker.log').read_text(errors='replace')[-24000:] if (job / 'worker.log').exists() else ''
-                if (job/'task.log').exists():info['log']=(job/'task.log').read_text(errors='replace')[-80000:]
-            return JSONResponse(info)
-        if action == 'reveal':
-            if request.method != 'POST':
-                return JSONResponse({'error': 'POST 요청이 필요합니다.'}, status_code=405)
-            path = get_file(payload['id'])
-            if not path.is_file():
-                raise ValueError('파일을 찾을 수 없습니다. 파일 목록을 새로 불러와 주세요.')
-            if sys.platform == 'darwin':
-                command = ['open', '-R', str(path)]
-            elif sys.platform == 'win32':
-                command = ['explorer', '/select,', str(path)]
-            else:
-                command = ['xdg-open', str(path.parent)]
-            try:
-                await run_in_threadpool(subprocess.run, command, check=True, capture_output=True, timeout=10)
-            except (OSError, subprocess.SubprocessError) as exc:
-                raise ValueError('파일 위치를 열지 못했습니다. 파일 관리자를 확인한 뒤 다시 시도해 주세요.') from exc
-            return JSONResponse({'ok': True})
-        if action == 'download':
-            path = get_file(q['id'])
-            name = registry[q['id']]['label']
-            name = Path(name).name
-            asset=registry[q['id']].get('asset','image')
-            # New products already have their download name on disk. Retain the
-            # historical fallback for old manifests with descriptive labels.
-            if asset=='image' and name != path.name and not name.lower().endswith('.fits'): name += '.fits'
-            return FileResponse(path, filename=name, media_type='application/fits' if asset=='image' else 'application/octet-stream')
-        raise ValueError('지원하지 않는 요청입니다.')
-    except (ValueError, KeyError, OSError, TypeError) as exc:
-        import re
-        message=str(exc)
-        match=re.search(r'(?:ccdproc\.)?([A-Za-z][\w]*)[:=]',message)
-        field=match.group(1) if match else 'inputs'
-        return JSONResponse({'error':message,'issues':[dict(field=field,message=message)]},status_code=400)
+        data = dict(data)
+        data['files'] = [register(r['path'], r.get('label'), r.get('job'), r.get('asset')) for r in workspace.get('file_refs', {}).values() if Path(r['path']).is_file()]
+        return JSONResponse(data)
 
 
-app = Starlette(routes=[Route('/api/{action}', api, methods=['GET', 'POST']), Mount('/', StaticFiles(directory=ROOT / 'web' / 'dist', html=True, check_dir=False))])
+async def workflow_endpoint(request: Request):
+    return JSONResponse(workflow_manager.current())
+
+
+async def workflow_run_endpoint(request: Request, *, action):
+    payload = await request_payload(request) if request.method == 'POST' else {}
+    if action == 'workflow-run':
+        if any(status(p.parent)['state'] in ('queued','running','waiting') for p in RUNS.glob('*/manifest.json')):
+            raise ValueError('실행 중인 작업이 끝난 뒤 워크플로우를 실행해 주세요.')
+        return JSONResponse(workflow_manager.start(payload))
+    if action == 'workflow-cancel': workflow_manager.cancel()
+    else: workflow_manager.confirm(payload.get('token'))
+    return JSONResponse(workflow_manager.current())
+
+
+async def task_validate_endpoint(request: Request, *, action):
+    payload = await request_payload(request) if request.method == 'POST' else {}
+    if action == 'task-run' and (workflow_manager.current() or {}).get('state') in ('running','waiting','confirmation','cancelling'):
+        raise ValueError('워크플로우가 실행 중입니다.')
+    def resolve(id):
+        path=get_file(id)
+        return register(path,registry[id].get('label'),registry[id].get('job'),registry[id].get('asset'))
+    manifest=await run_in_threadpool(validate_task,payload,resolve)
+    for row in manifest['rows']:registry[row['id']]=row
+    if action=='task-validate':
+        return JSONResponse(dict(preview=await run_in_threadpool(preview_task,manifest),filePlan=manifest['filePlan'],effective=manifest,errors=[],warnings=manifest.get('warnings', [])))
+    authorize_file_plan(manifest,payload.get('fileConfirmation'))
+    job=await run_in_threadpool(start_task,manifest,workspace['folder'])
+    return JSONResponse(job_info(job))
+
+
+async def header_endpoint(request: Request):
+    q = request.query_params
+    path=get_file(q['id'])
+    with fits.open(path) as hdus:
+        return JSONResponse(dict(cards=[dict(hdu=i,key=c.keyword,value=str(c.value),comment=c.comment) for i,h in enumerate(hdus) for c in h.header.cards]))
+
+
+async def task_respond_endpoint(request: Request, *, action):
+    q = request.query_params
+    payload = await request_payload(request) if request.method == 'POST' else {}
+    id=payload.get('id') if request.method=='POST' else q.get('id')
+    job=(RUNS/str(id)).resolve()
+    if job.parent!=RUNS.resolve() or not (job/'manifest.json').exists():raise ValueError('실행을 찾을 수 없습니다.')
+    if action=='task-graphics':
+        path=job/'interactive.svg'
+        if not path.exists():raise ValueError('아직 그래픽이 없습니다.')
+        return FileResponse(path,media_type='image/svg+xml',headers={'Cache-Control':'no-store','Content-Security-Policy':"default-src 'none'"})
+    if action=='task-cancel':
+        if status(job)['state'] not in ('queued','running','waiting'):raise ValueError('진행 중인 실행이 아닙니다.')
+        (job/'cancel').write_text('사용자 중단 요청')
+    else:
+        interaction=json.loads((job/'interaction.json').read_text())
+        if interaction['state']!='waiting' or payload.get('requestId')!=interaction['id']:raise ValueError('이전 입력 요청입니다. 현재 세션을 다시 확인해 주세요.')
+        value=str(payload.get('value',''))
+        if len(value)>200000 or '\x00' in value or (interaction['kind']!='editor' and any(c in value for c in '\n\r')):raise ValueError('응답 형식과 길이를 확인해 주세요.')
+        if interaction['kind']=='cursor':
+            import re
+            if not re.fullmatch(r'[-+\d.eE]+\s+[-+\d.eE]+\s+\d+\s+\S(?:\s+.*)?',value):raise ValueError('커서는 x y wcs key [명령] 형식입니다.')
+        with lock:
+            folder=job/'responses';folder.mkdir(exist_ok=True);path=folder/(interaction['id']+'.json')
+            if path.exists():raise ValueError('이미 응답한 요청입니다.')
+            atomic_json(path,{'value':value})
+    return JSONResponse({'ok':True})
+
+
+async def text_endpoint(request: Request):
+    q = request.query_params
+    path=get_file(q['id'])
+    if registry[q['id']].get('asset') not in ('text','image-list'): raise ValueError('텍스트 결과를 선택해 주세요.')
+    return JSONResponse({'text':path.read_text(errors='replace')[:200000]})
+
+
+async def plot_endpoint(request: Request):
+    q = request.query_params
+    path=get_file(q['id'])
+    if registry[q['id']].get('asset')!='plot':raise ValueError('그래프 결과를 선택해 주세요.')
+    return FileResponse(path,media_type='image/svg+xml',headers={'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'"})
+
+
+async def workspace_endpoint(request: Request):
+    rows = await run_in_threadpool(files)
+    return JSONResponse(dict(folder=workspace['folder'], sets=workspace['sets'], files=rows))
+
+
+async def browse_endpoint(request: Request):
+    q = request.query_params
+    path = Path(q.get('path', workspace['folder'])).expanduser().resolve()
+    if not path.is_dir():
+        raise ValueError('폴더를 찾을 수 없습니다.')
+    dirs = sorted([p for p in path.iterdir() if p.is_dir() and not p.name.startswith('.')], key=lambda p: p.name.lower())
+    count = sum(p.is_file() and p.suffix.lower() in ('.fits', '.fit', '.fts') for p in path.iterdir())
+    extensions=('.fits','.fit','.fts','.pl','.txt','.dat','.list','.log','.gki','.bin')
+    entries=await run_in_threadpool(lambda:[register(p) for p in sorted(path.iterdir()) if p.is_file() and p.suffix.lower() in extensions])
+    roots=[('작업 폴더',ROOT),('홈',Path.home()),('다운로드',Path.home()/'Downloads'),('문서',Path.home()/'Documents')]
+    return JSONResponse(dict(path=str(path), parent=str(path.parent),
+        breadcrumbs=[dict(name=p.name or '/',path=str(p)) for p in [*reversed(path.parents),path]],
+        shortcuts=[dict(name=n,path=str(p)) for n,p in roots if p.is_dir()],
+        directories=[dict(name=p.name, path=str(p)) for p in dirs], files=entries, fits=count))
+
+
+async def folder_endpoint(request: Request):
+    payload = await request_payload(request) if request.method == 'POST' else {}
+    folder = str(Path(payload['path']).expanduser().resolve())
+    await run_in_threadpool(scan, folder)
+    with lock:
+        workspace['folder'] = folder; save()
+    return JSONResponse({'ok': True})
+
+
+async def delete_files_endpoint(request: Request, *, action):
+    payload = await request_payload(request) if request.method == 'POST' else {}
+    return JSONResponse(await run_in_threadpool(delete_library, action.removeprefix('delete-'), payload.get('ids')))
+
+
+async def metadata_endpoint(request: Request):
+    payload = await request_payload(request) if request.method == 'POST' else {}
+    with lock:
+        for id in payload['ids']:
+            get_file(id)
+            changes = {k:v for k,v in payload['changes'].items() if k in ('kind','filter','exposure')}
+            workspace['overrides'].setdefault(id, {}).update(changes)
+        save()
+    return JSONResponse({'ok': True})
+
+
+async def alignment_star_endpoint(request: Request):
+    payload = await request_payload(request) if request.method == 'POST' else {}
+    from .alignment import measure_alignment_star
+    path = get_file(payload['id'])
+    row = dict(registry[payload['id']], path=str(path))
+    x, y = await run_in_threadpool(measure_alignment_star, row, payload['x'], payload['y'], payload.get('backend', 'cl'))
+    return JSONResponse(dict(x=x, y=y))
+
+
+async def info_endpoint(request: Request):
+    q = request.query_params
+    return JSONResponse(await run_in_threadpool(image_info, q['id']))
+
+
+async def image_endpoint(request: Request):
+    q = request.query_params
+    png = await run_in_threadpool(image_png, q['id'], q.get('low'), q.get('high'), q.get('stretch', 'asinh'))
+    return Response(png, media_type='image/png')
+
+
+async def pixel_endpoint(request: Request):
+    q = request.query_params
+    a, _ = data_for(q['id'])
+    x, y = int(q['x']), int(q['y'])
+    if not (1 <= x <= a.shape[1] and 1 <= y <= a.shape[0]):
+        raise ValueError('영상 밖의 좌표입니다.')
+    return JSONResponse(dict(x=x, y=y, value=clean_float(a[y-1,x-1]),
+                             row=[clean_float(v) for v in a[y-1]], column=[clean_float(v) for v in a[:,x-1]]))
+
+
+async def validate_endpoint(request: Request, *, action):
+    payload = await request_payload(request) if request.method == 'POST' else {}
+    operation = payload.get('operation', 'reduction')
+    settings = {k:v for k,v in payload.get('settings', {}).items() if k not in ('master_bias', 'master_darks', 'master_flats')}
+    refs = payload.get('calibrations', {})
+    settings['master_bias'] = str(get_file(refs['bias'][0])) if refs.get('bias') else ''
+    settings['master_darks'] = [str(get_file(id)) for id in refs.get('dark', [])]
+    settings['master_flats'] = [str(get_file(id)) for id in refs.get('flat', [])]
+    s = Settings(**settings)
+    rows = await run_in_threadpool(resolve_rows, payload['ids'], workspace['overrides'])
+    errors, warnings = (validate_combination if operation == 'combine' else validate)(rows, s)
+    if action == 'validate' or errors:
+        return JSONResponse(dict(errors=errors, warnings=warnings), status_code=400 if action == 'run' and errors else 200)
+    job = await run_in_threadpool(start, rows, s, operation, str(payload.get('name', '')).strip()[:100], workspace['folder'])
+    return JSONResponse(job_info(job))
+
+
+async def jobs_endpoint(request: Request):
+    return JSONResponse([job_info(p.parent) for p in sorted(RUNS.glob('*/manifest.json'), reverse=True)])
+
+
+async def job_endpoint(request: Request):
+    q = request.query_params
+    id = q['id']
+    job = (RUNS / id).resolve()
+    if job.parent != RUNS.resolve() or not (job / 'manifest.json').exists():
+        raise ValueError('실행을 찾을 수 없습니다.')
+    info = job_info(job)
+    if q.get('details'):
+        script='commands.cl' if info.get('backend')=='cl' else 'commands.py'
+        info['commands'] = (job / script).read_text() if (job / script).exists() else ''
+        info['log'] = (job / 'worker.log').read_text(errors='replace')[-24000:] if (job / 'worker.log').exists() else ''
+        if (job/'task.log').exists():info['log']=(job/'task.log').read_text(errors='replace')[-80000:]
+    return JSONResponse(info)
+
+
+async def reveal_endpoint(request: Request):
+    payload = await request_payload(request) if request.method == 'POST' else {}
+    path = get_file(payload['id'])
+    if not path.is_file():
+        raise ValueError('파일을 찾을 수 없습니다. 파일 목록을 새로 불러와 주세요.')
+    if sys.platform == 'darwin':
+        command = ['open', '-R', str(path)]
+    elif sys.platform == 'win32':
+        command = ['explorer', '/select,', str(path)]
+    else:
+        command = ['xdg-open', str(path.parent)]
+    try:
+        await run_in_threadpool(subprocess.run, command, check=True, capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ValueError('파일 위치를 열지 못했습니다. 파일 관리자를 확인한 뒤 다시 시도해 주세요.') from exc
+    return JSONResponse({'ok': True})
+
+
+async def download_endpoint(request: Request):
+    q = request.query_params
+    path = get_file(q['id'])
+    name = registry[q['id']]['label']
+    name = Path(name).name
+    asset=registry[q['id']].get('asset','image')
+    # New products already have their download name on disk. Retain the
+    # historical fallback for old manifests with descriptive labels.
+    if asset=='image' and name != path.name and not name.lower().endswith('.fits'): name += '.fits'
+    return FileResponse(path, filename=name, media_type='application/fits' if asset=='image' else 'application/octet-stream')
+
+
+api_routes = [
+    Route('/catalog', catalog_endpoint, methods=['GET'], name='catalog'),
+    Route('/workflow-diagnostics', workflow_diagnostics_endpoint, methods=['POST'], name='workflow-diagnostics'),
+    Route('/task-preferences', partial(task_preferences_endpoint, action='task-preferences'), methods=['GET', 'POST'], name='task-preferences'),
+    Route('/workflow-documents', partial(task_preferences_endpoint, action='workflow-documents'), methods=['GET', 'POST'], name='workflow-documents'),
+    Route('/workflow', workflow_endpoint, methods=['GET'], name='workflow'),
+    Route('/workflow-run', partial(workflow_run_endpoint, action='workflow-run'), methods=['POST'], name='workflow-run'),
+    Route('/workflow-cancel', partial(workflow_run_endpoint, action='workflow-cancel'), methods=['POST'], name='workflow-cancel'),
+    Route('/workflow-confirm', partial(workflow_run_endpoint, action='workflow-confirm'), methods=['POST'], name='workflow-confirm'),
+    Route('/task-validate', partial(task_validate_endpoint, action='task-validate'), methods=['POST'], name='task-validate'),
+    Route('/task-run', partial(task_validate_endpoint, action='task-run'), methods=['POST'], name='task-run'),
+    Route('/header', header_endpoint, methods=['GET'], name='header'),
+    Route('/task-respond', partial(task_respond_endpoint, action='task-respond'), methods=['POST'], name='task-respond'),
+    Route('/task-cancel', partial(task_respond_endpoint, action='task-cancel'), methods=['POST'], name='task-cancel'),
+    Route('/task-graphics', partial(task_respond_endpoint, action='task-graphics'), methods=['GET'], name='task-graphics'),
+    Route('/text', text_endpoint, methods=['GET'], name='text'),
+    Route('/plot', plot_endpoint, methods=['GET'], name='plot'),
+    Route('/workspace', workspace_endpoint, methods=['GET'], name='workspace'),
+    Route('/browse', browse_endpoint, methods=['GET'], name='browse'),
+    Route('/folder', folder_endpoint, methods=['POST'], name='folder'),
+    Route('/delete-files', partial(delete_files_endpoint, action='delete-files'), methods=['POST'], name='delete-files'),
+    Route('/delete-jobs', partial(delete_files_endpoint, action='delete-jobs'), methods=['POST'], name='delete-jobs'),
+    Route('/metadata', metadata_endpoint, methods=['POST'], name='metadata'),
+    Route('/alignment-star', alignment_star_endpoint, methods=['POST'], name='alignment-star'),
+    Route('/info', info_endpoint, methods=['GET'], name='info'),
+    Route('/image', image_endpoint, methods=['GET'], name='image'),
+    Route('/pixel', pixel_endpoint, methods=['GET'], name='pixel'),
+    Route('/validate', partial(validate_endpoint, action='validate'), methods=['POST'], name='validate'),
+    Route('/run', partial(validate_endpoint, action='run'), methods=['POST'], name='run'),
+    Route('/jobs', jobs_endpoint, methods=['GET'], name='jobs'),
+    Route('/job', job_endpoint, methods=['GET'], name='job'),
+    Route('/reveal', reveal_endpoint, methods=['POST'], name='reveal'),
+    Route('/download', download_endpoint, methods=['GET'], name='download'),
+]
+
+app = Starlette(
+    routes=[Mount('/api', routes=api_routes),
+            Mount('/', StaticFiles(directory=ROOT / 'web' / 'dist', html=True, check_dir=False))],
+    exception_handlers={ValidationError: validation_error, ValueError: api_error,
+                        KeyError: api_error, OSError: api_error, TypeError: api_error,
+                        HTTPException: http_error},
+)
+app.add_middleware(LocalOriginMiddleware)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=['127.0.0.1', 'localhost', 'testserver'])
