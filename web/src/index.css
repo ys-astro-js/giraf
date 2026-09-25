@@ -243,6 +243,8 @@
 .workflow-output-handle svg { width: 16px; height: 16px; pointer-events: none; }
 .map-viewport .react-flow__handle.connectingto.valid { background: var(--primary); border-color: var(--primary); }
 .map-viewport .react-flow__edge.workflow-edge-inactive .react-flow__edge-path { stroke-dasharray: 5 5; }
+.map-viewport .react-flow__edge.workflow-edge-error .react-flow__edge-path { stroke: var(--destructive); stroke-width: 3; }
+.map-viewport .react-flow__edge.workflow-edge-warning .react-flow__edge-path { stroke: var(--warning); stroke-width: 3; }
 .workflow-drop-choice { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); }
 .workflow-node {
   position: relative;
@@ -252,6 +254,8 @@
   cursor: default;
 }
 .workflow-node[data-selected="true"] { border-color: var(--foreground); outline: 1px solid var(--foreground); }
+.workflow-node[data-diagnostic="error"] { border-color: var(--destructive); }
+.workflow-node[data-diagnostic="warning"] { border-color: var(--warning); }
 .workflow-node[data-connection-target="true"] { border-color: var(--primary); outline: 2px solid var(--primary); outline-offset: -1px; }
 .node-input-row[data-connection-target="true"] .node-input { background: var(--accent); color: var(--accent-foreground); }
 .workflow-node[data-dragging="true"] { z-index: 2; }
@@ -264,7 +268,8 @@
 .node-title>span {font-size:12px;line-height:18px;color:var(--muted-foreground);}
 .node-title strong,.node-title>span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .node-state {display:block;margin:0;font-size:12px;line-height:16px;color:var(--muted-foreground);}
-.node-state[data-failed="true"] {color:var(--destructive);}
+.node-state[data-failed="true"], .node-state[data-severity="error"] {color:var(--destructive);}
+.node-state[data-severity="warning"] {color:var(--warning);}
 .node-delete {position:absolute;right:4px;top:8px;opacity:0;}
 .workflow-node:hover .node-delete,.workflow-node:focus-within .node-delete,.workflow-node[data-selected="true"] .node-delete {opacity:1;}
 .node-inputs {padding:8px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
@@ -689,7 +694,7 @@ textarea {
 .viewer-comparison[hidden] { display: none; }
 
 
-.node-state > svg {width:16px;height:16px;color:var(--foreground);}
+.node-state > svg {width:16px;height:16px;color:inherit;}
 
 .viewer-filename { max-width: 100%; justify-content: flex-start; font: inherit; padding-inline: 8px; }
 .viewer-filename > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

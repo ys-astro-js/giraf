@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/popover"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Empty, EmptyDescription } from "@/components/ui/empty"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 type Filter = DiagnosticSeverity | "all"
 const labels = { all: "전체", warning: "경고", error: "오류" }
@@ -33,9 +34,11 @@ const timeFormat = new Intl.DateTimeFormat("ko-KR", {
 export function DiagnosticsButton({
   resolveNode,
   onNavigate,
+  failure = "",
 }: {
   resolveNode: (entry: Diagnostic) => string | undefined
-  onNavigate: (nodeId: string) => void
+  onNavigate: (entry: Diagnostic) => void
+  failure?: string
 }) {
   const entries = useSyncExternalStore(
     diagnostics.subscribe,
@@ -52,20 +55,20 @@ export function DiagnosticsButton({
   const visibleSeverities = (["warning", "error"] as const).filter(
     (severity) => counts[severity] > 0
   )
-  if (visibleSeverities.length === 0) return null
+  if (visibleSeverities.length === 0 && !failure) return null
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <ButtonGroup className="shrink-0" aria-label="경고 및 오류">
-        {visibleSeverities.map((severity) => {
+        {(visibleSeverities.length ? visibleSeverities : ["error" as const]).map((severity) => {
           const Icon = severity === "warning" ? TriangleAlert : CircleX
           return (
             <PopoverTrigger
               key={severity}
               render={<Button variant="outline" />}
               onClick={() => setFilter(severity)}
-              aria-label={`${labels[severity]} ${counts[severity]}개 보기`}
-              title={`${labels[severity]} ${counts[severity]}개 보기`}
+              aria-label={failure && !counts.all ? "검사 실패 보기" : `${labels[severity]} ${counts[severity]}개 보기`}
+              title={failure && !counts.all ? "검사 실패 보기" : `${labels[severity]} ${counts[severity]}개 보기`}
             >
               <Icon
                 data-icon="inline-start"
@@ -74,7 +77,7 @@ export function DiagnosticsButton({
                 }
               />
               <span className="diagnostics-count tabular-nums" aria-hidden="true">
-                <AnimatedCount value={Math.min(999, counts[severity])} suffix={counts[severity] > 999 ? "+" : undefined} entranceDelay={220} />
+                {failure && !counts.all ? "!" : <AnimatedCount value={Math.min(999, counts[severity])} suffix={counts[severity] > 999 ? "+" : undefined} entranceDelay={220} />}
               </span>
             </PopoverTrigger>
           )
@@ -106,9 +109,9 @@ export function DiagnosticsButton({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                disabled={!counts[filter]}
-                aria-label={`${labels[filter]} 기록 비우기`}
-                title={`${labels[filter]} 기록 비우기`}
+                disabled={!entries.some(entry => !entry.current && (filter === "all" || entry.severity === filter))}
+                aria-label={`${labels[filter]} 기록 지우기`}
+                title={`${labels[filter]} 기록 지우기`}
                 onClick={() => {
                   setOpen(false)
                   diagnostics.clear(filter === "all" ? undefined : filter)
@@ -127,6 +130,7 @@ export function DiagnosticsButton({
             </div>
           </div>
           <Separator />
+          {failure && <Alert variant="destructive" className="m-3 w-auto"><CircleX /><AlertDescription>검사 실패: {failure}. 다음 검사에서 다시 확인합니다.</AlertDescription></Alert>}
           {(["all", "warning", "error"] as const).map((value) => (
             <TabsContent
               key={value}
@@ -172,7 +176,7 @@ export function DiagnosticsButton({
                               title={`${entry.source} 노드로 이동`}
                               onClick={() => {
                                 setOpen(false)
-                                onNavigate(nodeId)
+                                onNavigate(entry)
                               }}
                             />
                           )}

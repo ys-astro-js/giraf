@@ -6,7 +6,7 @@ from pathlib import Path
 import shlex
 import tempfile
 
-from .task_expressions import resolve_expression, split_image
+from .task_expressions import resolve_expression, inspect_expression, split_image
 
 
 def accepts_asset(kind, asset):
@@ -20,7 +20,7 @@ def check_input_lists(manifest):
             raise ValueError(f'{path.name}: 검증 이후 목록 파일이 변경되었습니다. 다시 실행해 주세요.')
 
 
-def expand_image_selection(slot, ids, resolve, directory):
+def expand_image_selection(slot, ids, resolve, directory, *, inspection=False):
     rows, sources = [], {}
     def templates(path, stack=()):
         path = path.expanduser().resolve()
@@ -33,7 +33,7 @@ def expand_image_selection(slot, ids, resolve, directory):
         if path.stat().st_size > 2_000_000:
             raise ValueError(f'{path.name}: 목록 파일이 너무 큽니다.')
         content = path.read_bytes()
-        sources[str(path)] = dict(path=str(path), sha256=hashlib.sha256(content).hexdigest())
+        sources[str(path)] = dict(path=str(path), **({} if inspection else {'sha256': hashlib.sha256(content).hexdigest()}))
         try:
             lines = content.decode('utf-8-sig').splitlines()
         except UnicodeDecodeError:
@@ -78,13 +78,16 @@ def expand_image_selection(slot, ids, resolve, directory):
             raise ValueError(f'{path.name}: 영상 목록이 비어 있습니다.')
         # IRAF performs template expansion; the application only resolves each
         # list's relative paths and preserves ordering across nested lists.
-        with tempfile.TemporaryDirectory(prefix='giraf-image-list-') as tmp:
-            listing = Path(tmp) / 'images.list'
-            listing.write_text('\n'.join(json.dumps(v, ensure_ascii=False) if any(c.isspace() for c in v) else v for v in entries) + '\n')
-            try:
-                expanded = resolve_expression('@' + str(listing), path.parent)
-            except (ValueError, OSError) as exc:
-                raise ValueError(f'{path.name}: {exc}') from None
+        try:
+            if inspection:
+                expanded = [item for entry in entries for item in inspect_expression(entry, path.parent)]
+            else:
+                with tempfile.TemporaryDirectory(prefix='giraf-image-list-') as tmp:
+                    listing = Path(tmp) / 'images.list'
+                    listing.write_text('\n'.join(json.dumps(v, ensure_ascii=False) if any(c.isspace() for c in v) else v for v in entries) + '\n')
+                    expanded = resolve_expression('@' + str(listing), path.parent)
+        except (ValueError, OSError) as exc:
+            raise ValueError(f'{path.name}: {exc}') from None
         for item in expanded:
             if item.get('error'):
                 raise ValueError(f'{path.name}: {item["name"]}: {item["error"]}')

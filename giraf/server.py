@@ -28,6 +28,7 @@ from .model import Settings, inspect_file, scan, validate
 from .combine import validate_combination
 from .task_catalog import catalog
 from .task_jobs import validate_task, preview_task, start_task, authorize_file_plan
+from .workflow_diagnostics import workflow_diagnostics
 
 STATE = ROOT / '.workspace.json'
 registry: dict[str, dict] = {}
@@ -261,6 +262,14 @@ async def api(request: Request):
         payload = await request.json() if request.method == 'POST' else {}
         if action == 'catalog':
             return JSONResponse(catalog())
+        if action == 'workflow-diagnostics':
+            if request.method != 'POST': raise ValueError('POST 요청이 필요합니다.')
+            def resolve_diagnostic(id):
+                row = registry.get(id)
+                if row is None:
+                    row = workspace.get('file_refs', {}).get(id)
+                return row
+            return JSONResponse({'diagnostics': await run_in_threadpool(workflow_diagnostics, payload, resolve_diagnostic)})
         if action in ('task-preferences', 'workflow-documents'):
             with lock:
                 store = WorkflowDocuments(workspace['folder'])

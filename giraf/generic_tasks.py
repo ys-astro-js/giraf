@@ -18,7 +18,7 @@ from .jobs import ROOT, atomic_json
 from .task_discovery import file_hash
 from .task_capabilities import parameter_number
 from .task_schema import file_extension
-from .task_expressions import resolve_expression
+from .task_expressions import resolve_expression, inspect_expression
 from .task_session import run_process, Cancelled
 
 
@@ -103,7 +103,7 @@ def alignment_pairs(records, name):
     return pairs
 
 
-def validate_generic(spec, payload, resolve):
+def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles=frozenset()):
     if not spec['runnable']: raise ValueError(spec['reason'])
     backend = payload.get('backend', 'cl')
     if backend not in ('cl', 'pyraf'): raise ValueError('CL 또는 PyRAF를 선택해 주세요.')
@@ -166,20 +166,20 @@ def validate_generic(spec, payload, resolve):
             raise ValueError(f'{name}: 직접 입력과 파일/노드 연결 중 하나를 선택해 주세요.')
         if expr:
             if slot['kind'] == 'image':
-                rows = resolve_expression(expr, directory)
+                rows = (inspect_expression if diagnostics else resolve_expression)(expr, directory)
             else:
                 path = Path(expr).expanduser(); path = path if path.is_absolute() else Path(directory) / path
                 rows = [dict(id=hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:20], name=path.name, label=path.name, path=str(path.resolve()), asset=slot['kind'])]
             ids = [r['id'] for r in rows]; expanded = {r['id']: r for r in rows}
         from .image_lists import expand_image_selection, accepts_asset
         selection_slot = slot
-        selected, list_sources = expand_image_selection(selection_slot, ids, lambda id: expanded[id] if id in expanded else resolve(id), directory)
+        selected, list_sources = expand_image_selection(selection_slot, ids, lambda id: expanded[id] if id in expanded else resolve(id), directory, inspection=diagnostics)
         ids = [r['id'] for r in selected]
         expanded.update({r['id']: r for r in selected})
         input_lists.update({r['path']: r for r in list_sources})
-        if slot['required'] and not ids and not cursor_commands.get(name, '').strip() and not text_inputs.get(name, '').strip(): raise ValueError(f'{slot["label"]}: 입력 파일을 선택해 주세요.')
+        if slot['required'] and not ids and name not in pending_roles and not cursor_commands.get(name, '').strip() and not text_inputs.get(name, '').strip(): raise ValueError(f'{slot["label"]}: 입력 파일을 선택해 주세요.')
         if not slot['multiple'] and len(ids) > 1: raise ValueError(f'{name}: 파일 한 개를 선택해 주세요.')
-        if slot.get('scalar') and not ids:
+        if slot.get('scalar') and not ids and name not in pending_roles:
             try:
                 value = float(supplied.get(name, ''))
                 if not math.isfinite(value): raise ValueError()
@@ -191,10 +191,13 @@ def validate_generic(spec, payload, resolve):
             row = deepcopy(expanded[id] if id in expanded else resolve(id))
             path = Path(row['path'])
             if not path.is_file(): raise ValueError(f'{name}: 입력 파일이 없습니다.')
+            if diagnostics and row.get('error'):
+                raise ValueError(f'{name}: {row["error"]}')
             if not accepts_asset(slot['kind'], row.get('asset', 'image')): raise ValueError(f'{name}: {slot["kind"]} 파일을 선택해 주세요.')
             if slot.get('valueType') == 'cursor':
                 validate_cursor_file(path, name)
-            row['sha256'] = file_hash(path); sources[id] = row
+            if not diagnostics: row['sha256'] = file_hash(path)
+            sources[id] = row
     if pairs.get('shifts') and len(pairs['shifts']) != len(inputs.get('input', [])):
         raise ValueError('shifts: 입력 영상 순서대로 영상마다 한 행을 입력해 주세요.')
     warnings = []
@@ -223,11 +226,13 @@ def validate_generic(spec, payload, resolve):
     if active_each and spec['inputs']:
         count = len(inputs.get(spec['inputs'][0]['name'], []))
         for slot in spec['inputs'][1:]:
-            if slot['multiple'] and len(inputs[slot['name']]) not in (0, 1, count):
+            if slot['multiple'] and slot['name'] not in pending_roles and spec['inputs'][0]['name'] not in pending_roles and len(inputs[slot['name']]) not in (0, 1, count):
                 raise ValueError(f'{slot["name"]}: 입력 파일은 한 개 또는 주 입력과 같은 {count}개여야 합니다.')
     previews = preview_generic(m)
     labels = [r['output'] for r in previews]
     if len(labels) != len(set(labels)): raise ValueError('출력 파일 이름이 중복됩니다. 서로 다른 이름을 지정해 주세요.')
+    if diagnostics:
+        return m
     m['filePlan'] = dict(mode='copy', destructive=False, backup=True, targets=[dict(path=r['path'], sha256=r['sha256'], role='input') for r in sources.values()],
                          output=', '.join(labels), description='선언된 입력 사본과 독립된 파라미터로 실행합니다.', collision='기존 결과를 덮어쓰지 않습니다.')
     m['filePlan']['token'] = hashlib.sha256(json.dumps(m, sort_keys=True).encode()).hexdigest()

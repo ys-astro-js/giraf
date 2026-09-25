@@ -1,9 +1,11 @@
 """Resolve IRAF image templates with IRAF itself, without evaluating CL commands."""
 import hashlib
+import glob
 import json
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -46,4 +48,67 @@ def resolve_expression(expression,directory):
         r.update(id=hashlib.sha256((str(p)+section).encode()).hexdigest()[:20],section=section,label=p.name+section,asset='image')
         rows.append(r)
     if not rows:raise ValueError('표현식에 일치하는 영상이 없습니다.')
+    return rows
+
+
+def inspect_expression(expression, directory, _lists=()):
+    """Expand file templates without starting IRAF or creating a working folder."""
+    safe_expression(expression)
+    root = Path(directory).expanduser().resolve()
+    if not root.is_dir():
+        raise ValueError('표현식 기준 폴더가 없습니다.')
+    pieces = []
+    depth = 0
+    start = 0
+    for index, char in enumerate(expression):
+        if char == '[': depth += 1
+        elif char == ']': depth -= 1
+        elif char == ',' and depth == 0:
+            pieces.append(expression[start:index].strip())
+            start = index + 1
+    pieces.append(expression[start:].strip())
+    rows = []
+    for piece in pieces:
+        if not piece:
+            continue
+        if piece.startswith('@'):
+            listing = Path(piece[1:]).expanduser()
+            listing = (listing if listing.is_absolute() else root / listing).resolve()
+            if listing in _lists or len(_lists) >= 32:
+                raise ValueError(f'{listing.name}: 목록 파일의 순환 참조 또는 과도한 중첩이 있습니다.')
+            if not listing.is_file():
+                raise ValueError(f'{listing.name}: 목록 파일이 없습니다.')
+            if listing.stat().st_size > 2_000_000:
+                raise ValueError(f'{listing.name}: 목록 파일이 너무 큽니다.')
+            for line in listing.read_text(encoding='utf-8-sig').splitlines():
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    parts = shlex.split(line, comments=True)
+                    if not parts:
+                        continue
+                    if len(parts) != 1:
+                        raise ValueError(f'{listing.name}: 한 줄에 영상 경로 하나가 필요합니다.')
+                    rows.extend(inspect_expression(parts[0], listing.parent, (*_lists, listing)))
+            continue
+        path_text, section = split_image(piece)
+        path = Path(path_text).expanduser()
+        path = path if path.is_absolute() else root / path
+        names = glob.glob(str(path)) if glob.has_magic(str(path)) else [str(path)]
+        if not names and not path.suffix:
+            names = glob.glob(str(path) + '.fits')
+        for name in names:
+            file = Path(name)
+            if not file.is_file() and not file.suffix:
+                file = file.with_suffix('.fits')
+            file = file.resolve()
+            if not file.is_file():
+                raise ValueError(f'{piece}: 파일이 없습니다.')
+            row = inspect_file(file)
+            row.update(id=hashlib.sha256((str(file)+section).encode()).hexdigest()[:20],
+                       section=section, label=file.name+section, asset='image')
+            rows.append(row)
+            if len(rows) > 50000:
+                raise ValueError('표현식에 일치하는 영상이 너무 많습니다.')
+    if not rows:
+        raise ValueError('표현식에 일치하는 영상이 없습니다.')
     return rows

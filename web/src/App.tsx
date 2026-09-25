@@ -1,7 +1,8 @@
 import { useJobDiagnostics } from "@/hooks/use-job-diagnostics"
 import { workflowDocument } from "@/lib/workflow-document"
 import { DiagnosticsButton } from "@/components/diagnostics-button"
-import { resolveDiagnosticNode } from "@/lib/diagnostics"
+import { diagnostics, resolveDiagnosticNode } from "@/lib/diagnostics"
+import { createWorkflowDiagnosticsController } from "@/lib/live-diagnostics"
 import { WorkflowSelector, type WorkflowAction } from "@/components/workflow-selector"
 import { resolveExecutionStatus, type ExecutionReference } from "@/lib/execution-status"
 import { readPanelLayout } from "@/lib/panel-layout"
@@ -87,6 +88,8 @@ import {
   connect,
   replaceRoleInputs,
   workflowRequest,
+  workflowDiagnosticRequest,
+  workflowDiagnosticSignature,
   disconnect,
   publishRun,
   payloadFor,
@@ -159,9 +162,12 @@ function App() {
     [cache, setCache] = useState<Record<string, Frame>>({}),
     [jobs, setJobs] = useState<Job[]>([])
   const [documentBusy, setDocumentBusy] = useState(false)
+  const [diagnosticFailure, setDiagnosticFailure] = useState("")
+  const diagnosticController = useRef<ReturnType<typeof createWorkflowDiagnosticsController> | null>(null)
   const [mapSearch, setMapSearch] = useState("")
   const [layoutRevision, setLayoutRevision] = useState(0)
   const [revealNode, setRevealNode] = useState<{ id: string; revision: number }>()
+  const [revealConnection, setRevealConnection] = useState<{ id: string; revision: number }>()
   const [loadAttempt, setLoadAttempt] = useState(0)
   const [loadError, setLoadError] = useState(false)
   const [ready, setReady] = useState(false),
@@ -217,6 +223,38 @@ function App() {
     prefsRef = useRef(prefs)
   mapRef.current = map
   prefsRef.current = prefs
+  const diagnosticSignature = workflowDiagnosticSignature(map, workspace.folder)
+  const documentId = prefs._document?.path || "현재 문서"
+  useEffect(() => {
+    const controller = createWorkflowDiagnosticsController(diagnostics)
+    diagnosticController.current = controller
+    const unsubscribe = controller.subscribeFailure(() => setDiagnosticFailure(controller.getFailure()))
+    return () => {
+      unsubscribe()
+      controller.dispose()
+      diagnosticController.current = null
+    }
+  }, [])
+  useEffect(() => {
+    if (!ready || !catalog) return
+    diagnosticController.current?.change(documentId, workflowDiagnosticRequest(map, catalog, workspace.folder))
+  // The signature excludes position, selection, zoom and other view changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diagnosticSignature, documentId, ready, catalog, diagnosticController])
+  useEffect(() => {
+    if (!ready) return
+    const checkVisible = () => {
+      if (!document.hidden) diagnosticController.current?.recheck()
+    }
+    const timer = setInterval(checkVisible, 3000)
+    document.addEventListener("visibilitychange", checkVisible)
+    window.addEventListener("focus", checkVisible)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener("visibilitychange", checkVisible)
+      window.removeEventListener("focus", checkVisible)
+    }
+  }, [ready, diagnosticController])
   const { theme, setTheme } = useTheme()
   const remember = useCallback(
     (rows: Frame[]) =>
@@ -337,6 +375,7 @@ function App() {
     const next = {...initial, ...value, drafts: value.drafts || {}, packageValues: {...defaults(catalog.ccdred), ...value.packageValues}}
     prefsRef.current = next
     mapRef.current = migrateMap(next, catalog)
+    diagnosticController.current?.change(next._document?.path || "현재 문서", workflowDiagnosticRequest(mapRef.current, catalog, workspace.folder), true)
     setPrefs(next)
     setMap(mapRef.current)
     setSaveState(value._document?.saved ? "저장됨" : "작업을 추가하면 자동 저장됩니다")
@@ -943,14 +982,18 @@ function App() {
         header={
           <WorkbenchToolbar
             diagnostics={<DiagnosticsButton
+              failure={diagnosticFailure}
               resolveNode={entry => resolveDiagnosticNode(entry, map)}
-              onNavigate={id => {
+              onNavigate={entry => {
+                const id = resolveDiagnosticNode(entry, map)
+                if (!id) return
                 setMapSearch("")
                 update(m => ({...m, view: {...m.view, selected: id}}))
                 setInputRequest(null)
                 setInspectorOpen(true)
                 setMobilePanel("map")
                 setRevealNode(previous => ({id, revision: (previous?.revision || 0) + 1}))
+                if (entry.connectionId) setRevealConnection(previous => ({id: entry.connectionId!, revision: (previous?.revision || 0) + 1}))
               }}
             />}
             workflowSelector={<WorkflowSelector document={prefs._document}
@@ -1081,6 +1124,7 @@ function App() {
                   onSearch={setMapSearch}
                   layoutRevision={layoutRevision}
                   revealNode={revealNode}
+                  revealConnection={revealConnection}
                   onAutoLayout={autoLayout}
                   layoutBusy={layoutBusy}
                   onRunSubflow={runWorkflow}

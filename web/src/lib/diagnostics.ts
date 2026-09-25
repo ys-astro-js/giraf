@@ -7,6 +7,8 @@ export type Diagnostic = {
   timestamp: number
   runId?: string
   nodeId?: string
+  connectionId?: string
+  current?: boolean
   runCreatedAt?: number
   scope?: string
 }
@@ -45,6 +47,9 @@ function validDiagnostic(value: unknown): value is Diagnostic {
 // In-memory stores remain available to tests without touching browser storage.
 export function createDiagnosticStore(storage?: DiagnosticStorage) {
   let entries: Diagnostic[] = []
+  let current: Diagnostic[] = []
+  let currentDocument = ""
+  let snapshot: Diagnostic[] = []
   let dismissed: Diagnostic[] = []
   const successful = new Map<string, SuccessfulRun>()
   const listeners = new Set<() => void>()
@@ -78,7 +83,9 @@ export function createDiagnosticStore(storage?: DiagnosticStorage) {
   } catch (error) {
     console.warn("오류 기록을 복원하지 못했습니다.", error)
   }
+  snapshot = entries
   function publish() {
+    snapshot = [...current, ...entries]
     try {
       storage?.setItem(
         storageKey,
@@ -107,7 +114,33 @@ export function createDiagnosticStore(storage?: DiagnosticStorage) {
     )
   }
   return {
-    getSnapshot: () => entries,
+    getSnapshot: () => snapshot,
+    getHistory: () => entries,
+    currentForNode: (nodeId: string) => current.filter(entry => entry.nodeId === nodeId),
+    currentForConnection: (connectionId: string) => current.filter(entry => entry.connectionId === connectionId),
+    replaceCurrent(documentId: string, issues: {id: string; severity: DiagnosticSeverity; message: string; nodeId: string; connectionId?: string}[]) {
+      currentDocument = documentId
+      const previous = new Map(current.map(entry => [entry.id, entry]))
+      current = issues.map(issue => {
+        const id = `current:${documentId}:${issue.id}`
+        return { ...issue, id, source: "현재 워크플로우", current: true, timestamp: previous.get(id)?.timestamp ?? Date.now() }
+      }).sort((a, b) => Number(b.severity === "error") - Number(a.severity === "error"))
+      publish()
+    },
+    clearCurrent(documentId?: string) {
+      if (documentId && documentId !== currentDocument) return
+      if (!current.length) return
+      current = []
+      publish()
+    },
+    pruneCurrent(nodeIds: string[], connectionIds: string[]) {
+      const nodes = new Set(nodeIds)
+      const connections = new Set(connectionIds)
+      const next = current.filter(entry => entry.nodeId && nodes.has(entry.nodeId) && (!entry.connectionId || connections.has(entry.connectionId)))
+      if (next.length === current.length) return
+      current = next
+      publish()
+    },
     isResolved,
     subscribe(listener: () => void) {
       listeners.add(listener)

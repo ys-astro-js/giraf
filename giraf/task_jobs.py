@@ -14,7 +14,7 @@ from copy import deepcopy
 
 from .jobs import ROOT, RUNS, atomic_json
 from .task_catalog import TASKS, SNAPSHOT, parameters, CALIBRATIONS
-from .task_expressions import resolve_expression
+from .task_expressions import resolve_expression, inspect_expression
 
 def digest(path):
     with Path(path).open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
@@ -61,13 +61,13 @@ def values(name, supplied):
     return result
 
 
-def validate_task(payload, resolve):
+def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozenset()):
     name = payload.get('task')
     if name not in TASKS: raise ValueError('지원하는 IRAF task를 선택해 주세요.')
     spec = TASKS[name]
     if spec.get('adapter') == 'generic':
         from .generic_tasks import validate_generic
-        return validate_generic(spec, payload, resolve)
+        return validate_generic(spec, payload, resolve, diagnostics=diagnostics, pending_roles=pending_roles)
     params = values(name, payload.get('parameters', {}))
     prep = values('ccdproc', payload.get('ccdproc', {}))
     package = values('ccdred', payload.get('ccdred', {}))
@@ -89,7 +89,7 @@ def validate_task(payload, resolve):
         expression=expressions.get(role['name'],'')
         if not expression:continue
         if role['kind']=='image':
-            expanded=resolve_expression(expression,directory)
+            expanded=(inspect_expression if diagnostics else resolve_expression)(expression,directory)
         else:
             path=Path(expression).expanduser()
             if not path.is_absolute():path=Path(directory)/path
@@ -103,14 +103,14 @@ def validate_task(payload, resolve):
         selection = supplied.get(role['name'], [])
         if not isinstance(selection, list) or any(not isinstance(i, str) for i in selection):
             raise ValueError('파일 ID 목록을 선택해 주세요.')
-        expanded, list_sources = expand_image_selection(role, selection, lambda id: expression_rows[id] if id in expression_rows else resolve(id), directory)
+        expanded, list_sources = expand_image_selection(role, selection, lambda id: expression_rows[id] if id in expression_rows else resolve(id), directory, inspection=diagnostics)
         supplied[role['name']] = [row['id'] for row in expanded]
         expression_rows.update({row['id']: row for row in expanded})
         input_lists.update({row['path']: row for row in list_sources})
     for role in roles:
         ids = supplied.get(role['name'], [])
         if not isinstance(ids, list) or any(not isinstance(i,str) for i in ids): raise ValueError('파일 ID 목록을 선택해 주세요.')
-        if role.get('required') and not ids: raise ValueError(role['label']+'을 선택해 주세요.')
+        if role.get('required') and not ids and role['name'] not in pending_roles: raise ValueError(role['label']+'을 선택해 주세요.')
         if not role['multiple'] and len(ids)>1: raise ValueError(role['label']+'은 파일 한 개만 선택해 주세요.')
         inputs[role['name']] = ids
         for id in ids:
@@ -120,24 +120,24 @@ def validate_task(payload, resolve):
                 raise ValueError(row['name']+': IRAF가 읽을 수 있는 FITS 영상을 선택해 주세요.')
             if role['kind']=='text' and not accepts_asset('text', row.get('asset','image')):
                 raise ValueError(row['name']+': 텍스트 파일을 선택해 주세요.')
-            row['sha256']=digest(row['path'])
+            if not diagnostics: row['sha256']=digest(row['path'])
             sources[id] = row
     main = inputs[spec['inputs'][0]['name']]
     corrections = params if name=='ccdproc' else prep
     uses_prep = name=='ccdproc' or (spec.get('preprocess') and (params.get('process')=='yes' or name.startswith('mk')))
-    if name=='mkskyflat' and not inputs.get('flat'):
+    if name=='mkskyflat' and not inputs.get('flat') and 'flat' not in pending_roles:
         raise ValueError('mkskyflat: sky 영상에 사용한 원래 flat 기준 영상을 선택해 주세요.')
     if uses_prep:
         for flag, role in [('zerocor','zero'),('darkcor','dark'),('flatcor','flat'),('illumcor','illum'),('fringecor','fringe')]:
-            if corrections[flag]=='yes' and not inputs.get(role):
+            if corrections[flag]=='yes' and not inputs.get(role) and role not in pending_roles:
                 raise ValueError(f'ccdproc.{flag}=yes: {role} 기준 영상을 선택하거나 해당 보정을 꺼 주세요.')
-        if corrections['fixpix']=='yes' and not inputs.get('fixfile'):
+        if corrections['fixpix']=='yes' and not inputs.get('fixfile') and 'fixfile' not in pending_roles:
             raise ValueError('ccdproc.fixpix=yes: 불량 픽셀 영역 파일을 선택해 주세요.')
         for flag, field in [('overscan','biassec'),('trim','trimsec')]:
             if corrections[flag]=='yes' and not corrections[field]:
                 # Header regions remain valid IRAF input; no invented geometry.
                 from astropy.io import fits
-                if any(not fits.getheader(sources[id]['path']).get(field.upper()) for id in main):
+                if main and any(not fits.getheader(sources[id]['path']).get(field.upper()) for id in main):
                     raise ValueError(f'ccdproc.{flag}=yes: {field} 영역을 지정해 주세요. 입력 헤더에도 영역이 없습니다.')
     if name=='ccdhedit' and not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,67}', params['parameter']):
         raise ValueError('편집할 헤더 parameter를 입력해 주세요. 예: subset')
@@ -151,7 +151,11 @@ def validate_task(payload, resolve):
     if set(mapping)!=set(DEFAULT_MAPPING) or any(not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,67}', str(v)) for v in mapping.values()):
         raise ValueError('헤더 매핑에 FITS 키워드를 입력해 주세요.')
     exam = payload.get('exam', {})
-    if name=='imexamine':
+    if name=='imexamine' and diagnostics and not main and spec['inputs'][0]['name'] in pending_roles:
+        if exam.get('key') not in ('r','a','m','l','c'): raise ValueError('지원하는 조사 동작을 선택해 주세요.')
+        for group in ('rimexam','limexam','cimexam'):
+            values(group, exam.get('parameters', {}).get(group, {}))
+    if name=='imexamine' and not (diagnostics and not main and spec['inputs'][0]['name'] in pending_roles):
         try:
             x,y=float(exam['x']),float(exam['y'])
             row = sources[main[0]]
@@ -169,6 +173,9 @@ def validate_task(payload, resolve):
                 output=dict(name=output_name), mapping=mapping, exam=exam, section=section,
                 expressions=expressions,workingDirectory=directory,filePolicy=policy,instanceId=payload.get('instanceId'),
                 settings=dict(task=name, backend=backend, **params))
+    if diagnostics:
+        m['warnings'] = []
+        return m
     targets=[dict(path=r['path'],sha256=r['sha256'],role='input') for r in sources.values()]
     direct=policy.get('mode')=='direct'
     if direct and spec['output'] and name!='ccdhedit' and output_name:

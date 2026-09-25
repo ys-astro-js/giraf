@@ -411,6 +411,12 @@ export function payloadFor(map: TaskMap, id: string, catalog: Catalog) {
     inputs[slot.name] ??= [];
   }
   if(spec.adapter !== "generic") inputs.instrument = clone(t.instrument);
+  return taskPayload(t, inputs);
+}
+
+// Execution and live inspection serialize the same settings, but only execution
+// requires all connections to be ready and valid before building a request.
+function taskPayload(t: Instance, inputs: Record<string, string[]>) {
   return clone({
     calibration: undefined,
     task: t.task,
@@ -419,7 +425,7 @@ export function payloadFor(map: TaskMap, id: string, catalog: Catalog) {
     textInputs: clone(t.draft.textInputs || {}),
     alignmentBinding: t.draft.alignmentBinding ? clone(t.draft.alignmentBinding) : undefined,
     parameterSets: clone(t.parameterSets || {}),
-    instanceId: id,
+    instanceId: t.id,
     backend: t.backend,
     inputs,
     parameters: t.draft.parameters,
@@ -701,4 +707,50 @@ export function workflowRequest(
     })),
     links,
   };
+}
+
+/** The live checker receives every edge, including ones the run planner excludes. */
+export function workflowDiagnosticRequest(map: TaskMap, catalog: Catalog, workingDirectory: string) {
+  const connections = map.connections.map(connection => {
+    const task = map.tasks.find(task => task.id === connection.target)
+    const spec = catalog.tasks.find(spec => spec.name === task?.task)
+    const role = spec && connectionRoles(spec, catalog).find(role => role.name === connection.role)
+    return { ...connection, source: resolvedSource(map, connection.source, role?.kind) }
+  })
+  return {
+    workingDirectory,
+    nodes: map.tasks.map(task => {
+      const spec = catalog.tasks.find(spec => spec.name === task.task)
+      const inputs = clone(task.draft.inputs)
+      if (spec?.preprocess)
+        for (const slot of catalog.ccdproc.inputs)
+          inputs[slot.name] = clone(task.preprocess.inputs[slot.name] || [])
+      const incoming = connections.filter(connection => connection.target === task.id)
+      for (const role of new Set(incoming.map(connection => connection.role)))
+        inputs[role] = incoming.filter(connection => connection.role === role).flatMap(connection =>
+          connection.source.kind === "pending" ? [] : connection.source.ids)
+      if (spec && spec.adapter !== "generic") inputs.instrument = clone(task.instrument)
+      return {
+        id: task.id,
+        label: task.label,
+        payload: { ...taskPayload(task, inputs), workingDirectory },
+      }
+    }),
+    connections,
+  }
+}
+
+export function workflowDiagnosticSignature(map: TaskMap, workingDirectory: string) {
+  return JSON.stringify({
+    workingDirectory,
+    tasks: map.tasks.map(task => {
+      const content = { ...task }
+      delete content.position
+      delete content.collapsed
+      delete content.subflowId
+      return content
+    }),
+    connections: map.connections,
+    runs: map.runs,
+  })
 }

@@ -13,6 +13,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type DragEvent,
   type CSSProperties,
 } from "react"
@@ -51,7 +52,14 @@ import {
   Terminal,
   File,
   X,
+  CircleX,
+  TriangleAlert,
+  CircleDashed,
+  Clock3,
+  Ban,
+  CircleHelp,
 } from "lucide-react"
+import { diagnostics, type Diagnostic } from "@/lib/diagnostics"
 import { toast } from "@/components/ui/toast"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
@@ -107,9 +115,11 @@ type Props = {
   onRunSubflow?: (id: string) => void
   workflowBusy?: boolean
   runDisabled?: boolean
+  revealConnection?: { id: string; revision: number }
 }
 type DropChoice = { source: Source; target: string; roles: string[] }
 type NodeContext = Pick<Props, "map" | "catalog" | "rows" | "onInput"> & {
+  currentIssues: Diagnostic[]
   selectingGroup: boolean
   dragPreview: { entering?: string; leaving?: string }
   editGroup: (id: string) => void
@@ -138,8 +148,11 @@ const TaskNode = memo(function TaskNode({
     dropChoice,
     finishDrop,
     selectingGroup,
+    currentIssues,
   } = useContext(WorkflowContext)!
   const { task, geometry } = data
+  const nodeIssues = currentIssues.filter(issue => issue.nodeId === id)
+  const nodeIssue = nodeIssues.find(issue => issue.severity === "error") || nodeIssues[0]
   const spec = catalog.tasks.find((s) => s.name === task.task)
   const sourceConnections = map.connections.filter(
     (connection) => connection.source.kind !== "files" && connection.source.taskId === id
@@ -148,6 +161,9 @@ const TaskNode = memo(function TaskNode({
     (connection) => outputHandle(connection.source, spec) === handle
   )
   const run = map.runs.filter((r) => r.instanceId === id).at(-1)
+  const nodeStatus = nodeIssue
+    ? `${nodeIssue.severity === "error" ? "오류" : "경고"}: ${nodeIssues.map(issue => issue.message).join("; ")}`
+    : run ? stateLabel(run.state) : "실행 전"
   const output = nodeOutput(map, id, geometry.primaryOutputRole)
   const primaryName = task.outputPorts?.find(p=>p.id==="$default")?.name.trim() || ""
   const flow = useReactFlow<TaskFlowNode>()
@@ -174,6 +190,7 @@ const TaskNode = memo(function TaskNode({
       data-running={run?.state === "running"}
       data-dragging={dragging}
       data-connection-target={connectionTarget !== null}
+      data-diagnostic={nodeIssue?.severity}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => drop(e, id)}
     >
@@ -311,24 +328,16 @@ const TaskNode = memo(function TaskNode({
         )}
       </div>
       <div className="node-footer">
-        <span className="node-state" data-failed={run?.state === "failed"}>
-          {run?.state === "running" ? (
-            <LoaderCircle
-              className="node-running-icon"
-              role="img"
-              aria-label="실행 중"
-            >
-              <title>실행 중</title>
-            </LoaderCircle>
-          ) : run?.state === "completed" ? (
-            <Check role="img" aria-label="완료">
-              <title>완료</title>
-            </Check>
-          ) : run ? (
-            stateLabel(run.state)
-          ) : (
-            "실행 전"
-          )}
+        <span className="node-state" data-severity={nodeIssue?.severity} data-failed={!nodeIssue && run?.state === "failed"} role="img" aria-label={nodeStatus} title={nodeStatus}>
+          {nodeIssue?.severity === "error" ? <CircleX aria-hidden="true" />
+            : nodeIssue ? <TriangleAlert aria-hidden="true" />
+            : run?.state === "running" || run?.state === "queued" ? <LoaderCircle className="node-running-icon" aria-hidden="true" />
+            : run?.state === "completed" ? <Check aria-hidden="true" />
+            : run?.state === "waiting" ? <Clock3 aria-hidden="true" />
+            : run?.state === "failed" ? <CircleX aria-hidden="true" />
+            : run?.state === "cancelled" ? <Ban aria-hidden="true" />
+            : run ? <CircleHelp aria-hidden="true" />
+            : <CircleDashed aria-hidden="true" />}
         </span>
         
         {output.kind === "result" && (
@@ -441,6 +450,7 @@ export function TaskMapView({
   onSearch,
   layoutRevision = 0,
   revealNode,
+  revealConnection,
   onAutoLayout,
   layoutBusy = false,
   map,
@@ -455,6 +465,8 @@ export function TaskMapView({
   workflowBusy,
   runDisabled,
 }: Props) {
+  const diagnosticEntries = useSyncExternalStore(diagnostics.subscribe, diagnostics.getSnapshot, diagnostics.getSnapshot)
+  const currentIssues = useMemo(() => diagnosticEntries.filter(entry => entry.current), [diagnosticEntries])
   const [groupFormHidden, setGroupFormHidden] = useState(false)
   const [selectingGroup, setSelectingGroup] = useState(false)
   const [groupSelection, setGroupSelection] = useState<string[]>([])
@@ -512,10 +524,12 @@ export function TaskMapView({
     () =>
       flowEdges(map, catalog, search).map((edge) => ({
         ...edge,
+        className: [edge.className, currentIssues.some(issue => issue.connectionId === edge.id && issue.severity === "error") ? "workflow-edge-error" : currentIssues.some(issue => issue.connectionId === edge.id) ? "workflow-edge-warning" : ""].filter(Boolean).join(" "),
+        ariaLabel: `${edge.ariaLabel}${currentIssues.filter(issue => issue.connectionId === edge.id).map(issue => `, ${issue.severity === "error" ? "오류" : "경고"}: ${issue.message}`).join("")}`,
         selected: !selectingGroup && selectedEdges.includes(edge.id),
         selectable: !selectingGroup,
       })),
-    [map, catalog, search, selectedEdges, selectingGroup]
+    [map, catalog, search, selectedEdges, selectingGroup, currentIssues]
   )
   const choose = useCallback(
     (id: string) => {
@@ -742,6 +756,11 @@ export function TaskMapView({
     })
     return () => cancelAnimationFrame(frame)
   }, [flow, revealNode])
+  useEffect(() => {
+    if (!revealConnection) return
+    const frame = requestAnimationFrame(() => setSelectedEdges([revealConnection.id]))
+    return () => cancelAnimationFrame(frame)
+  }, [revealConnection])
   function revealSelected() {
     if (map.view.selected)
       void flow?.fitView({
@@ -816,6 +835,7 @@ export function TaskMapView({
           <WorkflowContext.Provider
             value={{
               map,
+              currentIssues,
               catalog,
               rows,
               choose,
