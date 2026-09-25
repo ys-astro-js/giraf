@@ -1,5 +1,5 @@
 import {nodeGeometry,roleActive} from "../src/lib/node-interaction"
-import {inputPorts,outputPorts,portHandle,compactPortLabel} from "../src/lib/calibration-ports"
+import {inputPorts,outputPorts,portHandle,compactPortLabel,portFrames} from "../src/lib/calibration-ports"
 import {connectFlow,flowEdges,connectInputPort} from "../src/lib/workflow-flow"
 import {test,expect} from 'bun:test'
 import {calibrationGroups,matchCalibration,metadataItems,groupOverride,updateGroupOverride} from '../src/lib/calibration'
@@ -9,6 +9,56 @@ const frame=(id:string,filter?:string,exposure?:number):Frame=>({id,label:id,fil
 const spec:Spec={name:'ccdproc',title:'ccdproc',package:'noao.imred.ccdred',adapter:'generic',parameters:[],inputs:[{name:'images',label:'images',kind:'image',multiple:true},{name:'dark',label:'dark',kind:'image',multiple:false}],outputs:[{name:'output',kind:'image',mode:'each',default:''}],output:null,kind:'image'}
 const cat:Catalog={version:'test',tasks:[spec],ccdproc:{parameters:[],inputs:[]},ccdred:[],exam:{}}
 const prefs:Preferences={drafts:{},backend:'cl',mapping:{},instrument:[],packageValues:{}}
+
+test('metadata tracing merges shared ancestors without multiplying frame references', () => {
+ const root=makeInstance(spec,cat,prefs,'root')
+ root.draft.inputs.images=['b','v','b','list','missing']
+ const map={...emptyMap(),tasks:[root]}
+ let parents=[root.id]
+ for(let level=0;level<16;level++) {
+  const next=[`${level}a`,`${level}b`]
+  for(const id of next) {
+   map.tasks.push(makeInstance(spec,cat,prefs,id))
+   for(const parent of parents) map.connections.push({id:parent+'-'+id,target:id,role:'images',source:{kind:'pending',taskId:parent}})
+  }
+  parents=next
+ }
+ const rows=[frame('b','B',60),frame('v','V',90),{...frame('list'),asset:'image-list'}]
+ expect(portFrames(map,map.tasks.at(-1)!,'images',cat,rows).map(r=>r.id)).toEqual(['b','v'])
+ // Results must be fresh after edits, not retained across graph snapshots.
+ root.draft.inputs.images=['v']
+ expect(portFrames(map,map.tasks.at(-1)!,'images',cat,rows).map(r=>r.id)).toEqual(['v'])
+})
+
+test('metadata tracing preserves branch filters, frame precedence and result selections', () => {
+ const root=makeInstance(spec,cat,prefs,'root'),target=makeInstance(spec,cat,prefs,'target')
+ root.draft.inputs.images=['b','v']
+ const map={...emptyMap(),tasks:[root,target]}
+ map.runs=[{id:'run',instanceId:'root',state:'completed',products:[frame('b','old',1),frame('result','Ha',120)]}]
+ map.connections=[
+  {id:'v',target:'target',role:'images',source:{kind:'pending',taskId:'root',group:{filter:'V'}}},
+  {id:'b',target:'target',role:'images',source:{kind:'pending',taskId:'root',group:{filter:'B'}}},
+  {id:'result',target:'target',role:'images',source:{kind:'result',runId:'run',ids:['result','v']}},
+ ]
+ const rows=[frame('b','B',60),frame('v','V',90)]
+ expect(portFrames(map,target,'images',cat,rows)).toEqual([rows[1],rows[0],map.runs[0].products[1]])
+ map.connections[0].source.group={filter:'B',exposure:90}
+ expect(portFrames(map,target,'images',cat,rows).map(r=>r.id)).toEqual(['b','result','v'])
+})
+
+test('metadata tracing tolerates cycles without caching path-dependent partial results', () => {
+ const [a,b,target]=['a','b','target'].map(id=>makeInstance(spec,cat,prefs,id))
+ const map={...emptyMap(),tasks:[a,b,target]}
+ map.connections=[
+  {id:'ab',target:'b',role:'images',source:{kind:'pending',taskId:'a'}},
+  {id:'ba',target:'a',role:'images',source:{kind:'pending',taskId:'b'}},
+  {id:'files',target:'a',role:'images',source:{kind:'files',ids:['f'],label:'f'}},
+  {id:'at',target:'target',role:'images',source:{kind:'pending',taskId:'a',group:{filter:'V'}}},
+  {id:'bt',target:'target',role:'images',source:{kind:'pending',taskId:'b'}},
+ ]
+ expect(portFrames(map,target,'images',cat,[frame('f','B',60)]).map(r=>r.id)).toEqual(['f'])
+})
+
 test('metadata matching preserves filter identities, does not guess missing values or choose duplicate masters',()=>{
  expect(matchCalibration(frame('s','B',90),[frame('d1','',60),frame('d2','',90)],'dark').id).toBe('d2')
  expect(matchCalibration(frame('s','Ha',90),[frame('f','Ha',3)],'flat').id).toBe('f')

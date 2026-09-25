@@ -1,10 +1,54 @@
 """Read-only checks of the workflow currently shown in the editor."""
 from pathlib import Path
+from collections import Counter
 import json
 
 from .model import inspect_file
 from .task_catalog import TASKS, CALIBRATIONS
 from .task_jobs import validate_task, values
+
+
+def connection_components(connections):
+    """Label strongly connected components in O(V + E), without recursion."""
+    outgoing, incoming = {}, {}
+    for edge in connections:
+        source, target = edge.get('source', {}).get('taskId'), edge.get('target')
+        if source is None or target is None:
+            continue
+        outgoing.setdefault(source, []).append(target)
+        outgoing.setdefault(target, [])
+        incoming.setdefault(target, []).append(source)
+        incoming.setdefault(source, [])
+
+    # Kosaraju: finish order on the graph, then traverse its reversed edges.
+    seen, finished = set(), []
+    for node in outgoing:
+        if node in seen:
+            continue
+        seen.add(node)
+        stack = [(node, iter(outgoing[node]))]
+        while stack:
+            current, neighbors = stack[-1]
+            neighbor = next(neighbors, None)
+            if neighbor is None:
+                finished.append(current)
+                stack.pop()
+            elif neighbor not in seen:
+                seen.add(neighbor)
+                stack.append((neighbor, iter(outgoing[neighbor])))
+
+    components = {}
+    for node in reversed(finished):
+        if node in components:
+            continue
+        components[node] = node
+        stack = [node]
+        while stack:
+            for neighbor in incoming[stack.pop()]:
+                if neighbor not in components:
+                    components[neighbor] = node
+                    stack.append(neighbor)
+    return components
 
 
 def workflow_diagnostics(request, resolve):
@@ -23,16 +67,8 @@ def workflow_diagnostics(request, resolve):
                            message=message, nodeId=node_id,
                            **({'connectionId': connection_id} if connection_id else {})))
 
-    def reaches(start, goal, seen=None):
-        if start == goal:
-            return True
-        seen = seen or set()
-        if start in seen:
-            return False
-        seen.add(start)
-        return any(c.get('source', {}).get('taskId') == start and
-                   reaches(c.get('target'), goal, seen) for c in connections)
-
+    components = connection_components(connections)
+    input_counts = Counter((edge.get('target'), edge.get('role')) for edge in connections)
     pending = {node['id']: set() for node in nodes}
     correction_flags = {'zero': 'zerocor', 'dark': 'darkcor', 'flat': 'flatcor',
                         'illum': 'illumcor', 'fringe': 'fringecor', 'fixfile': 'fixpix'}
@@ -65,7 +101,7 @@ def workflow_diagnostics(request, resolve):
             if not enabled:
                 add('error', '비활성 입력 역할에 연결되어 있습니다.', target_id, edge_id)
                 continue
-        if not slot.get('multiple', False) and sum(c.get('target') == target_id and c.get('role') == slot['name'] for c in connections) > 1:
+        if not slot.get('multiple', False) and input_counts[target_id, slot['name']] > 1:
             add('error', '입력 연결은 하나만 선택해 주세요.', target_id, edge_id)
             continue
         parent_id = source.get('taskId')
@@ -74,7 +110,7 @@ def workflow_diagnostics(request, resolve):
             if not parent:
                 add('error', '출발 작업이 삭제되었습니다.', target_id, edge_id)
                 continue
-            if reaches(target_id, parent_id):
+            if components[target_id] == components[parent_id]:
                 add('error', '순환 연결은 만들 수 없습니다.', target_id, edge_id)
                 continue
             parent_spec = TASKS.get(parent['payload'].get('task'))

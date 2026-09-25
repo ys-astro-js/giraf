@@ -1,5 +1,6 @@
 """Local workbench API. Files are referenced by registered IDs, never shell text."""
 from __future__ import annotations
+from copy import deepcopy
 from functools import lru_cache, partial
 from pathlib import Path
 import hashlib
@@ -43,12 +44,32 @@ def save():
     atomic_json(STATE, workspace)
 
 
-def register(path, label=None, job=None, asset=None):
+@lru_cache(maxsize=512)
+def _inventory_metadata(path, version):
+    return inspect_file(path)
+
+
+def inventory_metadata(path):
+    """Reuse unchanged FITS headers without sharing mutable registry metadata."""
+    path = Path(path).resolve()
+    try:
+        stat = path.stat()
+    except OSError:
+        # Missing/unreadable files retain inspect_file's actionable error row.
+        return inspect_file(path)
+    version = (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_dev, stat.st_ino)
+    return deepcopy(_inventory_metadata(path, version))
+
+
+def register(path, label=None, job=None, asset=None, *, inspected=None):
     path = Path(path).resolve()
     id = hashlib.sha256(str(path).encode()).hexdigest()[:20]
     asset = asset or ('image-list' if path.suffix.lower()=='.list' else 'image' if path.suffix.lower() in ('.fits','.fit','.fts') else 'mask' if path.suffix.lower()=='.pl' else 'metacode' if path.suffix.lower()=='.gki' else 'binary' if path.suffix.lower()=='.bin' else 'text')
-    r = inspect_file(path) if asset=='image' else dict(path=str(path),name=path.name,kind='exclude',detected_kind='exclude',
-          filter='',exposure=0,shape='',history={},error='',note='',processed=False,resumable=False)
+    if asset == 'image':
+        r = deepcopy(inspected) if inspected is not None else inventory_metadata(path)
+    else:
+        r = dict(path=str(path), name=path.name, kind='exclude', detected_kind='exclude',
+                 filter='', exposure=0, shape='', history={}, error='', note='', processed=False, resumable=False)
     r['asset'] = asset
     r['id'] = id
     r['label'] = label or r['name']
@@ -64,8 +85,8 @@ def register(path, label=None, job=None, asset=None):
 def files():
     rows = []
     try:
-        for row in scan(workspace['folder']):
-            rows.append(register(row['path']))
+        for row in scan(workspace['folder'], inspector=inventory_metadata):
+            rows.append(register(row['path'], inspected=row))
     except ValueError:
         pass
     for path in sorted(Path(workspace['folder']).glob('*.list')):
@@ -537,11 +558,23 @@ async def validate_endpoint(request: Request, *, action):
     return JSONResponse(job_info(job))
 
 
-async def jobs_endpoint(request: Request):
+def log_tail(path: Path, characters: int) -> str:
+    # UTF-8 uses at most four bytes per character. Read enough for the existing
+    # character limit, including universal newline conversion used by read_text.
+    byte_limit = characters * 4
+    with path.open('rb') as stream:
+        size = stream.seek(0, 2)
+        stream.seek(max(0, size - byte_limit))
+        text = stream.read(byte_limit).decode('utf-8', errors='replace')
+    return text.replace('\r\n', '\n').replace('\r', '\n')[-characters:]
+
+
+# Starlette runs synchronous endpoints in its threadpool, including JSON encoding.
+def jobs_endpoint(request: Request):
     return JSONResponse([job_info(p.parent) for p in sorted(RUNS.glob('*/manifest.json'), reverse=True)])
 
 
-async def job_endpoint(request: Request):
+def job_endpoint(request: Request):
     q = request.query_params
     id = q['id']
     job = (RUNS / id).resolve()
@@ -551,8 +584,8 @@ async def job_endpoint(request: Request):
     if q.get('details'):
         script='commands.cl' if info.get('backend')=='cl' else 'commands.py'
         info['commands'] = (job / script).read_text() if (job / script).exists() else ''
-        info['log'] = (job / 'worker.log').read_text(errors='replace')[-24000:] if (job / 'worker.log').exists() else ''
-        if (job/'task.log').exists():info['log']=(job/'task.log').read_text(errors='replace')[-80000:]
+        log, limit = (job / 'task.log', 80000) if (job / 'task.log').exists() else (job / 'worker.log', 24000)
+        info['log'] = log_tail(log, limit) if log.exists() else ''
     return JSONResponse(info)
 
 

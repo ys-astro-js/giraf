@@ -103,13 +103,22 @@ class WorkflowManager:
         self.approved = threading.Event()
         self.thread = None
         self.state = None
+        self._saved = False
+        self._snapshot_files = {}
         history = self.root / 'memberships.json'
         self.memberships = json.loads(history.read_text()) if history.exists() else {}
         path = self.root / 'current.json'
         if path.exists():
             self.state = json.loads(path.read_text())
+            for field in ('graph', 'jobs'):
+                filename = self.state.pop(field + 'File', None)
+                if filename:
+                    self._snapshot_files[field] = filename
+                    self.state[field] = json.loads((self.root / filename).read_text())
+            self._saved = True
             if self.state['state'] in ACTIVE:
                 self.state.update(state='failed', message='서버가 재시작되어 워크플로우가 중단되었습니다. 실행 기록을 확인해 주세요.')
+                self._saved = False
 
         if self.state:
             self._record_memberships()
@@ -119,17 +128,18 @@ class WorkflowManager:
         current = self.state.get('currentJob')
         if current and not any(job['id'] == current['id'] for job in jobs):
             jobs.append(current)
-        changed = False
+        updates = {}
         for step, job in enumerate(jobs):
             membership = {'id': self.state['id'], 'step': step}
             if self.memberships.get(job['id']) != membership:
-                self.memberships[job['id']] = membership
-                changed = True
-        if changed:
+                updates[job['id']] = membership
+        if updates:
+            memberships = {**self.memberships, **updates}
             self.root.mkdir(parents=True, exist_ok=True)
             temporary = self.root / 'memberships.tmp'
-            temporary.write_text(json.dumps(self.memberships, ensure_ascii=False))
+            temporary.write_text(json.dumps(memberships, ensure_ascii=False))
             temporary.replace(self.root / 'memberships.json')
+            self.memberships = memberships
 
     def membership(self, job_id):
         with self.lock:
@@ -148,12 +158,35 @@ class WorkflowManager:
 
     def save(self, patch):
         with self.lock:
-            self.state.update(patch)
+            if self._saved and all(key in self.state and self.state[key] == value for key, value in patch.items()):
+                return
+            state = {**self.state, **deepcopy(patch)}
             self.root.mkdir(parents=True, exist_ok=True)
+            snapshot = dict(state)
+            snapshot_files = dict(self._snapshot_files)
+            for field in ('graph', 'jobs'):
+                if field not in state:
+                    continue
+                filename = snapshot_files.get(field)
+                changed = field in patch and state[field] != self.state.get(field)
+                if not self._saved or not filename or changed:
+                    # Alternate two files: the previous snapshot stays readable
+                    # until its pointer is committed, without accumulating copies.
+                    filename = f'{field}-1.json' if filename == f'{field}-0.json' else f'{field}-0.json'
+                    field_tmp = self.root / (field + '.tmp')
+                    field_tmp.write_text(json.dumps(state[field], ensure_ascii=False))
+                    field_tmp.replace(self.root / filename)
+                    snapshot_files[field] = filename
+                del snapshot[field]
+                snapshot[field + 'File'] = filename
             tmp = self.root / 'current.tmp'
-            tmp.write_text(json.dumps(self.state, ensure_ascii=False))
+            tmp.write_text(json.dumps(snapshot, ensure_ascii=False))
             tmp.replace(self.root / 'current.json')
+            self.state = state
+            self._snapshot_files = snapshot_files
+            self._saved = False
             self._record_memberships()
+            self._saved = True
 
     def start(self, graph):
         workflow_order(graph)
@@ -164,6 +197,7 @@ class WorkflowManager:
             self.stop.clear()
             self.approved.clear()
             self.state = dict(id=uuid4().hex, state='running', jobs=[], total=len(graph['nodes']), done=0, currentTask='', message='', currentJob=None, plan=None)
+            self._saved = False
             self.save({'graph': graph})
             self.thread = threading.Thread(target=self._execute, args=(graph,), daemon=True)
             self.thread.start()

@@ -104,5 +104,63 @@ class WorkflowDiagnosticsTests(unittest.TestCase):
                 {"nodes": selected_list, "connections": [], "workingDirectory": str(self.folder)}, resolve)))
 
 
+class GraphDiagnosticsTests(unittest.TestCase):
+    def edge(self, source, target, role='input'):
+        return dict(id=f'{source}-{target}-{role}', target=target, role=role,
+                    source=dict(kind='pending', taskId=source))
+
+    def diagnose(self, ids, connections):
+        spec = dict(name='test', adapter='generic',
+                    inputs=[dict(name='input', kind='image', multiple=True),
+                            dict(name='reference', kind='image', multiple=False)],
+                    outputs=[dict(name='output', kind='image')])
+        request = dict(nodes=[dict(id=id, payload=dict(task='test')) for id in ids],
+                       connections=connections)
+        with patch('giraf.workflow_diagnostics.TASKS', {'test': spec}), patch(
+            'giraf.workflow_diagnostics.validate_task', return_value={'warnings': []}
+        ):
+            return workflow_diagnostics(request, lambda _: None)
+
+    def test_marks_every_cycle_edge_but_not_bridges_or_downstream_edges(self):
+        edges = [self.edge(a, b) for a, b in [
+            ('a', 'b'), ('b', 'a'), ('b', 'c'), ('c', 'd'), ('d', 'c'),
+            ('d', 'e'), ('self', 'self'), ('missing', 'e')]]
+        issues = self.diagnose(['a', 'b', 'c', 'd', 'e', 'self'], edges)
+        cyclic = {issue['connectionId'] for issue in issues if '순환' in issue['message']}
+        self.assertEqual(cyclic, {edges[i]['id'] for i in (0, 1, 3, 4, 6)})
+        self.assertTrue(any(issue['connectionId'] == edges[-1]['id'] and '삭제' in issue['message'] for issue in issues))
+
+    def test_long_chain_and_cycle_do_not_depend_on_python_recursion_limit(self):
+        ids = [str(i) for i in range(1200)]
+        edges = [self.edge(a, b) for a, b in zip(ids, ids[1:])]
+        self.assertEqual(self.diagnose(ids, edges), [])
+        edges.append(self.edge(ids[-1], ids[0]))
+        self.assertEqual({issue['connectionId'] for issue in self.diagnose(ids, edges)},
+                         {edge['id'] for edge in edges})
+
+    def test_graph_checks_have_a_linear_connection_visit_budget(self):
+        class CountedConnections(list):
+            visits = 0
+
+            def __iter__(self):
+                for edge in super().__iter__():
+                    self.visits += 1
+                    yield edge
+
+        ids = [str(i) for i in range(40)]
+        for role in ('input', 'reference'):
+            with self.subTest(role=role):
+                edges = CountedConnections(self.edge(a, b, role) for a, b in zip(ids, ids[1:]))
+                self.assertEqual(self.diagnose(ids, edges), [])
+                self.assertLessEqual(edges.visits, 10 * (len(ids) + len(edges)))
+
+    def test_single_input_duplicate_errors_keep_priority_over_cycle_errors(self):
+        edges = [self.edge('a', 'b', 'reference'), self.edge('c', 'b', 'reference'), self.edge('b', 'a')]
+        issues = self.diagnose(['a', 'b', 'c'], edges)
+        for edge in edges[:2]:
+            self.assertTrue(any(issue['connectionId'] == edge['id'] and '하나만' in issue['message'] for issue in issues))
+        self.assertTrue(any(issue['connectionId'] == edges[2]['id'] and '순환' in issue['message'] for issue in issues))
+
+
 if __name__ == "__main__":
     unittest.main()

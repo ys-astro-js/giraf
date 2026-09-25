@@ -33,19 +33,57 @@ function groups(frames:Frame[],mode:MetadataMode):CalibrationGroup[] {
 }
 /** Resolve known input metadata through unexecuted nodes without pretending it is a result. */
 export function portFrames(map:TaskMap,task:Instance,role:string,catalog:Catalog,rows:Frame[],seen=new Set<string>()):Frame[] {
- const key=task.id+':'+role
- if(seen.has(key))return []
- const visited=new Set(seen).add(key),all=[...rows,...map.runs.flatMap(r=>r.products)]
- const links=map.connections.filter(c=>c.target===task.id&&c.role===role)
- if(!links.length)return (task.draft.inputs[role]||task.preprocess.inputs[role]||[]).map(id=>all.find(r=>r.id===id)).filter((r):r is Frame=>!!r&&r.asset!=='image-list')
- return links.flatMap(c=>{
-  if(c.source.kind!=='pending')return c.source.ids.map(id=>all.find(r=>r.id===id)).filter((r):r is Frame=>!!r&&r.asset!=='image-list')
-  const source=c.source
-  const parent=map.tasks.find(t=>t.id===source.taskId),spec=catalog.tasks.find(s=>s.name===parent?.task)
-  if(!parent||!spec)return []
-  const frames=portFrames(map,parent,spec.inputs[0]?.name||'input',catalog,rows,visited)
-  return c.source.group?frames.filter(r=>matchesGroup(r,c.source.group!)):frames
- })
+ const keyFor=(id:string,role:string)=>JSON.stringify([id,role])
+ const tasks=new Map(map.tasks.map(t=>[t.id,t]))
+ const specs=new Map(catalog.tasks.map(s=>[s.name,s]))
+ const framesById=new Map<string,Frame>()
+ // The current library takes precedence over older run metadata.
+ for(const row of [...rows,...map.runs.flatMap(r=>r.products)]) {
+  if(!framesById.has(row.id))framesById.set(row.id,row)
+ }
+ const incoming=new Map<string,TaskMap['connections']>()
+ for(const link of map.connections) {
+  const key=keyFor(link.target,link.role),links=incoming.get(key) || []
+  links.push(link)
+  incoming.set(key,links)
+ }
+ type Resolution={frames:Frame[];cyclic:boolean}
+ const memo=new Map<string,Resolution>(),visiting=new Set<string>()
+ function resolve(current:Instance,inputRole:string):Resolution {
+  const key=keyFor(current.id,inputRole)
+  if(visiting.has(key) || seen.has(current.id+':'+inputRole))return {frames:[],cyclic:true}
+  const cached=memo.get(key)
+  if(cached)return cached
+  visiting.add(key)
+  const unique=new Map<string,Frame>()
+  const add=(row:Frame|undefined)=>{
+   if(row && row.asset!=='image-list' && !unique.has(row.id))unique.set(row.id,row)
+  }
+  const links=incoming.get(key) || []
+  let cyclic=false
+  if(!links.length) {
+   for(const id of current.draft.inputs[inputRole] || current.preprocess.inputs[inputRole] || [])add(framesById.get(id))
+  }
+  for(const link of links) {
+   const source=link.source
+   if(source.kind!=='pending') {
+    for(const id of source.ids)add(framesById.get(id))
+    continue
+   }
+   const parent=tasks.get(source.taskId),spec=parent && specs.get(parent.task)
+   if(!parent || !spec)continue
+   const result=resolve(parent,spec.inputs[0]?.name || 'input')
+   cyclic ||= result.cyclic
+   // Filter each branch after resolving its shared ancestor.
+   for(const row of result.frames)if(!source.group || matchesGroup(row,source.group))add(row)
+  }
+  visiting.delete(key)
+  const result={frames:[...unique.values()],cyclic}
+  // A cycle cutoff depends on the current path and cannot be reused elsewhere.
+  if(!cyclic)memo.set(key,result)
+  return result
+ }
+ return resolve(task,role).frames
 }
 export function inputPorts(map:TaskMap,task:Instance,catalog:Catalog,rows:Frame[]):InputPort[] {
  const spec=catalog.tasks.find(s=>s.name===task.task)
