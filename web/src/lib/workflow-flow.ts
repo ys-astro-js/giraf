@@ -124,7 +124,7 @@ export function flowNodes(
   })
   return [...groups, ...tasks]
 }
-function outputHandle(source: Source, spec: Spec | undefined) {
+export function outputHandle(source: Source, spec: Spec | undefined) {
   if (source.kind === "files") return "output"
   const primary = primaryOutputRole(spec)
   if (primary && source.outputRole === primary && (!source.port || source.port === "output:" + primary)) return "output"

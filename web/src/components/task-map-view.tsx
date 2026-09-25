@@ -80,6 +80,7 @@ import {
   flowNodes,
   connectInputPort,
   flowViewport,
+  outputHandle,
   type TaskFlowNode,
   type SubflowNode,
   type WorkflowNode,
@@ -140,6 +141,12 @@ const TaskNode = memo(function TaskNode({
   } = useContext(WorkflowContext)!
   const { task, geometry } = data
   const spec = catalog.tasks.find((s) => s.name === task.task)
+  const sourceConnections = map.connections.filter(
+    (connection) => connection.source.kind !== "files" && connection.source.taskId === id
+  )
+  const isOutputConnected = (handle: string) => sourceConnections.some(
+    (connection) => outputHandle(connection.source, spec) === handle
+  )
   const run = map.runs.filter((r) => r.instanceId === id).at(-1)
   const output = nodeOutput(map, id, geometry.primaryOutputRole)
   const primaryName = task.outputPorts?.find(p=>p.id==="$default")?.name.trim() || ""
@@ -334,7 +341,7 @@ const TaskNode = memo(function TaskNode({
           aria-label={`${task.label} ${primaryName ? primaryName+" " : ""}출력 연결`} title={primaryName || "기본 출력 연결"}
           isConnectable={isConnectable} className={`workflow-output-handle${primaryName ? " workflow-named-port" : ""}`}
           style={{top:geometry.outputY,left:geometry.outputX,bottom:"auto",transform:"translate(-50%, -50%)"}}
-          data-connected={map.connections.some(c=>c.source.kind!=="files" && c.source.taskId===id && (c.source.port==="output" || !c.source.port && !c.source.outputRole))}
+          data-connected={isOutputConnected("output")}
           onKeyDown={e=>{if(e.key === "Enter" || e.key === " "){e.preventDefault();e.stopPropagation();e.currentTarget.click()}}}>
           {primaryName ? <span>{primaryName}</span> : <ArrowRight aria-hidden="true"/>}
         </Handle>
@@ -348,7 +355,7 @@ const TaskNode = memo(function TaskNode({
           style={{top:slot.y,left:slot.x,bottom:'auto',transform:'translate(-50%, -50%)'}}
           isConnectable={isConnectable}
           className={`workflow-output-handle workflow-right-port${name ? " workflow-named-port" : ""}`}
-          data-connected={map.connections.some(c=>c.source.kind!=="files" && c.source.taskId===id && (custom ? c.source.port===slot.handleId : c.source.outputRole===slot.outputRole))}
+          data-connected={isOutputConnected(slot.handleId)}
           role="button" tabIndex={isConnectable?0:-1}
           aria-label={`${task.label} ${name || "이름 없는 포트"} 출력 연결`}
           title={`${name || "출력"} — ${result.kind === "result" ? result.ids.length+"개" : "출력 대기"}`}
