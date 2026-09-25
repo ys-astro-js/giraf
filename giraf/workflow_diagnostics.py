@@ -99,7 +99,7 @@ def workflow_diagnostics(request, resolve):
             raise ValueError('선택한 파일을 다시 불러와 주세요.')
         path = Path(row['path'])
         if not path.is_file():
-            raise ValueError(f'{path.name}: 파일이 없습니다.')
+            raise ValueError(f'{row.get("label") or path.name}: 파일이 없습니다.')
         if row.get('asset', 'image') == 'image':
             inspected = inspect_file(path)
             return {**row, **inspected, 'asset': 'image'}

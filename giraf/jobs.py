@@ -24,6 +24,9 @@ def start(rows, settings: Settings, operation='reduction', name='', workspace_fo
     if operation not in ('reduction', 'combine'):
         raise ValueError('지원하지 않는 작업입니다.')
     from .combine import validate_combination
+    from .products import product_name
+    if operation == 'combine':
+        name = product_name(name or 'Combined.fits', 'image')
     errors, warnings = (validate_combination if operation == 'combine' else validate)(rows, settings)
     if errors:
         raise ValueError('\n'.join(errors))

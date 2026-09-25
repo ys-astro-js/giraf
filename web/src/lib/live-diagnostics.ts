@@ -31,6 +31,7 @@ export function createWorkflowDiagnosticsController(
 ) {
   let documentId = ""
   let payload: unknown
+  let nodeLabels: Record<string, string> = {}
   let version = 0
   let dueAt = 0
   let lastRecheckAt = 0
@@ -56,7 +57,7 @@ export function createWorkflowDiagnosticsController(
     try {
       const result = await request(payload, activeRequest.signal)
       if (!disposed && inspectedDocument === documentId && inspectedVersion === version) {
-        store.replaceCurrent(documentId, result.diagnostics)
+        store.replaceCurrent(documentId, result.diagnostics, nodeLabels)
         setFailure("")
       }
     } catch (error) {
@@ -85,7 +86,9 @@ export function createWorkflowDiagnosticsController(
       }
       documentId = nextDocument
       payload = nextPayload
+      nodeLabels = {}
       if (nextPayload && typeof nextPayload === "object" && "nodes" in nextPayload && "connections" in nextPayload && Array.isArray(nextPayload.nodes) && Array.isArray(nextPayload.connections)) {
+        nodeLabels = Object.fromEntries(nextPayload.nodes.map((node: { id: string; label?: string }) => [node.id, node.label || node.id]))
         store.pruneCurrent(nextPayload.nodes.map((node: { id: string }) => node.id), nextPayload.connections.map((edge: { id: string }) => edge.id))
       }
       version++

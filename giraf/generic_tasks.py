@@ -20,6 +20,7 @@ from .task_capabilities import parameter_number
 from .task_schema import file_extension
 from .task_expressions import resolve_expression, inspect_expression
 from .task_session import run_process, Cancelled
+from .products import product_name, publish_product
 
 
 def checked_values(parameters, supplied):
@@ -190,7 +191,7 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
         for id in ids:
             row = deepcopy(expanded[id] if id in expanded else resolve(id))
             path = Path(row['path'])
-            if not path.is_file(): raise ValueError(f'{name}: 입력 파일이 없습니다.')
+            if not path.is_file(): raise ValueError(f'{name}: {row.get("label") or path.name}: 입력 파일이 없습니다.')
             if diagnostics and row.get('error'):
                 raise ValueError(f'{name}: {row["error"]}')
             if not accepts_asset(slot['kind'], row.get('asset', 'image')): raise ValueError(f'{name}: {slot["kind"]} 파일을 선택해 주세요.')
@@ -209,11 +210,12 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
     if set(provided_outputs) - {s['name'] for s in spec['outputs']}: raise ValueError('알 수 없는 출력 역할입니다.')
     outputs = {}
     for slot in spec['outputs']:
-        name = str(provided_outputs.get(slot['name'], slot['default'])).strip()
+        name = str(provided_outputs.get(slot['name'], slot['default']))
         if slot.get('optional') and not name:
             outputs[slot['name']] = ''
             continue
-        if not name or name in ('.', '..') or any(c in name for c in '/\\\n\r\x00') or len(name) > 180 or name.startswith('@'):
+        product_name(name)
+        if len(name) > 180 or name.startswith('@'):
             raise ValueError(f'{slot["name"]}: 경로 대신 결과 파일 이름 또는 접두사를 입력해 주세요.')
         outputs[slot['name']] = name
     m = dict(operation='task', adapter='generic', task=spec['name'], name=spec['name'], backend=backend,
@@ -230,7 +232,6 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
                 raise ValueError(f'{slot["name"]}: 입력 파일은 한 개 또는 주 입력과 같은 {count}개여야 합니다.')
     previews = preview_generic(m)
     labels = [r['output'] for r in previews]
-    if len(labels) != len(set(labels)): raise ValueError('출력 파일 이름이 중복됩니다. 서로 다른 이름을 지정해 주세요.')
     if diagnostics:
         return m
     m['filePlan'] = dict(mode='copy', destructive=False, backup=True, targets=[dict(path=r['path'], sha256=r['sha256'], role='input') for r in sources.values()],
@@ -250,12 +251,13 @@ def preview_generic(manifest):
         if slot['mode'] == 'each':
             for index, id in enumerate(main):
                 prefix = value
-                stem = Path(rows[id].get('label') or rows[id]['name']).stem
-                ext = file_extension(slot['kind'])
-                result.append(dict(role=slot['name'], source=id, index=index, inputs=[rows[id].get('label', rows[id]['name'])], output=f'{prefix}{stem}{ext}'))
+                source = Path(rows[id].get('label') or rows[id]['name'])
+                ext = (source.suffix or '.fits') if slot['kind'] == 'image' else file_extension(slot['kind'])
+                label = product_name(f'{prefix}{source.stem}{ext}', slot['kind'])
+                result.append(dict(role=slot['name'], source=id, index=index, inputs=[rows[id].get('label', rows[id]['name'])], output=label))
         else:
-            result.append(dict(role=slot['name'], inputs=[r.get('label', r['name']) for r in rows.values()], output=value))
-    return result or [dict(inputs=[r.get('label', r['name']) for r in rows.values()], output='실행 로그')]
+            result.append(dict(role=slot['name'], inputs=[r.get('label', r['name']) for r in rows.values()], output=product_name(value, slot['kind'])))
+    return result or [dict(inputs=[r.get('label', r['name']) for r in rows.values()], output=spec['taskName']+'-results.txt')]
 
 
 def cl_literal(value, typ='s'):
@@ -285,7 +287,9 @@ class GenericTaskRun:
         for folder in ('input', 'output', 'lists', 'uparm'): (self.job / folder).mkdir(exist_ok=True)
         aliases = {}; sources = []
         for index, row in enumerate(self.m['rows']):
-            if file_hash(row['path']) != row['sha256']: raise ValueError('입력 파일이 검증 이후 변경되었습니다.')
+            label = row.get('label') or Path(row['path']).name
+            if not Path(row['path']).is_file(): raise ValueError(f'{label}: 입력 파일이 없습니다.')
+            if file_hash(row['path']) != row['sha256']: raise ValueError(f'{label}: 입력 파일이 검증 이후 변경되었습니다.')
             alias = f'input/s{index:05d}' + Path(row['path']).suffix
             if not (self.job / alias).exists(): shutil.copy2(row['path'], self.job / alias)
             aliases[row['id']] = alias + row.get('section', '')
@@ -414,9 +418,10 @@ class GenericTaskRun:
             ids = [p['source'] for p in expected if 'source' in p] or [r['id'] for r in self.m['rows']] or [self.spec['name']]
             outcomes += [dict(source=id, label=id, state='failed' if failed else 'processed', message=('출력 파일이 없습니다: ' + ', '.join(missing)) if missing else text[-3000:] if failed else 'IRAF task 완료') for id in dict.fromkeys(ids)]
             if not failed:
-                products += [dict(p, sha256=file_hash(self.job / p['file'])) for p in expected]
+                for p in expected:
+                    products.append(publish_product(self.job, p, len(products)))
             atomic_json(self.job / 'outcomes.json', outcomes)
-        products.append(dict(file='task.log', label=self.spec['taskName'] + '-results.txt', asset='text', role='$log', sha256=file_hash(self.job / 'task.log')))
+        products.append(publish_product(self.job, dict(file='task.log', label=self.spec['taskName'] + '-results.txt', asset='text', role='$log'), len(products)))
         atomic_json(self.job / 'products.json', products)
         failed = sum(o['state'] == 'failed' for o in outcomes)
         state = 'failed' if failed == len(outcomes) else 'partial' if failed else 'completed'

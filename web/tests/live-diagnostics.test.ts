@@ -12,6 +12,22 @@ const issue = (message: string, nodeId = "n", connectionId?: string) => ({
   connectionId,
 })
 
+test("current errors identify the node and follow its renamed label", async () => {
+  const store = createDiagnosticStore()
+  const controller = createWorkflowDiagnosticsController(store, async () => ({ diagnostics: [issue("파일이 없습니다.")] }), 0)
+  try {
+    controller.change("doc", { nodes: [{ id: "n", label: "Master Bias" }], connections: [] }, true)
+    await Bun.sleep(10)
+    expect(store.currentForNode("n")[0].source).toBe("Master Bias")
+    controller.change("doc", { nodes: [{ id: "n", label: "보정 기준" }], connections: [] }, true)
+    await Bun.sleep(10)
+    expect(store.currentForNode("n")[0].source).toBe("보정 기준")
+    expect(store.currentForNode("n")[0].nodeId).toBe("n")
+  } finally {
+    controller.dispose()
+  }
+})
+
 test("current problems replace together, survive history clear, and never persist", () => {
   const saved: string[] = []
   const store = createDiagnosticStore({ getItem: () => null, setItem: (_, value) => saved.push(value) })

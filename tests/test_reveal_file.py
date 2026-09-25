@@ -42,3 +42,13 @@ class RevealFileTests(unittest.TestCase):
             code, data = asyncio.run(request('POST', 'reveal', {'id': 'known'}))
             self.assertEqual(code, 400)
             self.assertIn('파일 위치', data['error'])
+
+    def test_missing_result_read_endpoints_use_saved_label(self):
+        self.path.unlink()
+        server.registry['known'].update(label='보정한 영상.fits', asset='image')
+        for action in ('info', 'download', 'image', 'text', 'plot'):
+            with self.subTest(action=action):
+                code, data = asyncio.run(request('GET', action, query='id=known'))
+                self.assertEqual(code, 400)
+                self.assertIn('보정한 영상.fits', data['error'])
+                self.assertNotIn(str(self.path), data['error'])

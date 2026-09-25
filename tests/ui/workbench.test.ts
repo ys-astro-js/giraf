@@ -29,10 +29,12 @@ test('reuse supports append, replacement, deduplication and single-file roles',(
 test('output planning handles many-to-one, per-image duplicates and subsets',()=>{
   const rows=[{id:'a',label:'one.fits',filter:'B'},{id:'b',label:'one.fits',filter:'V'},{id:'c',label:'three.fits',filter:'B'}]
   expect(plannedOutputs(combine,makeDraft(combine,{inputs:{input:rows.map(r=>r.id)}}),rows).map(p=>p.output)).toEqual(['Zero.fits'])
-  expect(plannedOutputs(proc,makeDraft(proc,{inputs:{images:['a','b']}}),rows).map(p=>p.output)).toEqual(['pone.fits','pone_2.fits'])
+  expect(plannedOutputs(proc,makeDraft(proc,{inputs:{images:['a','b']}}),rows).map(p=>p.output)).toEqual(['pone.fits','pone.fits'])
+  expect(plannedOutputs(proc,makeDraft(proc,{inputs:{images:['a']},output:{name:'nested/한글 결과'}}),rows).map(p=>p.output)).toEqual(['한글 결과.fits'])
+  expect(plannedOutputs(combine,makeDraft(combine,{inputs:{input:['a']},output:{name:'결과.fit'}}),rows).map(p=>p.output)).toEqual(['결과.fit'])
   expect(plannedOutputs(combine,makeDraft(combine,{parameters:{subsets:'yes'},inputs:{input:rows.map(r=>r.id)}}),rows).map(p=>p.output)).toEqual(['ZeroB.fits','ZeroV.fits'])
 })
 test('dry-run and text tasks do not advertise generated FITS files',()=>{
-  expect(plannedOutputs(proc,makeDraft(proc,{parameters:{noproc:'yes'},inputs:{images:['a']}}),[]).map(p=>p.output)).toEqual(['task.log'])
-  expect(plannedOutputs({...combine,output:null,kind:'text'},makeDraft(combine),[]).map(p=>p.output)).toEqual(['task.log'])
+  expect(plannedOutputs(proc,makeDraft(proc,{parameters:{noproc:'yes'},inputs:{images:['a']}}),[]).map(p=>p.output)).toEqual(['ccdproc-results.txt'])
+  expect(plannedOutputs({...combine,output:null,kind:'text'},makeDraft(combine),[]).map(p=>p.output)).toEqual(['zerocombine-results.txt'])
 })

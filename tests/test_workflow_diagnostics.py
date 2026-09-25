@@ -45,6 +45,18 @@ class WorkflowDiagnosticsTests(unittest.TestCase):
         self.assertFalse(any(d["severity"] == "error" for d in fixed), fixed)
         self.assertEqual(first, self.inspect([self.node()]))
 
+    def test_missing_result_uses_display_name_with_or_without_connection(self):
+        path = self.folder / 'o00000.fits'
+        self.image.rename(path)
+        self.row = server.register(path, '정렬한 영상.fits', 'old-run')
+        nodes = [self.node('a'), self.node(inputs={'input': [self.row['id']]})]
+        edge = {'id': 'result', 'source': {'kind': 'result', 'taskId': 'a', 'ids': [self.row['id']]}, 'target': 'n', 'role': 'input'}
+        path.unlink()
+        for edges in ([edge], []):
+            messages = [d['message'] for d in self.inspect(nodes, edges) if d['nodeId'] == 'n']
+            self.assertTrue(any('정렬한 영상.fits' in m for m in messages), messages)
+            self.assertTrue(all('o00000.fits' not in m for m in messages), messages)
+
     def test_pending_output_is_waiting_but_bad_edge_and_parameter_are_reported(self):
         edge = {"id": "e", "source": {"kind": "pending", "taskId": "a"}, "target": "b", "role": "input"}
         nodes = [self.node("a", {"input": [self.row["id"]]}), self.node("b")]

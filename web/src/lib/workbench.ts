@@ -37,6 +37,15 @@ export function buildPayload(task:Spec,drafts:Record<string,Draft>,catalog:Catal
 export function mergeInputs(previous:string[],incoming:string[],multiple:boolean,append:boolean){
   return multiple?[...new Set([...(append?previous:[]),...incoming])]:incoming.slice(0,1)
 }
+function outputBasename(name:string) { return name.split('/').at(-1)||'' }
+function outputExtension(name:string) {
+  const base=outputBasename(name), index=base.lastIndexOf('.')
+  return index>0&&index<base.length-1?base.slice(index):''
+}
+function productName(name:string,kind:string) {
+  const base=outputBasename(name)
+  return base&&kind==='image'&&!outputExtension(base)?base+'.fits':base
+}
 export function plannedOutputs(task:Spec,draft:Draft,rows:Frame[],_mapping:Values={}):{input:string;output:string}[]{
   if(task.adapter==='generic'){
     const ids=draft.inputs[task.inputs[0]?.name]||[]
@@ -44,20 +53,37 @@ export function plannedOutputs(task:Spec,draft:Draft,rows:Frame[],_mapping:Value
       const value=draft.outputs?.[slot.name]??slot.default
       if(slot.optional&&!value)return []
       const each = slot.eachWhen ? draft.parameters[slot.eachWhen] === 'yes' : slot.mode === 'each'
-      return each?ids.map(id=>{const row=rows.find(r=>r.id===id),stem=(row?.name||row?.label||id).replace(/\.[^.]*$/, '');return {input:row?.label||id,output:value+stem+({image:'.fits',mask:'.pl',text:'.txt',metacode:'.gki',binary:'.bin','image-list':'.list'}[slot.kind]||'')}}):[{input:task.taskName||task.name,output:value}]
+      return each?ids.map(id=>{
+        const row=rows.find(r=>r.id===id),source=outputBasename(row?.label||row?.name||id),ext=outputExtension(source)
+        const stem=ext?source.slice(0,-ext.length):source
+        const suffix=slot.kind==='image'?(ext||'.fits'):({mask:'.pl',text:'.txt',metacode:'.gki',binary:'.bin','image-list':'.list'}[slot.kind]||'')
+        return {input:row?.label||id,output:productName(value+stem+suffix,slot.kind)}
+      }):[{input:task.taskName||task.name,output:productName(value,slot.kind)}]
     })
-    return outputs.length?outputs:[{input:task.taskName||task.name,output:'실행 로그'}]
+    return outputs.length?outputs:[{input:task.taskName||task.name,output:(task.taskName||task.name)+'-results.txt'}]
   }
-  if(!task.output||draft.parameters.noproc==='yes')return [{input:task.name,output:'task.log'}]
+  if(!task.output||draft.parameters.noproc==='yes')return [{input:task.name,output:task.name+'-results.txt'}]
   const ids=draft.inputs[task.inputs[0].name]||[],name=draft.output.name
   if(!ids.length)return []
   const selected=ids.map(id=>headerFrame(rows.find(f=>f.id===id)||{id,label:id}))
+  // List contents are resolved by the server's preview endpoint.
+  if(name.startsWith('@'))return []
+  if(name.includes(','))return name.split(',').map((n,i)=>({input:selected[i]?.label||task.name,output:productName(n.trim(),task.kind)}))
   if(['each','edit'].includes(task.output.mode)){
-    const counts:Record<string,number>={}
-    return selected.map(row=>{let output=name+row.label;counts[output]=(counts[output]||0)+1;if(counts[output]>1)output=output.replace(/(\.[^.]*)?$/,`_${counts[output]}$1`);return {input:row.label,output}})
+    return selected.map(row=>{
+      const output=name.endsWith('/')?name+row.label:selected.length===1&&(outputExtension(name)||name.includes('/'))?name:name+row.label
+      return {input:row.label,output:productName(output,task.kind)}
+    })
   }
-  if(draft.parameters.subsets==='yes')return [...new Set(selected.map(f=>f.filter||''))].map(filter=>({input:`${filter||'Subset 없음'} 영상 ${selected.filter(f=>(f.filter||'')===filter).length}개`,output:name.replace(/\.fits$/i,'')+filter+'.fits'}))
-  return [{input:`${ids.length}개`,output:name}]
+  if(draft.parameters.subsets==='yes')return [...new Set(selected.map(f=>f.filter||''))].map(filter=>{
+    const base=outputBasename(name),ext=outputExtension(base)
+    return {input:`${filter||'Subset 없음'} 영상 ${selected.filter(f=>(f.filter||'')===filter).length}개`,output:(ext?base.slice(0,-ext.length):base)+filter+(ext||'.fits')}
+  })
+  if(draft.parameters.project==='yes'&&ids.length>1){
+    const base=outputBasename(name),ext=outputExtension(base),stem=ext?base.slice(0,-ext.length):base
+    return selected.map((row,i)=>({input:row.label,output:stem+`_${i+1}`+(ext||'.fits')}))
+  }
+  return [{input:`${ids.length}개`,output:productName(name,task.kind)}]
 }
 export async function api<T>(action:string,payload?:unknown):Promise<T>{
   const nodeId = payload && typeof payload === "object" && "instanceId" in payload && typeof payload.instanceId === "string" ? payload.instanceId : undefined

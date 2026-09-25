@@ -15,6 +15,7 @@ from copy import deepcopy
 from .jobs import ROOT, RUNS, atomic_json
 from .task_catalog import TASKS, SNAPSHOT, parameters, CALIBRATIONS
 from .task_expressions import resolve_expression, inspect_expression
+from .products import product_name
 
 def digest(path):
     with Path(path).open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
@@ -115,7 +116,7 @@ def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozense
         inputs[role['name']] = ids
         for id in ids:
             row = deepcopy(expression_rows[id] if id in expression_rows else resolve(id))
-            if not Path(row['path']).is_file(): raise ValueError(row['name']+': 파일이 없습니다.')
+            if not Path(row['path']).is_file(): raise ValueError((row.get('label') or row['name'])+': 파일이 없습니다.')
             if role['kind']=='image' and (row.get('asset','image')!='image' or row.get('error')):
                 raise ValueError(row['name']+': IRAF가 읽을 수 있는 FITS 영상을 선택해 주세요.')
             if role['kind']=='text' and not accepts_asset('text', row.get('asset','image')):
@@ -143,7 +144,7 @@ def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozense
         raise ValueError('편집할 헤더 parameter를 입력해 주세요. 예: subset')
     if params.get('clobber')=='yes':raise ValueError('clobber=yes: 설치 IRAF combine에서 폐기된 옵션입니다. 새 출력 경로를 사용해 주세요.')
     output = payload.get('output', {})
-    output_name = str(output.get('name', spec['output']['default'] if spec['output'] else '')).strip()
+    output_name = str(output.get('name', spec['output']['default'] if spec['output'] else ''))
     inplace=name=='ccdproc' and payload.get('filePolicy',{}).get('mode')=='direct' and not output_name
     if spec['output'] and ((not output_name and not inplace) or len(output_name)>20000 or any(c in output_name for c in '\n\r\x00') or output_name in ('.','..')):
         raise ValueError('출력 이름 또는 IRAF 출력 목록을 한 줄로 입력해 주세요.')
@@ -173,18 +174,15 @@ def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozense
                 output=dict(name=output_name), mapping=mapping, exam=exam, section=section,
                 expressions=expressions,workingDirectory=directory,filePolicy=policy,instanceId=payload.get('instanceId'),
                 settings=dict(task=name, backend=backend, **params))
+    if spec['output']:
+        output_paths(m)
     if diagnostics:
         m['warnings'] = []
         return m
     targets=[dict(path=r['path'],sha256=r['sha256'],role='input') for r in sources.values()]
     direct=policy.get('mode')=='direct'
     if direct and spec['output'] and name!='ccdhedit' and output_name:
-        if output_name.startswith('@'):
-            listing=Path(output_name[1:]);listing=listing if listing.is_absolute() else Path(directory)/listing
-            output_targets=[x.strip() for x in listing.read_text().splitlines() if x.strip() and not x.startswith('#')]
-        elif ',' in output_name:output_targets=[x.strip() for x in output_name.split(',')]
-        elif spec['output']['mode']=='each' and not Path(output_name).suffix:output_targets=[output_name+Path(sources[i]['path']).name for i in main]
-        else:output_targets=[output_name]
+        output_targets=output_paths(m)
         targets += [dict(path=str((Path(directory)/n).resolve()),role='output') for n in output_targets]
     plan=dict(mode=policy.get('mode'),destructive=direct,backup=bool(policy.get('backup',True)),targets=targets,
               output=output_name,delete=params.get('delete','no'),collision='IRAF가 기존 출력을 거부합니다. clobber는 사용하지 않습니다.',
@@ -196,7 +194,7 @@ def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozense
     return m
 
 
-def preview_task(manifest):
+def preview_task(manifest, *, paths=False):
     if manifest.get('adapter') == 'generic':
         from .generic_tasks import preview_generic
         return preview_generic(manifest)
@@ -205,24 +203,40 @@ def preview_task(manifest):
     ids=manifest['inputs'][spec['inputs'][0]['name']]
     output=spec['output']
     name=manifest['output']['name']
-    if not output: return [dict(inputs=[rows[i].get('label',rows[i]['name']) for i in ids],output='조사 결과와 실행 로그')]
-    if manifest['parameters'].get('noproc')=='yes':return [dict(inputs=[rows[i].get('label',rows[i]['name']) for i in ids],output='처리 계획과 실행 로그')]
+    if not output or manifest['parameters'].get('noproc')=='yes':
+        return [dict(inputs=[rows[i].get('label',rows[i]['name']) for i in ids],output=manifest['task']+'-results.txt')]
     if output['mode'] in ('each','edit'):
         result=[dict(inputs=[rows[i].get('label',rows[i]['name'])], output=name+rows[i].get('label',rows[i]['name'])) for i in ids]
-        # Different folders can contain identically named images.
-        seen={}
-        for row in result:
-            label=row['output']; seen[label]=seen.get(label,0)+1
-            if seen[label]>1: row['output']=Path(label).stem+f'_{seen[label]}'+Path(label).suffix
-        return result
-    if manifest['parameters'].get('subsets')=='yes':
+        if len(ids)==1 and not name.endswith('/') and (Path(name).suffix or '/' in name):
+            result[0]['output']=name
+    elif manifest['parameters'].get('subsets')=='yes':
         from astropy.io import fits
         grouped={}
         for i in ids:
             subset=str(fits.getheader(rows[i]['path']).get(manifest['mapping']['subset'], '')).strip()
             grouped.setdefault(subset,[]).append(rows[i].get('label',rows[i]['name']))
-        return [dict(inputs=v,output=Path(name).stem+k+'.fits') for k,v in grouped.items()]
-    return [dict(inputs=[rows[i].get('label',rows[i]['name']) for i in ids],output=name)]
+        result=[dict(inputs=v,output=str(Path(name).with_name(Path(name).stem+k+(Path(name).suffix or '.fits')))) for k,v in grouped.items()]
+    elif manifest['parameters'].get('project')=='yes' and len(ids)>1:
+        result=[dict(inputs=[rows[i].get('label',rows[i]['name'])],output=str(Path(name).with_name(Path(name).stem+f'_{n+1}'+(Path(name).suffix or '.fits')))) for n,i in enumerate(ids)]
+    else:
+        result=[dict(inputs=[rows[i].get('label',rows[i]['name']) for i in ids],output=name)]
+    names=[r['output'] for r in result]
+    if name.startswith('@'):
+        path=Path(name[1:]);path=path if path.is_absolute() else Path(manifest['workingDirectory'])/path
+        names=[line.strip() for line in path.read_text().splitlines() if line.strip() and not line.lstrip().startswith('#')]
+    elif ',' in name:
+        names=[n.strip() for n in name.split(',')]
+    if len(names)!=len(result):
+        raise ValueError('출력 목록 수가 실제 입력/출력 수와 다릅니다.')
+    for row,value in zip(result,names):
+        path=Path(value)
+        label=product_name(path.name,spec['kind'])
+        row['output']=str(path.with_name(label)) if paths else label
+    return result
+
+
+def output_paths(manifest):
+    return [row['output'] for row in preview_task(manifest, paths=True)]
 
 
 def start_task(manifest, folder):

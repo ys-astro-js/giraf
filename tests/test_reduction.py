@@ -47,7 +47,13 @@ def run_job(folder, rows, settings, operation="reduction", name=""):
                             env=env, capture_output=True, text=True, timeout=120)
     if result.returncode:
         raise AssertionError(result.stdout + result.stderr)
-    return json.loads((folder / 'products.json').read_text())
+    products = json.loads((folder / 'products.json').read_text())
+    for p in products:
+        assert Path(p['file']).name == p['label'], p
+        assert (folder / p['file']).is_file(), p
+        assert p['sha256'] == checksum(folder / p['file']), p
+        assert Path(p['file']).parts[0] == 'products', p
+    return products
 
 
 class ReductionTests(unittest.TestCase):
@@ -61,14 +67,19 @@ class ReductionTests(unittest.TestCase):
             self.assertEqual(validate(rows, Settings())[0], [])
             products = run_job(root / 'run', rows, Settings(flat_scale='mean'))
             for p in products:
+                if p.get('asset') == 'text': continue
                 array = fits.getdata(root / 'run' / p['file'])
                 if p['source']:
                     np.testing.assert_allclose(array, 500., atol=.002, rtol=0)
                     h = fits.getheader(root / 'run' / p['file'])
                     for key in ['ZEROCOR', 'DARKCOR', 'FLATCOR']:
                         self.assertIn(key, h)
-                if p['label'] == 'Master bias':
+                if p['label'] == 'Master bias.fits':
                     np.testing.assert_array_equal(array, bias)
+                if p['label'].startswith('Master flat'):
+                    internal = root / 'run/masters' / ('flat00.fits' if ' B ' in p['label'] else 'flat01.fits')
+                    self.assertEqual((root / 'run' / p['file']).read_bytes(), internal.read_bytes())
+                    self.assertIn('CCDMEAN', fits.getheader(root / 'run' / p['file']))
             self.assertEqual(before, {str(p): checksum(p) for p in raw.glob('*.fits')})
             self.assertEqual(len([p for p in products if p['source']]), 2)
 

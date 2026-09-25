@@ -7,6 +7,7 @@ import {
   makeInstance,
   publishRun,
   removeLibraryReferences,
+  reconcileRuns,
 } from "../src/lib/task-map"
 import {
   connectionChoices,
@@ -283,6 +284,25 @@ test('generic inputs stay visible while unused optional outputs stay compact aft
   expect(flowEdges(linked,cat)[0].sourceHandle).toBe('output')
   linked.connections[0].source={kind:'pending',taskId:task.id,outputRole:'output',port:'output:output'}
   expect(flowEdges(linked,cat)[0].sourceHandle).toBe('output')
+})
+
+test('saved completion disappears when its execution was deleted, preserving the upstream connection', () => {
+  const map=publishRun(fixture(),'a',{id:'deleted',state:'completed',products:[product('result')]})
+  map.connections=[{id:'wire',target:'b',role:'images',source:{kind:'result',taskId:'a',runId:'deleted',ids:['result']}}]
+  const restored=reconcileRuns(map,[])
+  expect(restored.runs).toEqual([])
+  expect(nodeOutput(restored,'a')).toEqual({kind:'pending',taskId:'a'})
+  expect(restored.connections[0].source).toEqual({kind:'pending',taskId:'a'})
+  expect(map.runs).toHaveLength(1)
+})
+
+test('restoring a document uses actual execution state and products without importing other nodes', () => {
+  const map=publishRun(fixture(),'a',{id:'kept',state:'completed',products:[product('stale')]})
+  const restored=reconcileRuns(map,[{id:'kept',state:'failed',products:[]},{id:'unrelated',state:'completed',products:[product('other')]}])
+  expect(restored.runs).toEqual([{id:'kept',instanceId:'a',state:'failed',products:[]}])
+  expect(nodeOutput(restored,'a').kind).toBe('pending')
+  const completed=reconcileRuns(map,[{id:'kept',state:'completed',products:[product('actual')]}])
+  expect(nodeOutput(completed,'a')).toMatchObject({kind:'result',ids:['actual']})
 })
 
 test('clearing or deleting input files removes empty references before connecting another node', () => {

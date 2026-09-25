@@ -265,6 +265,20 @@ export function removeLibraryReferences(map: TaskMap, fileIds: Set<string>, jobI
     }),
   };
 }
+/** Saved documents retain run snapshots; the execution library is authoritative. */
+export function reconcileRuns(map: TaskMap, jobs: Pick<Job, 'id' | 'state' | 'products'>[]): TaskMap {
+  const actual = new Map(jobs.map(job => [job.id, job]));
+  const deleted = new Set(map.runs.filter(run => !actual.has(run.id)).map(run => run.id));
+  const removedProducts = new Set(map.runs.flatMap(run => {
+    const job = actual.get(run.id);
+    return job ? run.products.filter(product => !job.products.some(p => p.id === product.id)).map(p => p.id) : [];
+  }));
+  const cleaned = removeLibraryReferences(map, removedProducts, deleted);
+  return {...cleaned, runs: cleaned.runs.map(run => {
+    const job = actual.get(run.id)!;
+    return {...run, state: job.state, products: job.products};
+  })};
+}
 export function replacePending(
   map: TaskMap,
   id: string,

@@ -13,7 +13,8 @@ from astropy.io import fits
 
 from .jobs import atomic_json
 from .task_catalog import TASKS, SNAPSHOT, CAPABILITIES
-from .task_jobs import preview_task
+from .task_jobs import output_paths
+from .products import product_name, publish_product
 from .task_expressions import split_image
 from .task_session import run_process, Cancelled
 
@@ -71,18 +72,6 @@ class TaskRun:
         alias='package/'+key+'/'+p.name;(self.job/alias).parent.mkdir(parents=True,exist_ok=True)
         self.references.append(dict(parameter='ccdred.'+key,requested=value,alias=alias))
         return alias
-    def output_names(self,previews):
-        name=self.m['output']['name']
-        if name.startswith('@'):
-            p=Path(name[1:]);p=p if p.is_absolute() else self.directory/p
-            names=[x.strip() for x in p.read_text().splitlines() if x.strip() and not x.startswith('#')]
-        elif ',' in name:names=[x.strip() for x in name.split(',')]
-        elif len(previews)==1 and (Path(name).suffix.lower() in ('.fits','.fit','.fts','.pl') or '/' in name):names=[name]
-        elif self.spec.get('output',{}).get('mode') in ('each','edit') and name.endswith('/'):
-            names=[name+Path(r['output']).name for r in previews]
-        else:names=[r['output'] for r in previews]
-        if len(names)!=len(previews):raise ValueError('출력 목록 수가 실제 입력/출력 수와 다릅니다.')
-        return names
     def target(self,index,label,ext='.fits'):
         if self.direct:
             p=Path(label).expanduser();p=p if p.is_absolute() else self.directory/p
@@ -102,7 +91,9 @@ class TaskRun:
         sources=[]
         for index,row in enumerate(self.m['rows']):
             path=Path(row['path'])
-            if row.get('sha256') and checksum(path)!=row['sha256']:raise ValueError(f'{path.name}: 검증 이후 파일이 변경되었습니다. 다시 실행해 주세요.')
+            label=row.get('label') or path.name
+            if not path.is_file():raise ValueError(f'{label}: 입력 파일이 없습니다.')
+            if row.get('sha256') and checksum(path)!=row['sha256']:raise ValueError(f'{label}: 검증 이후 파일이 변경되었습니다. 다시 실행해 주세요.')
             ext=path.suffix.lower();alias=f'input/s{index:05d}'+(ext if ext else '.fits')
             shutil.copy2(path,self.job/alias)
             if self.direct and self.m.get('filePolicy',{}).get('backup',True):shutil.copy2(path,self.job/'backup'/Path(alias).name)
@@ -143,7 +134,7 @@ class TaskRun:
                 if str(params.get(key,'')).startswith('@'):params[key]=self.stage_reference(params[key],self.directory,key)
         if name=='ccdinstrument':params['instrument']=instrument
         output=self.spec['output'];main=self.m['inputs'][self.spec['inputs'][0]['name']]
-        previews=preview_task(self.m);names=self.output_names(previews) if output and not self.dryrun else []
+        names=output_paths(self.m) if output and not self.dryrun else []
         if output and output['mode'] in ('each','edit'):
             for i,id in enumerate(main):
                 label=names[i] if names else self.rows[id].get('label',self.rows[id]['name'])
@@ -171,13 +162,13 @@ class TaskRun:
             ext='.pl' if self.spec['kind']=='mask' else '.txt' if output['mode']=='text' else '.fits'
             label=names[0] if names else self.m['output']['name']
             if params.get('subsets')=='yes':
-                params[output['name']]=str((self.directory/label).with_suffix('')) if self.direct else 'output/result'
+                params[output['name']]=str((self.directory/self.m['output']['name']).with_suffix('')) if self.direct else 'output/result'
                 prefix=self.job/params[output['name']];self.subset_existing={str(p) for p in prefix.parent.glob(prefix.name+'*.fits')}
                 expected=[]
             elif params.get('project')=='yes' and len(main)>1:
                 expected=[];targets=[]
                 for i,id in enumerate(main):
-                    label=names[i] if len(names)>1 else Path(label).stem+f'_{i+1}'+ext
+                    label=names[i]
                     target=self.target(i,label,ext);targets.append(target);expected.append(dict(file=target,label=Path(label).name,source=id,asset=self.spec['kind']))
                 (self.job/'lists/project-output.list').write_text('\n'.join(targets)+'\n');params[output['name']]='@lists/project-output.list'
             else:
@@ -185,7 +176,8 @@ class TaskRun:
                 expected=[dict(file=target,label=Path(label).name,asset=self.spec['kind'])]
             for role in ('plfile','sigma'):
                 if params.get(role):
-                    label=Path(params[role]).name;params[role]=self.target(1 if role=='sigma' else 2,params[role],'.fits' if role=='sigma' else '.pl')
+                    requested=Path(params[role]);label=product_name(requested.name,'image' if role=='sigma' else 'mask')
+                    params[role]=self.target(1 if role=='sigma' else 2,str(requested.with_name(label)),'.fits' if role=='sigma' else '.pl')
                     item=dict(file=params[role],label=label,asset='image' if role=='sigma' else 'mask');expected.append(item);self.expected.append(item)
             self.calls.append((name,params));self.call_sources.append(main);self.call_expected.append(expected);self.expected+=expected
         elif name=='imexamine':
@@ -249,7 +241,9 @@ class TaskRun:
                 for path in sorted(prefix.parent.glob(prefix.name+'*.fits')):
                     if str(path) in self.subset_existing:continue
                     file=str(path) if self.direct else str(path.relative_to(self.job))
-                    label=path.name if self.direct else Path(self.m['output']['name']).stem+path.name.removeprefix('result')
+                    requested=Path(self.m['output']['name'])
+                    subset=path.stem.removeprefix(prefix.name)
+                    label=requested.stem+subset+(requested.suffix or '.fits')
                     item=dict(file=file,label=label,asset='image');self.call_expected[i].append(item);self.expected.append(item)
             for id in self.call_sources[i]:
                 items=[q for q in self.call_expected[i] if q.get('source',id)==id]
@@ -295,8 +289,8 @@ class TaskRun:
         from .gki_svg import render_gki
         for source,target in [('graphics.gki','profile.svg'),('interactive.gki','interactive.svg')]:
             if (self.job/source).exists() and render_gki(self.job/source,self.job/target):self.products.append(dict(file=target,label=target,asset='plot'))
-        for p in self.products:p['sha256']=checksum(self.job/p['file'])
-        self.products.append(dict(file='task.log',label=self.m['task']+'-results.txt',asset='text',sha256=checksum(self.job/'task.log')))
+        self.products.append(dict(file='task.log',label=self.m['task']+'-results.txt',asset='text',role='$log'))
+        self.products=[publish_product(self.job,p,i) for i,p in enumerate(self.products)]
         atomic_json(self.job/'products.json',self.products)
         states={x['state'] for x in self.outcomes}
         state='failed' if states=={'failed'} else 'partial' if 'failed' in states else 'skipped' if states=={'skipped'} else 'completed'

@@ -118,12 +118,12 @@ export function createDiagnosticStore(storage?: DiagnosticStorage) {
     getHistory: () => entries,
     currentForNode: (nodeId: string) => current.filter(entry => entry.nodeId === nodeId),
     currentForConnection: (connectionId: string) => current.filter(entry => entry.connectionId === connectionId),
-    replaceCurrent(documentId: string, issues: {id: string; severity: DiagnosticSeverity; message: string; nodeId: string; connectionId?: string}[]) {
+    replaceCurrent(documentId: string, issues: {id: string; severity: DiagnosticSeverity; message: string; nodeId: string; connectionId?: string}[], nodeLabels: Record<string, string> = {}) {
       currentDocument = documentId
       const previous = new Map(current.map(entry => [entry.id, entry]))
       current = issues.map(issue => {
         const id = `current:${documentId}:${issue.id}`
-        return { ...issue, id, source: "현재 워크플로우", current: true, timestamp: previous.get(id)?.timestamp ?? Date.now() }
+        return { ...issue, id, source: nodeLabels[issue.nodeId] || issue.nodeId, current: true, timestamp: previous.get(id)?.timestamp ?? Date.now() }
       }).sort((a, b) => Number(b.severity === "error") - Number(a.severity === "error"))
       publish()
     },

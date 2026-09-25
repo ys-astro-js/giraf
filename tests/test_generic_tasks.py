@@ -117,7 +117,7 @@ class DiscoveryTests(unittest.TestCase):
         job = self.root / 'multi'; job.mkdir(); (job / 'manifest.json').write_text(json.dumps(m))
         runner = GenericTaskRun(job); runner.prepare()
         self.assertEqual(len(runner.expected), 2)
-        for names in ({'a': '../escape.fits'}, {'a': '/tmp/escape.fits'}, {'a': 'same.txt', 'b': 'same.txt'}, {'bad': 'x'}):
+        for names in ({'a': '../escape.fits'}, {'a': '/tmp/escape.fits'}, {'bad': 'x'}):
             with self.assertRaises(ValueError):
                 validate_generic(spec, {'task': spec['name'], 'outputs': names}, lambda key: None)
         with patch('giraf.generic_tasks.run_process', return_value=1):

@@ -108,6 +108,7 @@ def image_list_spec():
 
 def execute_image_list(runner):
     from .jobs import atomic_json
+    from .products import publish_product
     from .task_session import Cancelled
     check_input_lists(runner.m)
     rows = {r['id']: r for r in runner.m['rows']}
@@ -118,15 +119,16 @@ def execute_image_list(runner):
         row = rows[id]
         path = Path(row['path']).resolve()
         if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != row['sha256']:
-            raise ValueError(f'{path.name}: 검증 이후 입력 파일이 변경되었습니다.')
+            raise ValueError(f'{row.get("label") or path.name}: 검증 이후 입력 파일이 변경되었거나 없어졌습니다.')
         value = str(path) + row.get('section', '')
         entries.append(json.dumps(value, ensure_ascii=False) if any(c.isspace() for c in value) else value)
     folder = runner.job / 'output'
     folder.mkdir(exist_ok=True)
     path = folder / 'images.list'
     path.write_text('\n'.join(entries) + '\n')
-    atomic_json(runner.job / 'products.json', [dict(file='output/images.list', label=runner.m['outputs']['output'],
-                asset='image-list', role='output', sha256=hashlib.sha256(path.read_bytes()).hexdigest())])
     atomic_json(runner.job / 'sources.json', list(rows.values()))
     (runner.job / 'task.log').write_text(f'Created image list with {len(entries)} entries.\n')
+    products = [dict(file='output/images.list', label=runner.m['outputs']['output'], asset='image-list', role='output'),
+                dict(file='task.log', label='image_list-results.txt', asset='text', role='$log')]
+    atomic_json(runner.job / 'products.json', [publish_product(runner.job, p, i) for i, p in enumerate(products)])
     runner.state('image_list 완료', 1, 'completed')

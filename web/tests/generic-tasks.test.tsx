@@ -22,6 +22,10 @@ test('generic nodes require no CCD task and preserve package sets, outputs and n
 })
 test('no input tasks and multiple outputs have complete previews',()=>{
  const task={...spec,inputs:[]};expect(plannedOutputs(task,makeDraft(task),[]).map(p=>p.output)).toEqual(['measure.txt','result.fits'])
+ const d=makeDraft(task);d.outputs={table:'한글 표.txt',image:'한글 영상'}
+ expect(plannedOutputs(task,d,[]).map(p=>p.output)).toEqual(['한글 표.txt','한글 영상.fits'])
+ const each={...spec,outputs:[{name:'image',kind:'image',mode:'each',default:'p '}]}
+ expect(plannedOutputs(each,makeDraft(each,{inputs:{zero:['a','b']}}),[{id:'a',name:'o000.fits',label:'영상.fit'},{id:'b',label:'영상.fit'}]).map(p=>p.output)).toEqual(['p 영상.fit','p 영상.fit'])
 })
 
 test('generated ports connect before execution and keep a selected output role through workflow submission',()=>{

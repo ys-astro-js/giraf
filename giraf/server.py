@@ -88,7 +88,10 @@ def get_file(id):
         register(ref['path'],ref.get('label'),ref.get('job'),ref.get('asset'))
     if id not in registry:
         raise ValueError('파일을 다시 불러와 주세요.')
-    return Path(registry[id]['path'])
+    path = Path(registry[id]['path'])
+    if not path.is_file():
+        raise ValueError(f'{registry[id].get("label") or path.name}: 파일이 없습니다.')
+    return path
 
 
 def delete_library(kind, ids):
@@ -480,7 +483,9 @@ async def api(request: Request):
             name = registry[q['id']]['label']
             name = Path(name).name
             asset=registry[q['id']].get('asset','image')
-            if asset=='image' and not name.lower().endswith('.fits'): name += '.fits'
+            # New products already have their download name on disk. Retain the
+            # historical fallback for old manifests with descriptive labels.
+            if asset=='image' and name != path.name and not name.lower().endswith('.fits'): name += '.fits'
             return FileResponse(path, filename=name, media_type='application/fits' if asset=='image' else 'application/octet-stream')
         raise ValueError('지원하지 않는 요청입니다.')
     except (ValueError, KeyError, OSError, TypeError) as exc:

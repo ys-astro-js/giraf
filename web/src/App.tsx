@@ -82,6 +82,7 @@ import {
   emptyMap,
   removeTask,
   removeLibraryReferences,
+  reconcileRuns,
   restoreTask,
   addTask,
   makeInstance,
@@ -302,7 +303,7 @@ function App() {
         setCatalog(c)
         setSaveState(pref._document?.saved ? "저장됨" : "작업을 추가하면 자동 저장됩니다")
         setPrefs(pref)
-        setMap(migrateMap(pref, c))
+        setMap(reconcileRuns(migrateMap(pref, c), j))
         setWorkspace(w)
         setJobs(j)
         remember([
@@ -374,7 +375,7 @@ function App() {
     changed.current = false
     const next = {...initial, ...value, drafts: value.drafts || {}, packageValues: {...defaults(catalog.ccdred), ...value.packageValues}}
     prefsRef.current = next
-    mapRef.current = migrateMap(next, catalog)
+    mapRef.current = reconcileRuns(migrateMap(next, catalog), jobs)
     diagnosticController.current?.change(next._document?.path || "현재 문서", workflowDiagnosticRequest(mapRef.current, catalog, workspace.folder), true)
     setPrefs(next)
     setMap(mapRef.current)

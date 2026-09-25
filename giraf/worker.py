@@ -15,6 +15,7 @@ import numpy as np
 
 from .jobs import atomic_json
 from .model import Settings, dark_for, inspect_file, validate
+from .products import product_name, publish_product
 
 
 def checksum(path):
@@ -86,8 +87,11 @@ class Reduction:
                 raise ValueError(f'{name}: NaN/Inf 픽셀이 있습니다. 입력과 보정 조건을 확인하세요.')
             stats = dict(mean=float(a.mean()), median=float(np.median(a)), std=float(a.std()),
                          min=float(a.min()), max=float(a.max()), shape=list(a.shape))
-        self.products.append(dict(file=name, label=label, source=source, sha256=checksum(p), **stats))
-        atomic_json(self.job / 'products.json', self.products)
+        self.products.append(dict(file=name, label=product_name(label, 'image'), source=source, asset='image', **stats))
+        self.save_products()
+
+    def save_products(self):
+        atomic_json(self.job / 'products.json', [publish_product(self.job, p, i) for i, p in enumerate(self.products)])
 
     def combine(self, task, inputs, output, scale='none', override=None):
         listfile = f'lists/{Path(output).stem}.list'
@@ -248,7 +252,7 @@ class Reduction:
                 master = f'masters/dark{j:02d}.fits'
                 self.combine('darkcombine', inputs, master, scale='none')
                 darks[t] = master
-                self.product(master, f'Master dark {t:g} s')
+                self.product(master, f'Master dark {t:g} s.fits')
 
         def choose_dark(row):
             if not self.s.dark or (self.s.resume and 'DARKCOR' in row.get('history', {})):
@@ -284,7 +288,7 @@ class Reduction:
                     raise ValueError(f'{filt} master flat에 0 이하 또는 비유한 픽셀이 있습니다. 입력과 보정 조건 또는 bad-pixel 처리가 필요합니다.')
                 flats[filt] = master
                 # IRAF ccdproc computes and uses the flat mean internally.
-                self.product(master, f'Master flat {filt} 정규화 전 ADU')
+                self.product(master, f'Master flat {filt} 정규화 전 ADU.fits')
         self.state('Science에 bias, dark, flat 순으로 보정 적용', 0.75)
         for i, r in enumerate(groups['science']):
             out = f"reduced/science{r['index']:04d}.fits"
@@ -294,10 +298,8 @@ class Reduction:
                          flat=flats.get(r['filter'], ''), geometry=True)
             self.product(out, r['name'], source=r['path'])
             self.state(f"Science {i + 1}/{len(groups['science'])} 완료", .75 + .2 * (i + 1) / max(1, len(groups['science'])))
-        # Some calibration headers are updated in-place by IRAF during dependent processing.
-        for product in self.products:
-            product['sha256'] = checksum(self.job / product['file'])
-        atomic_json(self.job / 'products.json', self.products)
+        # Refresh calibration copies after dependent processing changes headers.
+        self.save_products()
         self.call('imstatistics', images=','.join(p['file'] for p in self.products),
                   fields='image,npix,mean,stddev,min,max', lower='INDEF', upper='INDEF',
                   nclip=0, lsigma=3., usigma=3., binwidth=.1, format='yes', cache='no')
@@ -312,6 +314,13 @@ def main():
         traceback.print_exc()
         worker.state(str(exc), worker.progress, 'failed')
         sys.exit(1)
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        logfile = next((name for name in ('worker.log', 'iraf.log') if (worker.job / name).is_file()), None)
+        if logfile:
+            worker.products.append(dict(file=logfile, label=worker.operation+'-results.txt', asset='text', role='$log', source=None))
+        worker.save_products()
 
 
 if __name__ == '__main__':
