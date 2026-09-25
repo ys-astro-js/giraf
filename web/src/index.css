@@ -1079,11 +1079,17 @@ textarea {
 
 /* Inspector navigation stays visible while each task area scrolls independently. */
 .inspector-tabs { flex: 1; min-height: 0; gap: 0; overflow: hidden; }
+.inspector-info { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.inspector-info-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }
+.inspector-info-body > * { flex-shrink: 0; }
+.inspector-info-actions { display: flex; flex-shrink: 0; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--border); }
 .inspector-tabs > .inspector-sections { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }
 .inspector-tabs > .inspector-settings { display: flex; flex-direction: column; min-height: 0; overflow: hidden; gap: 16px; padding: 20px; }
 .inspector-settings > .parameter-editor-body { flex: 1; padding: 0; }
 .inspector-command { overflow-wrap: anywhere; }
 @media (max-width: 640px) {
+  .inspector-info-body { padding: 16px; }
+  .inspector-info-actions { padding-inline: 16px; }
   .inspector-tabs > .inspector-sections, .inspector-tabs > .inspector-settings { padding: 16px; }
 }
 
