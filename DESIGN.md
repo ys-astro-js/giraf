@@ -34,13 +34,13 @@ colors:
   dark-destructive: "oklch(0.704 0.191 22.216)"
 typography:
   body:
-    fontFamily: "Inter Variable, sans-serif"
+    fontFamily: "Pretendard Variable, Pretendard, system-ui, sans-serif"
   label:
-    fontFamily: "Inter Variable, sans-serif"
+    fontFamily: "Pretendard Variable, Pretendard, system-ui, sans-serif"
     fontSize: "0.875rem"
     fontWeight: 500
   title:
-    fontFamily: "Inter Variable, sans-serif"
+    fontFamily: "Pretendard Variable, Pretendard, system-ui, sans-serif"
     fontWeight: 600
 rounded:
   base: "0.625rem"
@@ -78,7 +78,7 @@ components:
 
 **Creative North Star: "중성색 작업 환경과 명확한 액션"**
 
-GIRAF는 기존 Inter와 Base UI의 중성색 작업 환경을 유지하며 주요 동작과 활성 컨트롤을 청록색으로 표시합니다. 얇은 경계, 정렬, 명확한 폼과 선택 상태로 정보를 구분하며 장식보다 반복 작업의 읽기와 조작을 우선합니다.
+GIRAF는 Pretendard Variable과 Base UI의 중성색 작업 환경을 사용하며 주요 동작과 활성 컨트롤을 청록색으로 표시합니다. 얇은 경계, 정렬, 명확한 폼과 선택 상태로 정보를 구분하며 장식보다 반복 작업의 읽기와 조작을 우선합니다.
 
 **Key Characteristics:**
 
@@ -94,7 +94,7 @@ Primary는 주요 실행 동작과 켜진 스위치·체크박스에 사용합�
 
 ## Typography
 
-본문과 제목 모두 Inter Variable을 사용합니다. 컨트롤은 기존 작은 label 크기와 중간 굵기를, 영역 제목은 600 굵기를 사용합니다. 본문 크기는 전역적으로 새로 고정하지 않으며 Base UI 컴포넌트의 기존 크기를 이어갑니다. 입력은 기존 반응형 크기(기본 1rem, md 이상 0.875rem)를 유지합니다.
+본문과 제목 모두 Pretendard Variable을 사용합니다. [orioncactus/pretendard v1.3.9 릴리스](https://github.com/orioncactus/pretendard/releases/tag/v1.3.9)의 `Pretendard-1.3.9.zip`에서 받은 `web/variable/woff2/PretendardVariable.woff2` 원본을 `web/src/assets/fonts/`에 저장하고 빌드 결과물에 포함합니다. 라이선스는 `web/public/fonts/Pretendard-LICENSE.txt`에 보관합니다. 컨트롤은 기존 작은 label 크기와 중간 굵기를, 영역 제목은 600 굵기를 사용합니다. 본문 크기는 전역적으로 새로 고정하지 않으며 Base UI 컴포넌트의 기존 크기를 이어갑니다. 입력은 기존 반응형 크기(기본 1rem, md 이상 0.875rem)를 유지합니다.
 
 ## Layout
 
