@@ -70,6 +70,7 @@ export function ImageViewer({
   selectionMode = false,
   navigationTools = true,
   imageOverlay,
+  headerActions,
 }: {
   frame?: Frame
   onPick?: (x: number, y: number) => void
@@ -86,6 +87,7 @@ export function ImageViewer({
   selectionMode?: boolean
   navigationTools?: boolean
   imageOverlay?: React.ReactNode
+  headerActions?: React.ReactNode
 }) {
   const uid = useId()
   const [rangeError, setRangeError] = useState("")
@@ -369,6 +371,7 @@ export function ImageViewer({
               </ViewerToolButton>
             )}
             {frame && <RevealFile id={frame.id} />}
+            {headerActions}
           </ButtonGroup>
         </header>
       )}

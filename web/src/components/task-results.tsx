@@ -1,6 +1,15 @@
-import { RevealFile } from "@/components/viewer-controls"
+import { RevealFile, ViewerToolButton } from "@/components/viewer-controls"
 import { matchesFileName } from "@/lib/file-library"
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
+import { Check, Maximize2, X } from "lucide-react"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { ButtonGroup } from "@/components/ui/button-group"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ImageViewer } from "@/components/image-viewer"
@@ -8,7 +17,13 @@ import { Blank, Failure } from "@/components/workbench-controls"
 import { api, type Frame, type Job } from "@/lib/workbench"
 import { stateLabel, type TaskMap, type Instance } from "@/lib/task-map"
 
-function ResultPreview({ frame }: { frame: Frame }) {
+function ResultPreview({
+  frame,
+  actions,
+}: {
+  frame: Frame
+  actions?: ReactNode
+}) {
   const [text, setText] = useState<string | null>(null),
     [error, setError] = useState(""),
     [attempt, setAttempt] = useState(0)
@@ -30,17 +45,26 @@ function ResultPreview({ frame }: { frame: Frame }) {
   }, [frame.id, frame.asset, attempt])
   return (
     <div className="result-preview">
+      {frame.asset && frame.asset !== "image" && (
+        <header className="result-preview-heading">
+          <h3 className="min-w-0 truncate" title={frame.label}>
+            {frame.label}
+          </h3>
+          <ButtonGroup aria-label="파일 동작">
+            <RevealFile id={frame.id} />
+            {actions}
+          </ButtonGroup>
+        </header>
+      )}
       {error ? (
         <>
           <Failure message={error} />
           <Button variant="outline" onClick={() => setAttempt((v) => v + 1)}>
             다시 불러오기
           </Button>
-          <RevealFile id={frame.id} />
         </>
       ) : ["text", "image-list"].includes(frame.asset || "") ? (
         <>
-          <RevealFile id={frame.id} />
           {text === null ? (
             <p role="status">결과를 불러오는 중입니다.</p>
           ) : (
@@ -49,7 +73,6 @@ function ResultPreview({ frame }: { frame: Frame }) {
         </>
       ) : frame.asset === "plot" ? (
         <>
-          <RevealFile id={frame.id} />
           <img
             key={attempt}
             src={"/api/plot?id=" + encodeURIComponent(frame.id)}
@@ -60,15 +83,26 @@ function ResultPreview({ frame }: { frame: Frame }) {
           />
         </>
       ) : frame.asset === "metacode" || frame.asset === "binary" ? (
-        <><p>{frame.asset === "metacode" ? "IRAF graphics metacode (GKI)" : "Binary file"}</p><RevealFile id={frame.id} /></>
+        <p>
+          {frame.asset === "metacode"
+            ? "IRAF graphics metacode (GKI)"
+            : "Binary file"}
+        </p>
       ) : !frame.asset || frame.asset === "image" ? (
         <>
-          <ImageViewer key={`${frame.id}:${attempt}`} frame={frame} onReload={() => setAttempt(value => value + 1)} />
+          <ImageViewer
+            key={attempt}
+            frame={frame}
+            headerActions={actions}
+            onReload={() => setAttempt((value) => value + 1)}
+          />
         </>
       ) : (
         <>
-          <p>이 파일은 미리보기를 지원하지 않습니다. 파일 위치를 열어 확인해 주세요.</p>
-          <RevealFile id={frame.id} />
+          <p>
+            이 파일은 미리보기를 지원하지 않습니다. 파일 위치를 열어 확인해
+            주세요.
+          </p>
         </>
       )}
     </div>
@@ -122,34 +156,69 @@ export function TaskResults({
                 : "생성된 결과 파일이 없습니다."}
         </Blank>
       ) : (
-        <>
-          {products.length > 8 && (
-            <Input
-              aria-label="결과 파일 검색"
-              placeholder="파일명 검색"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          )}
-          <div className="result-files" aria-label="결과 파일 목록">
-            {visible.map((p) => (
-              <Button
-                key={p.id}
-                variant={selected?.id === p.id ? "secondary" : "ghost"}
-                className="result-file"
-                aria-pressed={selected?.id === p.id}
-                onClick={() => setSelection(p.id)}
-                title={p.label}
-              >
-                <span className="truncate">{p.label}</span>
-              </Button>
-            ))}
+        <div className="result-workspace">
+          <div className="result-browser">
+            {products.length > 8 && (
+              <Input
+                aria-label="결과 파일 검색"
+                placeholder="파일명 검색"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            )}
+            <div className="result-files" aria-label="결과 파일 목록">
+              {visible.map((p) => (
+                <Button
+                  key={p.id}
+                  variant={selected?.id === p.id ? "secondary" : "ghost"}
+                  className="result-file"
+                  aria-pressed={selected?.id === p.id}
+                  onClick={() => setSelection(p.id)}
+                  title={p.label}
+                >
+                  <Check
+                    data-icon="inline-start"
+                    className={selected?.id === p.id ? "" : "invisible"}
+                  />
+                  <span className="truncate">{p.label}</span>
+                </Button>
+              ))}
+            </div>
+            {!visible.length && (
+              <p role="status">검색 조건에 맞는 결과가 없습니다.</p>
+            )}
           </div>
-          {!visible.length && (
-            <p role="status">검색 조건에 맞는 결과가 없습니다.</p>
+          {selected && (
+            <Dialog>
+              <ResultPreview
+                frame={selected}
+                actions={
+                  <DialogTrigger
+                    render={<ViewerToolButton label="크게 보기" />}
+                  >
+                    <Maximize2 />
+                  </DialogTrigger>
+                }
+              />
+              <DialogContent
+                className="result-preview-dialog"
+                showCloseButton={false}
+              >
+                <DialogTitle className="sr-only">
+                  {selected.label} 미리보기
+                </DialogTitle>
+                <ResultPreview
+                  frame={selected}
+                  actions={
+                    <DialogClose render={<ViewerToolButton label="닫기" />}>
+                      <X />
+                    </DialogClose>
+                  }
+                />
+              </DialogContent>
+            </Dialog>
           )}
-          {selected && <ResultPreview key={selected.id} frame={selected} />}
-        </>
+        </div>
       )}
     </section>
   )
