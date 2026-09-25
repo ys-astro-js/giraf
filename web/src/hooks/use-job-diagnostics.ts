@@ -1,5 +1,20 @@
 import { useEffect, useRef } from "react"
 import { api, type Job } from "@/lib/workbench"
+import { diagnostics, jobDiagnosticContext } from "@/lib/diagnostics"
+
+export function jobsNeedingDiagnostics(
+  jobs: Job[],
+  store: Pick<typeof diagnostics, "isResolved"> = diagnostics
+) {
+  return jobs
+    .filter(
+      (job) =>
+        ["completed", "failed"].includes(job.state) &&
+        job.log === undefined &&
+        !store.isResolved(jobDiagnosticContext(job))
+    )
+    .map((job) => job.id)
+}
 
 // Workflow summaries omit logs. Read each finished run once without opening its tray.
 export function useJobDiagnostics(jobs: Job[]) {
@@ -7,15 +22,10 @@ export function useJobDiagnostics(jobs: Job[]) {
   const observed = useRef(new Set<string>())
   const workers = useRef(0)
   useEffect(() => {
-    for (const job of jobs) {
-      if (
-        !["completed", "failed"].includes(job.state) ||
-        job.log !== undefined ||
-        observed.current.has(job.id)
-      )
-        continue
-      observed.current.add(job.id)
-      pending.current.push(job.id)
+    for (const id of jobsNeedingDiagnostics(jobs)) {
+      if (observed.current.has(id)) continue
+      observed.current.add(id)
+      pending.current.push(id)
     }
     async function drain() {
       workers.current++

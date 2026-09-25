@@ -53,6 +53,38 @@ class WorkspaceTests(unittest.TestCase):
                 code,_=asyncio.run(request('GET','info',query='id=notregistered'))
                 self.assertEqual(code,400)
 
+    def test_job_creation_time_is_stable_and_orders_runs_within_one_second(self):
+        import os
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jobs = []
+            for name, timestamp in [('20260925-120000-ffffff', 1000000100), ('20260925-120000-000000', 1000000200)]:
+                job = root / name
+                job.mkdir()
+                manifest = job / 'manifest.json'
+                manifest.write_text(json.dumps({'rows': [], 'settings': {}}))
+                os.utime(manifest, ns=(timestamp, timestamp))
+                (job / 'status.json').write_text(json.dumps({'state': 'failed'}))
+                jobs.append(job)
+            with patch.object(server.workflow_manager, 'membership', return_value=None):
+                first = server.job_info(jobs[0])
+                second = server.job_info(jobs[1])
+                self.assertLess(first['createdAt'], second['createdAt'])
+                (jobs[0] / 'status.json').write_text(json.dumps({'state': 'completed'}))
+                self.assertEqual(first['createdAt'], server.job_info(jobs[0])['createdAt'])
+                process = jobs[0] / 'process.json'
+                process.write_text('{}')
+                stable = server.job_info(jobs[0])['createdAt']
+                os.utime(jobs[0] / 'manifest.json', ns=(2000000000, 2000000000))
+                self.assertEqual(stable, server.job_info(jobs[0])['createdAt'])
+            from giraf.workflow import WorkflowManager
+            workflow_root = root / 'workflow'
+            workflow_root.mkdir()
+            (workflow_root / 'current.json').write_text(json.dumps({'id': 'w', 'state': 'failed', 'jobs': []}))
+            manager = WorkflowManager(workflow_root, None, None, None, None)
+            self.assertGreater(manager.current()['updatedAt'], 0)
+            self.assertEqual(manager.current()['updatedAt'], manager.current()['updatedAt'])
+
     def test_cross_origin_mutation_rejected(self):
         code,_=asyncio.run(request('POST','folder',{'path':'/'},origin='https://unrelated.example'))
         self.assertEqual(code,403)

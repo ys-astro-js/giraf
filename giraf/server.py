@@ -213,6 +213,9 @@ def job_info(job):
     result = dict(id=job.name, name=manifest.get('name') or ('영상 결합' if manifest.get('operation') == 'combine' else '전체 전처리'),
                   **status(job), count=len(manifest.get('rows', [])), settings=manifest['settings'],
                   inputs=[dict(name=r['name'], path=r['path']) for r in manifest.get('rows', [])])
+    # Alignment may rewrite the manifest; the launcher record stays unchanged.
+    started = job / 'process.json'
+    result['createdAt'] = (started if started.exists() else job / 'manifest.json').stat().st_mtime_ns / 1_000_000
     result['execution'] = workflow_manager.membership(job.name)
     result['products']=[]
     if (job / 'products.json').exists():

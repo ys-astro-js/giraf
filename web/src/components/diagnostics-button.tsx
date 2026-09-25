@@ -87,7 +87,7 @@ export function DiagnosticsButton({
       >
         <PopoverTitle className="sr-only">경고 및 오류</PopoverTitle>
         <PopoverDescription className="sr-only">
-          현재 세션에서 수집한 기록입니다.
+          해결이 확인되지 않은 경고와 오류입니다. 기록을 비워도 실행 로그는 유지됩니다.
         </PopoverDescription>
         <Tabs
           value={filter}

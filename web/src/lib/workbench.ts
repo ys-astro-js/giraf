@@ -1,4 +1,4 @@
-import { collectResponseDiagnostics, diagnostics } from "./diagnostics"
+import { collectResponseDiagnostics, diagnostics, requestDiagnosticScope } from "./diagnostics"
 import {headerFrame} from "./calibration"
 export type Values = Record<string, string | number | boolean | null>
 export type Param = { mode?:string; required?:boolean; indirect?:string; name:string; type:string; default:string | number | boolean | null; choices:string[]; prompt:string; min:unknown; max:unknown }
@@ -14,7 +14,7 @@ export type WorkflowDocument = {path: string; name: string; saved?: boolean}
 export type Preferences = { _document?:WorkflowDocument; parameterSets?:Record<string,Record<string,Values>>; drafts:Record<string,Draft>; backend:string; mapping:Values; instrument:string[]; packageValues:Values; taskMap?:import('./task-map').TaskMap }
 export type Workspace = { folder:string; files:Frame[]; sets:{name:string;ids:string[];folder:string}[] }
 export type Manifest = { workflowId?:string; workflowStep?:number; textInputs?:Record<string,string>; alignmentBinding?:AlignmentBinding; inputSelections?:Record<string,string[]>; cursorCommands?:Record<string,string>; outputs?:Record<string,string>; parameterSets?:Record<string,Values>; task:string; backend:string; parameters:Values; inputs:Record<string,string[]>; output:{name:string}; ccdproc:Values; ccdred:Values; mapping:Values; section:string; exam:Draft['exam']; rows:Frame[] }
-export type Job = {execution?:{id:string;step:number}|null;id:string;name:string;task?:string;backend?:string;state:string;message:string;count:number;progress:number;products:Frame[];manifest?:Manifest & {instanceId?:string};log?:string;commands?:string;operation?:string;outcomes?:{source:string;label:string;state:string;message:string}[];headerDiff?:{source:string;key:string;before:string|null;after:string|null}[];effective?:unknown;interaction?:{id:string;kind:string;prompt:string;state:string;wcs?:number[][];initial?:string}}
+export type Job = {createdAt?:number;execution?:{id:string;step:number}|null;id:string;name:string;task?:string;backend?:string;state:string;message:string;count:number;progress:number;products:Frame[];manifest?:Manifest & {instanceId?:string};log?:string;commands?:string;operation?:string;outcomes?:{source:string;label:string;state:string;message:string}[];headerDiff?:{source:string;key:string;before:string|null;after:string|null}[];effective?:unknown;interaction?:{id:string;kind:string;prompt:string;state:string;wcs?:number[][];initial?:string}}
 export const defaults=(params:Param[]):Values=>Object.fromEntries(params.map(p=>[p.name,p.default]))
 export function makeDraft(spec:Spec | undefined, saved?:Partial<Draft>):Draft {
   const parameters = {...defaults(spec?.parameters || []), ...saved?.parameters}
@@ -64,12 +64,13 @@ export async function api<T>(action:string,payload?:unknown):Promise<T>{
   try {
     const response=await fetch('/api/'+action,payload===undefined?{cache:'no-store'}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
     const data=await response.json()
-    collectResponseDiagnostics(action, data, diagnostics, {nodeId})
+    if (response.ok && !data?.error && !(Array.isArray(data?.errors) && data.errors.length)) diagnostics.resolveScope(requestDiagnosticScope(action, nodeId))
+    collectResponseDiagnostics(action, data, diagnostics, {nodeId, ok: response.ok})
     if(!response.ok)throw new Error(data.error||data.errors?.join('\n')||'요청 실패')
     return data
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (!diagnostics.hasMessage(message, "error", nodeId) && !message.split("\n").every(part => diagnostics.hasMessage(part, "error", nodeId))) diagnostics.report({severity:'error', message, source:`요청: ${action.split('?')[0]}`, nodeId})
+    if (!diagnostics.hasMessage(message, "error", nodeId) && !message.split("\n").every(part => diagnostics.hasMessage(part, "error", nodeId))) diagnostics.report({severity:'error', message, source:`요청: ${action.split('?')[0]}`, nodeId, scope: requestDiagnosticScope(action, nodeId)})
     throw error
   }
 }

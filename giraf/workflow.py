@@ -132,6 +132,9 @@ class WorkflowManager:
         with self.lock:
             result = deepcopy(self.state)
             if result:
+                snapshot = self.root / 'current.json'
+                if snapshot.exists():
+                    result['updatedAt'] = snapshot.stat().st_mtime_ns / 1_000_000
                 for job in result.get('jobs', []) + ([result['currentJob']] if result.get('currentJob') else []):
                     job['execution'] = self.membership(job['id'])
             return result
