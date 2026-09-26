@@ -113,7 +113,9 @@ type Props = {
   map: TaskMap
   catalog: Catalog
   rows: Frame[]
-  update: (fn: (m: TaskMap) => TaskMap) => void
+  update: (fn: (m: TaskMap) => TaskMap, label?: string) => void
+  onEditStart?: () => void
+  onEditEnd?: () => void
   add: () => void
   link: (target?: string, source?: Source) => void
   open: (r: Frame) => void
@@ -135,6 +137,8 @@ type NodeContext = Pick<Props, "map" | "catalog" | "rows" | "onInput" | "duplica
   selectingGroup: boolean
   dragPreview: { entering?: string; leaving?: string }
   editGroup: (id: string) => void
+  beginEdit?: () => void
+  endEdit?: () => void
   runGroup?: (id: string) => void
   groupRunDisabled?: boolean
   choose: (id: string) => void
@@ -435,7 +439,7 @@ const TaskNode = memo(function TaskNode({
 })
 // Stable nodeTypes avoid remounting nodes during edits.
 const GroupNode = memo(function GroupNode({ data }: NodeProps<SubflowNode>) {
-  const { editGroup, runGroup, groupRunDisabled, dragPreview } =
+  const { editGroup, runGroup, groupRunDisabled, dragPreview, beginEdit, endEdit } =
     useContext(WorkflowContext)!
   return (
     <section
@@ -480,6 +484,8 @@ const GroupNode = memo(function GroupNode({ data }: NodeProps<SubflowNode>) {
         </Button>
       </header>
       <NodeResizeControl
+        onResizeStart={beginEdit}
+        onResizeEnd={endEdit}
         minWidth={data.minWidth}
         minHeight={data.minHeight}
         aria-label={`${data.group.name} 크기 조절`}
@@ -515,6 +521,8 @@ export function TaskMapView({
   catalog,
   rows,
   update,
+  onEditStart,
+  onEditEnd,
   removeLink,
   remove,
   duplicate,
@@ -649,7 +657,7 @@ export function TaskMapView({
             c.type === "dimensions"
         )
       )
-        update((m) => changeFlowNodes(m, catalog, changes))
+        update((m) => changeFlowNodes(m, catalog, changes), changes.some(c => c.type === "dimensions" && c.resizing) ? "서브플로우 크기 변경" : "노드 이동")
     },
     [update, catalog, map, rows, selectingGroup]
   )
@@ -696,7 +704,7 @@ export function TaskMapView({
     const info = groupDrop(node)
     if (info)
       update((m) =>
-        moveTaskToSubflow(m, catalog, node.id, info.target, info.position)
+        moveTaskToSubflow(m, catalog, node.id, info.target, info.position), "노드 이동"
       )
     setDragPreview({})
   }
@@ -730,7 +738,7 @@ export function TaskMapView({
   function finishConnection(connection: FlowConnection, replacingId?: string) {
     try {
       const next = connectFlow(map, catalog, rows, connection, replacingId)
-      update(() => next)
+      update(() => next, replacingId ? "연결 변경" : "연결 추가")
     } catch (error) {
       toast.add({ title: (error as Error).message, type: "error" })
     }
@@ -738,7 +746,7 @@ export function TaskMapView({
   function finishDrop(target: string, source: Source, role: string) {
     try {
       const next = connectInputPort(map,catalog,rows,target,role,source,true)
-      update(() => next)
+      update(() => next, "입력 연결")
       setDropChoice(null)
     } catch (error) {
       toast.add({ title: (error as Error).message, type: "error" })
@@ -775,16 +783,21 @@ export function TaskMapView({
       edges: Edge[]
     }) => {
       const ids = new Set(deletingNodes.map((n) => n.id))
-      deletingNodes
-        .filter((n) => n.type === "task")
-        .forEach((n) => remove(n.id))
-      deletingEdges
-        .filter((e) => !ids.has(e.source) && !ids.has(e.target))
-        .forEach((e) => removeLink(e.id))
+      onEditStart?.()
+      try {
+        deletingNodes
+          .filter((n) => n.type === "task")
+          .forEach((n) => remove(n.id))
+        deletingEdges
+          .filter((e) => !ids.has(e.source) && !ids.has(e.target))
+          .forEach((e) => removeLink(e.id))
+      } finally {
+        onEditEnd?.()
+      }
       setSelectedEdges([])
       return false
     },
-    [remove, removeLink]
+    [remove, removeLink, onEditStart, onEditEnd]
   )
   useEffect(() => {
     const added = map.tasks.length > previousCount.current
@@ -899,6 +912,8 @@ export function TaskMapView({
               finishDrop,
               selectingGroup,
               dragPreview,
+              beginEdit: onEditStart,
+              endEdit: onEditEnd,
               editGroup: (id) => {
                 setSelectingGroup(false)
                 setGroupFormHidden(false)
@@ -932,9 +947,9 @@ export function TaskMapView({
                 })
               }}
               onMoveStart={() => setEdgeActionPosition(null)}
-              onNodeDragStart={(_, node) => previewGroupDrop(node)}
+              onNodeDragStart={(_, node) => { onEditStart?.(); previewGroupDrop(node) }}
               onNodeDrag={(_, node) => previewGroupDrop(node)}
-              onNodeDragStop={(_, node) => finishGroupDrop(node)}
+              onNodeDragStop={(_, node) => { finishGroupDrop(node); onEditEnd?.() }}
               onSelectionEnd={() => {
                 if (selectingGroup) finishGroupSelection()
               }}
@@ -1030,7 +1045,7 @@ export function TaskMapView({
                     disabled={layoutBusy || !onStraightEdges}
                     onClick={() => {
                       if (map.view.edgeStyle === "smoothstep")
-                        update(m => ({ ...m, view: { ...m.view, edgeStyle: "default" } }))
+                        update(m => ({ ...m, view: { ...m.view, edgeStyle: "default" } }), "연결선 모양 변경")
                       else onStraightEdges?.()
                     }}
                   />

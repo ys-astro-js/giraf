@@ -39,6 +39,7 @@ const statusIcons = {
 const COMPLETION_HOLD_MS = 3000
 
 type Props = {
+  historyControls?: React.ReactNode
   diagnostics?: React.ReactNode
   workflowSelector?: React.ReactNode
   executionStatus?: ExecutionStatus
@@ -118,6 +119,7 @@ export function WorkbenchToolbar(props: Props) {
         >
           {props.workflowBusy ? <Square /> : <Play />}
         </Button>
+        {props.historyControls}
       </div>
       <div className="toolbar-center">
         <div

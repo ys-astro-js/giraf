@@ -1,6 +1,10 @@
 import { useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query"
 import { apiQueryOptions, jobQueryOptions, activeJob } from "@/lib/queries"
 import { useJobDiagnostics } from "@/hooks/use-job-diagnostics"
+import { createEditorStore } from "@/lib/edit-history"
+import { createDocumentAutosave } from "@/lib/document-autosave"
+import { useStore } from "zustand"
+import { EditHistoryControls } from "@/components/edit-history-controls"
 import { workflowDocument } from "@/lib/workflow-document"
 import { nodeLayout } from "@/lib/node-interaction"
 import { DiagnosticsButton } from "@/components/diagnostics-button"
@@ -12,7 +16,6 @@ import { readPanelLayout } from "@/lib/panel-layout"
 import { WorkbenchToolbar, type ExecutionStatus } from "@/components/workbench-toolbar"
 import { autoLayoutMap } from "@/lib/subflow"
 import {updateOutputPort,removeOutputPort} from "@/lib/output-ports"
-import {publishWorkflowRun} from "@/lib/task-map"
 import {connectInputPort} from "@/lib/workflow-flow"
 import {parsePort} from "@/lib/calibration-ports"
 import { LibrarySidebar } from "@/components/library-sidebar"
@@ -84,9 +87,7 @@ import {
 import {
   emptyMap,
   removeTask,
-  removeLibraryReferences,
   reconcileRuns,
-  restoreTask,
   addTask,
   duplicateTask,
   makeInstance,
@@ -96,7 +97,6 @@ import {
   workflowDiagnosticRequest,
   workflowDiagnosticSignature,
   disconnect,
-  publishRun,
   payloadFor,
   migrateMap,
   connectionRoles,
@@ -171,9 +171,14 @@ function App() {
       sets: [],
     }),
     [prefs, setPrefs] = useState<Preferences>(initial),
-    [map, setMap] = useState<TaskMap>(emptyMap()),
     [cache, setCache] = useState<Record<string, Frame>>({}),
     [jobs, setJobs] = useState<Job[]>([])
+  const [editor] = useState(() => createEditorStore(emptyMap()))
+  const map = useStore(editor.store, editor.selectMap)
+  const temporalState = useStore(editor.store.temporal)
+  const currentEditLabel = useStore(editor.store, state => state.label)
+  const editHistory = useMemo(() => editor.history(temporalState, currentEditLabel), [editor, temporalState, currentEditLabel])
+  const setMap = editor.reset
   const [documentBusy, setDocumentBusy] = useState(false)
   const [diagnosticFailure, setDiagnosticFailure] = useState("")
   const diagnosticController = useRef<ReturnType<typeof createWorkflowDiagnosticsController> | null>(null)
@@ -244,13 +249,37 @@ function App() {
   const [workflowName, setWorkflowName] = useState("워크플로우")
   const [checking, setChecking] = useState(false)
   const runLock = useRef(false)
-  const saveRevision = useRef(0)
-  const changed = useRef(false),
-    saving = useRef(Promise.resolve()),
-    mapRef = useRef(map),
-    prefsRef = useRef(prefs)
-  mapRef.current = map
-  prefsRef.current = prefs
+  const prefsRef = useRef(prefs)
+  const replacePreferences = useCallback((value: Preferences) => {
+    prefsRef.current = value
+    setPrefs(value)
+  }, [])
+  const [autosave] = useState(() => createDocumentAutosave<Preferences>({
+    save: async value => { await api("task-preferences", value) },
+    writeRecovery: value => localStorage.setItem("giraf-pending-draft", JSON.stringify(value)),
+    clearRecovery: () => localStorage.removeItem("giraf-pending-draft"),
+    onSaved: () => setSaveState("저장됨"),
+    onError: error => { setSaveState("저장 실패"); setError((error as Error).message) },
+  }))
+  const queueSave = useCallback(() => {
+    setSaveState("저장 중")
+    autosave.schedule({ ...prefsRef.current, taskMap: editor.getMap() })
+  }, [autosave, editor])
+  const finishEdit = useCallback(() => {
+    editor.endEdit()
+    void autosave.flush().catch(() => {})
+  }, [autosave, editor])
+  useEffect(() => {
+    const flushRecovery = () => autosave.flushRecovery()
+    const hide = () => { if (document.visibilityState === "hidden") flushRecovery() }
+    window.addEventListener("pagehide", flushRecovery)
+    document.addEventListener("visibilitychange", hide)
+    return () => {
+      window.removeEventListener("pagehide", flushRecovery)
+      document.removeEventListener("visibilitychange", hide)
+      autosave.dispose()
+    }
+  }, [autosave])
   const diagnosticSignature = workflowDiagnosticSignature(map, workspace.folder)
   const documentId = prefs._document?.path || "현재 문서"
   useEffect(() => {
@@ -323,7 +352,6 @@ function App() {
         const recovery = JSON.parse(pending)
         if (recovery._document?.path === p._document?.path) {
           recovered = recovery
-          changed.current = true
         }
       }
     } catch {
@@ -339,8 +367,9 @@ function App() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setCatalog(c)
     setSaveState(pref._document?.saved ? "저장됨" : "작업을 추가하면 자동 저장됩니다")
-    setPrefs(pref)
+    replacePreferences(pref)
     setMap(reconcileRuns(migrateMap(pref, c), j))
+    if (recovered !== p) queueSave()
     setWorkspace(w)
     setJobs(j)
     remember([
@@ -349,66 +378,34 @@ function App() {
       ...j.flatMap((j) => j.products || []),
     ])
     setReady(true)
-  }, [bootstrap.data, ready, loadError, remember])
-  const update = useCallback((fn: (m: TaskMap) => TaskMap) => {
-    changed.current = true
-    setSaveState("저장 중")
-    setMap(fn)
-  }, [])
-  useEffect(() => {
-    if (!ready || !changed.current) return
-    const revision = ++saveRevision.current
-    const value = { ...prefsRef.current, taskMap: mapRef.current }
-    try {
-      localStorage.setItem("giraf-pending-draft", JSON.stringify(value))
-    } catch {
-      /* Server saving remains available when storage is full. */
-    }
-    const timer = setTimeout(() => {
-      saving.current = saving.current
-        .catch(() => {})
-        .then(async () => {
-          if (revision !== saveRevision.current) return
-          await api("task-preferences", value)
-          if (revision === saveRevision.current) {
-            try { localStorage.removeItem("giraf-pending-draft") } catch { /* Storage may be unavailable. */ }
-            changed.current = false
-            setSaveState("저장됨")
-          }
-        })
-        .catch((e) => {
-          setSaveState("저장 실패")
-          setError(e.message)
-        })
-    }, 350)
-    return () => clearTimeout(timer)
-  }, [map, prefs, ready])
+  }, [bootstrap.data, ready, loadError, remember, setMap, replacePreferences, queueSave])
+  const update = useCallback((fn: (m: TaskMap) => TaskMap, label?: string) => {
+    if (editor.update(fn, label)) queueSave()
+  }, [editor, queueSave])
+  const publishJob = useCallback((instanceId: string, job: Job, catalog?: Catalog) => {
+    if (editor.publishRun(instanceId, job, catalog)) queueSave()
+  }, [editor, queueSave])
+  const restoreHistory = useCallback((type: "undo" | "redo", steps = 1) => {
+    if (!editor[type](steps)) return
+    queueSave()
+    setTaskError("")
+    setLayoutRevision(revision => revision + 1)
+  }, [editor, queueSave])
   async function saveDocument(name?: string) {
-    const revision = ++saveRevision.current
-    const value = { ...prefsRef.current, taskMap: mapRef.current }
-    if (name !== undefined && value._document) value._document = {...value._document, name}
-    setSaveState("저장 중")
-    saving.current = saving.current.catch(() => {}).then(async () => {
-      await api("task-preferences", value)
-      if (revision === saveRevision.current) {
-        changed.current = false
-        try { localStorage.removeItem("giraf-pending-draft") } catch { /* Storage may be unavailable. */ }
-        setSaveState("저장됨")
-        if (name !== undefined) setPrefs(current => ({...current, _document: value._document}))
-      }
-    })
-    try { await saving.current }
-    catch (error) { setSaveState("저장 실패"); throw error }
+    editor.endEdit()
+    const current = prefsRef.current
+    if (name !== undefined && current._document) replacePreferences({ ...current, _document: { ...current._document, name } })
+    queueSave()
+    await autosave.flush()
   }
   function applyDocument(value: Preferences) {
     if (!catalog) return
-    changed.current = false
+    autosave.reset()
     const next = {...initial, ...value, drafts: value.drafts || {}, packageValues: {...defaults(catalog.ccdred), ...value.packageValues}}
-    prefsRef.current = next
-    mapRef.current = reconcileRuns(migrateMap(next, catalog), jobs)
-    diagnosticController.current?.change(next._document?.path || "현재 문서", workflowDiagnosticRequest(mapRef.current, catalog, workspace.folder), true)
-    setPrefs(next)
-    setMap(mapRef.current)
+    const nextMap = reconcileRuns(migrateMap(next, catalog), jobs)
+    diagnosticController.current?.change(next._document?.path || "현재 문서", workflowDiagnosticRequest(nextMap, catalog, workspace.folder), true)
+    replacePreferences(next)
+    setMap(nextMap)
     setSaveState(value._document?.saved ? "저장됨" : "작업을 추가하면 자동 저장됩니다")
     setLastExecution(undefined)
     setSelectedFiles([])
@@ -418,13 +415,13 @@ function App() {
     if (documentBusy) return
     setDocumentBusy(true)
     try {
-      if (changed.current) await saveDocument()
-      else await saving.current
+      editor.endEdit()
+      await autosave.flush()
       applyDocument(await api<Preferences>("workflow-documents", action))
     } finally { setDocumentBusy(false) }
   }
   function exportDocument() {
-    const exported = workflowDocument(prefsRef.current, mapRef.current)
+    const exported = workflowDocument(prefsRef.current, editor.getMap())
     const url = URL.createObjectURL(new Blob([JSON.stringify(exported, null, 2)], {type: "application/json"}))
     const anchor = document.createElement("a")
     anchor.href = url
@@ -432,7 +429,7 @@ function App() {
     anchor.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
-  const publishedWorkflowJobs = useRef("")
+  const publishedWorkflowJobs = useRef(new Map<string, Job>())
   useEffect(() => {
     if (!ready || !workflow) return
     if (workflowActive(workflow)) {
@@ -442,23 +439,21 @@ function App() {
         ? current : {kind: "workflow", id: workflow.id})
     }
     const current = [...workflow.jobs, ...(workflow.currentJob ? [workflow.currentJob] : [])]
-    const signature = JSON.stringify(current)
-    if (current.length && signature !== publishedWorkflowJobs.current) {
-      publishedWorkflowJobs.current = signature
+    if (current.some(job => publishedWorkflowJobs.current.get(job.id) !== job)) {
+      const incoming = current.filter(job => publishedWorkflowJobs.current.get(job.id) !== job)
+      publishedWorkflowJobs.current = new Map(current.map(job => [job.id, job]))
       setJobs(old => [...current, ...old.filter(job => !current.some(next => next.id === job.id))]
         .filter((job, index, all) => all.findIndex(next => next.id === job.id) === index))
       remember(current.flatMap(job => job.products || []))
-      update(map => current.reduce((next, job) => {
-        if (!job.manifest?.instanceId) return next
-        return catalog ? publishWorkflowRun(next, job.manifest.instanceId, job, catalog)
-          : publishRun(next, job.manifest.instanceId, job)
-      }, map))
+      for (const job of incoming) {
+        if (job.manifest?.instanceId) publishJob(job.manifest.instanceId, job, catalog ?? undefined)
+      }
     }
     if (workflow.currentJob && workflow.state === "waiting") {
       setSelectedJob(workflow.currentJob.id)
       setTrayOpen(true)
     }
-  }, [ready, workflow, catalog, remember, update])
+  }, [ready, workflow, catalog, remember, publishJob])
   useEffect(() => {
     if (workflowQuery.error) toast.add({ title: workflowQuery.error.message, type: "error" })
   }, [workflowQuery.error])
@@ -543,10 +538,9 @@ function App() {
     incoming.forEach(job => appliedJobs.current.set(job.id, job))
     setJobs(old => old.map(job => incoming.find(next => next.id === job.id) || job))
     remember(incoming.flatMap(job => job.products || []))
-    if (tracked.length) update(map => tracked.reduce((next, job) => job.manifest?.instanceId
-      ? publishRun(next, job.manifest.instanceId, job) : next, map))
+    for (const job of tracked) if (job.manifest?.instanceId) publishJob(job.manifest.instanceId, job)
     if (completed) void refresh().catch(error => setError(error.message))
-  }, [jobResults.jobs, jobs, refresh, remember, update])
+  }, [jobResults.jobs, jobs, refresh, remember, publishJob])
   useEffect(() => {
     if (jobResults.error) toast.add({ title: jobResults.error.message, type: "error" })
   }, [jobResults.error])
@@ -603,7 +597,7 @@ function App() {
           false
         )
       return next
-    })
+    }, `${t.label} 추가`)
     setAddOpen(false)
     if (ids === selectedFiles) setSelectedFiles([])
     setInspectorTab("input")
@@ -612,19 +606,7 @@ function App() {
     setTaskError("")
   }
   function remove(id: string) {
-    const before = mapRef.current
-    const toastId = toast.add({
-      title: "작업을 삭제했습니다.",
-      timeout: 0,
-      actionProps: {
-        children: "되돌리기",
-        onClick: () => {
-          update((m) => restoreTask(m, before, id))
-          toast.close(toastId)
-        },
-      },
-    })
-    update((m) => removeTask(m, id))
+    update((m) => removeTask(m, id), `${map.tasks.find(task => task.id === id)?.label || "작업"} 삭제`)
     setTaskError("")
   }
   function duplicate(id: string) {
@@ -640,7 +622,7 @@ function App() {
         nextPosition.y += 48
       }
       return duplicateTask(m, id, nextPosition)
-    })
+    }, `${map.tasks.find(task => task.id === id)?.label || "작업"} 복제`)
     setTaskError("")
   }
   function edit(fn: (t: Instance) => Instance) {
@@ -657,7 +639,7 @@ function App() {
         if(after.subflowId && after.position && catalog) next=moveTaskToSubflow(next,catalog,id,after.subflowId,after.position)
       }
       return next
-    })
+    }, `${task.label} 설정 변경`)
   }
 
   function pick(slot: Slot, ids: string[], apply: (ids: string[]) => void) {
@@ -685,8 +667,8 @@ function App() {
         let moved = false
         setDocumentBusy(true)
         try {
-          if (changed.current) await saveDocument()
-          else await saving.current
+          editor.endEdit()
+          await autosave.flush()
           await api("folder", {path})
           moved = true
           await refresh()
@@ -727,9 +709,7 @@ function App() {
       setJobs((old) => [j, ...old])
       setSelectedJob(j.id)
       setTrayOpen(true)
-      update((m) =>
-        publishRun(m, j.manifest?.instanceId || map.view.selected, j)
-      )
+      publishJob(j.manifest?.instanceId || map.view.selected, j)
       setPlan(null)
     } catch (e) {
       setTaskError((e as Error).message)
@@ -808,7 +788,7 @@ function App() {
         "images",
         { kind: "files", ids: [asset.row.id], label: asset.row.label },
         false
-      )
+      ), "ccdhedit 추가"
     )
     if (asset.taskId && asset.role)
       setOrigin({
@@ -847,14 +827,14 @@ function App() {
         )
       })
       return { ...next, view: { ...next.view, selected: parent.id } }
-    })
+    }, `${parent.label} 입력 교체`)
     setOrigin(null)
     setSelectedJob("")
   }
   function saveDefaults() {
     if (!task) return
-    changed.current = true
-    setPrefs((p) => ({
+    const p = prefsRef.current
+    replacePreferences({
       ...p,
       drafts: {
         ...p.drafts,
@@ -867,7 +847,8 @@ function App() {
       mapping: { ...task.mapping },
       packageValues: { ...task.packageValues },
       instrument: [...task.instrument],
-    }))
+    })
+    queueSave()
     setSaveState("새 작업에 적용할 설정 저장 중")
   }
   async function deleteLibrary(kind: "files" | "jobs", ids: string[]) {
@@ -878,7 +859,8 @@ function App() {
     setCache(previous => Object.fromEntries(Object.entries(previous).filter(([id]) => !fileIds.has(id))))
     setWorkspace(previous => ({...previous, files: previous.files.filter(file => !fileIds.has(file.id))}))
     setJobs(previous => previous.filter(job => !jobIds.has(job.id)).map(job => ({...job, products: job.products.filter(file => !fileIds.has(file.id))})))
-    update(previous => removeLibraryReferences(previous,fileIds,jobIds))
+    editor.removeLibrary(fileIds, jobIds)
+    queueSave()
     if (asset && fileIds.has(asset.row.id)) setAsset(null)
     setCompare(previous => previous.filter(id => !fileIds.has(id)))
     if (jobIds.has(selectedJob)) { setSelectedJob(""); setLogRequest(null); setTrayOpen(false) }
@@ -907,7 +889,7 @@ function App() {
         { kind: "pending", taskId: tasks[i].id },
         false
       )
-    update(() => next)
+    update(() => next, "보정 워크플로우 추가")
     setAddOpen(false)
   }
   const sourceOptions = useMemo<{ key: string; label: string; description?: string; count?: number; source: Source }[]>(
@@ -961,7 +943,7 @@ function App() {
           return current
         return { ...current, tasks: next.tasks, subflows: next.subflows, edgeRoutes: next.edgeRoutes,
           view: { ...current.view, ...(straight ? { edgeStyle: "smoothstep" as const } : {}) } }
-      })
+      }, "자동 배치")
       setLayoutRevision((revision) => revision + 1)
     } catch {
       toast.add({ title: "자동 배치에 실패했습니다. 다시 시도해 주세요.", type: "error" })
@@ -971,7 +953,14 @@ function App() {
   }
   return (
     <TooltipProvider>
-      <div className="contents" inert={documentBusy || undefined}>
+      <div className="contents" inert={documentBusy || undefined}
+        onFocusCapture={event => {
+          if (event.target.matches("input:not([type=checkbox]):not([type=radio]), textarea")) editor.beginEdit()
+        }}
+        onBlurCapture={event => {
+          if (event.target.matches("input:not([type=checkbox]):not([type=radio]), textarea")) finishEdit()
+        }}
+      >
       <WorkbenchShell
         libraryOpen={libraryOpen}
         onLibraryOpen={setLibraryOpen}
@@ -983,6 +972,13 @@ function App() {
         selection={`${mobilePanel}:${task?.id || ""}`}
         header={
           <WorkbenchToolbar
+            historyControls={<EditHistoryControls
+              past={editHistory.past}
+              future={editHistory.future}
+              disabled={!ready || documentBusy || workflowStarting || workflowActive(workflow) || busy || !!running}
+              onUndo={steps => restoreHistory("undo", steps)}
+              onRedo={steps => restoreHistory("redo", steps)}
+            />}
             diagnostics={<DiagnosticsButton
               failure={diagnosticFailure}
               resolveNode={entry => resolveDiagnosticNode(entry, map)}
@@ -1089,11 +1085,13 @@ function App() {
                   { value: "cl", label: "IRAF CL" },
                   { value: "pyraf", label: "PyRAF" },
                 ]}
-                onChange={(v) =>
-                  task
-                    ? edit((t) => ({ ...t, backend: v }))
-                    : setPrefs((p) => ({ ...p, backend: v }))
-                }
+                onChange={(v) => {
+                  if (task) edit((t) => ({ ...t, backend: v }))
+                  else {
+                    replacePreferences({ ...prefsRef.current, backend: v })
+                    queueSave()
+                  }
+                }}
               />
             </div>
           </LibrarySidebar>
@@ -1137,6 +1135,8 @@ function App() {
                   catalog={catalog}
                   rows={rows}
                   update={update}
+                  onEditStart={editor.beginEdit}
+                  onEditEnd={finishEdit}
                   add={() => setAddOpen(true)}
                   link={link}
                   open={open}
@@ -1152,7 +1152,7 @@ function App() {
                     setMobilePanel("detail")
                     setTaskError("")
                   }}
-                  removeLink={(id) => update((m) => disconnect(m, id))}
+                  removeLink={(id) => update((m) => disconnect(m, id), "연결 삭제")}
                 />
               )
             )}
@@ -1196,7 +1196,7 @@ function App() {
                   edit={edit}
                   reorderInput={(role, ids) =>
                     update((m) =>
-                      replaceRoleInputs(m, task.id, role, ids, rows)
+                      replaceRoleInputs(m, task.id, role, ids, rows), `${task.label} 입력 순서 변경`
                     )
                   }
                   pick={pick}
@@ -1215,7 +1215,7 @@ function App() {
                   onDuplicate={() => duplicate(task.id)}
                   onInputSource={(role, source) => {
                     try {
-                      const m = mapRef.current
+                      const m = editor.getMap()
                       const value =
                         source.kind === "expression" ? source.value : ""
                       const connected = parsePort(role,"input") && source.kind !== "expression"
@@ -1239,7 +1239,7 @@ function App() {
                             : t
                         ),
                       }
-                      update(() => next)
+                      update(() => next, `${task.label} 입력 변경`)
                       setTaskError("")
                     } catch (e) {
                       setTaskError((e as Error).message)
@@ -1494,7 +1494,7 @@ function App() {
                         role,
                         { kind: "files", ids, label: slot.label },
                         false
-                      )
+                      ), "입력 파일 연결"
                     )
                     setLinking(null)
                   })
@@ -1523,7 +1523,7 @@ function App() {
                         source,
                         connectionRoles(catalog!.tasks.find(s => s.name === map.tasks.find(t => t.id === linking.target)?.task)!, catalog!).find(s => s.name === linking.role)?.multiple ?? false
                       )
-                      update(() => next)
+                      update(() => next, "연결 추가")
                       setLinking(null)
                     } catch (e) {
                       setError((e as Error).message)

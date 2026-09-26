@@ -31,7 +31,7 @@ export function SubflowEditor({
   catalog: Catalog
   group?: Subflow
   taskIds?: string[]
-  update: (fn: (map: TaskMap) => TaskMap) => void
+  update: (fn: (map: TaskMap) => TaskMap, label?: string) => void
   reselect?: () => void
   hidden?: boolean
   close: () => void
@@ -66,7 +66,7 @@ export function SubflowEditor({
           const next = group
             ? updateSubflow(map, id, { name, color })
             : saveSubflow(map, catalog, { id, name, color, taskIds })
-          update(() => next)
+          update(() => next, group ? "서브플로우 설정 변경" : "서브플로우 추가")
           close()
         } catch (e) {
           setError((e as Error).message)
@@ -137,7 +137,7 @@ export function SubflowEditor({
             type="button"
             variant="outline"
             onClick={() => {
-              update((m) => dissolveSubflow(m, id))
+              update((m) => dissolveSubflow(m, id), "서브플로우 해제")
               close()
             }}
           >

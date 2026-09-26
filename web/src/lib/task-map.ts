@@ -355,10 +355,14 @@ export function inputResults(map: TaskMap, taskId: string, kind: string) {
 }
 export function publishWorkflowRun(map: TaskMap, instanceId: string, run: Pick<Job, "id" | "state" | "products">, catalog: Catalog): TaskMap {
   const published = publishRun(map, instanceId, run);
+  return bindWorkflowOutputs(published, instanceId, run, catalog);
+}
+/** Project current workflow results without copying execution records into edit history. */
+export function bindWorkflowOutputs(published: TaskMap, instanceId: string, run: Pick<Job, "id" | "state" | "products">, catalog: Catalog, eligible: (source: Source) => boolean = () => true): TaskMap {
   if (run.state !== "completed") return published;
   return {...published, connections: published.connections.map(c => {
     const source = c.source;
-    if (source.kind === "files" || source.taskId !== instanceId) return c;
+    if (source.kind === "files" || source.taskId !== instanceId || !eligible(source)) return c;
     const target = published.tasks.find(t => t.id === c.target);
     const spec = catalog.tasks.find(s => s.name === target?.task);
     const slot = spec && connectionRoles(spec, catalog).find(s => s.name === c.role);
