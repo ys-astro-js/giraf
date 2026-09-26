@@ -90,7 +90,7 @@ export function OutputPortEditor({
                       </FieldLabel>
                       {!port.id.startsWith("$") && (
                         <Button
-                          variant="ghost"
+                          variant="destructive"
                           size="icon-sm"
                           aria-label={`${label} 삭제`}
                           onClick={() =>

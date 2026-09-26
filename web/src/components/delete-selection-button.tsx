@@ -35,7 +35,7 @@ export function DeleteSelectionButton({
     <>
       <Tooltip>
         <TooltipTrigger
-          render={<Button variant="ghost" size="icon" />}
+          render={<Button variant="destructive" size="icon" />}
           aria-label={label}
           disabled={disabled || !ids.length}
           onClick={() => {

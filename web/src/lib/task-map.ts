@@ -139,6 +139,19 @@ export function addTask(map: TaskMap, task: Instance): TaskMap {
     view: { ...map.view, selected: task.id },
   };
 }
+export function duplicateTask(map: TaskMap, id: string, position: { x: number; y: number }): TaskMap {
+  const original = map.tasks.find(task => task.id === id);
+  if (!original) return map;
+  const task = { ...clone(original), id: uid(), position };
+  return {
+    ...map,
+    tasks: [...map.tasks, task],
+    connections: [...map.connections, ...map.connections.filter(link => link.target === id).map(link => ({
+      ...clone(link), id: uid(), target: task.id,
+    }))],
+    view: { ...map.view, selected: task.id },
+  };
+}
 export function connectionRoles(spec: Spec, catalog: Catalog) {
   return [
     ...spec.inputs,

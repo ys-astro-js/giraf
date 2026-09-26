@@ -2,6 +2,7 @@ import { useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult 
 import { apiQueryOptions, jobQueryOptions, activeJob } from "@/lib/queries"
 import { useJobDiagnostics } from "@/hooks/use-job-diagnostics"
 import { workflowDocument } from "@/lib/workflow-document"
+import { nodeLayout } from "@/lib/node-interaction"
 import { DiagnosticsButton } from "@/components/diagnostics-button"
 import { diagnostics, resolveDiagnosticNode } from "@/lib/diagnostics"
 import { createWorkflowDiagnosticsController } from "@/lib/live-diagnostics"
@@ -87,6 +88,7 @@ import {
   reconcileRuns,
   restoreTask,
   addTask,
+  duplicateTask,
   makeInstance,
   connect,
   replaceRoleInputs,
@@ -625,6 +627,22 @@ function App() {
     update((m) => removeTask(m, id))
     setTaskError("")
   }
+  function duplicate(id: string) {
+    update(m => {
+      const original = m.tasks.find(t => t.id === id)
+      if (!original) return m
+      if (!catalog) return m
+      const layout = nodeLayout(m, catalog, rows)
+      const position = layout.find(node => node.id === id)!
+      const nextPosition = { x: position.x + 48, y: position.y + 48 }
+      while (layout.some(node => node.x === nextPosition.x && node.y === nextPosition.y)) {
+        nextPosition.x += 48
+        nextPosition.y += 48
+      }
+      return duplicateTask(m, id, nextPosition)
+    })
+    setTaskError("")
+  }
   function edit(fn: (t: Instance) => Instance) {
     if (!task) return
     const id = task.id
@@ -1123,6 +1141,7 @@ function App() {
                   link={link}
                   open={open}
                   remove={remove}
+                  duplicate={duplicate}
                   onInput={(id, role) => {
                     setInspectorTab("input")
                     setInputRequest((previous) => ({taskId: id, role, sequence: (previous?.sequence || 0) + 1}))
@@ -1193,6 +1212,7 @@ function App() {
                   job={taskJob}
                   saveDefaults={saveDefaults}
                   onRemove={() => remove(task.id)}
+                  onDuplicate={() => duplicate(task.id)}
                   onInputSource={(role, source) => {
                     try {
                       const m = mapRef.current

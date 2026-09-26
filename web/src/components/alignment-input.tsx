@@ -357,7 +357,7 @@ export function AlignmentInput({
                             )}
                             <td>
                               <Button
-                                variant="ghost"
+                                variant="destructive"
                                 size="icon-sm"
                                 aria-label={`${i + 1}번 별 삭제`}
                                 disabled={measuring}
@@ -457,7 +457,7 @@ export function AlignmentInput({
                               )}
                               {point && index >= 0 && (
                                 <Button
-                                  variant="ghost"
+                                  variant="destructive"
                                   size="icon-sm"
                                   aria-label={`${frame?.label} 별 선택 지우기`}
                                   disabled={measuring}
@@ -502,6 +502,7 @@ export function AlignmentInput({
           <footer className="alignment-picker-footer">
             <ViewerToolButton
               label="전체 비우기"
+              variant="destructive"
               disabled={measuring || !value.trim()}
               onClick={() => {
                 onChange("")

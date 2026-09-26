@@ -29,6 +29,7 @@ import {
   ArrowDown,
   HelpCircle,
   Trash2,
+  Copy,
   ChevronDown,
   Info,
   SquareArrowRightEnter,
@@ -164,6 +165,7 @@ type Props = {
   job?: Job
   saveDefaults: () => void
   onRemove: () => void
+  onDuplicate: () => void
   reorderInput: (role: string, ids: string[]) => void
   onInputSource?: (
     role: string,
@@ -189,6 +191,7 @@ export function TaskInspector({
   job,
   saveDefaults,
   onRemove,
+  onDuplicate,
   reorderInput,
   onInputSource,
   checking,
@@ -1036,6 +1039,7 @@ export function TaskInspector({
               )}
             </div>
             <footer className="inspector-info-actions">
+              <div className="flex items-center gap-2">
               {!spec.executor && (
                 <Button
                   variant="outline"
@@ -1053,9 +1057,10 @@ export function TaskInspector({
                   <HelpCircle />
                 </Button>
               )}
+              <Button variant="outline" size="icon" onClick={onDuplicate} aria-label="노드 복제" title="노드 복제"><Copy /></Button>
+              </div>
               <Button
-                className="ms-auto"
-                variant="outline"
+                variant="destructive-outline"
                 size="icon"
                 onClick={onRemove}
                 aria-label="작업 삭제"

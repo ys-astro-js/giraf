@@ -1,6 +1,7 @@
 """Folder-scoped, portable workflow documents, separate from execution records."""
 import json
 import os
+from copy import deepcopy
 from pathlib import Path
 from uuid import uuid4
 from .jobs import atomic_json
@@ -60,6 +61,41 @@ class WorkflowDocuments:
                               'name': data.get('_document', {}).get('name', '불러온 워크플로우')}
         self.write(draft)
         return self.read(draft['_document']['path'])
+
+    def duplicate(self, data):
+        draft = deepcopy(self.validate(data))
+        draft['_document'] = {**self.new()['_document'],
+                              'name': draft['_document']['name'][:116] + ' 복사본'}
+        graph = draft['taskMap']
+        node_ids = {node['id']: uuid4().hex for node in graph['tasks']}
+        group_ids = {group['id']: uuid4().hex for group in graph.get('subflows', [])}
+        for node in graph['tasks']:
+            node['id'] = node_ids[node['id']]
+            if node.get('subflowId') in group_ids:
+                node['subflowId'] = group_ids[node['subflowId']]
+        for group in graph.get('subflows', []):
+            group['id'] = group_ids[group['id']]
+        for link in graph['connections']:
+            link['id'] = uuid4().hex
+            link['target'] = node_ids.get(link['target'], link['target'])
+            source = link['source']
+            if source.get('taskId') in node_ids:
+                link['source'] = {**{key: value for key, value in source.items()
+                                    if key not in ('runId', 'ids', 'label')},
+                                  'kind': 'pending', 'taskId': node_ids[source['taskId']]}
+        graph['runs'] = []
+        graph.pop('edgeRoutes', None)
+        view = graph.setdefault('view', {})
+        view['selected'] = node_ids.get(view.get('selected'), '')
+        self.write(draft)
+        return self.read(draft['_document']['path'])
+
+    def delete(self, values):
+        if not isinstance(values, list) or not values or not all(isinstance(value, str) for value in values):
+            raise ValueError('삭제할 워크플로우를 선택해 주세요.')
+        paths = [self.path(value) for value in values]
+        for path in paths:
+            path.unlink(missing_ok=True)
 
     def list(self):
         items = []

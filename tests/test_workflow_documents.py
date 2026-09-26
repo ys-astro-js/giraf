@@ -6,6 +6,54 @@ from giraf.workflow_documents import WorkflowDocuments
 
 
 class WorkflowDocumentTests(unittest.TestCase):
+    def test_duplicate_preserves_settings_and_remaps_graph_without_old_executions(self):
+        from copy import deepcopy
+        store = WorkflowDocuments(self.tmp_path)
+        original = store.new()
+        original['_document']['name'] = '보정'
+        original['customPreference'] = {'value': 7}
+        original['taskMap'].update({
+            'tasks': [
+                {'id': 'a', 'draft': {'inputs': {'input': ['raw']}, 'parameters': {'combine': 'median'}}, 'subflowId': 'g'},
+                {'id': 'b', 'parameterSets': {'options': {'value': 1}}},
+            ],
+            'subflows': [{'id': 'g', 'name': '그룹', 'position': {'x': 0, 'y': 0}, 'width': 400, 'height': 300}],
+            'connections': [{'id': 'e', 'target': 'b', 'role': 'input', 'source': {
+                'kind': 'result', 'taskId': 'a', 'runId': 'old', 'ids': ['old-output'], 'outputRole': 'output'}},
+                {'id': 'f', 'target': 'a', 'role': 'input', 'source': {'kind': 'files', 'ids': ['raw'], 'label': '파일'}}],
+            'runs': [{'id': 'old', 'instanceId': 'a', 'state': 'completed', 'products': []}],
+        })
+        store.write(original)
+        before = deepcopy(original)
+        duplicate = store.duplicate(original)
+        self.assertNotEqual(duplicate['_document']['path'], original['_document']['path'])
+        self.assertEqual(duplicate['_document']['name'], '보정 복사본')
+        graph = duplicate['taskMap']
+        a, b = graph['tasks']
+        self.assertNotIn(a['id'], ['a', 'b'])
+        self.assertEqual(a['draft'], original['taskMap']['tasks'][0]['draft'])
+        self.assertEqual(a['subflowId'], graph['subflows'][0]['id'])
+        self.assertNotEqual(a['subflowId'], 'g')
+        self.assertEqual(graph['connections'][0]['target'], b['id'])
+        self.assertEqual(graph['connections'][0]['source'], {'kind': 'pending', 'taskId': a['id'], 'outputRole': 'output'})
+        self.assertEqual(graph['connections'][1]['source']['ids'], ['raw'])
+        self.assertEqual(graph['runs'], [])
+        self.assertEqual(duplicate['customPreference'], {'value': 7})
+        self.assertEqual(original, before)
+        self.assertEqual(store.read(duplicate['_document']['path']), duplicate)
+
+    def test_delete_validates_all_paths_before_removing_documents(self):
+        store = WorkflowDocuments(self.tmp_path)
+        first, second = store.new(), store.new()
+        store.write(first)
+        store.write(second)
+        with self.assertRaises(ValueError):
+            store.delete([first['_document']['path'], str(self.tmp_path.parent / 'outside.json')])
+        self.assertEqual(len(store.list()), 2)
+        store.delete([first['_document']['path'], second['_document']['path']])
+        self.assertEqual(store.list(), [])
+        store.delete([store.new()['_document']['path']])
+
     def test_nested_types_are_checked_on_import_read_and_write(self):
         from copy import deepcopy
         store = WorkflowDocuments(self.tmp_path)

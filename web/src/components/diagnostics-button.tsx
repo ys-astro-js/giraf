@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore } from "react"
 import { AnimatedCount } from "@/components/animated-count"
+import { StatusTransition } from "@/components/status-transition"
 import { CircleX, TriangleAlert, Trash2, X } from "lucide-react"
 import {
   copyDiagnosticRunId,
@@ -55,12 +56,15 @@ export function DiagnosticsButton({
   const visibleSeverities = (["warning", "error"] as const).filter(
     (severity) => counts[severity] > 0
   )
-  if (visibleSeverities.length === 0 && !failure) return null
+  const shownSeverities = visibleSeverities.length
+    ? visibleSeverities
+    : failure ? ["error" as const] : []
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <ButtonGroup className="shrink-0" aria-label="경고 및 오류">
-        {(visibleSeverities.length ? visibleSeverities : ["error" as const]).map((severity) => {
+    <Popover open={open && shownSeverities.length > 0} onOpenChange={setOpen}>
+      <StatusTransition transitionKey={shownSeverities.join("-")} className="toolbar-diagnostics-transition">
+      {shownSeverities.length > 0 && <ButtonGroup className="shrink-0" aria-label="경고 및 오류">
+        {shownSeverities.map((severity) => {
           const Icon = severity === "warning" ? TriangleAlert : CircleX
           return (
             <PopoverTrigger
@@ -82,7 +86,8 @@ export function DiagnosticsButton({
             </PopoverTrigger>
           )
         })}
-      </ButtonGroup>
+      </ButtonGroup>}
+      </StatusTransition>
       <PopoverContent
         align="end"
         sideOffset={8}

@@ -30,7 +30,6 @@ import {
   Position,
   ReactFlow,
   SelectionMode,
-  useReactFlow,
   useNodeId,
   useConnection,
   useStore,
@@ -52,7 +51,7 @@ import {
   Pencil,
   Maximize2,
   LocateFixed,
-  Trash2,
+  Copy,
   Unplug,
   Terminal,
   File,
@@ -120,6 +119,7 @@ type Props = {
   open: (r: Frame) => void
   removeLink: (id: string) => void
   remove: (id: string) => void
+  duplicate: (id: string) => void
   onSelect?: () => void
   onInput?: (id: string, role: string) => void
   onRunSubflow?: (id: string) => void
@@ -128,7 +128,7 @@ type Props = {
   revealConnection?: { id: string; revision: number }
 }
 type DropChoice = { source: Source; target: string; roles: string[] }
-type NodeContext = Pick<Props, "map" | "catalog" | "rows" | "onInput"> & {
+type NodeContext = Pick<Props, "map" | "catalog" | "rows" | "onInput" | "duplicate"> & {
   validateConnection: (connection: FlowConnection) => ReturnType<typeof connectionFeedback>
   currentIssues: Diagnostic[]
   edges: Edge[]
@@ -197,6 +197,7 @@ const TaskNode = memo(function TaskNode({
     catalog,
     rows,
     choose,
+    duplicate,
     onInput,
     drop,
     dropChoice,
@@ -220,7 +221,6 @@ const TaskNode = memo(function TaskNode({
     : run ? stateLabel(run.state) : "실행 전"
   const output = nodeOutput(map, id, geometry.primaryOutputRole)
   const primaryName = task.outputPorts?.find(p=>p.id==="$default")?.name.trim() || ""
-  const flow = useReactFlow<TaskFlowNode>()
   const clickStart = useStore((state) => state.connectionClickStartHandle)
   const connecting = useConnection(state => state.inProgress)
   const connectionTarget = useConnection((connection) =>
@@ -267,16 +267,17 @@ const TaskNode = memo(function TaskNode({
           </span>
         </button>
         <Button
-          className="node-delete nodrag nopan"
+          className="node-duplicate nodrag nopan"
           size="icon-sm"
           variant="ghost"
-          aria-label={`${task.label} 삭제`}
+          aria-label={`${task.label} 복제`}
+          title="노드 복제"
           onClick={(e) => {
             e.stopPropagation()
-            void flow.deleteElements({ nodes: [{ id }] })
+            duplicate(id)
           }}
         >
-          <Trash2 />
+          <Copy />
         </Button>
       </header>
       <div className="node-inputs">
@@ -516,6 +517,7 @@ export function TaskMapView({
   update,
   removeLink,
   remove,
+  duplicate,
   onSelect,
   onInput,
   onRunSubflow,
@@ -890,6 +892,7 @@ export function TaskMapView({
               catalog,
               rows,
               choose,
+              duplicate,
               onInput: selectingGroup ? undefined : onInput,
               drop,
               dropChoice,

@@ -309,8 +309,8 @@ div:has(> [data-slot="tooltip-content"] .connection-port-feedback) { pointer-eve
 .node-state {display:block;margin:0;font-size:12px;line-height:16px;color:var(--muted-foreground);}
 .node-state[data-failed="true"], .node-state[data-severity="error"] {color:var(--destructive);}
 .node-state[data-severity="warning"] {color:var(--warning);}
-.node-delete {position:absolute;right:4px;top:8px;opacity:0;}
-.workflow-node:hover .node-delete,.workflow-node:focus-within .node-delete,.workflow-node[data-selected="true"] .node-delete {opacity:1;}
+.node-duplicate {position:absolute;right:4px;top:8px;opacity:0;}
+.workflow-node:hover .node-duplicate,.workflow-node:focus-within .node-duplicate,.workflow-node[data-selected="true"] .node-duplicate {opacity:1;}
 .node-inputs {padding:8px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
 .node-input-row {height:48px;}
 .node-input {display:flex;flex-direction:column;justify-content:center;gap:2px;width:100%;height:48px;padding:4px 16px;text-align:left;}
@@ -596,7 +596,7 @@ textarea {
   .inspector-body {
     padding: 16px;
   }
-  .node-delete {
+  .node-duplicate {
     opacity: 1;
   }
   input,
@@ -1135,7 +1135,21 @@ textarea {
 .inspector-info { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .inspector-info-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }
 .inspector-info-body > * { flex-shrink: 0; }
-.inspector-info-actions { display: flex; flex-shrink: 0; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--border); }
+.inspector-info-actions { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--border); }
+.workflow-selection-toggle { position: relative; width: 56px; padding-inline: 0; transition: width 180ms ease-out, border-radius 180ms ease-out; }
+.workflow-menu-transition { width: 32px; margin-inline-end: 8px; opacity: 1; filter: blur(0); visibility: visible; transition: width 180ms ease-out, margin-inline-end 180ms ease-out, opacity 180ms ease-out, filter 180ms ease-out, visibility 0s; }
+.workflow-menu-transition[data-hidden="true"] { width: 0; margin-inline-end: 0; opacity: 0; filter: blur(4px); visibility: hidden; pointer-events: none; transition: width 180ms ease-out, margin-inline-end 180ms ease-out, opacity 180ms ease-out, filter 180ms ease-out, visibility 0s 180ms; }
+.workflow-selection-toggle[data-selecting="true"] { width: 32px; }
+.workflow-selection-label { filter: blur(0); transition: opacity 180ms ease-out, filter 180ms ease-out, transform 180ms ease-out; }
+.workflow-selection-close { position: absolute; opacity: 0; filter: blur(4px); transform: rotate(-90deg) scale(.6); transition: opacity 180ms ease-out, filter 180ms ease-out, transform 180ms ease-out; }
+.workflow-selection-toggle[data-selecting="true"] .workflow-selection-label { opacity: 0; filter: blur(4px); transform: scale(.8); }
+.workflow-selection-toggle[data-selecting="true"] .workflow-selection-close { opacity: 1; filter: blur(0); transform: rotate(0) scale(1); }
+.workflow-dropdown-transition { opacity: 1; filter: blur(0); transition: opacity 180ms ease-out, filter 180ms ease-out; }
+.workflow-dropdown-transition[data-starting-style], .workflow-dropdown-transition[data-ending-style] { opacity: 0; filter: blur(4px); }
+@media (prefers-reduced-motion: reduce) {
+  .workflow-selection-toggle, .workflow-selection-label, .workflow-selection-close, .workflow-menu-transition, .workflow-menu-transition[data-hidden="true"] { transition: none; }
+  .workflow-dropdown-transition { transition: none; }
+}
 .inspector-tabs > .inspector-sections { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }
 .inspector-tabs > .inspector-settings { display: flex; flex-direction: column; min-height: 0; overflow: hidden; gap: 16px; padding: 20px; }
 .inspector-settings > .parameter-editor-body { flex: 1; padding: 0; }
@@ -1207,8 +1221,11 @@ textarea {
 }
 
 /* Only this small intrinsic-width region reflows, keeping all neighboring controls aligned. */
-.toolbar-diagnostics { flex-shrink: 0; overflow: clip; overflow-clip-margin: 4px; }
+.toolbar-diagnostics { flex-shrink: 0; overflow: visible; }
 .toolbar-diagnostics-content { display: flex; width: max-content; margin-inline-start: 8px; }
+.toolbar-diagnostics-transition { position: relative; }
+.toolbar-diagnostics-transition[data-transitioning="true"] { min-height: 36px; }
+.toolbar-diagnostics-transition > .status-transition-out { position: absolute; inset-inline-start: 0; top: 0; width: max-content; }
 .toolbar-status-transition { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-width: 0; }
 .toolbar-status-content[data-state="idle"] .toolbar-status-transition { gap: 2px; }
 
@@ -1239,6 +1256,14 @@ textarea {
   from { opacity: 1; filter: blur(0); }
   to { opacity: 0; filter: blur(4px); }
 }
+@keyframes toolbar-diagnostics-enter {
+  from { opacity: 0; filter: blur(4px); transform: translateX(-24px); }
+  to { opacity: 1; filter: blur(0); transform: translateX(0); }
+}
+@keyframes toolbar-diagnostics-exit {
+  from { opacity: 1; filter: blur(0); transform: translateX(0); }
+  to { opacity: 0; filter: blur(4px); transform: translateX(-24px); }
+}
 @media (prefers-reduced-motion: no-preference) {
   .toolbar-diagnostics { transition: width 380ms cubic-bezier(0.22, 1, 0.36, 1); }
   .status-transition[data-transitioning="true"] > .status-transition-in { animation: toolbar-content-enter 650ms cubic-bezier(0.22, 1, 0.36, 1) both; }
@@ -1256,6 +1281,10 @@ textarea {
   .text-flow { mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent); }
   .toolbar-mode-transition[data-transitioning="true"] > .status-transition-in { animation: toolbar-mode-enter 480ms cubic-bezier(0.22, 1, 0.36, 1) both; }
   .toolbar-mode-transition > .status-transition-out { animation: toolbar-mode-exit 320ms ease-out both; }
+  .toolbar-diagnostics-transition[data-transitioning="true"] > .status-transition-in { animation: toolbar-diagnostics-enter 380ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .toolbar-diagnostics-transition > .status-transition-out { animation: toolbar-diagnostics-exit 320ms ease-out both; }
+  .workflow-actions-transition[data-transitioning="true"] > .status-transition-in { animation: toolbar-mode-enter 180ms ease-out both; }
+  .workflow-actions-transition > .status-transition-out { animation: toolbar-mode-exit 180ms ease-out both; }
 }
 
 /* Inline previews follow the output panel width instead of the browser height. */
