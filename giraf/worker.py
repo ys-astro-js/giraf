@@ -166,6 +166,14 @@ class Reduction:
     def run(self):
         if self.operation == 'combine':
             return self.run_combination()
+        groups = self.prepare_reduction_inputs()
+        zero = self.build_bias(groups['bias'])
+        darks = self.build_darks(groups['dark'], zero)
+        flats = self.build_flats(groups['flat'], zero, darks)
+        self.reduce_science(groups['science'], zero, darks, flats)
+        self.finish_reduction()
+
+    def prepare_reduction_inputs(self):
         self.state('입력 무결성과 보정 조건 확인', 0.02)
         # Re-read headers at execution, rather than trusting a stale UI inventory.
         fresh = []
@@ -207,6 +215,9 @@ class Reduction:
                                      metadata={k: r[k] for k in ('kind', 'exposure', 'filter')}, prior_history=r.get('history', {})))
             groups[r['kind']].append(dict(r, alias=alias, index=i))
         atomic_json(self.job / 'sources.json', self.sources)
+        return groups
+
+    def build_bias(self, rows):
         zero = ''
         self.state('Master bias의 전자적 기준 레벨 결합', 0.15)
         if self.s.master_bias and self.s.bias:
@@ -214,7 +225,7 @@ class Reduction:
             self.copy_master(self.s.master_bias, zero, '기존 Master bias 영상')
         elif self.s.bias:
             inputs = []
-            for r in groups['bias']:
+            for r in rows:
                 name = r['alias']
                 if self.s.overscan or self.s.trim:
                     out = f"prepared/bias{r['index']:04d}.fits"
@@ -232,6 +243,9 @@ class Reduction:
             else:
                 self.combine('zerocombine', inputs, zero)
             self.product(zero, 'Master bias')
+        return zero
+
+    def build_darks(self, rows, zero):
         darks = {}
         self.state('Master dark 생성: bias 제거 후 노출시간별 결합', 0.32)
         if self.s.master_darks and self.s.dark:
@@ -241,9 +255,9 @@ class Reduction:
                 t = float(fits.getheader(self.job / master)['EXPTIME'])
                 darks[t] = master
         elif self.s.dark:
-            for j, t in enumerate(sorted({r['exposure'] for r in groups['dark']})):
+            for j, t in enumerate(sorted({r['exposure'] for r in rows})):
                 inputs = []
-                for r in groups['dark']:
+                for r in rows:
                     if r['exposure'] != t:
                         continue
                     out = f"prepared/dark{r['index']:04d}.fits"
@@ -254,14 +268,18 @@ class Reduction:
                 darks[t] = master
                 self.product(master, f'Master dark {t:g} s.fits')
 
-        def choose_dark(row):
-            if not self.s.dark or (self.s.resume and 'DARKCOR' in row.get('history', {})):
-                return ''
-            t = dark_for(float(row['exposure']), list(darks), self.s.dark_policy)
-            if t is None:
-                raise ValueError(f"{row['name']}: 일치하는 dark가 없습니다.")
-            return darks[t]
+        return darks
 
+    def choose_dark(self, row, darks):
+        if not self.s.dark or (self.s.resume and 'DARKCOR' in row.get('history', {})):
+            return ''
+        t = dark_for(float(row['exposure']), list(darks), self.s.dark_policy)
+        if t is None:
+            raise ValueError(f"{row['name']}: 일치하는 dark가 없습니다.")
+        return darks[t]
+
+
+    def build_flats(self, rows, zero, darks):
         flats = {}
         self.state('Master flat 생성: bias와 dark 제거 후 필터별 결합', 0.55)
         if self.s.master_flats and self.s.flat:
@@ -273,13 +291,13 @@ class Reduction:
                 filt = str(fits.getheader(self.job / master).get('FILTER', '')).strip()
                 flats[filt] = master
         elif self.s.flat:
-            for j, filt in enumerate(sorted({r['filter'] for r in groups['flat']})):
+            for j, filt in enumerate(sorted({r['filter'] for r in rows})):
                 inputs = []
-                for r in groups['flat']:
+                for r in rows:
                     if r['filter'] != filt:
                         continue
                     out = f"prepared/flat{r['index']:04d}.fits"
-                    self.process(r['alias'], out, zero=zero, dark=choose_dark(r), geometry=True)
+                    self.process(r['alias'], out, zero=zero, dark=self.choose_dark(r, darks), geometry=True)
                     inputs.append(out)
                 master = f'masters/flat{j:02d}.fits'
                 self.combine('flatcombine', inputs, master, scale=self.s.flat_scale)
@@ -289,15 +307,20 @@ class Reduction:
                 flats[filt] = master
                 # IRAF ccdproc computes and uses the flat mean internally.
                 self.product(master, f'Master flat {filt} 정규화 전 ADU.fits')
+        return flats
+
+    def reduce_science(self, rows, zero, darks, flats):
         self.state('Science에 bias, dark, flat 순으로 보정 적용', 0.75)
-        for i, r in enumerate(groups['science']):
+        for i, r in enumerate(rows):
             out = f"reduced/science{r['index']:04d}.fits"
             if not (self.s.bias or self.s.dark or self.s.flat or self.s.overscan or self.s.trim):
                 continue
-            self.process(r['alias'], out, zero=zero, dark=choose_dark(r),
+            self.process(r['alias'], out, zero=zero, dark=self.choose_dark(r, darks),
                          flat=flats.get(r['filter'], ''), geometry=True)
             self.product(out, r['name'], source=r['path'])
-            self.state(f"Science {i + 1}/{len(groups['science'])} 완료", .75 + .2 * (i + 1) / max(1, len(groups['science'])))
+            self.state(f"Science {i + 1}/{len(rows)} 완료", .75 + .2 * (i + 1) / max(1, len(rows)))
+
+    def finish_reduction(self):
         # Refresh calibration copies after dependent processing changes headers.
         self.save_products()
         self.call('imstatistics', images=','.join(p['file'] for p in self.products),

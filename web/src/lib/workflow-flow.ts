@@ -8,7 +8,7 @@ import {
   type Node,
   type NodeChange,
 } from "@xyflow/react"
-import { connect, type Instance, type TaskMap, type Subflow, type Source } from "./task-map"
+import { connect, type Instance, type TaskMap, type Subflow, type Source } from "@/lib/task-map"
 import {
   connectionChoices,
   nodeGeometry,

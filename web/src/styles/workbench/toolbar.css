@@ -1,0 +1,110 @@
+/* The shared toolbar spans the full workbench above both sidebars. */
+.giraf-app { container-type: inline-size; }
+.workbench-toolbar {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  min-width: 0;
+  flex-shrink: 0;
+  padding: 0 12px;
+}
+.workbench-toolbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: color-mix(in oklch, var(--background) 80%, transparent);
+  border-bottom: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transition: opacity 240ms ease-out;
+}
+.workbench-toolbar[data-background-visible="true"]::before {
+  opacity: 1;
+}
+@media (min-width: 768px) {
+  .giraf-app { --toolbar-height: 56px; }
+  .workbench-toolbar {
+    z-index: 20;
+    height: var(--toolbar-height);
+    margin-bottom: calc(-1 * var(--toolbar-height));
+    pointer-events: none;
+  }
+  .workbench-toolbar > * { pointer-events: auto; }
+  .workbench-body [data-slot="sidebar-container"] {
+    top: var(--toolbar-height);
+    height: calc(100% - var(--toolbar-height));
+  }
+  .workbench-body .inspector-pane { padding-top: var(--toolbar-height); }
+  .workbench-body .workflow-search ~ .map-viewport .react-flow__panel.top {
+    top: var(--toolbar-height);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workbench-toolbar::before { transition-duration: 100ms; }
+}
+.toolbar-leading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.toolbar-status {
+  display: flex;
+  justify-content: flex-start;
+  width: 24rem;
+  max-width: 100%;
+  min-width: 0;
+  padding-block: 8px;
+}
+.toolbar-status-content {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: start;
+  width: 100%;
+  gap: 8px 2px;
+  min-width: 0;
+  min-height: 36px;
+  max-width: 100%;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--muted);
+}
+.toolbar-status-name { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.toolbar-status-progress { margin-inline-start: auto; flex-shrink: 0; white-space: nowrap; }
+.toolbar-status-fill {
+  position: absolute;
+  z-index: -1;
+  inset-block: 0;
+  inset-inline: 0;
+  transform-origin: left;
+  background: color-mix(in oklch, var(--primary) 10%, transparent);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .toolbar-status-fill { transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 280ms ease-out; }
+}
+.toolbar-status-transition > svg { color: var(--muted-foreground); }
+.toolbar-status-content[data-state="completed"] .toolbar-status-transition > svg { color: var(--primary); }
+.toolbar-status-content[data-state="failed"] .toolbar-status-transition > svg { color: var(--destructive); }
+.toolbar-panels { justify-self: end; }
+@container (max-width: 600px) {
+  .workbench-toolbar { gap: 8px; padding-inline: 8px; }
+}
+
+@container (max-width: 480px) {
+  .workbench-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
+  .toolbar-panels { grid-column: 2; grid-row: 1; }
+  .toolbar-status { grid-column: 1 / -1; grid-row: 2; padding-block: 0 8px; }
+}

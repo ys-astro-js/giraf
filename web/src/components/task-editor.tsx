@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import { taskDisplayName, type Catalog, type Preferences, type Frame, type Job } from '@/lib/workbench'
 import { Parameters, Blank, Download, Failure } from '@/components/workbench-controls'
-import type { PickerRequest } from '@/components/file-picker'
+import type { PickerRequest } from '@/features/file-picker/FilePicker'
 
 type Shared = {catalog:Catalog;prefs:Preferences;rows:Frame[];update:(fn:(p:Preferences)=>Preferences)=>void;pick:(request:PickerRequest)=>void}
 export function PackageSettings({catalog,prefs,rows,update,pick}:Shared){

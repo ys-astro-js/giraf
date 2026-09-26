@@ -1,4 +1,4 @@
-import { stateLabel } from './task-map'
+import { stateLabel } from '@/lib/task-map'
 
 export type ExecutionStatus = {
   executionId?: string

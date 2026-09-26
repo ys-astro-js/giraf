@@ -2,13 +2,11 @@
 from __future__ import annotations
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 import shutil
 import sys
 import traceback
-from copy import deepcopy
 from astropy.io import fits
 
 from .jobs import atomic_json
@@ -80,6 +78,14 @@ class TaskRun:
             return str(p)
         return f'output/o{index:05d}{ext}'
     def prepare(self):
+        self.stage_inputs()
+        instrument = self.configure_package()
+        params = self.prepare_parameters(instrument)
+        self.plan_calls(params)
+        self.record_plan()
+        self.write_scripts()
+
+    def stage_inputs(self):
         from .image_lists import check_input_lists
         check_input_lists(self.m)
         for folder in ('input','output','lists','uparm','references','backup'):(self.job/folder).mkdir(exist_ok=True)
@@ -109,6 +115,8 @@ class TaskRun:
                             converted=str(Path(ref).with_suffix('.pl'));self.mask_conversions.append((ref,converted));ref=converted
                         fits.setval(self.job/alias,'BPM',value=ref)
         atomic_json(self.job/'sources.json',sources)
+
+    def configure_package(self):
         instrument=self.list_value('instrument')
         if not instrument:
             instrument='instrument.dat';(self.job/instrument).write_text(''.join(f'{k} {v}\n' for k,v in self.m['mapping'].items()))
@@ -124,6 +132,9 @@ class TaskRun:
         prep=dict(self.m['ccdproc'])
         for role in ('zero','dark','flat','illum','fringe','fixfile'):prep[role]=self.list_value(role)
         self.assignments.append(('ccdproc',prep))
+        return instrument
+
+    def prepare_parameters(self, instrument):
         name=self.m['task'];params=dict(self.m['parameters'])
         for role in self.spec['inputs']:
             value=self.list_value(role['name'],self.m.get('section','') if role==self.spec['inputs'][0] else '')
@@ -133,6 +144,10 @@ class TaskRun:
             for key in ('scale','zero','weight'):
                 if str(params.get(key,'')).startswith('@'):params[key]=self.stage_reference(params[key],self.directory,key)
         if name=='ccdinstrument':params['instrument']=instrument
+        return params
+
+    def plan_calls(self, params):
+        name = self.m['task']
         output=self.spec['output'];main=self.m['inputs'][self.spec['inputs'][0]['name']]
         names=output_paths(self.m) if output and not self.dryrun else []
         if output and output['mode'] in ('each','edit'):
@@ -185,11 +200,12 @@ class TaskRun:
             self.assignments+=list(exam['parameters'].items());params.update(use_display='no',imagecur='cursor.txt',graphcur='',logfile='exam.log',keeplog='yes',wcs='logical',graphics='stdgraph',frame=1,image='')
             self.calls.append((name,params));self.call_sources.append(main);self.call_expected.append([])
         else:self.calls.append((name,params));self.call_sources.append(main);self.call_expected.append([])
+
+    def record_plan(self):
         atomic_json(self.job/'references.json',self.references)
         atomic_json(self.job/'commands.json',[dict(task=n,parameters=p) for n,p in self.calls])
         atomic_json(self.job/'assignments.json',[dict(task=n,parameters=p) for n,p in self.assignments])
         atomic_json(self.job/'effective.json',dict(requested=self.m,assignments=[dict(task=n,parameters=p) for n,p in self.assignments],calls=[dict(task=n,parameters=p) for n,p in self.calls],capabilities=CAPABILITIES))
-        self.write_scripts()
     @staticmethod
     def pyvalue(v):return 'iraf.INDEF' if v=='INDEF' else repr(v)
     def write_scripts(self,only=None):

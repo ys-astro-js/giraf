@@ -1,0 +1,122 @@
+.run-tray > [data-slot="tabs"] {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.giraf-app[data-tray="false"] .run-tray > [data-slot="tabs"] {
+  display: none;
+}
+.tray-content {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 0 16px 12px;
+}
+.tray-content pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.tray-content td {
+}
+.panel-resizer:hover,
+.panel-resizer:focus-visible {
+  background: var(--border);
+}
+.mobile-nav {
+  display: none;
+}
+::selection {
+  background: var(--selection);
+  color: var(--selection-foreground);
+}
+input,
+textarea {
+  caret-color: var(--primary);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+@media (max-width: 1100px) {
+}
+@media (max-width: 700px) {
+
+
+  .mobile-nav {
+    display: flex;
+    grid-row: 2;
+    grid-column: 1;
+    align-items: center;
+    justify-content: space-around;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .map-tools {
+    padding: 0 16px 12px;
+  }
+
+  .inspector-heading,
+  .inspector-body {
+    padding: 16px;
+  }
+  .node-duplicate {
+    opacity: 1;
+  }
+  input,
+  textarea,
+  [data-slot="select-trigger"] {
+  }
+
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+
+
+
+/* shadcn panel groups own geometry and keyboard resizing. */
+.giraf-app {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workbench-panels { flex: 1; min-height: 0; min-width: 0; width: 100%; }
+.library, .main-workspace, .inspector-pane, .run-tray { width: 100%; height: 100%; min-height: 0; min-width: 0; }
+.library, .main-workspace, .run-tray { display: flex; flex-direction: column; }
+.inspector-pane { overflow-y: auto; overscroll-behavior: contain; }
+.run-tray { overflow: hidden; }
+.library { position: relative; }
+
+
+
+.inspector-title h2 { font-weight: 600; }
+.mobile-nav { display: none; }
+@media (max-width: 767px) {
+  .mobile-nav { display: flex; height: 44px; flex-shrink: 0; align-items: center; justify-content: space-around; border-bottom: 1px solid var(--border); }
+  .desktop-sidebar-trigger { display: none; }
+  .library { display: flex; }
+}
+
+/* Sidebar owns offcanvas/Sheet behavior; Resizable reserves its desktop width. */
+.workbench-body { position: relative; display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.workbench-body > [data-slot="sidebar"] > [data-slot="sidebar-gap"] { display: none; }
+.workbench-inset { height: 100%; min-height: 0; min-width: 0; overflow: hidden; }
+.workbench-body [data-slot="sidebar-container"] { position: absolute; height: 100%; transition-duration: 0s; }
+
+/* Fade boundaries follow the visible body below the fixed panel heading. */
+.inspector-pane { overflow: hidden; }
+.task-inspector { height: 100%; min-height: 0; }
+.inspector-heading { position: relative; flex-shrink: 0; }
+.inspector-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.run-tray > [data-slot="tabs"] > div:first-child { flex-shrink: 0; }

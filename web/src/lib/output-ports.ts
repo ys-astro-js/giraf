@@ -1,6 +1,6 @@
 import { activeOutputSlots, primaryOutputRole, matchesGroup, type CalibrationGroup } from "./calibration-ports"
 import { acceptsAsset, type Catalog, type Frame, type Spec } from "./workbench"
-import type { Source, TaskMap } from "./task-map"
+import type { Source, TaskMap } from "@/lib/task-map"
 
 export type CustomOutputPort = {
   id: string

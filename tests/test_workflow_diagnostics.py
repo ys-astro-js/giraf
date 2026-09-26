@@ -7,7 +7,7 @@ from unittest.mock import patch
 import numpy as np
 from astropy.io import fits
 
-from giraf import generic_tasks, server
+from giraf import server
 from giraf.workflow_diagnostics import workflow_diagnostics
 
 
@@ -79,7 +79,7 @@ class WorkflowDiagnosticsTests(unittest.TestCase):
         nodes = [self.node("a", {"input": [self.row["id"]]}), self.node(inputs={"input": [self.row["id"]]})]
         edge = {"id": "result-edge", "source": {"kind": "result", "taskId": "a", "runId": "completed", "ids": [self.row["id"]]}, "target": "n", "role": "input"}
         before = self.image.read_bytes()
-        with patch("giraf.task_jobs.digest", side_effect=AssertionError("hash")), patch.object(generic_tasks, "file_hash", side_effect=AssertionError("hash")):
+        with patch("giraf.task_jobs.digest", side_effect=AssertionError("hash")), patch("giraf.generic_tasks.validation.file_hash", side_effect=AssertionError("hash")):
             self.assertFalse(any(d["severity"] == "error" for d in self.inspect(nodes, [edge])))
             self.image.unlink()
             self.assertTrue(any(d["nodeId"] == "n" and "파일" in d["message"] for d in self.inspect(nodes, [edge])))

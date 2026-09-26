@@ -6,7 +6,7 @@ import {
   type Instance,
   type Source,
   type TaskMap,
-} from "./task-map"
+} from "@/lib/task-map"
 import { acceptsAsset, type Catalog, type Frame, type Slot } from "./workbench"
 
 const flags: Record<string, string> = {

@@ -67,9 +67,37 @@ def workflow_diagnostics(request, resolve):
                            message=message, nodeId=node_id,
                            **({'connectionId': connection_id} if connection_id else {})))
 
+    pending = diagnose_connections(by_id, connections, add)
+
+    def fresh(file_id):
+        row = resolve(file_id)
+        if not row:
+            raise ValueError('선택한 파일을 다시 불러와 주세요.')
+        path = Path(row['path'])
+        if not path.is_file():
+            raise ValueError(f'{row.get("label") or path.name}: 파일이 없습니다.')
+        if row.get('asset', 'image') == 'image':
+            inspected = inspect_file(path)
+            return {**row, **inspected, 'asset': 'image'}
+        return row
+
+    for node in nodes:
+        node_id = node['id']
+        payload = {**node['payload'], 'workingDirectory': request.get('workingDirectory') or node['payload'].get('workingDirectory')}
+        try:
+            manifest = validate_task(payload, fresh, diagnostics=True, pending_roles=pending[node_id])
+        except (ValueError, KeyError, TypeError, OSError) as exc:
+            add('error', str(exc), node_id)
+            continue
+        for warning in manifest.get('warnings', []):
+            add('warning', warning, node_id)
+    return result
+
+
+def diagnose_connections(by_id, connections, add):
     components = connection_components(connections)
     input_counts = Counter((edge.get('target'), edge.get('role')) for edge in connections)
-    pending = {node['id']: set() for node in nodes}
+    pending = {node_id: set() for node_id in by_id}
     correction_flags = {'zero': 'zerocor', 'dark': 'darkcor', 'flat': 'flatcor',
                         'illum': 'illumcor', 'fringe': 'fringecor', 'fixfile': 'fixpix'}
     for edge in connections:
@@ -129,26 +157,4 @@ def workflow_diagnostics(request, resolve):
         if source.get('kind') == 'files' and not slot.get('multiple', False) and len(source.get('ids', [])) > 1:
             add('error', '입력 파일은 한 개만 선택해 주세요.', target_id, edge_id)
 
-    def fresh(file_id):
-        row = resolve(file_id)
-        if not row:
-            raise ValueError('선택한 파일을 다시 불러와 주세요.')
-        path = Path(row['path'])
-        if not path.is_file():
-            raise ValueError(f'{row.get("label") or path.name}: 파일이 없습니다.')
-        if row.get('asset', 'image') == 'image':
-            inspected = inspect_file(path)
-            return {**row, **inspected, 'asset': 'image'}
-        return row
-
-    for node in nodes:
-        node_id = node['id']
-        payload = {**node['payload'], 'workingDirectory': request.get('workingDirectory') or node['payload'].get('workingDirectory')}
-        try:
-            manifest = validate_task(payload, fresh, diagnostics=True, pending_roles=pending[node_id])
-        except (ValueError, KeyError, TypeError, OSError) as exc:
-            add('error', str(exc), node_id)
-            continue
-        for warning in manifest.get('warnings', []):
-            add('warning', warning, node_id)
-    return result
+    return pending

@@ -156,6 +156,20 @@ def validate(rows: list[dict], s: Settings) -> tuple[list[str], list[str]]:
     active = selected(rows)
     if not active:
         return ['최소 한 장의 원본 영상을 선택해 주세요.'], []
+    validate_settings(s, errors)
+    validate_inputs(active, s, errors, warnings)
+    groups = {kind: [r for r in active if r['kind'] == kind] for kind in KINDS}
+    masters, master_rows = validate_masters(active, s, errors)
+    validate_combination(groups, masters, s, errors, warnings)
+    validate_resume(active, s, errors, warnings)
+    validate_matching(groups, master_rows, s, errors, warnings)
+    validate_sections(active, s, errors)
+    if not groups['science']:
+        warnings.append('Science 선택이 없어 master 보정 영상까지만 생성합니다.')
+    return list(dict.fromkeys(errors)), list(dict.fromkeys(warnings))
+
+
+def validate_settings(s, errors):
     if not any((s.bias, s.dark, s.flat, s.overscan, s.trim)):
         errors.append('최소 하나의 처리 단계를 선택해 주세요.')
     if s.combine not in ('median', 'average') or s.reject not in ('none', 'minmax', 'sigclip'):
@@ -164,6 +178,9 @@ def validate(rows: list[dict], s: Settings) -> tuple[list[str], list[str]]:
         errors.append('지원하지 않는 정규화/노출시간 설정입니다.')
     if s.readaxis not in ('line', 'column') or s.sigma <= 0 or s.nlow < 0 or s.nhigh < 0:
         errors.append('rejection 또는 판독 방향 설정을 확인해 주세요.')
+
+
+def validate_inputs(active, s, errors, warnings):
     if len({r['path'] for r in active}) != len(active):
         errors.append('중복 입력 영상이 있습니다.')
     for field, label in [('shape', '영상 크기'), ('binning', 'binning'), ('instrument', '검출기'),
@@ -175,7 +192,6 @@ def validate(rows: list[dict], s: Settings) -> tuple[list[str], list[str]]:
         errors.append('CCD 온도 차이가 2°C보다 큽니다. 같은 온도 조건의 프레임을 선택해 주세요.')
     if len(temps) != len(active):
         warnings.append('일부 영상에 CCD 온도 정보가 없습니다. 보정 프레임과 관측 조건이 같은지 확인해 주세요.')
-    groups = {kind: [r for r in active if r['kind'] == kind] for kind in KINDS}
     for r in active:
         if r.get('error') or (r.get('processed') and not (s.resume and r.get('resumable') and r['kind'] == r.get('detected_kind'))):
             errors.append(f"{r['name']}: 처리된 영상이나 지원하지 않는 파일은 원본으로 사용할 수 없습니다.")
@@ -186,6 +202,9 @@ def validate(rows: list[dict], s: Settings) -> tuple[list[str], list[str]]:
             errors.append(f"{r['name']}: 유효한 노출시간(초)을 입력해 주세요.")
         if r['kind'] in ('flat', 'science') and s.flat and not str(r['filter']).strip():
             errors.append(f"{r['name']}: flat 매칭에 필요한 필터를 입력해 주세요.")
+
+
+def validate_masters(active, s, errors):
     masters = {'bias': [s.master_bias] if s.master_bias else [], 'dark': s.master_darks, 'flat': s.master_flats}
     master_rows = {k: [inspect_file(Path(p)) for p in paths] for k, paths in masters.items()}
     for kind, refs in master_rows.items():
@@ -207,6 +226,10 @@ def validate(rows: list[dict], s: Settings) -> tuple[list[str], list[str]]:
         errors.append('노출시간이 같은 master dark가 중복되었습니다.')
     if len({r['filter'] for r in master_rows['flat']}) != len(master_rows['flat']):
         errors.append('필터가 같은 master flat이 중복되었습니다.')
+    return masters, master_rows
+
+
+def validate_combination(groups, masters, s, errors, warnings):
     for enabled, kind in [(s.bias, 'bias'), (s.dark, 'dark'), (s.flat, 'flat')]:
         if enabled and not groups[kind] and not masters[kind]:
             errors.append(f'{kind} 단계가 켜져 있지만 선택된 {kind} 프레임이 없습니다.')
@@ -232,6 +255,9 @@ def validate(rows: list[dict], s: Settings) -> tuple[list[str], list[str]]:
             errors.append(f'{label}: minmax 제거 후 최소 한 장이 남아야 합니다.')
         if s.reject == 'sigclip' and len(group) < 3:
             errors.append(f'{label}: 이 UI에서 sigma clipping은 최소 3장이 필요합니다.')
+
+
+def validate_resume(active, s, errors, warnings):
     resumed = [r for r in active if r.get('processed') and s.resume]
     if resumed:
         warnings.append('기존 bias/dark 보정 이력을 유지하고 완료된 보정은 건너뜁니다. 이전 보정에 사용한 master와 이번 master의 일치 여부는 검증되지 않았습니다. 원시 자료부터의 일관된 재보정이 필요하면 원본을 사용하세요.')
@@ -240,6 +266,9 @@ def validate(rows: list[dict], s: Settings) -> tuple[list[str], list[str]]:
         for r in resumed:
             if not s.dark and 'DARKCOR' in r.get('history', {}):
                 warnings.append('Dark 단계를 꺼도 입력에 이미 적용된 dark 보정은 취소되지 않습니다.')
+
+
+def validate_matching(groups, master_rows, s, errors, warnings):
     if s.dark:
         times = [number(r['exposure'], -1) for r in (master_rows['dark'] or groups['dark'])]
         for r in groups['science'] + (groups['flat'] if s.flat and not s.master_flats else []):
@@ -255,12 +284,12 @@ def validate(rows: list[dict], s: Settings) -> tuple[list[str], list[str]]:
         filters = {r['filter'] for r in (master_rows['flat'] or groups['flat'])}
         for f in {r['filter'] for r in groups['science']} - filters:
             errors.append(f'{f} 필터의 flat이 없습니다.')
+
+
+def validate_sections(active, s, errors):
     for enabled, value, label in [(s.overscan, s.biassec, 'Overscan'), (s.trim, s.trimsec, 'Trim')]:
         if enabled:
             try:
                 section(value, active[0].get('width', 0), active[0].get('height', 0))
             except ValueError as exc:
                 errors.append(f'{label}: {exc}')
-    if not groups['science']:
-        warnings.append('Science 선택이 없어 master 보정 영상까지만 생성합니다.')
-    return list(dict.fromkeys(errors)), list(dict.fromkeys(warnings))

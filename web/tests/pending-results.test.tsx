@@ -1,6 +1,6 @@
 import {test,expect} from 'bun:test'
 import {emptyMap,makeInstance,payloadFor,type TaskMap} from '../src/lib/task-map'
-import {assigned} from '../src/components/task-inspector'
+import {assigned} from '../src/lib/task-map/inputs'
 import type {Catalog,Spec,Preferences} from '../src/lib/workbench'
 const spec:Spec={name:'images.immatch.imalign',title:'imalign',package:'images',adapter:'generic',parameters:[],inputs:[{name:'input',label:'Input images',kind:'image',multiple:true},{name:'reference',label:'Reference image',kind:'image',multiple:false}],output:null,kind:'image'}
 const cat:Catalog={version:'1',tasks:[spec],ccdproc:{parameters:[],inputs:[]},ccdred:[],exam:{}}

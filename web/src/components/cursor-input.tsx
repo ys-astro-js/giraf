@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { ImageViewer } from "./image-viewer"
+import { ImageViewer } from "@/features/viewer/ImageViewer"
 import type { Frame, Slot } from "@/lib/workbench"
 
 export function CursorInput({

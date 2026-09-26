@@ -64,7 +64,7 @@ IRAF 계산을 별도의 근사 구현으로 대체하지 않고, 설치된 IRAF
 
 - `README.md`: 현재 기능, 실행 방법, 지원 task, 재현 기록 및 제한 사항.
 - `giraf/task_catalog.py`, `giraf/task_parameters.json`: 등록된 task와 IRAF 파라미터 정의. 파라미터는 IRAF 2.18.1 초기값 스냅샷입니다.
-- `IRAF_EXTENSIONS.md`, `giraf/task_discovery.py`, `giraf/task_schema.py`, `giraf/generic_tasks.py`: 설치 패키지의 정적 탐색, parameter 기반 스키마 생성, 범용 실행과 현재 제한입니다. 실제 CL/PyRAF 통합 검증 범위는 `imcopy`, `imarith`, `gauss`, `imtranspose`, `phot`, `sarith`이며 전체 IRAF 호환성을 뜻하지 않습니다.
+- `IRAF_EXTENSIONS.md`, `giraf/task_discovery/`, `giraf/task_schema.py`, `giraf/generic_tasks/`: 설치 패키지의 정적 탐색, parameter 기반 스키마 생성, 범용 실행과 현재 제한입니다. 실제 CL/PyRAF 통합 검증 범위는 `imcopy`, `imarith`, `gauss`, `imtranspose`, `phot`, `sarith`이며 전체 IRAF 호환성을 뜻하지 않습니다.
 - `tests/`: 실제 IRAF 실행, CL/PyRAF 비교, 보정, 결과 생성 및 원본 보존 등을 검사하는 기존 코드. 테스트의 존재를 이번 작업에서 통과를 확인한 것으로 표현하지 않습니다.
 - `observations/`: 로컬 관측 자료. `runs/`: 기존 로컬 실행 기록과 결과.
 - 고객 사례, 사용자 평가, 성능 수치 및 전체 IRAF 호환성은 별도의 근거 없이 주장하지 않습니다.

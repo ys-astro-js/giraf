@@ -1,7 +1,7 @@
 import type { ElkNode, LayoutOptions } from "elkjs/lib/elk-api"
 import { nodeGeometry } from "./node-interaction"
 import { flowEdges } from "./workflow-flow"
-import type { TaskMap } from "./task-map"
+import type { TaskMap } from "@/lib/task-map"
 import type { Catalog, Frame } from "./workbench"
 
 const options: LayoutOptions = {

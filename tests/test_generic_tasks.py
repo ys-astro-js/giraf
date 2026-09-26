@@ -120,7 +120,7 @@ class DiscoveryTests(unittest.TestCase):
         for names in ({'a': '../escape.fits'}, {'a': '/tmp/escape.fits'}, {'bad': 'x'}):
             with self.assertRaises(ValueError):
                 validate_generic(spec, {'task': spec['name'], 'outputs': names}, lambda key: None)
-        with patch('giraf.generic_tasks.run_process', return_value=1):
+        with patch('giraf.generic_tasks.execution.run_process', return_value=1):
             runner.execute()
         self.assertEqual(json.loads((job / 'status.json').read_text())['state'], 'failed')
 

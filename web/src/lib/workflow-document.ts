@@ -1,4 +1,4 @@
-import { emptyMap, type Connection, type TaskMap } from "./task-map"
+import { emptyMap, type Connection, type TaskMap } from "@/lib/task-map"
 import type { Preferences } from "./workbench"
 
 export function workflowDocument(prefs: Preferences, taskMap: TaskMap) {

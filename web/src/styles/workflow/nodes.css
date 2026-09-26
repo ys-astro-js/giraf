@@ -1,0 +1,118 @@
+
+.node-command {display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;color:var(--muted-foreground);}
+.node-command code {color:var(--foreground);overflow-wrap:anywhere;}
+
+.identity-heading {display:flex;align-items:center;gap:8px;min-width:0;}
+.identity-heading h2 {min-width:0;}
+.identity-actions {display:flex;justify-content:flex-end;gap:4px;margin-top:4px;}
+
+.workflow-node[data-running="true"] {border-color:var(--primary);background:color-mix(in srgb,var(--primary) 6%,var(--background));}
+.workflow-node[data-running="true"] .node-title strong {color:var(--primary);}
+.node-state > .node-running-icon {color:var(--primary);}
+@media (prefers-reduced-motion: no-preference) {
+  .node-running-icon {animation:node-running-spin 1.2s linear infinite;}
+}
+@keyframes node-running-spin {to {transform:rotate(360deg);}}
+
+.node-heading:focus-visible, .node-input:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+/* Native React Flow subflows share the existing canvas palette. */
+.map-workspace { position: relative; }
+.map-viewport .react-flow__minimap {
+  --workflow-minimap-mask: color-mix(in oklch, var(--background) 75%, transparent);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: none;
+}
+/* Let empty group backgrounds hit the canvas instead of the node's nopan wrapper. */
+.map-viewport .react-flow__node-subflow { pointer-events: none !important; }
+.map-viewport:not([data-group-selecting="true"]) .subflow-heading,
+.map-viewport:not([data-group-selecting="true"]) .subflow-resize { pointer-events: auto; }
+.subflow-node {
+  width: 100%; height: 100%;
+  border: 1px solid color-mix(in srgb, var(--group-color) 55%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--group-color) 7%, var(--background));
+}
+.subflow-heading { display:flex; align-items:center; gap:8px; height:56px; padding:12px; cursor:grab; }
+.subflow-heading > svg { width:16px; height:16px; flex-shrink:0; color:var(--muted-foreground); }
+.subflow-heading strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
+.subflow-heading > span { margin-left:auto; color:var(--muted-foreground); font-size:12px; white-space:nowrap; }
+.subflow-run-button {
+  --primary: var(--group-color);
+  --primary-hover: color-mix(in oklch, var(--group-color), var(--foreground) 12%);
+  --ring: var(--group-color);
+}
+.subflow-resize { background:transparent !important; border:none !important; width:20px !important; height:20px !important; }
+.subflow-resize svg { width:14px; height:14px; color:var(--muted-foreground); transform:rotate(90deg); }
+.subflow-editor { position:absolute; top:56px; right:12px; z-index:20; width:min(340px, calc(100% - 24px)); max-height:calc(100% - 68px); overflow:auto; padding:16px; border:1px solid var(--border); border-radius:12px; background:var(--background); display:flex; flex-direction:column; gap:12px; }
+.subflow-editor-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.subflow-editor-heading h2 { font-size:14px; font-weight:600; }
+.subflow-editor > label, .subflow-editor legend { font-size:13px; font-weight:500; }
+.subflow-editor fieldset { min-width:0; }
+.subflow-editor legend { margin-bottom:8px; }
+.subflow-editor-actions { display:flex; justify-content:flex-end; gap:8px; }
+.subflow-error { color:var(--destructive); font-size:13px; }
+@media (max-width: 640px) {
+  .map-viewport .react-flow__minimap { width:96px !important; height:64px !important; }
+  .map-viewport .react-flow__minimap svg { width:96px; height:64px; }
+}
+
+:root {
+  --subflow-teal: oklch(0.51 0.09 185);
+  --subflow-blue: oklch(0.52 0.16 255);
+  --subflow-violet: oklch(0.53 0.17 300);
+  --subflow-amber: oklch(0.55 0.12 70);
+  --subflow-rose: oklch(0.54 0.17 15);
+  --subflow-slate: oklch(0.51 0.03 250);
+}
+.dark {
+  --subflow-teal: oklch(0.76 0.11 185);
+  --subflow-blue: oklch(0.74 0.13 255);
+  --subflow-violet: oklch(0.76 0.13 300);
+  --subflow-amber: oklch(0.78 0.13 70);
+  --subflow-rose: oklch(0.75 0.13 15);
+  --subflow-slate: oklch(0.75 0.03 250);
+}
+.workflow-search { position:absolute; inset-block-end:12px; inset-inline:0; margin-inline:auto; z-index:6; width:min(240px, calc(100% - 128px)); }
+.workflow-search [data-slot="input-group"] { height:32px; background:var(--background); }
+.workflow-search [data-slot="input-group"]:not(:focus-within) { border-color:var(--border); }
+.map-workspace { container-type:inline-size; }
+@container (max-width: 540px) {
+  .workflow-search ~ .map-viewport .react-flow__minimap { bottom:56px; }
+}
+.map-viewport .workflow-tools { display:flex; flex-direction:column; gap:12px; }
+.workflow-tools [data-slot="button"][aria-pressed="true"] { background:var(--selection); color:var(--selection-foreground); outline:1px solid var(--primary); outline-offset:-1px; }
+@media (pointer:coarse) {
+  .workflow-search [data-slot="input-group"] { height:44px; }
+  .map-viewport .workflow-tools [data-slot="button"] { width:44px; height:44px; }
+}
+.subflow-selection-bar { display:flex; align-items:center; gap:8px; padding:8px 12px; max-width:calc(100% - 24px); border:1px solid var(--border); border-radius:12px; background:var(--background); font-size:13px; }
+.subflow-selection-bar > span { min-width:0; }
+.map-viewport[data-group-selecting="true"] .react-flow__pane { cursor:crosshair; }
+.map-viewport[data-group-selecting="true"] .react-flow__node-subflow { pointer-events:none !important; }
+.map-viewport[data-group-selecting="true"] .workflow-node:not([data-group-selected="true"]) { outline:none; }
+.workflow-node[data-group-selected="true"] { border-color:var(--primary); outline:2px solid var(--primary); outline-offset:-1px; }
+.subflow-node[data-drop-state="entering"] { border-color:var(--group-color); outline:2px solid var(--group-color); outline-offset:-1px; background:color-mix(in srgb,var(--group-color) 14%,var(--background)); }
+.subflow-node[data-drop-state="leaving"] { border:2px dashed var(--group-color); }
+.subflow-colors { display:flex; flex-wrap:wrap; gap:8px; }
+.subflow-colors label { position:relative; width:36px; height:36px; cursor:pointer; }
+.subflow-colors input { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer; }
+.subflow-colors span { display:flex; align-items:center; justify-content:center; pointer-events:none; width:100%; height:100%; border-radius:50%; background:var(--group-color); color:var(--background); }
+.subflow-colors input:focus-visible + span { outline:2px solid var(--ring); outline-offset:3px; }
+.subflow-colors svg { width:20px; height:20px; stroke-width:3; }
+
+.subflow-editor[hidden] { display:none; }
+.group-selection-summary { display:flex; align-items:center; justify-content:space-between; gap:8px; padding-bottom:4px; color:var(--muted-foreground); font-size:13px; }
+.group-selection-summary button { color:var(--foreground); }
+.group-task-count { display:inline-flex; align-items:center; gap:4px; }
+.group-task-count > svg { width:14px; height:14px; flex-shrink:0; }
+
+.node-output-row { position:relative; display:flex; align-items:center; gap:12px; height:36px; padding:4px 24px 4px 16px; min-width:0; border-top:1px solid var(--border); }
+.node-output-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
+.generic-output-field { min-width:0; gap:8px; }
+.generic-output-field [data-slot="field-description"], .cursor-input [data-slot="field-description"] { overflow-wrap:anywhere; }
+.cursor-input { min-width:0; }
+.cursor-input textarea { min-height:112px; max-height:240px; overflow:auto; }

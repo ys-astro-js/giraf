@@ -1,5 +1,5 @@
 import type {Catalog,Frame,Slot,Spec} from './workbench'
-import type {Instance,TaskMap,Source} from './task-map'
+import type {Instance,TaskMap,Source} from '@/lib/task-map'
 import {metadataMode,metadataItems,correctionRoles,correctionFlags,type MetadataMode} from './calibration'
 
 export type CalibrationGroup={filter?:string|null;exposure?:number|null}

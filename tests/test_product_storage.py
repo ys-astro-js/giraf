@@ -66,7 +66,7 @@ class ProductStorageTests(unittest.TestCase):
             original_prepare()
             if fail_indices or (spec or self.spec)['outputs'][0]['mode'] == 'each':
                 runner.calls = [(runner.calls[0][0], [p]) for p in runner.expected]
-        with patch.object(runner, 'prepare', side_effect=prepare), patch.object(runner, 'write_scripts', side_effect=lambda index=None: [(job / ('commands.' + ext)).write_text('') for ext in ('cl', 'py')]), patch('giraf.generic_tasks.run_process', side_effect=execute):
+        with patch.object(runner, 'prepare', side_effect=prepare), patch.object(runner, 'write_scripts', side_effect=lambda index=None: [(job / ('commands.' + ext)).write_text('') for ext in ('cl', 'py')]), patch('giraf.generic_tasks.execution.run_process', side_effect=execute):
             runner.execute()
         products = json.loads((job / 'products.json').read_text())
         assert_products(self, job, products)

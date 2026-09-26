@@ -1,0 +1,75 @@
+/* Keep selection in the file icon slot without shifting file names. */
+.library-file-row .library-file-checkbox {
+  opacity: 0;
+  pointer-events: none;
+}
+.library-file-row:is(:has(:focus-visible), [data-selecting="true"]) .library-file-checkbox {
+  opacity: 1;
+  pointer-events: auto;
+}
+.library-file-row:is(:has(:focus-visible), [data-selecting="true"]) .library-file-icon {
+  opacity: 0;
+}
+@media (hover: hover) {
+  .library-file-row:hover .library-file-checkbox { opacity: 1; pointer-events: auto; }
+  .library-file-row:hover .library-file-icon { opacity: 0; }
+}
+
+/* Inspector navigation stays visible while each task area scrolls independently. */
+.inspector-tabs { flex: 1; min-height: 0; gap: 0; overflow: hidden; }
+.inspector-info { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.inspector-info-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }
+.inspector-info-body > * { flex-shrink: 0; }
+.inspector-info-actions { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--border); }
+.workflow-selection-toggle { position: relative; width: 56px; padding-inline: 0; transition: width 180ms ease-out, border-radius 180ms ease-out; }
+.workflow-menu-transition { width: 32px; margin-inline-end: 8px; opacity: 1; filter: blur(0); visibility: visible; transition: width 180ms ease-out, margin-inline-end 180ms ease-out, opacity 180ms ease-out, filter 180ms ease-out, visibility 0s; }
+.workflow-menu-transition[data-hidden="true"] { width: 0; margin-inline-end: 0; opacity: 0; filter: blur(4px); visibility: hidden; pointer-events: none; transition: width 180ms ease-out, margin-inline-end 180ms ease-out, opacity 180ms ease-out, filter 180ms ease-out, visibility 0s 180ms; }
+.workflow-selection-toggle[data-selecting="true"] { width: 32px; }
+.workflow-selection-label { filter: blur(0); transition: opacity 180ms ease-out, filter 180ms ease-out, transform 180ms ease-out; }
+.workflow-selection-close { position: absolute; opacity: 0; filter: blur(4px); transform: rotate(-90deg) scale(.6); transition: opacity 180ms ease-out, filter 180ms ease-out, transform 180ms ease-out; }
+.workflow-selection-toggle[data-selecting="true"] .workflow-selection-label { opacity: 0; filter: blur(4px); transform: scale(.8); }
+.workflow-selection-toggle[data-selecting="true"] .workflow-selection-close { opacity: 1; filter: blur(0); transform: rotate(0) scale(1); }
+.workflow-dropdown-transition { opacity: 1; filter: blur(0); transition: opacity 180ms ease-out, filter 180ms ease-out; }
+.workflow-dropdown-transition[data-starting-style], .workflow-dropdown-transition[data-ending-style] { opacity: 0; filter: blur(4px); }
+@media (prefers-reduced-motion: reduce) {
+  .workflow-selection-toggle, .workflow-selection-label, .workflow-selection-close, .workflow-menu-transition, .workflow-menu-transition[data-hidden="true"] { transition: none; }
+  .workflow-dropdown-transition { transition: none; }
+}
+.inspector-tabs > .inspector-sections { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }
+.inspector-tabs > .inspector-settings { display: flex; flex-direction: column; min-height: 0; overflow: hidden; gap: 16px; padding: 20px; }
+.inspector-settings > .parameter-editor-body { flex: 1; padding: 0; }
+.inspector-command { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .inspector-info-body { padding: 16px; }
+  .inspector-info-actions { padding-inline: 16px; }
+  .inspector-tabs > .inspector-sections, .inspector-tabs > .inspector-settings { padding: 16px; }
+}
+
+/* Dependency graph shares the workflow canvas primitives. */
+.inspector-tabs > .inspector-dependencies { display: flex; min-height: 0; overflow: hidden; }
+.dependency-panel { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.dependency-canvas { flex: 1; min-height: 240px; }
+.dependency-node { display: block; width: 100%; text-align: center; cursor: pointer; height: 100%; border: 1px solid var(--border); border-radius: 12px; background: var(--background); color: var(--foreground); }
+.dependency-node[data-current="true"] { border-color: var(--dependency-color); background: color-mix(in srgb, var(--dependency-color) 7%, var(--background)); }
+@media (hover: hover) {
+  .dependency-node:not([data-current="true"]):hover { border-color: color-mix(in srgb, var(--dependency-color) 55%, var(--border)); background: color-mix(in srgb, var(--dependency-color) 5%, var(--background)); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dependency-node { transition: background-color 140ms ease, border-color 140ms ease; }
+}
+.dependency-node-label { display: flex; flex-direction: column; justify-content: center; gap: 4px; height: 66px; padding: 10px 12px; }
+.dependency-node-label strong { font-size: 14px; font-weight: 500; }
+.dependency-node-label span { font-size: 12px; color: var(--muted-foreground); }
+.dependency-node-label > *, .dependency-output > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dependency-outputs { display: flex; height: 28px; border-top: 1px solid var(--border); }
+.dependency-output { flex: 1; min-width: 0; display: block; line-height: 28px; padding: 0 6px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dependency-output + .dependency-output { border-left: 1px solid var(--border); }
+.dependency-node .react-flow__handle { width: 5px; height: 5px; min-width: 5px; min-height: 5px; background: var(--muted-foreground); border: 0; }
+.dependency-node:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 12px; }
+.dependency-message { padding: 12px; font-size: 13px; color: var(--muted-foreground); }
+
+.dependency-canvas .dependency-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; left: 0; right: 0; }
+.dependency-tools > [data-slot="button-group"], .dependency-view-tools { pointer-events: auto; }
+.dependency-view-tools { display: flex; gap: 8px; }
+.dependency-canvas .dependency-tools { pointer-events: none; }
+@media (pointer: coarse) { .dependency-tools [data-slot="button"], .dependency-tools [data-slot="toggle-group-item"] { width: 44px; height: 44px; } }

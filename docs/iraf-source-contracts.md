@@ -1,8 +1,8 @@
 # IRAF parameter and file contracts
 
-The shared analyzer is `giraf/spp_schema.py`. It contains no task-name dispatch.
+The shared analyzer is the `giraf/spp_schema/` package. It contains no task-name dispatch.
 `task_schema.py` merges its evidence into the node schema, and
-`task_discovery.py` loads the same contract for installed and source-distributed
+`task_discovery/` loads the same contract for installed and source-distributed
 tasks. Help prose may supply descriptions or fallback guesses; it cannot
 reverse a source-proven file direction or turn a proven setting into a port.
 

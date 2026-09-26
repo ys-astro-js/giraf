@@ -1,0 +1,11 @@
+/* Inline previews follow the output panel width instead of the browser height. */
+.result-preview .image-viewer { height: 100%; }
+.result-preview .viewer-image { width: 100%; min-height: 0; }
+.result-preview-dialog .result-preview .image-viewer {flex:1;height:100%;}
+.result-preview-dialog .result-preview .viewer-image {aspect-ratio:auto;min-height:0;}
+@container viewer (max-width: 480px) {
+  .viewer-panel-switch { top: 8px; right: 8px; }
+  .viewer-zoom { right: 8px; bottom: 8px; gap: 8px; }
+  .viewer-coordinate-overlay { left: 8px; bottom: 48px; max-width: calc(100% - 16px); }
+  .image-viewer > header { padding-inline: 0; }
+}

@@ -6,7 +6,7 @@ import {
   removeLibraryReferences,
   type Source,
   type TaskMap,
-} from "./task-map"
+} from "@/lib/task-map"
 import type { Catalog, Job } from "./workbench"
 
 export type EditEntry = { label: string }

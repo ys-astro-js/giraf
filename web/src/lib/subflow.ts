@@ -4,7 +4,7 @@ import {
   type SubflowColor,
   workflowRequest,
   payloadFor,
-} from "./task-map"
+} from "@/lib/task-map"
 import { nodeLayout, roleActive } from "./node-interaction"
 import type { Catalog } from "./workbench"
 

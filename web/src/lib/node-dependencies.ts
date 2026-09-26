@@ -9,7 +9,7 @@ import {
 import { flowEdges } from "./workflow-flow"
 import { subflowColor } from "./subflow"
 import { customPortHandle } from "./output-ports"
-import type { TaskMap } from "./task-map"
+import type { TaskMap } from "@/lib/task-map"
 import type { Catalog } from "./workbench"
 
 export type DependencyData = {

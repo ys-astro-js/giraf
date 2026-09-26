@@ -4,28 +4,26 @@ from copy import deepcopy
 from functools import lru_cache, partial
 from pathlib import Path
 import hashlib
-import io
 import json
-import math
 import threading
 import subprocess
 import sys
 
-import numpy as np
 from astropy.io import fits
-from PIL import Image
 from send2trash import send2trash
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.exceptions import HTTPException
-from pydantic import TypeAdapter, ValidationError
-from typing import Any
+from pydantic import ValidationError
 from starlette.responses import FileResponse, JSONResponse, Response
 from starlette.routing import Route, Mount
 from starlette.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.concurrency import run_in_threadpool
 
+from .api_contract import request_payload, LocalOriginMiddleware, validation_error, api_error, http_error
+from .workflow_preferences import document_action, initial_preferences
+from .image_rendering import image_info, image_png, image_pixel
 from .workflow_documents import WorkflowDocuments
 from .jobs import ROOT, RUNS, start, status, atomic_json
 from .model import Settings, inspect_file, scan, validate
@@ -175,54 +173,6 @@ def delete_library(kind, ids):
         save()
         return {'fileIds': sorted(removed), 'jobIds': ids if kind == 'jobs' else [], 'failedIds': failed_ids}
 
-
-@lru_cache(maxsize=5)
-def image_data(path, modified):
-    with fits.open(path, memmap=False) as h:
-        data = np.asarray(h[0].data, dtype=np.float32)
-        if data.ndim != 2:
-            raise ValueError('2D 영상만 표시할 수 있습니다.')
-        return data, str(h[0].header)
-
-
-def data_for(id):
-    path = get_file(id)
-    return image_data(str(path), path.stat().st_mtime_ns)
-
-
-def clean_float(x):
-    return float(x) if math.isfinite(float(x)) else None
-
-
-def image_info(id):
-    a, header = data_for(id)
-    finite = a[np.isfinite(a)].astype(float)
-    if not finite.size:
-        raise ValueError('유효한 픽셀이 없습니다.')
-    hist, bins = np.histogram(finite, bins=100, range=tuple(np.percentile(finite, [.2, 99.8])) if np.ptp(finite) else None)
-    return dict(width=a.shape[1], height=a.shape[0], mean=float(finite.mean()), median=float(np.median(finite)),
-                std=float(finite.std()), min=float(finite.min()), max=float(finite.max()),
-                low=float(np.percentile(finite, 1)), high=float(np.percentile(finite, 99.5)),
-                header=header, histogram=hist.tolist(), bins=bins.tolist())
-
-
-def image_png(id, low=None, high=None, stretch='asinh'):
-    a, _ = data_for(id)
-    # Keep every detector pixel so the viewer's 1:1 mode is actually native.
-    small = a
-    lo = float(low) if low is not None else float(np.nanpercentile(small, 1))
-    hi = float(high) if high is not None else float(np.nanpercentile(small, 99.5))
-    if not math.isfinite(lo) or not math.isfinite(hi) or hi <= lo:
-        raise ValueError('표시 상한은 하한보다 커야 합니다.')
-    v = np.clip((np.flipud(small) - lo) / (hi - lo), 0, 1)
-    if stretch == 'asinh':
-        v = np.arcsinh(v * 10) / np.arcsinh(10)
-    v = np.nan_to_num(v, nan=0)
-    image = Image.fromarray((v * 255).astype('uint8'))
-    out = io.BytesIO(); image.save(out, format='PNG')
-    return out.getvalue()
-
-
 def resolve_rows(ids, edits):
     rows = []
     for id in ids:
@@ -277,50 +227,6 @@ workflow_manager = WorkflowManager(ROOT / '.workflow', workflow_prepare,
     lambda id: job_info(RUNS / id), workflow_cancel_job)
 
 
-# Validate the JSON envelope before endpoint code accesses it.
-payload_adapter = TypeAdapter(dict[str, Any])
-
-
-async def request_payload(request):
-    return payload_adapter.validate_python(await request.json(), strict=True)
-
-
-class LocalOriginMiddleware:
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope['type'] == 'http' and scope['method'] == 'POST' and scope['path'].startswith('/api/'):
-            request = Request(scope)
-            origin = request.headers.get('origin')
-            if origin and origin != str(request.base_url).rstrip('/'):
-                response = JSONResponse({'error': '허용하지 않는 요청 출처입니다.'}, status_code=403)
-                await response(scope, receive, send)
-                return
-        await self.app(scope, receive, send)
-
-
-async def validation_error(request, exc):
-    issues = [
-        {'field': '.'.join(str(part) for part in error['loc']) or 'inputs',
-         'message': error['msg']}
-        for error in exc.errors(include_url=False, include_context=False, include_input=False)
-    ]
-    return JSONResponse({'error': '입력 형식을 확인해 주세요.', 'issues': issues}, status_code=400)
-
-
-async def api_error(request, exc):
-    import re
-    message = str(exc)
-    match = re.search(r'(?:ccdproc\.)?([A-Za-z][\w]*)[:=]', message)
-    field = match.group(1) if match else 'inputs'
-    return JSONResponse({'error': message, 'issues': [{'field': field, 'message': message}]}, status_code=400)
-
-
-async def http_error(request, exc):
-    return JSONResponse({'error': str(exc.detail)}, status_code=exc.status_code, headers=exc.headers)
-
-
 async def catalog_endpoint(request: Request):
     return JSONResponse(catalog())
 
@@ -346,24 +252,7 @@ async def task_preferences_endpoint(request: Request, *, action):
         if action == 'workflow-documents':
             if (workflow_manager.current() or {}).get('state') in ('running', 'waiting', 'confirmation', 'cancelling'):
                 raise ValueError('실행을 마친 뒤 워크플로우를 전환해 주세요.')
-            op = payload.get('operation')
-            if op == 'open': data = store.read(payload['path'])
-            elif op == 'new': data = store.new()
-            elif op == 'import': data = store.import_document(payload['document'])
-            elif op == 'duplicate':
-                if not current:
-                    raise ValueError('복제할 워크플로우를 선택해 주세요.')
-                paths = payload.get('paths', [current['_document']['path']])
-                if not isinstance(paths, list) or not paths or not all(isinstance(path, str) for path in paths):
-                    raise ValueError('복제할 워크플로우를 선택해 주세요.')
-                originals = [current if path == current['_document']['path'] and not store.path(path).is_file()
-                             else store.read(path) for path in dict.fromkeys(paths)]
-                copies = [store.duplicate(original) for original in originals]
-                data = copies[0] if len(copies) == 1 else current
-            elif op == 'delete':
-                store.delete(payload.get('paths'))
-                data = current if current and current['_document']['path'] not in payload['paths'] else store.new()
-            else: raise ValueError('지원하지 않는 워크플로우 동작입니다.')
+            data = document_action(store, current, payload)
             selected[workspace['folder']] = data
             save()
             return JSONResponse(data)
@@ -383,14 +272,7 @@ async def task_preferences_endpoint(request: Request, *, action):
                 path = current['_document']['path']
                 data = store.read(path) if Path(path).is_file() else current
             else:
-                choices = store.list()
-                data = store.read(choices[0]['path']) if choices else store.new()
-                # Migrate the old global draft exactly once, in its original folder.
-                legacy = workspace.get('task_preferences')
-                if legacy and legacy.get('taskMap'):
-                    data = {**legacy, '_document': {**store.new()['_document'], 'name': '워크플로우'}}
-                    store.write(data)
-                    workspace.pop('task_preferences', None)
+                data = initial_preferences(store, workspace)
                 selected[workspace['folder']] = data
                 save()
         data = dict(data)
@@ -535,23 +417,18 @@ async def alignment_star_endpoint(request: Request):
 
 async def info_endpoint(request: Request):
     q = request.query_params
-    return JSONResponse(await run_in_threadpool(image_info, q['id']))
+    return JSONResponse(await run_in_threadpool(image_info, get_file(q['id'])))
 
 
 async def image_endpoint(request: Request):
     q = request.query_params
-    png = await run_in_threadpool(image_png, q['id'], q.get('low'), q.get('high'), q.get('stretch', 'asinh'))
+    png = await run_in_threadpool(image_png, get_file(q['id']), q.get('low'), q.get('high'), q.get('stretch', 'asinh'))
     return Response(png, media_type='image/png')
 
 
 async def pixel_endpoint(request: Request):
     q = request.query_params
-    a, _ = data_for(q['id'])
-    x, y = int(q['x']), int(q['y'])
-    if not (1 <= x <= a.shape[1] and 1 <= y <= a.shape[0]):
-        raise ValueError('영상 밖의 좌표입니다.')
-    return JSONResponse(dict(x=x, y=y, value=clean_float(a[y-1,x-1]),
-                             row=[clean_float(v) for v in a[y-1]], column=[clean_float(v) for v in a[:,x-1]]))
+    return JSONResponse(image_pixel(get_file(q['id']), int(q['x']), int(q['y'])))
 
 
 async def validate_endpoint(request: Request, *, action):
