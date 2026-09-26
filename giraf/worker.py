@@ -60,6 +60,7 @@ class Reduction:
         self.operation = payload.get('operation', 'reduction')
         self.name = payload.get('name', '')
         self.calls, self.products, self.sources = [], [], []
+        self._published_products = {}
         self.progress = 0
 
     def state(self, message, progress, state='running'):
@@ -91,7 +92,20 @@ class Reduction:
         self.save_products()
 
     def save_products(self):
-        atomic_json(self.job / 'products.json', [publish_product(self.job, p, i) for i, p in enumerate(self.products)])
+        published = []
+        for index, product in enumerate(self.products):
+            stat = (self.job / product['file']).stat()
+            version = (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_dev, stat.st_ino)
+            cached = self._published_products.get(index)
+            # IRAF can update master headers after publication. Keep their final
+            # contents, but do not copy/hash every unchanged image at each step.
+            if (cached is None or cached[0] != version or cached[1] != product
+                    or not (self.job / cached[2]['file']).is_file()):
+                result = publish_product(self.job, product, index)
+                cached = (version, dict(product), result)
+                self._published_products[index] = cached
+            published.append(cached[2])
+        atomic_json(self.job / 'products.json', published)
 
     def combine(self, task, inputs, output, scale='none', override=None):
         listfile = f'lists/{Path(output).stem}.list'

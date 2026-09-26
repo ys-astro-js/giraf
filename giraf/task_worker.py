@@ -14,7 +14,7 @@ from .task_catalog import TASKS, SNAPSHOT, CAPABILITIES
 from .task_jobs import output_paths
 from .products import product_name, publish_product
 from .task_expressions import split_image
-from .task_session import run_process, Cancelled
+from .task_session import run_process, read_log_since, Cancelled
 
 
 def checksum(path):
@@ -248,7 +248,7 @@ class TaskRun:
             command=[binary,'-f',str(self.job/f'commands-{i+1:03d}.cl')] if backend=='cl' else [sys.executable,str(self.job/f'commands-{i+1:03d}.py')]
             with (self.job/'task.log').open('ab') as log:
                 start=log.tell();code=run_process(command,self.job,log,self.interactive,backend)
-            text=(self.job/'task.log').read_bytes()[start:].decode(errors='replace')
+            text=read_log_since(self.job/'task.log',start)
             version=re.search(r'GIRAF_IRAF_VERSION\s+([^\r\n]+)',text)
             if version:engine['iraf_version']=version.group(1).strip()
             failed=bool(code or 'GIRAF_RUN_DONE' not in text or re.search(r'(?im)^\s*(?:(?:ERROR|PANIC|FATAL)(?:\s|:)|\*\*\s*Syntax error)',text.replace('\x07','')))

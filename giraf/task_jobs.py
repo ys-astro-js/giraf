@@ -16,6 +16,7 @@ from .jobs import ROOT, RUNS, atomic_json
 from .task_inputs import resolve_task_inputs
 from .task_catalog import TASKS, parameters, CALIBRATIONS
 from .products import product_name
+from .request_schema import TaskRequest
 
 def digest(path):
     with Path(path).open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
@@ -63,6 +64,7 @@ def values(name, supplied):
 
 
 def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozenset()):
+    payload = TaskRequest.model_validate(payload).model_dump(exclude_unset=True)
     name = payload.get('task')
     if name not in TASKS: raise ValueError('지원하는 IRAF task를 선택해 주세요.')
     spec = TASKS[name]

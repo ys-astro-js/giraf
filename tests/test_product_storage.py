@@ -137,6 +137,34 @@ class ProductStorageTests(unittest.TestCase):
             self.assertEqual(json.loads((job / 'status.json').read_text())['state'], state)
             self.assertEqual(len(products), count)
 
+    def test_workers_do_not_reread_previous_invocations_from_the_log(self):
+        original_read = Path.read_bytes
+        def read_without_log(path):
+            if path.name == 'task.log':
+                raise AssertionError('Read the current invocation using its byte offset')
+            return original_read(path)
+        with patch.object(Path, 'read_bytes', read_without_log):
+            spec = deepcopy(self.spec)
+            spec['outputs'][0]['mode'] = 'each'
+            _, job, _ = self.generic(spec, fail_indices=(0,))
+            self.assertEqual(json.loads((job / 'status.json').read_text())['state'], 'partial')
+
+            m = validate_task(dict(task='ccdhedit', backend='pyraf', inputs={'images': ['a', 'b']},
+                                  parameters={'parameter': 'OBSERVER', 'value': 'test'}), self.rows.__getitem__)
+            job = self.job(m)
+            runner = TaskRun(job)
+            calls = []
+            def execute(command, directory, log, *args):
+                failed = not calls
+                calls.append(command)
+                log.write(b'ERROR: first call failed\n' if failed else b'GIRAF_RUN_DONE\n')
+                log.flush()
+                return int(failed)
+            with patch('giraf.task_worker.run_process', side_effect=execute):
+                runner.execute()
+            outcomes = json.loads((job / 'outcomes.json').read_text())
+            self.assertEqual([o['state'] for o in outcomes], ['failed', 'processed'])
+
     def test_image_list_and_log_preserve_content(self):
         m = validate_generic(image_list_spec(), dict(inputs={'input': ['a']}, outputs={'output': '영상 목록.list'}), self.rows.__getitem__)
         job = self.job(m); GenericTaskRun(job).execute()

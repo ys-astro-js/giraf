@@ -31,6 +31,7 @@ from .combine import validate_combination
 from .task_catalog import catalog
 from .task_jobs import validate_task, preview_task, start_task, authorize_file_plan
 from .workflow_diagnostics import workflow_diagnostics
+from .request_schema import WorkflowRequest
 
 STATE = ROOT / '.workspace.json'
 registry: dict[str, dict] = {}
@@ -227,8 +228,8 @@ workflow_manager = WorkflowManager(ROOT / '.workflow', workflow_prepare,
     lambda id: job_info(RUNS / id), workflow_cancel_job)
 
 
-async def catalog_endpoint(request: Request):
-    return JSONResponse(catalog())
+def catalog_endpoint(request: Request):
+    return JSONResponse(catalog(refresh=True) if request.query_params.get('refresh') == '1' else catalog())
 
 
 async def workflow_diagnostics_endpoint(request: Request):
@@ -243,11 +244,15 @@ async def workflow_diagnostics_endpoint(request: Request):
 
 async def task_preferences_endpoint(request: Request, *, action):
     payload = await request_payload(request) if request.method == 'POST' else {}
+    return await run_in_threadpool(task_preferences_response, payload, request.method, action)
+
+
+def task_preferences_response(payload, method, action):
     with lock:
         store = WorkflowDocuments(workspace['folder'])
         selected = workspace.setdefault('workflow_documents', {})
         current = selected.get(workspace['folder'])
-        if action == 'workflow-documents' and request.method == 'GET':
+        if action == 'workflow-documents' and method == 'GET':
             return JSONResponse(store.list())
         if action == 'workflow-documents':
             if (workflow_manager.current() or {}).get('state') in ('running', 'waiting', 'confirmation', 'cancelling'):
@@ -256,7 +261,7 @@ async def task_preferences_endpoint(request: Request, *, action):
             selected[workspace['folder']] = data
             save()
             return JSONResponse(data)
-        if request.method == 'POST':
+        if method == 'POST':
             if '_document' not in payload:
                 payload = {**payload, '_document': (current or store.new())['_document']}
             store.write(payload)
@@ -287,6 +292,7 @@ async def workflow_endpoint(request: Request):
 async def workflow_run_endpoint(request: Request, *, action):
     payload = await request_payload(request) if request.method == 'POST' else {}
     if action == 'workflow-run':
+        payload = WorkflowRequest.model_validate(payload).model_dump(exclude_unset=True)
         if any(status(p.parent)['state'] in ('queued','running','waiting') for p in RUNS.glob('*/manifest.json')):
             raise ValueError('실행 중인 작업이 끝난 뒤 워크플로우를 실행해 주세요.')
         return JSONResponse(workflow_manager.start(payload))

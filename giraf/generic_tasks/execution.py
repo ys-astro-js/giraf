@@ -6,7 +6,7 @@ import shutil
 import sys
 
 from ..jobs import atomic_json
-from ..task_session import run_process, Cancelled
+from ..task_session import run_process, read_log_since, Cancelled
 from ..products import publish_product
 from .preparation import stage_inputs, prepare_parameters, plan_outputs, bind_outputs
 from .preview import preview_generic
@@ -56,7 +56,7 @@ class GenericTaskRun:
             command = [binary, '-f', str(self.job / 'commands.cl')] if backend == 'cl' else [sys.executable, str(self.job / 'commands.py')]
             with (self.job / 'task.log').open('ab') as log:
                 start = log.tell(); code = run_process(command, self.job, log, interactive=False, backend=backend)
-            text = (self.job / 'task.log').read_bytes()[start:].decode(errors='replace')
+            text = read_log_since(self.job / 'task.log', start)
             captured = '\n'.join((self.job / p['file']).read_text(errors='replace') for p in expected if p['role'] == '$stdout' and (self.job / p['file']).exists())
             text += '\n' + captured
             failed = bool(code or 'GIRAF_GENERIC_DONE' not in text or re.search(r'(?im)^\s*(?:ERROR|PANIC|FATAL|\*\*.*Syntax error)\b', text.replace('\x07', '')))
@@ -73,4 +73,3 @@ class GenericTaskRun:
         failed = sum(o['state'] == 'failed' for o in outcomes)
         state = 'failed' if failed == len(outcomes) else 'partial' if failed else 'completed'
         self.state(self.spec['taskName'] + ' ' + {'failed': '실패', 'partial': '부분 실패', 'completed': '완료'}[state], 1, state)
-

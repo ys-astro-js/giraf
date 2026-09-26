@@ -711,7 +711,7 @@ function App() {
               workspace={workspace}
               catalog={catalog}
               onRefreshCatalog={async () => {
-                setCatalog(await api<Catalog>("catalog"))
+                setCatalog(await api<Catalog>("catalog?refresh=1"))
               }}
               jobs={jobs}
               currentExecution={workflow}

@@ -5,6 +5,8 @@ are discovered and compiled from installed IRAF metadata on catalog refresh.
 """
 import json
 from pathlib import Path
+from copy import deepcopy
+from threading import RLock
 
 SNAPSHOT = json.loads(Path(__file__).with_name('task_parameters.json').read_text())
 from .task_capabilities import load_installed
@@ -69,32 +71,39 @@ def parameters(name):
 LEGACY_TASKS = {name: spec for name, spec in TASKS.items() if name not in ('ccdproc', 'imexamine')}
 DISCOVERED_ALIASES = {'noao.imred.ccdred.ccdproc': 'ccdproc', 'images.tv.imexamine': 'imexamine'}
 DISCOVERY = {}
+_catalog_lock = RLock()
 
 
 def refresh_catalog():
     from .task_discovery import discover, env_paths
-    global DISCOVERY
-    DISCOVERY = discover(extra_roots=env_paths('GIRAF_IRAF_PACKAGE_ROOTS'),
-                         descriptors=env_paths('GIRAF_TASK_DESCRIPTORS'))
-    # Preserve the dict identity imported by validation/workflow modules.
-    TASKS.clear()
-    for task in LEGACY_TASKS.values():
-        task['description'] = DISCOVERY.get('descriptions', {}).get(task['package'] + '.' + task['name'], '')
-    TASKS.update(LEGACY_TASKS)
-    TASKS.update({DISCOVERED_ALIASES.get(k, k): dict(v, name=DISCOVERED_ALIASES.get(k, k)) for k, v in DISCOVERY['tasks'].items()
-                  if not any(t['package'] + '.' + t['name'] == k for t in LEGACY_TASKS.values())})
-
     from .image_lists import image_list_spec
-    utility = image_list_spec()
-    TASKS[utility["name"]] = utility
+    global DISCOVERY
+    with _catalog_lock:
+        discovery = discover(extra_roots=env_paths('GIRAF_IRAF_PACKAGE_ROOTS'),
+                             descriptors=env_paths('GIRAF_TASK_DESCRIPTORS'))
+        tasks = {name: dict(task, description=discovery.get('descriptions', {}).get(task['package'] + '.' + task['name'], ''))
+                 for name, task in LEGACY_TASKS.items()}
+        tasks.update({DISCOVERED_ALIASES.get(k, k): dict(v, name=DISCOVERED_ALIASES.get(k, k)) for k, v in discovery['tasks'].items()
+                      if not any(t['package'] + '.' + t['name'] == k for t in LEGACY_TASKS.values())})
+        utility = image_list_spec()
+        tasks[utility['name']] = utility
+        # Build completely before publishing; a failed discovery retains the
+        # previous catalog. Existing imports keep the same registry identity.
+        removed = TASKS.keys() - tasks.keys()
+        TASKS.update(tasks)
+        for name in removed:
+            del TASKS[name]
+        DISCOVERY = discovery
 
 
 refresh_catalog()
 
 
-def catalog():
-    refresh_catalog()
-    return dict(version=SNAPSHOT['version'], capabilities=CAPABILITIES, tasks=[dict(t, parameters=t['parameters'] if t.get('adapter') == 'generic' else parameters(t['name'])) for t in TASKS.values()], discovery=dict(diagnostics=DISCOVERY.get('diagnostics', []), count=len(DISCOVERY.get('tasks', {}))),
-                ccdproc=dict(parameters=parameters('ccdproc'), inputs=CALIBRATIONS),
-                ccdred=parameters('ccdred'),
-                exam={n:parameters(n) for n in ('rimexam','limexam','cimexam')})
+def catalog(*, refresh=False):
+    with _catalog_lock:
+        if refresh:
+            refresh_catalog()
+        return deepcopy(dict(version=SNAPSHOT['version'], capabilities=CAPABILITIES, tasks=[dict(t, parameters=t['parameters'] if t.get('adapter') == 'generic' else parameters(t['name'])) for t in TASKS.values()], discovery=dict(diagnostics=DISCOVERY.get('diagnostics', []), count=len(DISCOVERY.get('tasks', {}))),
+                    ccdproc=dict(parameters=parameters('ccdproc'), inputs=CALIBRATIONS),
+                    ccdred=parameters('ccdred'),
+                    exam={n:parameters(n) for n in ('rimexam','limexam','cimexam')}))
