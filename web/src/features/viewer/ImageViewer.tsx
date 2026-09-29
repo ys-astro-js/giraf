@@ -25,8 +25,8 @@ import { Blank } from "@/components/workbench-controls"
 
 import { RevealFile, ViewerPopover } from "./controls"
 
-import type { ViewerViewport, ViewerMarker } from "./types"
-export type { ViewerViewport, ViewerMarker } from "./types"
+import type { ViewerViewport, ViewerMarker, ViewerChrome } from "./types"
+export type { ViewerViewport, ViewerMarker, ViewerChrome } from "./types"
 export function ImageViewer({
   frame,
   onPick,
@@ -44,6 +44,7 @@ export function ImageViewer({
   navigationTools = true,
   imageOverlay,
   headerActions,
+  chrome,
 }: {
   frame?: Frame
   onPick?: (x: number, y: number) => void
@@ -61,6 +62,8 @@ export function ImageViewer({
   navigationTools?: boolean
   imageOverlay?: React.ReactNode
   headerActions?: React.ReactNode
+  /** A host window's own controls, placed in the same floating row as the viewer tools. */
+  chrome?: ViewerChrome
 }) {
   const uid = useId()
   const {
@@ -231,7 +234,9 @@ export function ImageViewer({
         )}
         {imageOverlay}
         <div className="viewer-top-bar">
-          {!embedded && (
+          {chrome?.title ? (
+            <div className="viewer-title">{chrome.title}</div>
+          ) : !embedded ? (
             <h2 className="viewer-title" title={frame?.label}>
               {onChoose ? (
                 <Button
@@ -248,7 +253,10 @@ export function ImageViewer({
                 </span>
               )}
             </h2>
+          ) : (
+            <span />
           )}
+          <div className="viewer-top-center">{chrome?.center}</div>
           <ToolbarCluster edge="end" size="sm" className="viewer-top-tools">
             <ToolbarGroup label="영상 분석">
               <ViewerDisplaySettings
@@ -293,6 +301,7 @@ export function ImageViewer({
             {!embedded && headerActions && (
               <ToolbarGroup label="보기">{headerActions}</ToolbarGroup>
             )}
+            {chrome?.actions}
           </ToolbarCluster>
         </div>
         {navigationTools && (

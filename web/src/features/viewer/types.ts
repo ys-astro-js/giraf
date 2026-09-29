@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 export type ViewerViewport = { scale: number; x: number; y: number }
 export type MarkerAppearance = {
   shape: "point" | "circle" | "rectangle" | "line" | "plus" | "cross" | "none"
@@ -10,3 +11,9 @@ export type MarkerAppearance = {
   offsetY: number
 }
 export type ViewerMarker = { x: number; y: number; label: string; appearance?: MarkerAppearance }
+
+export type ViewerChrome = {
+  title?: ReactNode
+  center?: ReactNode
+  actions?: ReactNode
+}
