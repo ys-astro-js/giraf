@@ -282,14 +282,12 @@ export function WorkbenchToolbar(props: Props) {
         <ToolbarGroup label="패널 표시">
           <ToolbarButton
             label={props.trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
-            aria-pressed={props.trayOpen}
             onClick={() => props.onTray(!props.trayOpen)}
           >
             <PanelBottom />
           </ToolbarButton>
           <ToolbarButton
             label={props.settingsVisible ? "설정 패널 닫기" : "설정 패널 열기"}
-            aria-pressed={props.settingsVisible}
             onClick={() => props.onSettings(!props.settingsVisible)}
           >
             <PanelRight />

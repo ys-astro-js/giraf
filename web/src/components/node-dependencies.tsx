@@ -109,13 +109,15 @@ function GraphControls({
     <>
       <Panel position="bottom-left" className="dependency-tools">
         <ToolbarCluster edge="start" placement="bottom" size="sm">
-          <ToolbarGroup label="의존성 보기">
+          <ToolbarGroup label="표시 범위">
             <ToolbarButton
               label={scope === "direct" ? "전체 경로 보기" : "연결된 노드만 보기"}
               onClick={() => onScopeChange(scope === "direct" ? "all" : "direct")}
             >
               {scope === "direct" ? <Network /> : <GitCommitHorizontal />}
             </ToolbarButton>
+          </ToolbarGroup>
+          <ToolbarGroup label="표시 방향">
             <ToolbarButton
               label="이전 노드"
               aria-pressed={directions.previous}
