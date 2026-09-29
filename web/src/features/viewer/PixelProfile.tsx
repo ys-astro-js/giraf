@@ -31,7 +31,7 @@ export function ViewerPixelProfile({
             </div>
             <div className="flex gap-2">
               <dt className="sr-only">픽셀 값</dt>
-              <dd>{displayNumber(pixel.value)} ADU</dd>
+              <dd>{pixel.value === null ? "—" : `${displayNumber(pixel.value)} ADU`}</dd>
             </div>
           </dl>
           <Profile

@@ -16,7 +16,10 @@ export type ImageInfo = {
 export type Pixel = {
   x: number
   y: number
-  value: number
+  /** null where the viewer shows a rendered frame rather than data values. */
+  value: number | null
+  /** IRAF image pixel under an IRAF display frame position. */
+  image?: { x: number; y: number } | null
   row: (number | null)[]
   column: (number | null)[]
 }

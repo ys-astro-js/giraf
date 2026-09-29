@@ -68,9 +68,11 @@ export function ViewerCoordinates({
                 {cross && (
                   <>
                     <span>
-                      ({cross.x}, {cross.y})
+                      {pixel?.image
+                        ? `(${displayNumber(pixel.image.x)}, ${displayNumber(pixel.image.y)})`
+                        : `(${cross.x}, ${cross.y})`}
                     </span>
-                    {pixel && (
+                    {pixel && pixel.value !== null && (
                       <span>
                         {displayNumber(pixel.value)}{" "}
                         <span className="text-muted-foreground">ADU</span>

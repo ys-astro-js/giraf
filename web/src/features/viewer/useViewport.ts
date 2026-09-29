@@ -21,6 +21,7 @@ export function useImageViewport({
   sharedRange,
   markers,
   selectedMarker,
+  revision,
 }: {
   onPick: ((x: number, y: number) => void) | undefined
   selectionMode: boolean
@@ -30,6 +31,8 @@ export function useImageViewport({
   sharedRange: [number, number] | undefined
   markers: ViewerMarker[]
   selectedMarker: string | undefined
+  /** Changes when a live image (an IRAF display frame) is redrawn. */
+  revision: number | undefined
 }) {
   const [rangeError, setRangeError] = useState("")
   const [coordinatesOpen, setCoordinatesOpen] = useState(
@@ -124,14 +127,17 @@ export function useImageViewport({
     setRangeError("")
     setError("")
   }, [frame?.id, retry])
+  // A redraw of the same image keeps showing the previous one until it loads.
+  const loadedId = useRef<string>(undefined)
   useEffect(() => {
     if (!frame || !info) return
     let cancelled = false
-    setLoading(true)
+    if (loadedId.current !== frame.id) setLoading(true)
     const im = new Image(),
       r = sharedRange || applied || [info.low, info.high]
     im.onload = () => {
       if (!cancelled) {
+        loadedId.current = frame.id
         setLoading(false)
         setImage(im)
         setError("")
@@ -150,11 +156,12 @@ export function useImageViewport({
         stretch,
         low: String(r[0]),
         high: String(r[1] > r[0] ? r[1] : r[0] + 1),
+        ...(revision === undefined ? {} : { v: String(revision) }),
       })
     return () => {
       cancelled = true
     }
-  }, [frame?.id, info, stretch, applied, sharedRange, retry])
+  }, [frame?.id, info, stretch, applied, sharedRange, retry, revision])
   useEffect(() => {
     if (!box.current) return
     const observer = new ResizeObserver((entries) => {

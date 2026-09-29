@@ -48,6 +48,12 @@ class ProtocolTests(unittest.TestCase):
         frame = state['frames'][0]
         self.assertEqual((frame['frame'], frame['width'], frame['height'], frame['title']), (1, 512, 512, 'm51 - galaxy'))
         self.assertEqual(frame['transform'], [1.0, 0.0, 0.0, -1.0, 1.0, 512.0])
+        info = self.server.info(1)
+        self.assertEqual((info['width'], info['height'], info['header']), (512, 512, wcs.decode()))
+        # Viewer positions are 1-based with y up; row 10 from the top is y = 502 = image y.
+        self.assertEqual(self.server.pixel(1, 200, 502)['image'], {'x': 200.0, 'y': 502.0})
+        with self.assertRaises(ValueError):
+            self.server.pixel(1, 0, 1)
         image = Image.open(io.BytesIO(self.server.png(1))).convert('RGB')
         self.assertEqual(image.getpixel((0, 10)), (0, 0, 0))
         self.assertEqual(image.getpixel((199, 10)), (255, 255, 255))
@@ -62,12 +68,16 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual([f['frame'] for f in self.server.state()['frames']], [2])
 
     def test_staged_input_names_map_back_to_the_original_file(self):
-        self.server.source_name = {'input/s00000.fits': 'NGC2420b.fits'}.get
+        self.server.source_name = lambda alias, directory: {'input/s00000.fits': 'NGC2420b.fits'}.get(alias)
         c = self.client()
         wcs = b'input/s00000.fits[1] - cluster\n1. 0. 0. -1. 1. 512. 0. 1. 1\n'
         c.sendall(header(PACKED, len(wcs), WCS) + wcs + header(IIS_READ | PACKED, 320, WCS))
         self.assertEqual(receive(c, 320).rstrip(b'\0'), wcs)
         self.assertEqual(self.server.frames[1].title, 'NGC2420b.fits[1] - cluster')
+        untitled = b'input/s00000.fits -\n1. 0. 0. -1. 1. 512. 0. 1. 1\n'
+        c.sendall(header(PACKED, len(untitled), WCS, z=2) + untitled + header(IIS_READ | PACKED, 320, WCS, z=2))
+        receive(c, 320)
+        self.assertEqual(self.server.frames[2].title, 'NGC2420b.fits')
 
     def test_stale_sockets_of_exited_servers_are_removed(self):
         from giraf.display import remove_stale_sockets
@@ -77,6 +87,15 @@ class ProtocolTests(unittest.TestCase):
         remove_stale_sockets(folder)
         self.assertFalse(dead.exists())
         self.assertTrue(alive.exists())
+
+    def test_writer_job_folder_names_the_staged_input_exactly(self):
+        from giraf.display import peer_directory, source_name
+        job = Path(self.tmp.name) / 'job'
+        (job / 'input').mkdir(parents=True)
+        (job / 'sources.json').write_text(json.dumps([{'alias': 'input/s00000.fits', 'original': '/data/m51.fits'}]))
+        self.assertEqual(source_name('input/s00000.fits', job), 'm51.fits')
+        # The server's peer here is this test process, so its cwd is ours.
+        self.assertEqual(peer_directory(self.client()), Path.cwd())
 
     def test_describe_tolerates_missing_transform(self):
         self.assertEqual(describe(''), {'title': '', 'transform': None})

@@ -45,6 +45,8 @@ export function ImageViewer({
   imageOverlay,
   headerActions,
   chrome,
+  analysis = true,
+  revision,
 }: {
   frame?: Frame
   onPick?: (x: number, y: number) => void
@@ -64,6 +66,10 @@ export function ImageViewer({
   headerActions?: React.ReactNode
   /** A host window's own controls, placed in the same floating row as the viewer tools. */
   chrome?: ViewerChrome
+  /** Display, statistics and profile tools; off for images IRAF already rendered. */
+  analysis?: boolean
+  /** Reloads the image without resetting the view when a live frame changes. */
+  revision?: number
 }) {
   const uid = useId()
   const {
@@ -109,6 +115,7 @@ export function ImageViewer({
     sharedRange,
     markers,
     selectedMarker,
+    revision,
   })
   return (
     <section
@@ -258,7 +265,7 @@ export function ImageViewer({
           )}
           <div className="viewer-top-center">{chrome?.center}</div>
           <ToolbarCluster edge="end" size="sm" className="viewer-top-tools">
-            <ToolbarGroup label="영상 분석">
+            <ToolbarGroup label="영상 분석" hidden={!analysis}>
               <ViewerDisplaySettings
                 info={info}
                 sharedRange={sharedRange}
