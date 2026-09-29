@@ -1,6 +1,7 @@
 """Local workbench API. Files are referenced by registered IDs, never shell text."""
 from __future__ import annotations
 from copy import deepcopy
+import contextlib
 from functools import lru_cache, partial
 from pathlib import Path
 import hashlib
@@ -24,6 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from .api_contract import request_payload, LocalOriginMiddleware, validation_error, api_error, http_error
 from .workflow_preferences import document_action, initial_preferences
 from .image_rendering import image_info, image_png, image_pixel
+from .display import start_display, stop_display
 from .workflow_documents import WorkflowDocuments
 from .jobs import ROOT, RUNS, start, status, atomic_json
 from .model import Settings, inspect_file, scan, validate
@@ -515,6 +517,25 @@ async def download_endpoint(request: Request):
     return FileResponse(path, filename=name, media_type='application/fits' if asset=='image' else 'application/octet-stream')
 
 
+@contextlib.asynccontextmanager
+async def lifespan(_app):
+    start_display()
+    try:
+        yield
+    finally:
+        stop_display()
+
+
+async def display_endpoint(request: Request):
+    return JSONResponse(start_display().state())
+
+
+async def display_frame_endpoint(request: Request):
+    frame = int(request.query_params.get('frame', '1'))
+    png = await run_in_threadpool(start_display().png, frame)
+    return Response(png, media_type='image/png', headers={'Cache-Control': 'no-store'})
+
+
 api_routes = [
     Route('/catalog', catalog_endpoint, methods=['GET'], name='catalog'),
     Route('/workflow-diagnostics', workflow_diagnostics_endpoint, methods=['POST'], name='workflow-diagnostics'),
@@ -548,9 +569,12 @@ api_routes = [
     Route('/job', job_endpoint, methods=['GET'], name='job'),
     Route('/reveal', reveal_endpoint, methods=['POST'], name='reveal'),
     Route('/download', download_endpoint, methods=['GET'], name='download'),
+    Route('/display', display_endpoint, methods=['GET'], name='display'),
+    Route('/display-frame', display_frame_endpoint, methods=['GET'], name='display-frame'),
 ]
 
 app = Starlette(
+    lifespan=lifespan,
     routes=[Mount('/api', routes=api_routes),
             Mount('/', StaticFiles(directory=ROOT / 'web' / 'dist', html=True, check_dir=False))],
     exception_handlers={ValidationError: validation_error, ValueError: api_error,

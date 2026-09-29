@@ -1,4 +1,5 @@
 import { useTaskMapInteraction } from "./useCanvasInteraction"
+import { DisplayWindow } from "@/features/viewer/DisplayWindow"
 import type { TaskMapViewProps } from "./types"
 import { WorkflowContext } from "./context"
 import { TaskNode } from "./TaskNode"
@@ -485,6 +486,7 @@ export function TaskMapView({
           </WorkflowContext.Provider>
         </div>
       )}
+      <DisplayWindow />
     </section>
   )
 }

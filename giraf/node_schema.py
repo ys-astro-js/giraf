@@ -19,7 +19,7 @@ PORT_FIELDS = {
     'outputs': {'kind': str, 'label': str, 'mode': str, 'default': str, 'optional': bool},
 }
 PARAMETER_FIELDS = {'label', 'default', 'fixed'}
-PLANNED_COMPONENTS = ('image-cursor', 'coords-overlay', 'value-output', 'value-input', 'ccd-preprocess', 'calibration-groups')
+PLANNED_COMPONENTS = ('image-cursor', 'value-output', 'value-input', 'ccd-preprocess', 'calibration-groups')
 KEY = re.compile(rf'^(?:{IDENT}\.)?{IDENT}$')
 
 

@@ -36,8 +36,6 @@ class GenericTaskRun:
         write_scripts(self.job, self.m, self.calls, only)
 
     def execute(self):
-        if self.m.get('task') == 'images.tv.tvmark':
-            raise ValueError('tvmark는 내부 FITS 뷰어 전용입니다. GIRAF 화면을 새로고침한 뒤 tvmark 노드를 개별 실행해 주세요.')
         if self.spec.get('executor') == 'image-list':
             from ..image_lists import execute_image_list
             return execute_image_list(self)

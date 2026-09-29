@@ -197,8 +197,6 @@ def output_paths(manifest):
 
 
 def start_task(manifest, folder):
-    if manifest.get('task') == 'images.tv.tvmark':
-        raise ValueError('tvmark는 내부 FITS 뷰어에서 실행합니다. GIRAF 화면을 새로고침한 뒤 tvmark 노드를 개별 실행해 주세요.')
     if manifest.get('filePlan',{}).get('destructive') and not manifest.get('fileAuthorized'):raise ValueError('직접 파일 변경 계획을 확인해 주세요.')
     job=RUNS/(datetime.now().strftime('%Y%m%d-%H%M%S')+'-'+uuid.uuid4().hex[:6])
     job.mkdir(parents=True)

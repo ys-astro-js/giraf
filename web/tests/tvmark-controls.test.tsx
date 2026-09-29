@@ -2,7 +2,6 @@ import { expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 import { ParamControl } from "../src/components/parameter-fields"
 import { tvmarkColors } from "../src/lib/tvmark"
-import { tvmarkStyle } from "../src/lib/tvmark"
 import type { Param } from "../src/lib/workbench"
 
 const param = (name: string): Param => ({name,type:name === "mark" ? "s" : "i",default:"",choices:[],prompt:"",min:"",max:""})
@@ -15,7 +14,7 @@ test("tvmark mark and color are semantic selectors even without schema choices",
   expect(color).toContain('빨강')
   expect(color).toContain('204')
   expect(color).toContain('background-color:red')
-  expect(tvmarkColors.find(c => c.value === "204")?.color).toBe(tvmarkStyle({color:204,mark:"cross"}).color)
+  expect(tvmarkColors.find(c => c.value === "204")?.color).toBe("red")
 })
 
 test("numeric display options use number controls; unrelated tasks retain their own schema", () => {
