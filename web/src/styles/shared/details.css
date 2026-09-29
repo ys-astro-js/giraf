@@ -37,7 +37,10 @@
 }
 .inspector-tabs > .inspector-sections { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }
 .inspector-tabs > .inspector-settings { display: flex; flex-direction: column; min-height: 0; overflow: hidden; gap: 16px; padding: 20px; }
-.inspector-settings > .parameter-editor-body { flex: 1; padding: 0; }
+/* Switch hit areas reach past the column edge; clip them instead of scrolling sideways, keeping room for focus rings. */
+.inspector-settings > .parameter-editor-body { flex: 1; overflow: hidden auto; padding: 0 4px; margin-inline: -4px; }
+/* The group menu ends the header; keep the list close to it (8px header padding + 4px). */
+.inspector-tabs:has(.parameter-group-nav) > .inspector-settings { padding-top: 4px; }
 .inspector-command { overflow-wrap: anywhere; }
 @media (max-width: 640px) {
   .inspector-info-body { padding: 16px; }

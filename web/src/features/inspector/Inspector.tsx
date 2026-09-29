@@ -6,6 +6,7 @@ import { InspectorOutputs } from "./OutputsTab"
 import { InspectorInputs } from "./InputsTab"
 import { InspectorInfo } from "./InfoTab"
 import { NodeDependencies } from "@/components/node-dependencies"
+import { ParameterGroupNav } from "@/components/parameter-editor"
 import { taskDisplayName } from "@/lib/workbench"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 import {
@@ -113,6 +114,7 @@ export function TaskInspector({
   const [query, setQuery] = useState("")
   const [expanded, setExpanded] = useState<Record<string, number>>({})
   const inspectorRef = useRef<HTMLElement>(null)
+  const settingsBodyRef = useRef<HTMLDivElement>(null)
   const openRequestedInput = useEffectEvent((role: string) => {
     setLocalTab("input")
     onTabChange?.("input")
@@ -318,29 +320,37 @@ export function TaskInspector({
               ))}
             </TabsList>
             {(activeTab ?? localTab) === "settings" && (
-              <div className="flex h-9 min-w-0 items-center gap-2">
-                <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <SidebarInput
-                    id="parameter-search"
-                    className="pl-9"
-                    aria-label="설정 검색"
-                    placeholder="이름 또는 설명 검색"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
+              <>
+                <div className="flex h-9 min-w-0 items-center gap-2">
+                  <div className="relative min-w-0 flex-1">
+                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <SidebarInput
+                      id="parameter-search"
+                      className="pl-9"
+                      aria-label="설정 검색"
+                      placeholder="이름 또는 설명 검색"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                  </div>
+                  {query && (
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="검색 초기화"
+                      onClick={() => setQuery("")}
+                    >
+                      <X />
+                    </Button>
+                  )}
                 </div>
-                {query && (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="검색 초기화"
-                    onClick={() => setQuery("")}
-                  >
-                    <X />
-                  </Button>
-                )}
-              </div>
+                <ParameterGroupNav
+                  groups={groups}
+                  query={query}
+                  changedOnly={false}
+                  bodyRef={settingsBodyRef}
+                />
+              </>
             )}
           </SidebarHeader>
           {spec.reason && (
@@ -397,6 +407,7 @@ export function TaskInspector({
             task={task}
             edit={edit}
             saveDefaults={saveDefaults}
+            bodyRef={settingsBodyRef}
           />
         </Tabs>
       </TooltipProvider>

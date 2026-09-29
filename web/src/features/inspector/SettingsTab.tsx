@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type RefObject } from "react"
 import type { Draft } from "@/lib/workbench"
 import { FolderOpen, RotateCcw } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -27,6 +27,7 @@ export function InspectorSettings({
   task,
   edit,
   saveDefaults,
+  bodyRef,
 }: {
   groups: ParameterGroup[]
   query: string
@@ -36,6 +37,7 @@ export function InspectorSettings({
   task: Instance
   edit: (fn: (t: Instance) => Instance) => void
   saveDefaults: () => void
+  bodyRef: RefObject<HTMLDivElement | null>
 }) {
   const [resetValues, setResetValues] = useState<{
     parameters: Values
@@ -43,7 +45,7 @@ export function InspectorSettings({
   } | null>(null)
   return (
     <TabsContent value="settings" className="inspector-settings">
-      <div className="parameter-editor-body">
+      <div ref={bodyRef} className="parameter-editor-body">
         <ParameterEditorFields
           groups={groups}
           query={query}

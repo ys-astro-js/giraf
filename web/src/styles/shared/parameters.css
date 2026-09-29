@@ -10,6 +10,8 @@
 .parameter-editor-body { min-height: 0; overflow: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 24px; padding: 4px; scrollbar-gutter: stable; }
 .parameter-editor-section { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .parameter-editor-section h3 { font-weight: 600; overflow-wrap: anywhere; }
+.parameter-editor-section h3:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+.parameter-group-nav { flex-shrink: 0; font-weight: 500; }
 .parameter-editor-section > [data-slot="field-group"] { gap: 16px; }
 .parameter-changes { font-size: 0.875rem; min-width: 0; }
 .parameter-changes summary { cursor: pointer; padding-block: 8px; }
