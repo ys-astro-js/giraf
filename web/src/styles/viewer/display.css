@@ -1,11 +1,7 @@
-/* IRAF display: a floating glass window like the minimap, directly above it (46px + 80px + 8px). */
+/* IRAF display: a floating glass window on the canvas. Place and size come from DisplayBox. */
 .display-window {
   position: absolute;
   z-index: 6;
-  right: 12px;
-  bottom: 146px;
-  width: 256px;
-  aspect-ratio: 1;
   display: flex;
   border-radius: 14px;
   overflow: hidden;
@@ -15,11 +11,25 @@
 /* A small window has no room for the viewer's three-column row: tools sit at both ends. */
 .display-window .viewer-top-bar { display: flex; justify-content: space-between; top: 8px; inset-inline: 8px; }
 .display-window .viewer-top-center:empty { display: none; }
-/* The preview keeps pan and zoom; pixel inspection lives in the enlarged view. */
+/* The preview keeps pan and zoom; pixel inspection lives in the maximized view. */
 .display-window .viewer-coordinate-overlay { display: none; }
-@media (max-width: 640px) {
-  .display-window { width: 176px; bottom: 126px; }
+.display-window-move { cursor: grab; touch-action: none; }
+.display-window-move:active { cursor: grabbing; }
+/* Resize grip: the corner itself, marked by two short strokes. */
+.display-window-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  height: 20px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background:
+    linear-gradient(135deg, transparent 55%, var(--glass-border) 55% 62%, transparent 62% 72%, var(--glass-border) 72% 79%, transparent 79%);
+  border-bottom-right-radius: 14px;
 }
-@media (pointer: coarse) {
-  .display-window { bottom: 158px; }
+.display-window-resize:hover, .display-window-resize:focus-visible {
+  background:
+    linear-gradient(135deg, transparent 55%, var(--foreground) 55% 62%, transparent 62% 72%, var(--foreground) 72% 79%, transparent 79%);
 }
+.display-window-resize:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }

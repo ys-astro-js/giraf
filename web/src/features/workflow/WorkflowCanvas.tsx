@@ -500,7 +500,7 @@ export function TaskMapView({
           </WorkflowContext.Provider>
         </div>
       )}
-      <DisplayWindow open={displayOpen} />
+      <DisplayWindow open={displayOpen} onMinimize={() => setDisplayOpen(false)} />
     </section>
   )
 }
