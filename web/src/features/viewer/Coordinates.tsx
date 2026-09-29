@@ -1,6 +1,12 @@
 import type { ImageInfo, Pixel } from "@/lib/image-queries"
 import { MousePointer2 } from "lucide-react"
-import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
+import {
+  ToolbarButton,
+  ToolbarCluster,
+  ToolbarGroup,
+  ToolbarItem,
+  ToolbarText,
+} from "@/components/toolbar"
 import {
   Popover,
   PopoverContent,
@@ -42,28 +48,40 @@ export function ViewerCoordinates({
   onPick: ((x: number, y: number) => void) | undefined
 }) {
   return (
-    <div className="viewer-coordinate-overlay">
+    <ToolbarCluster
+      edge="start"
+      placement="bottom"
+      size="sm"
+      className="viewer-coordinate-overlay"
+    >
       <Popover open={coordinatesOpen} onOpenChange={setCoordinatesOpen}>
-        <ButtonGroup className="viewer-pixel" aria-label="픽셀 좌표">
+        <ToolbarGroup label="픽셀 좌표">
           <PopoverTrigger
-            render={<Button variant="outline" size="icon-sm" />}
-            aria-label="좌표 입력"
-            title="좌표 입력"
+            render={<ToolbarButton label="좌표 입력" />}
             disabled={!info}
           >
             <MousePointer2 />
           </PopoverTrigger>
-          {cross && !selectionMode && (
-            <ButtonGroupText
-              render={<output aria-live="polite" />}
-              className="flex-wrap tabular-nums"
-            >
-              <span>X {cross.x}</span>
-              <span>Y {cross.y}</span>
-              {pixel && <span>{displayNumber(pixel.value)} ADU</span>}
-            </ButtonGroupText>
-          )}
-        </ButtonGroup>
+          <ToolbarItem hidden={!cross || selectionMode}>
+            <ToolbarText>
+              <output aria-live="polite" className="viewer-pixel-readout">
+                {cross && (
+                  <>
+                    <span>
+                      ({cross.x}, {cross.y})
+                    </span>
+                    {pixel && (
+                      <span>
+                        {displayNumber(pixel.value)}{" "}
+                        <span className="text-muted-foreground">ADU</span>
+                      </span>
+                    )}
+                  </>
+                )}
+              </output>
+            </ToolbarText>
+          </ToolbarItem>
+        </ToolbarGroup>
         <PopoverContent
           side="top"
           align="start"
@@ -119,6 +137,6 @@ export function ViewerCoordinates({
           </form>
         </PopoverContent>
       </Popover>
-    </div>
+    </ToolbarCluster>
   )
 }

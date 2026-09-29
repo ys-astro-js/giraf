@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react"
 import { diagnostics, resolveDiagnosticNode } from "@/lib/diagnostics"
 import { HelpCircle, Trash2, Copy, CircleX } from "lucide-react"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
+import { ToolbarButton, ToolbarCluster, ToolbarGroup } from "@/components/toolbar"
 import { TabsContent } from "@/components/ui/tabs"
 import {
   Table,
@@ -131,43 +131,39 @@ export function InspectorInfo({
         )}
       </div>
       <footer className="inspector-info-actions">
-        <div className="flex items-center gap-2">
-          {!spec.executor && (
-            <Button
-              variant="outline"
-              size="icon"
-              render={
-                <a
-                  href={`https://iraf.readthedocs.io/en/latest/tasks/${spec.package.replaceAll(".", "/")}/${spec.taskName || taskDisplayName(spec.name)}.html`}
-                  target="_blank"
-                  rel="noreferrer"
-                />
-              }
-              aria-label="IRAF 도움말"
-              title="IRAF 도움말"
+        <ToolbarCluster edge="start" placement="bottom">
+          <ToolbarGroup label="작업 동작">
+            {!spec.executor && (
+              <ToolbarButton
+                label="IRAF 도움말"
+                render={
+                  <a
+                    href={`https://iraf.readthedocs.io/en/latest/tasks/${spec.package.replaceAll(".", "/")}/${spec.taskName || taskDisplayName(spec.name)}.html`}
+                    target="_blank"
+                    rel="noreferrer"
+                  />
+                }
+                nativeButton={false}
+              >
+                <HelpCircle />
+              </ToolbarButton>
+            )}
+            <ToolbarButton label="노드 복제" onClick={onDuplicate}>
+              <Copy />
+            </ToolbarButton>
+          </ToolbarGroup>
+        </ToolbarCluster>
+        <ToolbarCluster edge="end" placement="bottom">
+          <ToolbarGroup label="삭제">
+            <ToolbarButton
+              label="작업 삭제"
+              className="text-destructive hover:text-destructive"
+              onClick={onRemove}
             >
-              <HelpCircle />
-            </Button>
-          )}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={onDuplicate}
-            aria-label="노드 복제"
-            title="노드 복제"
-          >
-            <Copy />
-          </Button>
-        </div>
-        <Button
-          variant="destructive-outline"
-          size="icon"
-          onClick={onRemove}
-          aria-label="작업 삭제"
-          title="작업 삭제"
-        >
-          <Trash2 />
-        </Button>
+              <Trash2 />
+            </ToolbarButton>
+          </ToolbarGroup>
+        </ToolbarCluster>
       </footer>
     </TabsContent>
   )

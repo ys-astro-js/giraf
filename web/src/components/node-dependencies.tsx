@@ -9,9 +9,8 @@ import {
   type NodeProps,
 } from "@xyflow/react"
 import { ArrowUpFromLine, ArrowDownFromLine, GitCommitHorizontal, Network } from "lucide-react"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { WorkflowToolButton, WorkflowZoomControls } from "./workflow-tools"
+import { ToolbarButton, ToolbarCluster, ToolbarGroup } from "./toolbar"
+import { WorkflowZoomControls } from "./workflow-tools"
 import {
   dependencyGraph,
   layoutDependencies,
@@ -107,53 +106,39 @@ function GraphControls({
   onDirectionsChange: (directions: DependencyDirections) => void
 }) {
   return (
-    <Panel
-      position="bottom-left"
-      className="workflow-tools dependency-tools"
-      role="group"
-      aria-label="의존성 도구"
-    >
-      <div className="dependency-view-tools">
-        <WorkflowToolButton
-          variant="outline"
-          size="icon-sm"
-          tooltipSide="top"
-          label={scope === "direct" ? "전체 경로 보기" : "연결된 노드만 보기"}
-          onClick={() => onScopeChange(scope === "direct" ? "all" : "direct")}
-        >
-          {scope === "direct" ? <Network /> : <GitCommitHorizontal />}
-        </WorkflowToolButton>
-        <ToggleGroup
-          multiple
-          variant="outline"
-          size="sm"
-          spacing={0}
-          aria-label="표시 방향"
-          value={Object.entries(directions).filter(([, enabled]) => enabled).map(([direction]) => direction)}
-          onValueChange={(value) => onDirectionsChange({
-            previous: value.includes("previous"),
-            next: value.includes("next"),
-          })}
-        >
-          <Tooltip>
-            <TooltipTrigger render={<ToggleGroupItem value="previous" className="size-8 p-0!" />} aria-label="이전 노드">
+    <>
+      <Panel position="bottom-left" className="dependency-tools">
+        <ToolbarCluster edge="start" placement="bottom" size="sm">
+          <ToolbarGroup label="의존성 보기">
+            <ToolbarButton
+              label={scope === "direct" ? "전체 경로 보기" : "연결된 노드만 보기"}
+              onClick={() => onScopeChange(scope === "direct" ? "all" : "direct")}
+            >
+              {scope === "direct" ? <Network /> : <GitCommitHorizontal />}
+            </ToolbarButton>
+            <ToolbarButton
+              label="이전 노드"
+              aria-pressed={directions.previous}
+              onClick={() => onDirectionsChange({ ...directions, previous: !directions.previous })}
+            >
               <ArrowUpFromLine />
-            </TooltipTrigger>
-            <TooltipContent side="top">이전 노드</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger render={<ToggleGroupItem value="next" className="size-8 p-0!" />} aria-label="이후 노드">
+            </ToolbarButton>
+            <ToolbarButton
+              label="이후 노드"
+              aria-pressed={directions.next}
+              onClick={() => onDirectionsChange({ ...directions, next: !directions.next })}
+            >
               <ArrowDownFromLine />
-            </TooltipTrigger>
-            <TooltipContent side="top">이후 노드</TooltipContent>
-          </Tooltip>
-        </ToggleGroup>
-      </div>
-      <WorkflowZoomControls
-        orientation="horizontal"
-        fitOptions={dependencyFitOptions}
-      />
-    </Panel>
+            </ToolbarButton>
+          </ToolbarGroup>
+        </ToolbarCluster>
+      </Panel>
+      <Panel position="bottom-right" className="dependency-tools">
+        <ToolbarCluster edge="end" placement="bottom" size="sm">
+          <WorkflowZoomControls fitOptions={dependencyFitOptions} />
+        </ToolbarCluster>
+      </Panel>
+    </>
   )
 }
 type Props = {

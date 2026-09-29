@@ -10,7 +10,7 @@ import {
 } from "@/lib/diagnostics"
 import { toast } from "@/components/ui/toast"
 import { Button } from "@/components/ui/button"
-import { ButtonGroup } from "@/components/ui/button-group"
+import { ToolbarGroup } from "@/components/toolbar"
 import { Separator } from "@/components/ui/separator"
 import {
   Popover,
@@ -63,13 +63,13 @@ export function DiagnosticsButton({
   return (
     <Popover open={open && shownSeverities.length > 0} onOpenChange={setOpen}>
       <StatusTransition transitionKey={shownSeverities.join("-")} className="toolbar-diagnostics-transition">
-      {shownSeverities.length > 0 && <ButtonGroup className="shrink-0" aria-label="경고 및 오류">
+      {shownSeverities.length > 0 && <ToolbarGroup label="경고 및 오류">
         {shownSeverities.map((severity) => {
           const Icon = severity === "warning" ? TriangleAlert : CircleX
           return (
             <PopoverTrigger
               key={severity}
-              render={<Button variant="outline" />}
+              render={<Button variant="ghost" />}
               onClick={() => setFilter(severity)}
               aria-label={failure && !counts.all ? "검사 실패 보기" : `${labels[severity]} ${counts[severity]}개 보기`}
               title={failure && !counts.all ? "검사 실패 보기" : `${labels[severity]} ${counts[severity]}개 보기`}
@@ -86,7 +86,7 @@ export function DiagnosticsButton({
             </PopoverTrigger>
           )
         })}
-      </ButtonGroup>}
+      </ToolbarGroup>}
       </StatusTransition>
       <PopoverContent
         align="end"

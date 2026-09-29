@@ -65,6 +65,13 @@ components:
   input:
     rounded: "{rounded.input}"
     height: "36px"
+  toolbar-group:
+    backgroundColor: "color-mix(in oklch, {colors.background} 68%, transparent)"
+    rounded: "21px"
+    height: "42px"
+  toolbar-group-sm:
+    rounded: "19px"
+    height: "38px"
   workflow-node:
     backgroundColor: "{colors.background}"
     textColor: "{colors.foreground}"
@@ -83,6 +90,7 @@ GIRAF는 Pretendard Variable과 Base UI의 중성색 작업 환경을 사용하�
 **Key Characteristics:**
 
 - 밝고 어두운 테마에 대응하는 중성색 영역
+- 작업면 위에 떠 있는 반투명 캡슐 도구 막대
 - 짧은 이름과 직접 편집하는 폼
 - 선택·초점을 선과 대비로 구별하는 평면 구조
 
@@ -104,7 +112,9 @@ Primary는 주요 실행 동작과 켜진 스위치·체크박스에 사용합�
 
 ## Elevation & Depth
 
-주 화면은 그림자 없이 배경 톤과 얇은 경계로 구분합니다. 선택 노드는 전경 테두리와 추가 outline을 사용합니다. 캔버스 도구는 배경과 경계로 작업면 위에서 읽히게 합니다. 초점은 ring 토큰을 사용하며 기존 Base UI focus ring을 보존합니다.
+주 화면은 그림자 없이 배경 톤과 얇은 경계로 구분합니다. 선택 노드는 전경 테두리와 추가 outline을 사용합니다. 초점은 ring 토큰을 사용하며 기존 Base UI focus ring을 보존합니다.
+
+작업면 위에 떠 있는 컨트롤(도구 막대 그룹, 캔버스 검색, 미니맵, 상태 캡슐)만 반투명 배경(`--glass-background`), 배경 흐림(`--glass-filter`), 얇은 경계(`--glass-border`)를 사용합니다. 그림자는 떠 있는 컨트롤에도 사용하지 않습니다. 반투명 요소의 상위에는 `filter`나 1 미만의 `opacity`를 정지 상태로 남기지 않습니다. 둘 다 배경 흐림을 끊습니다.
 
 ## Shapes
 
@@ -114,10 +124,28 @@ Primary는 주요 실행 동작과 켜진 스위치·체크박스에 사용합�
 
 - **Buttons:** primary 실행, outline 보조 동작, ghost 영역 내 동작을 사용합니다. 기본 높이는 36px, 작은 버튼은 32px입니다. hover, disabled, invalid, focus 상태를 Base UI에서 계승합니다.
 - **Inputs:** 기본 높이 36px, 입력 토큰의 절반 불투명도 바탕, 좌우 12px 패딩을 사용합니다. 표현식과 파일명은 같은 직접 편집 문법을 사용합니다.
-- **Navigation:** 기존 둥근 tabs를 사용하고 선택한 panel과 활성 상태를 일치시킵니다.
+- **Navigation:** 같은 영역의 보기 전환은 위쪽의 둥근 tabs(tab view)를 사용하고 선택한 panel과 활성 상태를 일치시킵니다. 아이콘만 쓰는 탭은 툴팁으로 이름을 제공합니다. 탭 막대에는 동작 버튼을 섞지 않습니다.
+- **Toolbars:** 컨트롤은 `web/src/components/toolbar.tsx`의 부품으로 배치합니다.
+  - 기능이 같은 버튼은 `ToolbarGroup` 캡슐 하나에 테두리 없는 아이콘 버튼(`ToolbarButton`)으로 묶습니다. 글자 버튼과 아이콘 버튼은 한 그룹에 섞지 않습니다.
+  - 그룹은 붙어 있는 가장자리마다 `ToolbarCluster`(`edge="start" | "end"`)로 모읍니다. 그룹 사이는 8px입니다.
+  - 왼쪽은 이동과 주요 실행, 가운데는 현재 위치와 상태, 오른쪽은 패널 전환과 보조 동작입니다. 청록색 채움은 화면의 주요 실행 하나에만 씁니다.
+  - 창 전체 도구 막대는 36px 버튼(그룹 42px), 캔버스·뷰어·팝오버 위 도구는 32px 버튼(그룹 38px)을 씁니다.
+  - 작업면 도구의 자리는 모든 캔버스형 화면에서 같습니다. 왼쪽 아래는 보기 도구, 가운데 아래는 검색, 오른쪽 아래는 확대·축소(`− 맞춤 +` 순서), 오른쪽 위는 분석 도구입니다.
+  - 눌린 토글은 `aria-pressed`와 selection 토큰으로 표시합니다.
+- **Search:** 검색은 `SearchField` 하나를 사용합니다. 앞의 돋보기, 입력칸 안의 지우기 버튼, Escape로 지우기를 갖습니다. 안내 문구는 검색 대상을 말합니다(예: `작업 검색`). 떠 있는 검색은 `variant="glass"`를 씁니다.
 - **Workflow node:** 하나의 task 인스턴스를 나타내는 compact card입니다. 제목, 입력 요약, 결과 접근과 입출력 포트를 묶습니다. 선택은 경계로 표현합니다.
 - **Boolean fields:** Base UI switch를 이름과 나란히 배치합니다. 실제 종속 필드를 관련 스위치 가까이에 표시합니다.
 - **Status:** 오류나 실행 상태처럼 판단에 필요한 곳에 간결한 텍스트를 사용합니다.
+
+## Motion
+
+도구 막대의 변화는 새 화면을 그리지 않고, 달라진 컨트롤만 움직입니다. 곡선은 `--motion-ease`(`cubic-bezier(0.22, 1, 0.36, 1)`), 길이는 즉시 반응 `--motion-quick`(180ms), 자리 변화 `--motion-shift`(380ms), 흐름 전환 650ms(`FLOW_TIMING`)입니다. 움직임 줄이기 설정에서는 이동과 흐림 없이 짧게 바뀝니다.
+
+- **`ToolbarItem hidden`:** 같은 종류의 버튼이 그룹에 더해지거나 빠집니다. 그룹이 붙은 가장자리 쪽에서 나오고 그쪽으로 들어갑니다.
+- **`ToolbarGroup hidden`:** 이웃 그룹이 있으면 그 뒤에서 빠져나오고 그 뒤로 들어갑니다. 이웃이 없으면 제자리에서 흐림과 함께 나타나고 사라집니다(materialize). 이동하지 않습니다.
+- **`ToolbarCluster joined`:** 이웃한 그룹이 간격 없이 한 캡슐로 붙습니다.
+- **`ToolbarMorph`:** 한 버튼이 역할을 바꿀 때(선택↔닫기, 실행↔중단) 모양을 이어서 바꿉니다. 새 모양은 가장자리 쪽에서 들어옵니다.
+- **`StatusTransition`:** 같은 자리가 전혀 다른 정보를 보여 줄 때만 내용을 교체합니다. 버튼 구성이 비슷한 모드 전환에는 쓰지 않습니다.
 
 ## Do's and Don'ts
 
@@ -131,6 +159,8 @@ Primary는 주요 실행 동작과 켜진 스위치·체크박스에 사용합�
 
 - Don't 반복 상태 배지나 안내문으로 편집 화면의 위계를 채우지 않습니다.
 - Don't 중성색 작업 영역에 장식용 색상·그라디언트·그림자를 추가하지 않습니다.
+- Don't 버튼마다 테두리를 두지 않습니다. 묶음의 경계는 그룹 캡슐 하나가 맡습니다.
+- Don't 막대 전체를 갈아 끼워 모드를 바꾸지 않습니다.
 - Don't 수업 예시나 특정 보정 순서를 모든 화면의 구조로 고정하지 않습니다.
 
 ## UI 표기 규칙

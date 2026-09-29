@@ -9,9 +9,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { ButtonGroup } from "@/components/ui/button-group"
+import { ToolbarCluster, ToolbarGroup } from "@/components/toolbar"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { SearchField } from "@/components/search-field"
 import { ImageViewer } from "@/features/viewer/ImageViewer"
 import { Blank, Failure } from "@/components/workbench-controls"
 import { api, type Frame, type Job } from "@/lib/workbench"
@@ -50,10 +50,12 @@ function ResultPreview({
           <h3 className="min-w-0 truncate" title={frame.label}>
             {frame.label}
           </h3>
-          <ButtonGroup aria-label="파일 동작">
-            <RevealFile id={frame.id} />
-            {actions}
-          </ButtonGroup>
+          <ToolbarCluster edge="end" size="sm">
+            <ToolbarGroup label="파일 동작">
+              <RevealFile id={frame.id} />
+            </ToolbarGroup>
+            {actions && <ToolbarGroup label="보기">{actions}</ToolbarGroup>}
+          </ToolbarCluster>
         </header>
       )}
       {error ? (
@@ -159,11 +161,11 @@ export function TaskResults({
         <div className="result-workspace">
           <div className="result-browser">
             {products.length > 8 && (
-              <Input
-                aria-label="결과 파일 검색"
+              <SearchField
+                label="결과 파일 검색"
                 placeholder="파일명 검색"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onValueChange={setQuery}
               />
             )}
             <div className="result-files" aria-label="결과 파일 목록">

@@ -1,7 +1,7 @@
 /* Navigation and active execution share the same status area. */
 .toolbar-status-content { justify-content: center; }
 .toolbar-status-content:is([data-state="running"], [data-state="waiting"]) { column-gap: 8px; }
-.toolbar-status-transition > [data-slot="button"] { max-width: calc(50% - 18px); }
+.toolbar-status-transition > button { min-width: 0; flex-shrink: 1; }
 
 /* Keep diagnostic counts beside status, outside its live announcement region. */
 .toolbar-center { display: flex; align-items: center; gap: 0; min-width: 0; }
@@ -59,7 +59,7 @@
 @keyframes toolbar-content-fade-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes toolbar-mode-enter {
   from { opacity: 0; filter: blur(4px); }
-  to { opacity: 1; filter: blur(0); }
+  to { opacity: 1; filter: none; }
 }
 @keyframes toolbar-mode-exit {
   from { opacity: 1; filter: blur(0); }
@@ -67,7 +67,7 @@
 }
 @keyframes toolbar-diagnostics-enter {
   from { opacity: 0; filter: blur(4px); transform: translateX(-24px); }
-  to { opacity: 1; filter: blur(0); transform: translateX(0); }
+  to { opacity: 1; filter: none; transform: translateX(0); }
 }
 @keyframes toolbar-diagnostics-exit {
   from { opacity: 1; filter: blur(0); transform: translateX(0); }
@@ -92,6 +92,4 @@
   .toolbar-mode-transition > .status-transition-out { animation: toolbar-mode-exit 320ms ease-out both; }
   .toolbar-diagnostics-transition[data-transitioning="true"] > .status-transition-in { animation: toolbar-diagnostics-enter 380ms cubic-bezier(0.22, 1, 0.36, 1) both; }
   .toolbar-diagnostics-transition > .status-transition-out { animation: toolbar-diagnostics-exit 320ms ease-out both; }
-  .workflow-actions-transition[data-transitioning="true"] > .status-transition-in { animation: toolbar-mode-enter 180ms ease-out both; }
-  .workflow-actions-transition > .status-transition-out { animation: toolbar-mode-exit 180ms ease-out both; }
 }

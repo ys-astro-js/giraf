@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { Check, Copy, Download, Ellipsis, FolderOpen, Plus, Search, TextCursorInput, Trash2, Upload, Workflow, X } from "lucide-react"
+import { Check, Copy, Download, Ellipsis, FolderOpen, Plus, TextCursorInput, Trash2, Upload, Workflow, X } from "lucide-react"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
 import { Field, FieldLabel } from "@/components/ui/field"
-import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import { SearchField } from "@/components/search-field"
+import { WorkflowToolButton } from "@/components/workflow-tools"
+import { ToolbarButton, ToolbarCluster, ToolbarGroup, ToolbarItem, ToolbarMorph } from "@/components/toolbar"
 import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
-import { WorkflowToolButton } from "@/components/workflow-tools"
-import { StatusTransition } from "@/components/status-transition"
 import { api, type WorkflowDocument } from "@/lib/workbench"
 
 type Item = WorkflowDocument & { folder: string }
@@ -89,33 +89,29 @@ export function WorkflowSelector(props: Props) {
                 <WorkflowToolButton type="button" size="icon-sm" variant="ghost" label="이름 변경 취소" disabled={busy} onClick={() => setEditing(false)}><X /></WorkflowToolButton>
               </form> : <>
           <span className="min-w-0 flex-1 break-words font-medium">{props.document?.name || "새 워크플로우"}</span>
-          <div className="flex shrink-0 items-center" aria-label="현재 워크플로우 도구">
-            <div className="workflow-menu-transition" data-hidden={selecting} inert={selecting} aria-hidden={selecting}>
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="outline" size="icon-sm" hidden={selecting} />} aria-label="워크플로우 메뉴" title="워크플로우 메뉴" disabled={busy}><Ellipsis /></DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="workflow-dropdown-transition">
-                <DropdownMenuGroup>
-                  <DropdownMenuItem onClick={() => { setName(props.document?.name || "새 워크플로우"); setEditing(true) }}><TextCursorInput />이름 변경</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void perform(() => props.onChange({ operation: "duplicate" }), true)}><Copy />복제</DropdownMenuItem>
-                  <DropdownMenuItem onClick={props.onExport}><Download />내보내기</DropdownMenuItem>
-                  <DropdownMenuItem variant="destructive" disabled={!props.document} onClick={() => { setError(""); setDeleting([{ ...props.document!, folder: "." }]) }}><Trash2 />삭제</DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            </div>
-            <Button variant="outline" size={selecting ? "icon-sm" : "sm"} className="workflow-selection-toggle" data-selecting={selecting} disabled={busy} aria-label={selecting ? "선택 취소" : "선택"} aria-pressed={selecting} onClick={() => { setSelecting(!selecting); setSelected([]) }}>
-              <span className="workflow-selection-label" aria-hidden="true">선택</span>
-              <X className="workflow-selection-close" aria-hidden="true" />
-            </Button>
-          </div>
+          <ToolbarCluster edge="end" size="sm" className="shrink-0">
+            <ToolbarGroup label="워크플로우 메뉴" hidden={selecting}>
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<ToolbarButton label="워크플로우 메뉴" />} disabled={busy}><Ellipsis /></DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="workflow-dropdown-transition">
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem onClick={() => { setName(props.document?.name || "새 워크플로우"); setEditing(true) }}><TextCursorInput />이름 변경</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void perform(() => props.onChange({ operation: "duplicate" }), true)}><Copy />복제</DropdownMenuItem>
+                    <DropdownMenuItem onClick={props.onExport}><Download />내보내기</DropdownMenuItem>
+                    <DropdownMenuItem variant="destructive" disabled={!props.document} onClick={() => { setError(""); setDeleting([{ ...props.document!, folder: "." }]) }}><Trash2 />삭제</DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </ToolbarGroup>
+            <ToolbarGroup label="선택">
+              <ToolbarMorph active={selecting} idle="선택" activeContent={<X />} label="선택" activeLabel="선택 취소" aria-pressed={selecting} disabled={busy} onClick={() => { setSelecting(!selecting); setSelected([]) }} />
+            </ToolbarGroup>
+          </ToolbarCluster>
         </>}
       </div>
       <Separator />
       <div className="shrink-0 p-2">
-        <InputGroup>
-          <InputGroupAddon><Search /></InputGroupAddon>
-          <InputGroupInput ref={search} aria-label="워크플로우 검색" placeholder="워크플로우 검색" value={query} onChange={event => setQuery(event.target.value)} />
-        </InputGroup>
+        <SearchField inputRef={search} label="워크플로우 검색" value={query} onValueChange={setQuery} />
       </div>
       <div className="min-h-0 overflow-y-auto px-2 pb-2" aria-label="사용 가능한 워크플로우">
         {loading ? <div className="flex flex-col gap-2 p-2" aria-label="워크플로우 목록 불러오는 중"><Skeleton className="h-8 w-full" /><Skeleton className="h-8 w-3/4" /></div> : matches.length ? [...groups].map(([folder, rows]) => <div key={folder} className="flex flex-col gap-1 not-first:pt-3">
@@ -135,26 +131,35 @@ export function WorkflowSelector(props: Props) {
         </div>) : <Empty className="px-3 py-5"><EmptyHeader><EmptyDescription>{query ? "검색 결과가 없습니다." : "저장된 워크플로우가 없습니다."}</EmptyDescription></EmptyHeader></Empty>}
         {error && <p role="alert" className="px-2 py-2 text-sm text-destructive">{error}</p>}
       </div>
-      <StatusTransition transitionKey={selecting ? "selection" : "add"} className="workflow-actions-transition shrink-0">
-      <div className="flex items-center justify-between gap-2 p-2">
-        {selecting ? <>
-          <WorkflowToolButton variant="outline" size="icon-sm" tooltipSide="bottom" label="선택한 워크플로우 복제" disabled={busy || !selected.length} onClick={() => void perform(() => props.onChange({ operation: "duplicate", paths: selected }))}><Copy /></WorkflowToolButton>
-          <span className="text-sm text-muted-foreground" role="status">{selected.length}개 선택</span>
-          <WorkflowToolButton variant="destructive-outline" size="icon-sm" tooltipSide="bottom" label="선택한 워크플로우 삭제" disabled={busy || !selected.length} onClick={() => {
-            setError("")
-            setDeleting(available.filter(item => selected.includes(item.path)))
-          }}><Trash2 /></WorkflowToolButton>
-        </> : <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="outline" size="icon-sm" />} aria-label="워크플로우 추가" title="워크플로우 추가" disabled={busy}><Plus /></DropdownMenuTrigger>
-          <DropdownMenuContent side="top" className="workflow-dropdown-transition">
-            <DropdownMenuGroup>
-              <DropdownMenuItem onClick={() => void perform(() => props.onChange({operation: "new"}), true)}><Plus />새로 만들기</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => file.current?.click()}><Upload />불러오기</DropdownMenuItem>
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>}
+      <div className="flex shrink-0 items-center justify-between gap-2 p-2">
+        <ToolbarCluster edge="start" placement="bottom" size="sm">
+          <ToolbarGroup label={selecting ? "선택한 워크플로우" : "워크플로우 추가"}>
+            <ToolbarItem hidden={selecting}>
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<ToolbarButton label="워크플로우 추가" />} disabled={busy}><Plus /></DropdownMenuTrigger>
+                <DropdownMenuContent side="top" className="workflow-dropdown-transition">
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem onClick={() => void perform(() => props.onChange({operation: "new"}), true)}><Plus />새로 만들기</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => file.current?.click()}><Upload />불러오기</DropdownMenuItem>
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </ToolbarItem>
+            <ToolbarItem hidden={!selecting}>
+              <ToolbarButton label="선택한 워크플로우 복제" disabled={busy || !selected.length} onClick={() => void perform(() => props.onChange({ operation: "duplicate", paths: selected }))}><Copy /></ToolbarButton>
+            </ToolbarItem>
+          </ToolbarGroup>
+        </ToolbarCluster>
+        <span className="materialize text-sm text-muted-foreground" data-hidden={!selecting} role="status">{selected.length}개 선택</span>
+        <ToolbarCluster edge="end" placement="bottom" size="sm">
+          <ToolbarGroup label="삭제" hidden={!selecting}>
+            <ToolbarButton label="선택한 워크플로우 삭제" className="text-destructive hover:text-destructive" disabled={busy || !selected.length} onClick={() => {
+              setError("")
+              setDeleting(available.filter(item => selected.includes(item.path)))
+            }}><Trash2 /></ToolbarButton>
+          </ToolbarGroup>
+        </ToolbarCluster>
       </div>
-      </StatusTransition>
       <Dialog open={deleting !== null} onOpenChange={value => { if (!value && !busy) setDeleting(null) }}>
         <DialogContent showCloseButton={!busy}>
           <DialogHeader>

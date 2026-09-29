@@ -13,13 +13,19 @@ import {
   CircleStop,
   Play,
   Square,
+  PanelLeft,
   PanelRight,
   PanelBottom,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar"
-import { ButtonGroup } from "@/components/ui/button-group"
+import { useSidebar } from "@/components/ui/sidebar"
+import {
+  ToolbarButton,
+  ToolbarCluster,
+  ToolbarGroup,
+  ToolbarMorph,
+} from "@/components/toolbar"
 import {
   Tooltip,
   TooltipTrigger,
@@ -58,9 +64,8 @@ type Props = {
 }
 
 export function WorkbenchToolbar(props: Props) {
-  const { open, openMobile, isMobile } = useSidebar()
-  const backgroundVisible =
-    (isMobile ? openMobile : open) || props.settingsVisible
+  const { open, openMobile, isMobile, toggleSidebar } = useSidebar()
+  const sidebarVisible = isMobile ? openMobile : open
   const status = props.executionStatus
   const completedKey =
     status?.state === "completed"
@@ -98,29 +103,30 @@ export function WorkbenchToolbar(props: Props) {
       : undefined
   const StatusIcon = status ? statusIcons[status.state] : LoaderCircle
   return (
-    <header
-      className="workbench-toolbar"
-      data-background-visible={backgroundVisible}
-      aria-label="도구 막대"
-    >
-      <div className="toolbar-leading">
-        <SidebarTrigger
-          variant="outline"
-          size="icon"
-          aria-label="사이드바 열기 또는 닫기"
-        />
-        <Button
-          size="icon"
-          variant={props.workflowBusy ? "outline" : "default"}
-          aria-label={props.workflowBusy ? "중단" : "일괄 실행"}
-          title={props.workflowBusy ? "중단" : "일괄 실행"}
-          onClick={props.workflowBusy ? props.onCancel : props.onRun}
-          disabled={!props.workflowBusy && props.runDisabled}
-        >
-          {props.workflowBusy ? <Square /> : <Play />}
-        </Button>
+    <header className="workbench-toolbar" aria-label="도구 막대">
+      <ToolbarCluster className="toolbar-leading" edge="start">
+        <ToolbarGroup label="사이드바">
+          <ToolbarButton
+            label={sidebarVisible ? "사이드바 닫기" : "사이드바 열기"}
+            onClick={toggleSidebar}
+          >
+            <PanelLeft />
+          </ToolbarButton>
+        </ToolbarGroup>
+        <ToolbarGroup label="일괄 실행">
+          <ToolbarMorph
+            variant={props.workflowBusy ? "ghost" : "default"}
+            active={props.workflowBusy}
+            idle={<Play />}
+            activeContent={<Square />}
+            label="일괄 실행"
+            activeLabel="중단"
+            onClick={props.workflowBusy ? props.onCancel : props.onRun}
+            disabled={!props.workflowBusy && props.runDisabled}
+          />
+        </ToolbarGroup>
         {props.historyControls}
-      </div>
+      </ToolbarCluster>
       <div className="toolbar-center">
         <div
           className="toolbar-status text-sm"
@@ -129,7 +135,7 @@ export function WorkbenchToolbar(props: Props) {
           aria-atomic="true"
         >
           <div
-            className="toolbar-status-content"
+            className="toolbar-status-content glass-surface"
             data-state={showExecution ? status.state : "idle"}
             title={showExecution ? status.label : undefined}
           >
@@ -267,28 +273,24 @@ export function WorkbenchToolbar(props: Props) {
           </div>
         </div>
       </div>
-      <ButtonGroup className="toolbar-panels" aria-label="패널 표시">
-        <Button
-          size="icon"
-          variant="outline"
-          aria-label={props.trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
-          title={props.trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
-          onClick={() => props.onTray(!props.trayOpen)}
-        >
-          <PanelBottom />
-        </Button>
-        <Button
-          size="icon"
-          variant="outline"
-          aria-label={
-            props.settingsVisible ? "설정 패널 닫기" : "설정 패널 열기"
-          }
-          title={props.settingsVisible ? "설정 패널 닫기" : "설정 패널 열기"}
-          onClick={() => props.onSettings(!props.settingsVisible)}
-        >
-          <PanelRight />
-        </Button>
-      </ButtonGroup>
+      <ToolbarCluster className="toolbar-panels" edge="end">
+        <ToolbarGroup label="패널 표시">
+          <ToolbarButton
+            label={props.trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
+            aria-pressed={props.trayOpen}
+            onClick={() => props.onTray(!props.trayOpen)}
+          >
+            <PanelBottom />
+          </ToolbarButton>
+          <ToolbarButton
+            label={props.settingsVisible ? "설정 패널 닫기" : "설정 패널 열기"}
+            aria-pressed={props.settingsVisible}
+            onClick={() => props.onSettings(!props.settingsVisible)}
+          >
+            <PanelRight />
+          </ToolbarButton>
+        </ToolbarGroup>
+      </ToolbarCluster>
     </header>
   )
 }

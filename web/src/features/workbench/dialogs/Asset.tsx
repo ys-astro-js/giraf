@@ -1,5 +1,5 @@
 import { Columns2, Image, TableProperties, Link2 } from "lucide-react"
-import { ButtonGroup } from "@/components/ui/button-group"
+import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -11,7 +11,6 @@ import {
 } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { RevealFile, ViewerToolButton } from "@/features/viewer/controls"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ViewerWorkspace } from "@/features/viewer/Comparison"
 import { type Frame } from "@/lib/workbench"
 import { type Source } from "@/lib/task-map"
@@ -77,29 +76,29 @@ export function AssetDialog({
               !["plot", "text", "image-list"].includes(
                 asset.row.asset || "image"
               ) && (
-                <ToggleGroup
-                  aria-label="파일 보기"
-                  variant="outline"
-                  spacing={0}
-                  value={[assetView]}
-                  onValueChange={(values) => {
-                    if (values.length) setAssetView(values[0])
-                  }}
-                >
-                  <ToggleGroupItem value="image" aria-label="영상" title="영상">
+                <ToolbarGroup label="파일 보기" size="sm">
+                  <ToolbarButton
+                    label="영상"
+                    aria-pressed={assetView === "image"}
+                    onClick={() => setAssetView("image")}
+                  >
                     <Image />
-                  </ToggleGroupItem>
-                  <ToggleGroupItem
-                    value="header"
-                    aria-label="헤더"
-                    title="헤더"
+                  </ToolbarButton>
+                  <ToolbarButton
+                    label="헤더"
+                    aria-pressed={assetView === "header"}
+                    onClick={() => setAssetView("header")}
                   >
                     <TableProperties />
-                  </ToggleGroupItem>
-                </ToggleGroup>
+                  </ToolbarButton>
+                </ToolbarGroup>
               )}
             {asset && (
-              <ButtonGroup className="asset-actions" aria-label="파일 동작">
+              <ToolbarGroup
+                label="파일 동작"
+                size="sm"
+                className="asset-actions"
+              >
                 {!["plot", "text", "image-list"].includes(
                   asset.row.asset || "image"
                 ) && (
@@ -125,7 +124,7 @@ export function AssetDialog({
                   <Link2 />
                 </ViewerToolButton>
                 <RevealFile id={asset.row.id} />
-              </ButtonGroup>
+              </ToolbarGroup>
             )}
           </header>
           {asset && (

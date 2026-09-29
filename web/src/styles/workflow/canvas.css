@@ -130,7 +130,7 @@ div:has(> [data-slot="tooltip-content"] .connection-port-feedback) { pointer-eve
     opacity: 1 !important;
   }
 }
-.workflow-drop-choice { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); }
+.workflow-drop-choice { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 2px 3px 2px 16px; border-radius: 19px; font-size: 13px; }
 .workflow-node {
   position: relative;
   border: 1px solid var(--border);

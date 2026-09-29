@@ -17,22 +17,15 @@
 
 /* Inspector navigation stays visible while each task area scrolls independently. */
 .inspector-tabs { flex: 1; min-height: 0; gap: 0; overflow: hidden; }
-.inspector-info { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.inspector-info-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }
+.inspector-info { position: relative; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+/* Bottom padding clears the floating action groups (12px inset + 42px group + 12px). */
+.inspector-info-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px 20px 66px; }
 .inspector-info-body > * { flex-shrink: 0; }
-.inspector-info-actions { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--border); }
-.workflow-selection-toggle { position: relative; width: 56px; padding-inline: 0; transition: width 180ms ease-out, border-radius 180ms ease-out; }
-.workflow-menu-transition { width: 32px; margin-inline-end: 8px; transition: width 180ms ease-out, margin-inline-end 180ms ease-out; }
-.workflow-menu-transition[data-hidden="true"] { width: 0; margin-inline-end: 0; pointer-events: none; }
-.workflow-selection-toggle[data-selecting="true"] { width: 32px; }
-.workflow-selection-label { filter: blur(0); transition: opacity 180ms ease-out, filter 180ms ease-out, transform 180ms ease-out; }
-.workflow-selection-close { position: absolute; opacity: 0; filter: blur(4px); transform: rotate(-90deg) scale(.6); transition: opacity 180ms ease-out, filter 180ms ease-out, transform 180ms ease-out; }
-.workflow-selection-toggle[data-selecting="true"] .workflow-selection-label { opacity: 0; filter: blur(4px); transform: scale(.8); }
-.workflow-selection-toggle[data-selecting="true"] .workflow-selection-close { opacity: 1; filter: blur(0); transform: rotate(0) scale(1); }
+.inspector-info-actions { position: absolute; inset-inline: 12px; bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; pointer-events: none; }
+.inspector-info-actions > * { pointer-events: auto; }
 .workflow-dropdown-transition { opacity: 1; filter: blur(0); transition: opacity 180ms ease-out, filter 180ms ease-out; }
 .workflow-dropdown-transition[data-starting-style], .workflow-dropdown-transition[data-ending-style] { opacity: 0; filter: blur(4px); }
 @media (prefers-reduced-motion: reduce) {
-  .workflow-selection-toggle, .workflow-selection-label, .workflow-selection-close, .workflow-menu-transition, .workflow-menu-transition[data-hidden="true"] { transition: none; }
   .workflow-dropdown-transition { transition: none; }
 }
 .inspector-tabs > .inspector-sections { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; }
@@ -43,8 +36,7 @@
 .inspector-tabs:has(.parameter-group-nav) > .inspector-settings { padding-top: 4px; }
 .inspector-command { overflow-wrap: anywhere; }
 @media (max-width: 640px) {
-  .inspector-info-body { padding: 16px; }
-  .inspector-info-actions { padding-inline: 16px; }
+  .inspector-info-body { padding: 16px 16px 66px; }
   .inspector-tabs > .inspector-sections, .inspector-tabs > .inspector-settings { padding: 16px; }
 }
 
@@ -71,8 +63,4 @@
 .dependency-node:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 12px; }
 .dependency-message { padding: 12px; font-size: 13px; color: var(--muted-foreground); }
 
-.dependency-canvas .dependency-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; left: 0; right: 0; }
-.dependency-tools > [data-slot="button-group"], .dependency-view-tools { pointer-events: auto; }
-.dependency-view-tools { display: flex; gap: 8px; }
-.dependency-canvas .dependency-tools { pointer-events: none; }
-@media (pointer: coarse) { .dependency-tools [data-slot="button"], .dependency-tools [data-slot="toggle-group-item"] { width: 44px; height: 44px; } }
+.dependency-canvas .dependency-tools { margin: 12px; }
