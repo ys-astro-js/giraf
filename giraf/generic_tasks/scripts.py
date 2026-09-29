@@ -20,7 +20,7 @@ def write_scripts(job, manifest, calls, only=None):
     for package in spec['loadPackages']:
         lines.append(package); py.append(f'iraf.getPkg({package!r})(_doprint=0)')
     schemas = [(spec['qualified'], spec.get('allParameters', spec['parameters']), manifest['parameters'])]
-    schemas += [(s['task'], s['parameters'], manifest['parameterSets'][s['name']]) for s in spec['parameterSets']]
+    schemas += [(s['task'], s.get('allParameters', s['parameters']), manifest['parameterSets'][s['name']]) for s in spec['parameterSets']]
     for task, pars, values in schemas:
         if any(s['name'] == '$package' and s['task'] == task for s in spec['parameterSets']):
             continue  # Package unlearn recursively touches unrelated broken tasks.

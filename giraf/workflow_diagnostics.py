@@ -84,6 +84,10 @@ def workflow_diagnostics(request, resolve):
     for node in nodes:
         node_id = node['id']
         payload = {**node['payload'], 'workingDirectory': request.get('workingDirectory') or node['payload'].get('workingDirectory')}
+        # Schema errors make the task unrunnable and are reported by validation.
+        for issue in TASKS.get(payload.get('task'), {}).get('schemaIssues', []):
+            if issue['severity'] == 'warning':
+                add('warning', '노드 스키마 ' + issue['message'], node_id)
         try:
             manifest = validate_task(payload, fresh, diagnostics=True, pending_roles=pending[node_id])
         except (ValueError, KeyError, TypeError, OSError) as exc:

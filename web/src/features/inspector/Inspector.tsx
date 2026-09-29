@@ -33,6 +33,7 @@ import {
 import { type Instance, type TaskMap } from "@/lib/task-map"
 import {
   parameterChanged,
+  schemaParameterGroups,
   type ParameterGroup,
 } from "@/lib/parameter-presentation"
 import {
@@ -268,6 +269,7 @@ export function TaskInspector({
         ]
       : []),
   ]
+  const displayGroups = schemaParameterGroups(spec, groups)
   const changedParameters = groups.flatMap((g) =>
     g.parameters
       .filter((p) => parameterChanged(p, g.values))
@@ -327,7 +329,7 @@ export function TaskInspector({
                   onValueChange={setQuery}
                 />
                 <ParameterGroupNav
-                  groups={groups}
+                  groups={displayGroups}
                   query={query}
                   changedOnly={false}
                   bodyRef={settingsBodyRef}
@@ -381,7 +383,7 @@ export function TaskInspector({
             job={job}
           />
           <InspectorSettings
-            groups={groups}
+            groups={displayGroups}
             query={query}
             spec={spec}
             d={d}

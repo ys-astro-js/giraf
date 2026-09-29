@@ -83,6 +83,10 @@ def refresh_catalog():
                              descriptors=env_paths('GIRAF_TASK_DESCRIPTORS'))
         tasks = {name: dict(task, description=discovery.get('descriptions', {}).get(task['package'] + '.' + task['name'], ''))
                  for name, task in LEGACY_TASKS.items()}
+        for task in tasks.values():
+            # Adapter-owned forms and ports do not read node schemas yet.
+            if discovery['tasks'].get(task['package'] + '.' + task['name'], {}).get('schemaLayers'):
+                task['schemaIssues'] = [dict(severity='warning', message='전용 어댑터로 실행하는 작업이라 노드 스키마를 아직 적용하지 않습니다.')]
         tasks.update({DISCOVERED_ALIASES.get(k, k): dict(v, name=DISCOVERED_ALIASES.get(k, k)) for k, v in discovery['tasks'].items()
                       if not any(t['package'] + '.' + t['name'] == k for t in LEGACY_TASKS.values())})
         utility = image_list_spec()
