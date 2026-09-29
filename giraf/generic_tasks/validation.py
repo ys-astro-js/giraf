@@ -24,6 +24,9 @@ def checked_values(parameters, supplied):
             continue
         if name not in supplied and value == '' and p.get('hasDefault') is False and 'h' in p.get('mode', ''):
             continue
+        # An untouched numeric field with no IRAF default stays unset (display z1/z2).
+        if value == '' and p['type'] in ('i', 'r', 'd') and p['default'] in ('', None):
+            continue
         if p['type'] == 'b':
             if value not in (True, False, 'yes', 'no'):
                 raise ValueError(f'{name}: yes 또는 no를 선택해 주세요.')

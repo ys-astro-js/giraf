@@ -86,7 +86,6 @@ pset 파라미터는 `datapars.fwhmpsf`처럼 pset 이름을 앞에 붙입니다
 | 종류 | 상태 | 용도 |
 | --- | --- | --- |
 | `image-cursor` | 예정 | 영상을 클릭해 커서 명령으로 측정 (daoedit) |
-| `coords-overlay` | 예정 | 좌표 파일을 영상 위에 표시 (tvmark) |
 | `value-output`, `value-input` | 예정 | 측정값을 연결선으로 다른 노드의 파라미터에 전달 |
 | `ccd-preprocess`, `calibration-groups` | 예정 | ccdred 계열 전처리와 보정 그룹 포트 |
 
