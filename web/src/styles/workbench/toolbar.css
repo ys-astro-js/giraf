@@ -2,6 +2,7 @@
 .giraf-app { container-type: inline-size; }
 .workbench-toolbar {
   position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
   align-items: center;
@@ -10,6 +11,26 @@
   min-width: 0;
   flex-shrink: 0;
   padding: 0 12px;
+}
+/* A side panel runs under the toolbar area, so the bar gains a background while one is open. */
+.workbench-toolbar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: color-mix(in oklch, var(--background) 50%, transparent);
+  border-bottom: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  opacity: 0;
+  transition: opacity 240ms ease-out;
+}
+.workbench-toolbar[data-background-visible="true"]::before {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .workbench-toolbar::before { transition-duration: 100ms; }
 }
 @media (min-width: 768px) {
   .giraf-app { --toolbar-height: 56px; }
@@ -20,8 +41,10 @@
     pointer-events: none;
   }
   .workbench-toolbar > * { pointer-events: auto; }
-  /* Sidebars run under the floating toolbar, like the canvas does. */
-  .workbench-body [data-slot="sidebar-inner"] { padding-top: var(--toolbar-height); }
+  .workbench-body [data-slot="sidebar-container"] {
+    top: var(--toolbar-height);
+    height: calc(100% - var(--toolbar-height));
+  }
   .workbench-body .inspector-pane { padding-top: var(--toolbar-height); }
   .workbench-body .workflow-search ~ .map-viewport .react-flow__panel.top {
     top: var(--toolbar-height);

@@ -66,6 +66,7 @@ type Props = {
 export function WorkbenchToolbar(props: Props) {
   const { open, openMobile, isMobile, toggleSidebar } = useSidebar()
   const sidebarVisible = isMobile ? openMobile : open
+  const backgroundVisible = sidebarVisible || props.settingsVisible
   const status = props.executionStatus
   const completedKey =
     status?.state === "completed"
@@ -103,7 +104,11 @@ export function WorkbenchToolbar(props: Props) {
       : undefined
   const StatusIcon = status ? statusIcons[status.state] : LoaderCircle
   return (
-    <header className="workbench-toolbar" aria-label="도구 막대">
+    <header
+      className="workbench-toolbar"
+      data-background-visible={backgroundVisible}
+      aria-label="도구 막대"
+    >
       <ToolbarCluster className="toolbar-leading" edge="start">
         <ToolbarGroup label="사이드바">
           <ToolbarButton
