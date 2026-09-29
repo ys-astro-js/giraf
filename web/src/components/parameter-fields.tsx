@@ -7,7 +7,7 @@ import { Choice, ParameterHelp } from "./workbench-controls"
 import type { Param, Values } from "@/lib/workbench"
 import { TvmarkParameterControl } from "./tvmark-parameter-control"
 
-const label = (p: Param) => p.name
+const label = (p: Param) => p.label || p.name
 export function ParamControl({
   p,
   value,
@@ -115,8 +115,8 @@ export function ParameterTable({
             data-boolean={p.type === "b"}
           >
             <div className="parameter-label">
-              <FieldLabel htmlFor={id}>
-                {p.name}
+              <FieldLabel htmlFor={id} title={p.label ? p.name : undefined}>
+                {label(p)}
                 {p.required && <span aria-hidden="true">*</span>}
               </FieldLabel>
               {changed && (

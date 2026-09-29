@@ -49,6 +49,21 @@ def checked_values(parameters, supplied):
     return values
 
 
+def same_value(a, b):
+    a, b = ('yes' if v is True else 'no' if v is False else v for v in (a, b))
+    try:
+        return float(a) == float(b)
+    except (TypeError, ValueError):
+        return str(a) == str(b)
+
+
+def without_fixed(supplied, fixed, prefix, warnings):
+    """Schema-fixed values win over values stored in an existing node."""
+    for name, value in fixed.items():
+        if name in supplied and not same_value(supplied[name], value):
+            warnings.append(f'{prefix}{name}: 노드 값 {supplied[name]} 대신 스키마 고정값 {value}을 사용합니다.')
+    return {k: v for k, v in supplied.items() if k not in fixed}
+
 
 def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles=frozenset()):
     if not spec['runnable']: raise ValueError(spec['reason'])
@@ -59,8 +74,9 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
     directory = str(Path(payload.get('workingDirectory') or ROOT).expanduser().resolve())
     # Retired empty controls may now be managed output destinations.
     output_roles = {s['name'] for s in spec['outputs']}
-    supplied = {k: v for k, v in payload.get('parameters', {}).items()
-                if k not in output_roles or v != ''}
+    schema_warnings = []
+    supplied = without_fixed({k: v for k, v in payload.get('parameters', {}).items()
+                              if k not in output_roles or v != ''}, spec.get('fixed', {}), '', schema_warnings)
     # A file can replace a numeric operand, so do not require an unused scalar.
     scalar_names = {s['name'] for s in spec['inputs'] if s.get('scalar')}
     ordinary = [p for p in spec['parameters'] if p['name'] not in scalar_names]
@@ -72,7 +88,9 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
             slot['mode'] = 'each' if params.get(slot['eachWhen']) == 'yes' else 'single'
     supplied_sets = payload.get('parameterSets', {})
     if set(supplied_sets) - {s['name'] for s in spec['parameterSets']}: raise ValueError('알 수 없는 파라미터 세트입니다.')
-    sets = {s['name']: checked_values(s['parameters'], supplied_sets.get(s['name'], {})) for s in spec['parameterSets']}
+    sets = {s['name']: {**checked_values(s['parameters'], without_fixed(
+                supplied_sets.get(s['name'], {}), s.get('fixed', {}), s['name'] + '.', schema_warnings)), **s.get('fixed', {})}
+            for s in spec['parameterSets']}
     for values in [params, *sets.values()]:
         # Interactive display/cursor integration needs a dedicated adapter.
         for key in ('interactive', 'verify', 'update'):
@@ -97,7 +115,7 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
     params.update(scalar_values)
     if pairs.get('shifts') and len(pairs['shifts']) != len(inputs.get('input', [])):
         raise ValueError('shifts: 입력 영상 순서대로 영상마다 한 행을 입력해 주세요.')
-    warnings = []
+    warnings = schema_warnings
     binding = payload.get('alignmentBinding')
     if binding and any(text_inputs.get(k, '').strip() for k in ('coords', 'shifts')):
         if not isinstance(binding, dict) or binding.get('reference') != inputs.get('reference') or (text_inputs.get('shifts', '').strip() and binding.get('input') != inputs.get('input')):

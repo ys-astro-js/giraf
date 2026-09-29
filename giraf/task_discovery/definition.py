@@ -6,7 +6,7 @@ from .packages import IDENT, file_hash
 from .parameters import read_task_parameters
 
 
-def task_definition(name, path, pkg, packages, all_pars, generated, overrides, description):
+def task_definition(name, path, pkg, packages, all_pars, generated, overrides, description, layers=()):
     folder = pkg['path'].parent
     identity = pkg['name'] + '.' + name
     files = {str(path.resolve()): file_hash(path)}
@@ -51,7 +51,12 @@ def task_definition(name, path, pkg, packages, all_pars, generated, overrides, d
         automatic = refine_help(automatic, public, help_path.read_text(errors='replace'))
     automatic['evidence'] += [dict(parameter=p['name'], source='cl-assignment',
                                    role='internal', path=str(script)) for p in internal]
-    profile = overrides.get(identity, automatic['profile'])
+    from ..node_schema import merge_layers, apply_presentation
+    for layer in layers:
+        files[layer['source']] = layer['hash']
+    profile, presentation, schema_issues, provenance = merge_layers(
+        overrides.get(identity, automatic['profile']), public, sets, layers)
+    issues += [i['message'] for i in schema_issues if i['severity'] == 'error']
     spec['schemaSource'] = 'override' if identity in overrides else 'iraf' if inferred and inferred.get('complete') else 'parameters'
     spec['ioEvidence'] = automatic['evidence']
     spec['parameterConstraints'] = inferred.get('parameterConstraints', {}) if inferred else {}
@@ -73,6 +78,11 @@ def task_definition(name, path, pkg, packages, all_pars, generated, overrides, d
     spec['parameters'] = [p for p in spec['parameters'] if p['name'] not in ('mode', '$nargs') and p['type'] != 'pset']
     for group in spec['parameterSets']:
         group['parameters'] = [p for p in group['parameters'] if p['name'] not in ('mode', '$nargs') and p['type'] != 'pset']
+    if not issues:
+        apply_presentation(spec, presentation, schema_issues, provenance, layers)
+    else:
+        spec.update(schemaLayers=[dict(layer=l['layer'], source=l['source']) for l in layers],
+                    schemaProvenance={}, schemaIssues=schema_issues)
     spec['runnable'] = not issues
     spec['reason'] = ' '.join(dict.fromkeys(issues))
     return spec

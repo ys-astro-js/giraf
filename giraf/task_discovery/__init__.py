@@ -11,7 +11,7 @@ from ..task_capabilities import installed_root
 from .packages import IDENT, DECLARATION, file_hash, env_paths, scan_packages, read_overrides
 from .definition import task_definition, apply_profile
 
-def discover(root=None, extra_roots=(), descriptors=()):
+def discover(root=None, extra_roots=(), descriptors=(), schema_directories=None):
     root = Path(root) if root else installed_root()
     diagnostics = []
     roots = [(root / name, False) for name in ('pkg', 'noao') if root and (root / name).is_dir()]
@@ -20,6 +20,9 @@ def discover(root=None, extra_roots=(), descriptors=()):
     roots += [(Path(p).resolve(), True) for p in extra_roots]
     packages, all_pars = scan_packages(roots, diagnostics)
     overrides = read_overrides(descriptors, diagnostics)
+    from ..node_schema import load_layers
+    layers, layer_diagnostics = load_layers(schema_directories)
+    diagnostics += layer_diagnostics
 
     generated_path = Path(__file__).resolve().parent.parent / 'task_schemas.json'
     generated = json.loads(generated_path.read_text()).get('tasks', {}) if generated_path.exists() else {}
@@ -46,7 +49,9 @@ def discover(root=None, extra_roots=(), descriptors=()):
                 continue
             identity = pkg['name'] + '.' + name
             try:
-                tasks[identity] = task_definition(name, path, pkg, packages, all_pars, generated, overrides, descriptions.get(name, ''))
+                tasks[identity] = task_definition(name, path, pkg, packages, all_pars, generated, overrides, descriptions.get(name, ''),
+                                                   layers.get(identity, ()))
             except (OSError, ValueError) as exc:
                 diagnostics.append(f'{identity}: {exc}')
+    diagnostics += [f'{layer["source"]}: {name} 작업을 찾지 못했습니다.' for name in layers.keys() - tasks.keys() for layer in layers[name]]
     return dict(tasks=tasks, diagnostics=diagnostics, descriptions=task_descriptions)

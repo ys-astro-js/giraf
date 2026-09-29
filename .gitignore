@@ -26,6 +26,7 @@ coverage/
 /.workflow/
 /pyraf/
 /observations/
+/user-schemas/
 *.fits
 *.fit
 *.fts

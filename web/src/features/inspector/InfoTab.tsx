@@ -15,6 +15,7 @@ import {
   TableCell,
 } from "@/components/ui/table"
 import { type Spec } from "@/lib/workbench"
+import { fixedParameters } from "@/lib/parameter-presentation"
 import { type Instance, type TaskMap } from "@/lib/task-map"
 
 function NodeErrors({ map, nodeId }: { map: TaskMap; nodeId: string }) {
@@ -98,6 +99,22 @@ export function InspectorInfo({
             <p className="text-muted-foreground">변경한 파라미터가 없습니다.</p>
           )}
         </section>
+        {fixedParameters(spec).length > 0 && (
+          <section className="inspector-section parameter-changes">
+            <h3>고정된 파라미터</h3>
+            <dl>
+              {fixedParameters(spec).map((p) => (
+                <div key={p.name} title={`${p.source} 스키마에서 고정`}>
+                  <dt>{p.name}</dt>
+                  <dd>
+                    {p.value || "빈 값"}
+                    <span className="text-muted-foreground"> · {p.source}</span>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        )}
         {spec.name === "ccdhedit" && headerPreview.length > 0 && (
           <section className="inspector-section">
             <h3>변경 미리보기</h3>

@@ -1,11 +1,12 @@
 import { collectResponseDiagnostics, diagnostics, requestDiagnosticScope } from "./diagnostics"
 import {headerFrame} from "./calibration"
 export type Values = Record<string, string | number | boolean | null>
-export type Param = { mode?:string; required?:boolean; indirect?:string; name:string; type:string; default:string | number | boolean | null; choices:string[]; prompt:string; min:unknown; max:unknown }
+export type Param = { label?:string; mode?:string; required?:boolean; indirect?:string; name:string; type:string; default:string | number | boolean | null; choices:string[]; prompt:string; min:unknown; max:unknown }
 export type Slot = { valueType?:string; cursorType?:string; representation?:string; name:string; label:string; multiple:boolean; required?:boolean; kind:string }
 export type OutputSlot = { eachWhen?:string; optional?:boolean; name:string; kind:string; default:string; mode?:string; label?:string }
-export type ParameterSet = { name:string; task:string; parameters:Param[] }
-export type Spec = { executor?:'image-list'; taskName?:string; adapter?:'generic'; runnable?:boolean; reason?:string; description?:string; outputs?:OutputSlot[]; parameterSets?:ParameterSet[]; name:string; title:string; package:string; parameters:Param[]; inputs:Slot[]; output:{ name:string; mode:string; default:string } | null; kind:string; preprocess?:boolean }
+export type ParameterSet = { name:string; task:string; parameters:Param[]; fixed?:Values }
+export type SchemaIssue = { severity:'warning'|'error'; message:string }
+export type Spec = { fixed?:Values; groups?:{label:string;parameters:string[]}[]; schemaProvenance?:Record<string,string>; schemaIssues?:SchemaIssue[]; executor?:'image-list'; taskName?:string; adapter?:'generic'; runnable?:boolean; reason?:string; description?:string; outputs?:OutputSlot[]; parameterSets?:ParameterSet[]; name:string; title:string; package:string; parameters:Param[]; inputs:Slot[]; output:{ name:string; mode:string; default:string } | null; kind:string; preprocess?:boolean }
 export type Catalog = { version:string; tasks:Spec[]; ccdproc:{parameters:Param[];inputs:Slot[]}; ccdred:Param[]; exam:Record<string,Param[]>; capabilities?:{version:string;schemaFingerprint:string;fallback:string[];limits:Record<string,string>} }
 export type Frame = { calibrationMetadata?:{filter:string;exposure:number}; role?:string; id:string; label:string; path?:string; name?:string; asset?:string; filter?:string; exposure?:number; shape?:string; width?:number; height?:number; detected_kind?:string; group?:string; job?:string; error?:string; history?:Record<string,string>;source?:string;viewer_supported?:boolean }
 export type AlignmentBinding = {reference:string[];input:string[]}
