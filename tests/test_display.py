@@ -97,6 +97,14 @@ class ProtocolTests(unittest.TestCase):
         # The server's peer here is this test process, so its cwd is ours.
         self.assertEqual(peer_directory(self.client()), Path.cwd())
 
+    def test_closing_the_display_clears_every_frame(self):
+        c = self.client()
+        c.sendall(header(PACKED, 4, MEMORY, z=1) + b'\x10' * 4 + header(PACKED, 4, MEMORY, z=2) + b'\x20' * 4)
+        c.sendall(header(IIS_READ | PACKED, 4, MEMORY, z=2))
+        receive(c, 4)
+        self.server.close()
+        self.assertEqual(self.server.state(), {'current': 1, 'frames': []})
+
     def test_describe_tolerates_missing_transform(self):
         self.assertEqual(describe(''), {'title': '', 'transform': None})
 

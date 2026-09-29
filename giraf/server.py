@@ -538,6 +538,11 @@ async def display_endpoint(request: Request):
     return JSONResponse(start_display().state())
 
 
+async def display_close_endpoint(request: Request):
+    start_display().close()
+    return JSONResponse(start_display().state())
+
+
 api_routes = [
     Route('/catalog', catalog_endpoint, methods=['GET'], name='catalog'),
     Route('/workflow-diagnostics', workflow_diagnostics_endpoint, methods=['POST'], name='workflow-diagnostics'),
@@ -572,6 +577,7 @@ api_routes = [
     Route('/reveal', reveal_endpoint, methods=['POST'], name='reveal'),
     Route('/download', download_endpoint, methods=['GET'], name='download'),
     Route('/display', display_endpoint, methods=['GET'], name='display'),
+    Route('/display-close', display_close_endpoint, methods=['POST'], name='display-close'),
 ]
 
 app = Starlette(

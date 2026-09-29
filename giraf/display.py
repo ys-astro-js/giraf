@@ -190,6 +190,12 @@ class DisplayServer:
                 frame.pixels[:] = 0
                 frame.version += 1
 
+    def close(self):
+        """End the display session, like closing ds9: every frame is cleared."""
+        with self.lock:
+            self.frames.clear()
+            self.current = 1
+
     def state(self):
         with self.lock:
             return dict(current=self.current, frames=[
