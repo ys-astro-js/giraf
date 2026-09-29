@@ -14,7 +14,8 @@ import { FileFilterButton } from "@/components/file-filter-button"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldLabel } from "@/components/ui/field"
+import { SearchField } from "@/components/search-field"
 import { type Frame, type Slot, type Workspace } from "@/lib/workbench"
 import { Failure } from "@/components/workbench-controls"
 
@@ -156,26 +157,14 @@ export function FilePicker({
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
-                <FieldGroup className="picker-filters items-end">
-                  <Field className="min-w-0">
-                    <FieldLabel htmlFor="picker-search">파일 검색</FieldLabel>
-                    <Input
-                      id="picker-search"
-                      placeholder="파일명 검색"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
-                  </Field>
-                  {query && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="검색 초기화"
-                      onClick={() => setQuery("")}
-                    >
-                      <X />
-                    </Button>
-                  )}
+                <div className="picker-filters flex items-center">
+                  <SearchField
+                    id="picker-search"
+                    className="min-w-0 flex-1"
+                    label="파일명 검색"
+                    value={query}
+                    onValueChange={setQuery}
+                  />
                   {request.slot.kind === "image" && (
                     <FileFilterButton
                       filters={filters}
@@ -183,7 +172,7 @@ export function FilePicker({
                       onChange={setFilters}
                     />
                   )}
-                </FieldGroup>
+                </div>
               </>
             )}
             {!request.folderOnly && (

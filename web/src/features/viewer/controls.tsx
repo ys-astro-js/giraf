@@ -80,7 +80,7 @@ export function ViewerPopover({
         <TooltipTrigger
           render={
             <PopoverTrigger
-              render={<Button variant="outline" size="icon-sm" />}
+              render={<Button variant="ghost" size="icon-sm" />}
               disabled={disabled}
             />
           }

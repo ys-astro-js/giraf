@@ -2,6 +2,7 @@ import { useRef, useState } from "react"
 import { taskDisplayName } from "@/lib/workbench"
 import { Pencil, Check, X, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
 import { Input } from "@/components/ui/input"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { type Spec } from "@/lib/workbench"
@@ -145,16 +146,15 @@ export function InspectorHeading({
           </>
         )}
       </div>
-      <Button
-        size="icon"
-        variant="secondary"
-        aria-label={checking ? "확인 중" : busy ? "실행 중" : "실행"}
-        title={checking ? "확인 중" : busy ? "실행 중" : "실행"}
-        disabled={busy || checking || spec.runnable === false}
-        onClick={onRun}
-      >
-        <Play />
-      </Button>
+      <ToolbarGroup label="작업 실행">
+        <ToolbarButton
+          label={checking ? "확인 중" : busy ? "실행 중" : "이 작업 실행"}
+          disabled={busy || checking || spec.runnable === false}
+          onClick={onRun}
+        >
+          <Play />
+        </ToolbarButton>
+      </ToolbarGroup>
     </header>
   )
 }

@@ -19,8 +19,6 @@ import {
   SquareFunction,
   SlidersHorizontal,
   RefreshCw,
-  Search,
-  X,
   ChevronRight,
   FileImage,
   FileText,
@@ -30,7 +28,6 @@ import {
 import {
   SidebarHeader,
   SidebarTrigger,
-  SidebarInput,
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -52,6 +49,7 @@ import {
 } from "@/components/ui/tooltip"
 import { TabsList, TabsTrigger, Tabs, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
+import { SearchField } from "@/components/search-field"
 import { Checkbox } from "@/components/ui/checkbox"
 import { FileFilterButton } from "@/components/file-filter-button"
 import {
@@ -342,37 +340,18 @@ export function LibrarySidebar(props: Props) {
               ))}
             </TabsList>
             {(tab === "files" || tab === "tasks") && (
-              <div className="flex h-9 min-w-0 items-center gap-2">
-                <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <SidebarInput
-                    className="pl-9"
-                    aria-label={tab === "files" ? "파일 검색" : "작업 검색"}
-                    placeholder={tab === "files" ? "파일명 검색" : "작업 검색"}
-                    value={tab === "files" ? fileQuery : taskQuery}
-                    onChange={(event) => {
-                      if (tab === "files") {
-                        setFileQuery(event.target.value)
-                        revealMatches()
-                      } else setTaskQuery(event.target.value)
-                    }}
-                  />
-                </div>
-                {(tab === "files" ? fileQuery : taskQuery) && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="검색 초기화"
-                    onClick={() => {
-                      if (tab === "files") {
-                        setFileQuery("")
-                        revealMatches()
-                      } else setTaskQuery("")
-                    }}
-                  >
-                    <X />
-                  </Button>
-                )}
+              <div className="flex min-w-0 items-center gap-2">
+                <SearchField
+                  className="min-w-0 flex-1"
+                  label={tab === "files" ? "파일명 검색" : "작업 검색"}
+                  value={tab === "files" ? fileQuery : taskQuery}
+                  onValueChange={(value) => {
+                    if (tab === "files") {
+                      setFileQuery(value)
+                      revealMatches()
+                    } else setTaskQuery(value)
+                  }}
+                />
                 {tab === "files" && (
                   <FileFilterButton
                     filters={filters}

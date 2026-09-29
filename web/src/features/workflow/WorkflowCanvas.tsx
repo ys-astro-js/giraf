@@ -8,6 +8,13 @@ import {
   WorkflowZoomControls,
   WorkflowEdgeStyleButton,
 } from "@/components/workflow-tools"
+import {
+  ToolbarButton,
+  ToolbarCluster,
+  ToolbarGroup,
+  ToolbarItem,
+} from "@/components/toolbar"
+import { SearchField } from "@/components/search-field"
 import { WorkflowEdge } from "@/components/workflow-edge"
 import { useMemo, useSyncExternalStore } from "react"
 import {
@@ -20,7 +27,6 @@ import {
   type Edge,
 } from "@xyflow/react"
 import {
-  Search,
   BroomSparkles,
   LoaderCircle,
   SquareDashedMousePointer,
@@ -31,12 +37,6 @@ import {
 } from "lucide-react"
 import { diagnostics } from "@/lib/diagnostics"
 import { Button } from "@/components/ui/button"
-import { ButtonGroup } from "@/components/ui/button-group"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupInput,
-} from "@/components/ui/input-group"
 import { Blank } from "@/components/workbench-controls"
 import { SubflowEditor } from "@/components/subflow-editor"
 import { subflowColor } from "@/lib/subflow"
@@ -158,18 +158,12 @@ export function TaskMapView({
       <h1 className="sr-only">워크플로우</h1>
       {onSearch && (
         <div className="workflow-search">
-          <InputGroup>
-            <InputGroupInput
-              className="h-full"
-              aria-label="작업 검색"
-              placeholder="작업 검색"
-              value={search}
-              onChange={(event) => onSearch(event.target.value)}
-            />
-            <InputGroupAddon>
-              <Search aria-hidden="true" />
-            </InputGroupAddon>
-          </InputGroup>
+          <SearchField
+            variant="glass"
+            label="작업 검색"
+            value={search}
+            onValueChange={onSearch}
+          />
         </div>
       )}
       {editingGroup !== null && (
@@ -359,74 +353,70 @@ export function TaskMapView({
                 maskColor="var(--workflow-minimap-mask)"
               />
               <WorkflowClickConnection />
-              <Panel
-                position="bottom-left"
-                className="workflow-tools"
-                role="group"
-                aria-label="워크플로우 도구"
-              >
-                <WorkflowZoomControls />
-                <ButtonGroup
-                  orientation="vertical"
-                  aria-label="워크플로우 구성"
-                >
-                  <WorkflowEdgeStyleButton
-                    straight={map.view.edgeStyle === "smoothstep"}
-                    disabled={layoutBusy || !onStraightEdges}
-                    onClick={() => {
-                      if (map.view.edgeStyle === "smoothstep")
-                        update(
-                          (m) => ({
-                            ...m,
-                            view: { ...m.view, edgeStyle: "default" },
-                          }),
-                          "연결선 모양 변경"
-                        )
-                      else onStraightEdges?.()
-                    }}
-                  />
-                  <WorkflowToolButton
-                    variant="outline"
-                    size="icon-sm"
-                    label="선택한 작업 보기"
-                    disabled={!map.view.selected}
-                    onClick={revealSelected}
-                  >
-                    <LocateFixed />
-                  </WorkflowToolButton>
-                  <WorkflowToolButton
-                    variant="outline"
-                    size="icon-sm"
-                    label="그룹 만들기"
-                    aria-pressed={selectingGroup}
-                    disabled={!map.tasks.some((t) => !t.subflowId)}
-                    onClick={() => {
-                      setEditingGroup(null)
-                      setSelectingGroup((v) => !v)
-                      setSelectedEdges([])
-                      setGroupSelection([])
-                    }}
-                  >
-                    <SquareDashedMousePointer />
-                  </WorkflowToolButton>
-                  <WorkflowToolButton
-                    variant="outline"
-                    size="icon-sm"
-                    label={layoutBusy ? "배치 중…" : "자동 배치"}
-                    onClick={onAutoLayout}
-                    disabled={layoutBusy || !onAutoLayout}
-                    aria-busy={layoutBusy}
-                  >
-                    {layoutBusy ? (
-                      <LoaderCircle className="animate-spin" />
-                    ) : (
-                      <BroomSparkles />
-                    )}
-                  </WorkflowToolButton>
-                </ButtonGroup>
+              <Panel position="bottom-left" className="workflow-tools">
+                <ToolbarCluster edge="start" placement="bottom" size="sm">
+                  <ToolbarGroup label="워크플로우 구성">
+                    <ToolbarItem hidden={!map.view.selected}>
+                      <ToolbarButton
+                        label="선택한 작업 보기"
+                        onClick={revealSelected}
+                      >
+                        <LocateFixed />
+                      </ToolbarButton>
+                    </ToolbarItem>
+                    <WorkflowEdgeStyleButton
+                      straight={map.view.edgeStyle === "smoothstep"}
+                      disabled={layoutBusy || !onStraightEdges}
+                      onClick={() => {
+                        if (map.view.edgeStyle === "smoothstep")
+                          update(
+                            (m) => ({
+                              ...m,
+                              view: { ...m.view, edgeStyle: "default" },
+                            }),
+                            "연결선 모양 변경"
+                          )
+                        else onStraightEdges?.()
+                      }}
+                    />
+                    <ToolbarButton
+                      label="그룹 만들기"
+                      aria-pressed={selectingGroup}
+                      disabled={!map.tasks.some((t) => !t.subflowId)}
+                      onClick={() => {
+                        setEditingGroup(null)
+                        setSelectingGroup((v) => !v)
+                        setSelectedEdges([])
+                        setGroupSelection([])
+                      }}
+                    >
+                      <SquareDashedMousePointer />
+                    </ToolbarButton>
+                    <ToolbarButton
+                      label={layoutBusy ? "배치 중…" : "자동 배치"}
+                      onClick={onAutoLayout}
+                      disabled={layoutBusy || !onAutoLayout}
+                      aria-busy={layoutBusy}
+                    >
+                      {layoutBusy ? (
+                        <LoaderCircle className="animate-spin" />
+                      ) : (
+                        <BroomSparkles />
+                      )}
+                    </ToolbarButton>
+                  </ToolbarGroup>
+                </ToolbarCluster>
+              </Panel>
+              <Panel position="bottom-right" className="workflow-zoom">
+                <ToolbarCluster edge="end" placement="bottom" size="sm">
+                  <WorkflowZoomControls />
+                </ToolbarCluster>
               </Panel>
               {selectingGroup && (editingGroup === null || groupFormHidden) && (
-                <Panel position="top-center" className="subflow-selection-bar">
+                <Panel
+                  position="top-center"
+                  className="subflow-selection-bar glass-surface"
+                >
                   <span role="status">
                     {groupSelection.length ? (
                       <span
@@ -475,7 +465,10 @@ export function TaskMapView({
               )}
               {dropChoice && (
                 <Panel position="top-center">
-                  <div className="workflow-drop-choice" role="status">
+                  <div
+                    className="workflow-drop-choice glass-surface"
+                    role="status"
+                  >
                     연결할 입력을 선택하세요
                     <Button
                       variant="ghost"

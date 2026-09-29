@@ -12,13 +12,18 @@ import {
   TableProperties,
   RotateCw,
 } from "lucide-react"
-import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
+import {
+  ToolbarButton,
+  ToolbarCluster,
+  ToolbarGroup,
+  ToolbarText,
+} from "@/components/toolbar"
 import { Button } from "@/components/ui/button"
 import { stepPixel } from "@/lib/viewer-navigation"
 import type { Frame } from "@/lib/workbench"
 import { Blank } from "@/components/workbench-controls"
 
-import { RevealFile, ViewerToolButton, ViewerPopover } from "./controls"
+import { RevealFile, ViewerPopover } from "./controls"
 
 import type { ViewerViewport, ViewerMarker } from "./types"
 export type { ViewerViewport, ViewerMarker } from "./types"
@@ -108,45 +113,6 @@ export function ImageViewer({
       className="image-viewer @container/viewer"
       data-embedded={embedded}
     >
-      {!embedded && (
-        <header className="flex min-w-0 items-center justify-between gap-2">
-          <h2 className="min-w-0 truncate" title={frame?.label}>
-            {onChoose ? (
-              <Button
-                variant="ghost"
-                className="viewer-filename"
-                onClick={onChoose}
-                title="영상 변경"
-              >
-                <span>{frame?.label || "영상 선택"}</span>
-              </Button>
-            ) : (
-              frame?.label || "영상"
-            )}
-          </h2>
-          <ButtonGroup aria-label="파일 동작">
-            {onReload && (
-              <ViewerToolButton label="영상 다시 불러오기" onClick={onReload}>
-                <RotateCw />
-              </ViewerToolButton>
-            )}
-            {info && (
-              <ViewerPopover label="FITS 헤더" icon={TableProperties}>
-                <pre className="max-h-80 overflow-auto text-xs">
-                  {info.header}
-                </pre>
-              </ViewerPopover>
-            )}
-            {onCompare && (
-              <ViewerToolButton label="영상 비교" onClick={onCompare}>
-                <Columns2 />
-              </ViewerToolButton>
-            )}
-            {frame && <RevealFile id={frame.id} />}
-            {headerActions}
-          </ButtonGroup>
-        </header>
-      )}
       <div ref={box} className="viewer-image bg-muted">
         {!frame ? (
           <Blank>영상 선택</Blank>
@@ -264,61 +230,107 @@ export function ImageViewer({
           </div>
         )}
         {imageOverlay}
-        <ButtonGroup className="viewer-panel-switch" aria-label="영상 분석">
-          <ViewerDisplaySettings
-            info={info}
-            sharedRange={sharedRange}
-            range={range}
-            applyRange={applyRange}
-            resetRange={resetRange}
-            uid={uid}
-            stretch={stretch}
-            setStretch={setStretch}
-            rangeError={rangeError}
-            changeRange={changeRange}
-          />
-          {!selectionMode && (
-            <ViewerStatistics info={info} onStatistics={onStatistics} />
+        <div className="viewer-top-bar">
+          {!embedded && (
+            <h2 className="viewer-title" title={frame?.label}>
+              {onChoose ? (
+                <Button
+                  variant="ghost"
+                  className="viewer-filename glass-surface"
+                  onClick={onChoose}
+                  title="영상 변경"
+                >
+                  <span>{frame?.label || "영상 선택"}</span>
+                </Button>
+              ) : (
+                <span className="viewer-filename glass-surface">
+                  <span>{frame?.label || "영상"}</span>
+                </span>
+              )}
+            </h2>
           )}
-          {!onPick && <ViewerPixelProfile info={info} pixel={pixel} />}
-        </ButtonGroup>
+          <ToolbarCluster edge="end" size="sm" className="viewer-top-tools">
+            <ToolbarGroup label="영상 분석">
+              <ViewerDisplaySettings
+                info={info}
+                sharedRange={sharedRange}
+                range={range}
+                applyRange={applyRange}
+                resetRange={resetRange}
+                uid={uid}
+                stretch={stretch}
+                setStretch={setStretch}
+                rangeError={rangeError}
+                changeRange={changeRange}
+              />
+              {!selectionMode && (
+                <ViewerStatistics info={info} onStatistics={onStatistics} />
+              )}
+              {!onPick && <ViewerPixelProfile info={info} pixel={pixel} />}
+            </ToolbarGroup>
+            {!embedded && (
+              <ToolbarGroup label="파일 동작">
+                {onReload && (
+                  <ToolbarButton label="영상 다시 불러오기" onClick={onReload}>
+                    <RotateCw />
+                  </ToolbarButton>
+                )}
+                {info && (
+                  <ViewerPopover label="FITS 헤더" icon={TableProperties}>
+                    <pre className="max-h-80 overflow-auto text-xs">
+                      {info.header}
+                    </pre>
+                  </ViewerPopover>
+                )}
+                {onCompare && (
+                  <ToolbarButton label="영상 비교" onClick={onCompare}>
+                    <Columns2 />
+                  </ToolbarButton>
+                )}
+                {frame && <RevealFile id={frame.id} />}
+              </ToolbarGroup>
+            )}
+            {!embedded && headerActions && (
+              <ToolbarGroup label="보기">{headerActions}</ToolbarGroup>
+            )}
+          </ToolbarCluster>
+        </div>
         {navigationTools && (
-          <div className="viewer-zoom">
-            <ButtonGroup aria-label="확대 및 축소">
-              <ViewerToolButton
-                variant="outline"
+          <ToolbarCluster
+            edge="end"
+            placement="bottom"
+            size="sm"
+            className="viewer-zoom"
+          >
+            <ToolbarGroup label="확대 및 축소">
+              <ToolbarButton
                 label="축소"
                 disabled={!image}
                 onClick={() => zoom(1 / 1.25)}
               >
                 <Minus />
-              </ViewerToolButton>
-              <ButtonGroupText
-                render={<output aria-label="현재 배율" />}
-                className="min-w-16 justify-center tabular-nums"
-              >
-                {info ? `${Math.round(actualScale * 1000) / 10}%` : "—"}
-              </ButtonGroupText>
-              <ViewerToolButton
-                variant="outline"
+              </ToolbarButton>
+              <ToolbarText className="min-w-14 text-center">
+                <output aria-label="현재 배율">
+                  {info ? `${Math.round(actualScale * 1000) / 10}%` : "—"}
+                </output>
+              </ToolbarText>
+              <ToolbarButton
                 label="확대"
                 disabled={!image}
                 onClick={() => zoom(1.25)}
               >
                 <Plus />
-              </ViewerToolButton>
-            </ButtonGroup>
-            <ButtonGroup aria-label="영상 맞춤">
-              <ViewerToolButton
-                variant="outline"
+              </ToolbarButton>
+              <ToolbarButton
                 label="화면에 맞춤"
                 disabled={!image}
                 onClick={reset}
               >
                 <Scan />
-              </ViewerToolButton>
-            </ButtonGroup>
-          </div>
+              </ToolbarButton>
+            </ToolbarGroup>
+          </ToolbarCluster>
         )}
         <ViewerCoordinates
           coordinatesOpen={coordinatesOpen}

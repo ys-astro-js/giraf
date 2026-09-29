@@ -10,9 +10,9 @@
 /* Keep the output pane's scroll range stable while switching file types or loading. */
 .result-workspace > .result-preview {height:max(328px,calc(100cqi + 48px));overflow:hidden;}
 .result-workspace > .result-preview > .result-text {flex:1;max-height:none;}
-.result-preview-heading, .result-preview .image-viewer > header {display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;}
+.result-preview-heading {display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;}
 .result-preview-heading h3 {font-size:14px;font-weight:500;}
-.result-preview-heading > [role="group"], .result-preview .image-viewer > header > [role="group"] {flex-shrink:0;}
+.result-preview-heading > .toolbar-cluster {flex-shrink:0;}
 .result-preview > p, .result-preview > [role="alert"] {padding:12px;}
 .result-preview > button {align-self:flex-start;margin:0 12px 12px;}
 .result-preview img {max-width:100%;min-height:0;object-fit:contain;}

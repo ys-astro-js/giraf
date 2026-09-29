@@ -2,7 +2,6 @@
 .giraf-app { container-type: inline-size; }
 .workbench-toolbar {
   position: relative;
-  isolation: isolate;
   display: grid;
   grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
   align-items: center;
@@ -11,22 +10,6 @@
   min-width: 0;
   flex-shrink: 0;
   padding: 0 12px;
-}
-.workbench-toolbar::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background: color-mix(in oklch, var(--background) 50%, transparent);
-  border-bottom: 1px solid var(--border);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  opacity: 0;
-  transition: opacity 240ms ease-out;
-}
-.workbench-toolbar[data-background-visible="true"]::before {
-  opacity: 1;
 }
 @media (min-width: 768px) {
   .giraf-app { --toolbar-height: 56px; }
@@ -37,23 +20,12 @@
     pointer-events: none;
   }
   .workbench-toolbar > * { pointer-events: auto; }
-  .workbench-body [data-slot="sidebar-container"] {
-    top: var(--toolbar-height);
-    height: calc(100% - var(--toolbar-height));
-  }
+  /* Sidebars run under the floating toolbar, like the canvas does. */
+  .workbench-body [data-slot="sidebar-inner"] { padding-top: var(--toolbar-height); }
   .workbench-body .inspector-pane { padding-top: var(--toolbar-height); }
   .workbench-body .workflow-search ~ .map-viewport .react-flow__panel.top {
     top: var(--toolbar-height);
   }
-}
-@media (prefers-reduced-motion: reduce) {
-  .workbench-toolbar::before { transition-duration: 100ms; }
-}
-.toolbar-leading {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
 }
 .toolbar-status {
   display: flex;
@@ -74,12 +46,10 @@
   width: 100%;
   gap: 8px 2px;
   min-width: 0;
-  min-height: 36px;
+  min-height: 42px;
   max-width: 100%;
-  padding: 5px 12px;
-  border: 1px solid var(--border);
+  padding: 3px 12px;
   border-radius: 9999px;
-  background: var(--muted);
 }
 .toolbar-status-name { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .toolbar-status-progress { margin-inline-start: auto; flex-shrink: 0; white-space: nowrap; }

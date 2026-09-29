@@ -10,18 +10,16 @@ import { ParameterGroupNav } from "@/components/parameter-editor"
 import { taskDisplayName } from "@/lib/workbench"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 import {
-  X,
   Info,
   SquareArrowRightEnter,
   SquareArrowRightExit,
   SlidersVertical,
   Route,
-  Search,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
-import { Button } from "@/components/ui/button"
-import { SidebarHeader, SidebarInput } from "@/components/ui/sidebar"
+import { SearchField } from "@/components/search-field"
+import { SidebarHeader } from "@/components/ui/sidebar"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   type Catalog,
@@ -321,29 +319,13 @@ export function TaskInspector({
             </TabsList>
             {(activeTab ?? localTab) === "settings" && (
               <>
-                <div className="flex h-9 min-w-0 items-center gap-2">
-                  <div className="relative min-w-0 flex-1">
-                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <SidebarInput
-                      id="parameter-search"
-                      className="pl-9"
-                      aria-label="설정 검색"
-                      placeholder="이름 또는 설명 검색"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                    />
-                  </div>
-                  {query && (
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="검색 초기화"
-                      onClick={() => setQuery("")}
-                    >
-                      <X />
-                    </Button>
-                  )}
-                </div>
+                <SearchField
+                  id="parameter-search"
+                  label="설정 검색"
+                  placeholder="이름 또는 설명 검색"
+                  value={query}
+                  onValueChange={setQuery}
+                />
                 <ParameterGroupNav
                   groups={groups}
                   query={query}

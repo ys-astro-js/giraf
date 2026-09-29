@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { SearchField } from "@/components/search-field"
 import {
   Table,
   TableHeader,
@@ -43,11 +43,11 @@ export function AddTaskDialog({
         <DialogHeader>
           <DialogTitle>작업 추가</DialogTitle>
         </DialogHeader>
-        <Input
-          aria-label="추가할 작업 검색"
+        <SearchField
+          label="추가할 작업 검색"
           placeholder="작업 이름 검색"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onValueChange={setQuery}
         />
         <Table>
           <TableHeader>
