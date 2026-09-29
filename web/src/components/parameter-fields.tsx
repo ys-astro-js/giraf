@@ -5,6 +5,7 @@ import { Switch } from "@/components/ui/switch"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Choice, ParameterHelp } from "./workbench-controls"
 import type { Param, Values } from "@/lib/workbench"
+import { TvmarkParameterControl } from "./tvmark-parameter-control"
 
 const label = (p: Param) => p.name
 export function ParamControl({
@@ -12,13 +13,18 @@ export function ParamControl({
   value,
   onChange,
   id,
+  task,
 }: {
   p: Param
   value: unknown
   onChange: (value: string) => void
   id: string
+  task?: string
 }) {
   const v = String(value ?? "")
+  if (task === "images.tv.tvmark" && ["mark", "color", "frame", "pointsize", "txsize", "nxoffset", "nyoffset", "tolerance"].includes(p.name)) {
+    return <TvmarkParameterControl name={p.name} value={v} onChange={onChange} id={id} />
+  }
   return p.type === "b" ? (
     <Switch
       id={id}
@@ -58,6 +64,7 @@ export function ParameterTable({
   scope,
   filter = "",
   showInactive = false,
+  task,
 }: {
   parameters: Param[]
   values: Values
@@ -65,6 +72,7 @@ export function ParameterTable({
   scope: string
   filter?: string
   showInactive?: boolean
+  task?: string
 }) {
   const dependencies: Record<string, string> = {
     biassec: "overscan",
@@ -124,6 +132,7 @@ export function ParameterTable({
               )}
             </div>
             <ParamControl
+              task={task}
               p={p}
               id={id}
               value={values[p.name] ?? p.default}

@@ -60,6 +60,8 @@ import { useWorkflowDiagnostics } from "@/features/workbench/hooks/useWorkflowDi
 import { TaskInteractionDialog } from "@/features/workbench/dialogs/TaskInteraction"
 import { TaskConfirmationDialog } from "@/features/workbench/dialogs/TaskConfirmation"
 import { AssetDialog } from "@/features/workbench/dialogs/Asset"
+import { DaoeditViewer } from "@/features/viewer/DaoeditViewer"
+import { TvmarkViewer } from "@/features/viewer/TvmarkViewer"
 import { ConnectInputDialog } from "@/features/workbench/dialogs/ConnectInput"
 import { WorkflowConfirmationDialog } from "@/features/workbench/dialogs/WorkflowConfirmation"
 import { AddTaskDialog } from "@/features/workbench/dialogs/AddTask"
@@ -259,6 +261,10 @@ function App() {
     setPlan,
     start,
     pendingPayload,
+    daoedit,
+    setDaoedit,
+    tvmark,
+    setTvmark,
   } = useTaskExecution({
     setLastExecution,
     setJobs,
@@ -1067,9 +1073,11 @@ function App() {
           plan={plan}
           setPlan={setPlan}
           busy={busy}
-          start={start}
+          start={async (payload) => { await start(payload) }}
           pendingPayload={pendingPayload}
         />
+        {daoedit && <DaoeditViewer session={daoedit} onClose={() => setDaoedit(null)} onStart={start} />}
+        {tvmark && <TvmarkViewer session={tvmark} rows={rows} onClose={() => setTvmark(null)} />}
         {currentJob?.state === "waiting" &&
           currentJob.interaction?.state === "waiting" && (
             <TaskInteractionDialog

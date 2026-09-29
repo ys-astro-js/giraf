@@ -1,5 +1,6 @@
 /* Keep this import order: later feature rules refine earlier shared styles. */
 @import "./styles/theme.css";
+@import "./styles/shared/button.css";
 @import "./styles/workflow/canvas.css";
 @import "./styles/inspector/panel.css";
 @import "./styles/workbench/layout.css";

@@ -18,7 +18,7 @@
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: color-mix(in oklch, var(--background) 80%, transparent);
+  background: color-mix(in oklch, var(--background) 50%, transparent);
   border-bottom: 1px solid var(--border);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);

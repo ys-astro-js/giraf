@@ -45,6 +45,7 @@ export function InspectorSettings({
     <TabsContent value="settings" className="inspector-settings">
       <div className="parameter-editor-body">
         <ParameterEditorFields
+          task={spec.name}
           groups={groups}
           query={query}
           changedOnly={false}

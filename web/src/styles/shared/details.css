@@ -22,8 +22,8 @@
 .inspector-info-body > * { flex-shrink: 0; }
 .inspector-info-actions { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--border); }
 .workflow-selection-toggle { position: relative; width: 56px; padding-inline: 0; transition: width 180ms ease-out, border-radius 180ms ease-out; }
-.workflow-menu-transition { width: 32px; margin-inline-end: 8px; opacity: 1; filter: blur(0); visibility: visible; transition: width 180ms ease-out, margin-inline-end 180ms ease-out, opacity 180ms ease-out, filter 180ms ease-out, visibility 0s; }
-.workflow-menu-transition[data-hidden="true"] { width: 0; margin-inline-end: 0; opacity: 0; filter: blur(4px); visibility: hidden; pointer-events: none; transition: width 180ms ease-out, margin-inline-end 180ms ease-out, opacity 180ms ease-out, filter 180ms ease-out, visibility 0s 180ms; }
+.workflow-menu-transition { width: 32px; margin-inline-end: 8px; transition: width 180ms ease-out, margin-inline-end 180ms ease-out; }
+.workflow-menu-transition[data-hidden="true"] { width: 0; margin-inline-end: 0; pointer-events: none; }
 .workflow-selection-toggle[data-selecting="true"] { width: 32px; }
 .workflow-selection-label { filter: blur(0); transition: opacity 180ms ease-out, filter 180ms ease-out, transform 180ms ease-out; }
 .workflow-selection-close { position: absolute; opacity: 0; filter: blur(4px); transform: rotate(-90deg) scale(.6); transition: opacity 180ms ease-out, filter 180ms ease-out, transform 180ms ease-out; }

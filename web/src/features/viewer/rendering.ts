@@ -1,5 +1,6 @@
 import type { ImageInfo } from "@/lib/image-queries"
 import type { ViewerMarker } from "./types"
+import { drawTvmark } from "./tvmark-rendering"
 type Point = { x: number; y: number }
 type Size = { width: number; height: number }
 type Placement = Point & { w: number; h: number }
@@ -74,7 +75,11 @@ function drawMarkers(
   markers: ViewerMarker[],
   selectedMarker: string | undefined
 ) {
-  for (const marker of markers) {
+  for (const [index, marker] of markers.entries()) {
+    if (marker.appearance) {
+      drawTvmark(ctx, marker, markers[index - 1], { x, y, w, h }, info)
+      continue
+    }
     const mx = x + ((marker.x - 0.5) / info.width) * w
     const my = y + ((info.height - marker.y + 0.5) / info.height) * h
     ctx.save()

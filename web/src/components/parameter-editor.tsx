@@ -9,11 +9,13 @@ export function ParameterEditorFields({
   query,
   changedOnly,
   hasOtherResults = false,
+  task,
 }: {
   groups: ParameterGroup[]
   query: string
   changedOnly: boolean
   hasOtherResults?: boolean
+  task?: string
 }) {
   const visible = filterParameterGroups(groups, query, changedOnly)
   return (
@@ -26,6 +28,7 @@ export function ParameterEditorFields({
         >
           <h3>{group.label}</h3>
           <ParameterTable
+            task={group.id === "task" ? task : undefined}
             parameters={group.parameters}
             values={group.values}
             change={group.change}

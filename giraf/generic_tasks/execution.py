@@ -36,6 +36,8 @@ class GenericTaskRun:
         write_scripts(self.job, self.m, self.calls, only)
 
     def execute(self):
+        if self.m.get('task') == 'images.tv.tvmark':
+            raise ValueError('tvmark는 내부 FITS 뷰어 전용입니다. GIRAF 화면을 새로고침한 뒤 tvmark 노드를 개별 실행해 주세요.')
         if self.spec.get('executor') == 'image-list':
             from ..image_lists import execute_image_list
             return execute_image_list(self)
@@ -61,12 +63,21 @@ class GenericTaskRun:
             text += '\n' + captured
             failed = bool(code or 'GIRAF_GENERIC_DONE' not in text or re.search(r'(?im)^\s*(?:ERROR|PANIC|FATAL|\*\*.*Syntax error)\b', text.replace('\x07', '')))
             missing = [p['label'] for p in expected if not (self.job / p['file']).is_file()]
-            failed = failed or bool(missing)
+            # IRAF may return normally without creating a predicted output (for
+            # example phot with no coordinates). Product presence and per-star
+            # error flags do not override the native task's execution status.
+            message = text[-3000:] if failed else 'IRAF task 완료'
+            if missing:
+                notice = '출력 파일이 없습니다: ' + ', '.join(missing)
+                message += '\n' + notice
+                with (self.job / 'task.log').open('a') as log:
+                    log.write('WARNING: ' + notice + '\n')
             ids = [p['source'] for p in expected if 'source' in p] or [r['id'] for r in self.m['rows']] or [self.spec['name']]
-            outcomes += [dict(source=id, label=id, state='failed' if failed else 'processed', message=('출력 파일이 없습니다: ' + ', '.join(missing)) if missing else text[-3000:] if failed else 'IRAF task 완료') for id in dict.fromkeys(ids)]
+            outcomes += [dict(source=id, label=id, state='failed' if failed else 'processed', message=message) for id in dict.fromkeys(ids)]
             if not failed:
                 for p in expected:
-                    products.append(publish_product(self.job, p, len(products)))
+                    if (self.job / p['file']).is_file():
+                        products.append(publish_product(self.job, p, len(products)))
             atomic_json(self.job / 'outcomes.json', outcomes)
         products.append(publish_product(self.job, dict(file='task.log', label=self.spec['taskName'] + '-results.txt', asset='text', role='$log'), len(products)))
         atomic_json(self.job / 'products.json', products)

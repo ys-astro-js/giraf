@@ -5,7 +5,9 @@ import {
 } from "@/features/workbench/types"
 import { type ExecutionReference } from "@/lib/execution-status"
 import { useRef, useState } from "react"
-import { api, type Catalog, type Workspace, type Job } from "@/lib/workbench"
+import { api, type Catalog, type Workspace, type Job, type Manifest } from "@/lib/workbench"
+import { daoeditSession, type DaoeditSession } from "@/lib/daoedit"
+import { parseTvmark, tvmarkPreview, tvmarkSource, tvmarkStyle, type TvmarkSession } from "@/lib/tvmark"
 import { payloadFor, type TaskMap } from "@/lib/task-map"
 import type * as React from "react"
 
@@ -40,6 +42,29 @@ export function useTaskExecution({
   const [preparingName, setPreparingName] = useState("")
   const [checking, setChecking] = useState(false)
   const runLock = useRef(false)
+  const [daoedit, setDaoedit] = useState<DaoeditSession | null>(null)
+  const [tvmark, setTvmark] = useState<TvmarkSession | null>(null)
+
+  async function openTvmark(manifest: Manifest) {
+    const coords = tvmarkPreview(manifest)
+    if (!coords) return false
+    // Download the complete list: the text preview endpoint truncates long files.
+    async function read(id: string) {
+      const response = await fetch(`/api/download?id=${encodeURIComponent(id)}`)
+      if (!response.ok) throw new Error("좌표 또는 표시 설정 파일을 읽지 못했습니다.")
+      return response.text()
+    }
+    const [text, radii, lengths, job] = await Promise.all([
+      read(coords.id),
+      manifest.inputs.radii?.[0] ? read(manifest.inputs.radii[0]) : String(manifest.parameters.radii ?? "0"),
+      manifest.inputs.lengths?.[0] ? read(manifest.inputs.lengths[0]) : String(manifest.parameters.lengths ?? "0"),
+      coords.job ? api<Job>(`job?id=${encodeURIComponent(coords.job)}&details=1`) : undefined,
+    ])
+    const appearance = tvmarkStyle(manifest.parameters, radii, lengths)
+    const markers = parseTvmark(text, manifest.parameters).map(marker => ({ ...marker, appearance }))
+    setTvmark({ coords, markers, frame: job ? tvmarkSource(coords.id, job) : undefined })
+    return true
+  }
 
   async function start(payload: unknown) {
     setLastExecution(undefined)
@@ -52,6 +77,7 @@ export function useTaskExecution({
       setTrayOpen(true)
       publishJob(j.manifest?.instanceId || map.view.selected, j)
       setPlan(null)
+      return j
     } catch (e) {
       setTaskError((e as Error).message)
     } finally {
@@ -72,6 +98,12 @@ export function useTaskExecution({
         workingDirectory: workspace.folder,
       }
       const p = await api<Plan>("task-validate", payload)
+      if (await openTvmark(p.effective as Manifest)) return
+      const viewer = daoeditSession(payload, p.effective as Manifest)
+      if (viewer) {
+        setDaoedit(viewer)
+        return
+      }
       if (p.filePlan.destructive) {
         setPendingPayload(payload)
         setPlan(p)
@@ -98,5 +130,9 @@ export function useTaskExecution({
     setPlan,
     start,
     pendingPayload,
+    daoedit,
+    setDaoedit,
+    tvmark,
+    setTvmark,
   }
 }

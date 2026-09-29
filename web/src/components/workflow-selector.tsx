@@ -92,7 +92,7 @@ export function WorkflowSelector(props: Props) {
           <div className="flex shrink-0 items-center" aria-label="현재 워크플로우 도구">
             <div className="workflow-menu-transition" data-hidden={selecting} inert={selecting} aria-hidden={selecting}>
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="outline" size="icon-sm" />} aria-label="워크플로우 메뉴" title="워크플로우 메뉴" disabled={busy}><Ellipsis /></DropdownMenuTrigger>
+              <DropdownMenuTrigger render={<Button variant="outline" size="icon-sm" hidden={selecting} />} aria-label="워크플로우 메뉴" title="워크플로우 메뉴" disabled={busy}><Ellipsis /></DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="workflow-dropdown-transition">
                 <DropdownMenuGroup>
                   <DropdownMenuItem onClick={() => { setName(props.document?.name || "새 워크플로우"); setEditing(true) }}><TextCursorInput />이름 변경</DropdownMenuItem>

@@ -132,18 +132,17 @@ export function SubflowEditor({
         </p>
       )}
       <div className="subflow-editor-actions">
-        {group && (
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              update((m) => dissolveSubflow(m, id), "서브플로우 해제")
-              close()
-            }}
-          >
-            그룹 해제
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="outline"
+          hidden={!group}
+          onClick={() => {
+            update((m) => dissolveSubflow(m, id), "서브플로우 해제")
+            close()
+          }}
+        >
+          그룹 해제
+        </Button>
         <Button
           type="submit"
           disabled={!name.trim() || (!group && !taskIds.length)}

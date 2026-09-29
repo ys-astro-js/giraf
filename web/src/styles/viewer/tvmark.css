@@ -1,0 +1,11 @@
+.tvmark-dialog { display: flex; flex-direction: column; gap: 0; height: 94dvh; max-width: min(1120px, calc(100vw - 32px)); padding: 0; overflow: hidden; }
+.tvmark-header { display: flex; align-items: center; gap: 16px; padding: 12px 64px 12px 20px; border-bottom: 1px solid var(--border); }
+.tvmark-image { flex: 1; min-height: 0; padding: 12px; }
+.tvmark-image .image-viewer { height: 100%; }
+.tvmark-image .viewer-image { flex: 1; min-height: 0; aspect-ratio: auto; }
+@media (max-width: 600px) {
+  .tvmark-dialog { height: 96dvh; max-width: calc(100vw - 16px); }
+  .tvmark-header { flex-wrap: wrap; gap: 8px; padding: 12px 56px 12px 16px; }
+  .tvmark-header > span { flex-basis: 100%; }
+  .tvmark-image { padding: 8px; }
+}

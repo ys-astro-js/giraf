@@ -1,0 +1,34 @@
+/* Keep hidden outline buttons rendered until their blur-out finishes. */
+.button-outline-motion {
+  --button-presence-blur: 4px;
+  filter: blur(0);
+  transition-duration: 180ms;
+  transition-timing-function: ease-out;
+  transition-behavior: allow-discrete;
+}
+
+.button-outline-motion[hidden] {
+  display: none;
+  opacity: 0;
+  filter: blur(var(--button-presence-blur));
+  pointer-events: none;
+}
+
+@starting-style {
+  .button-outline-motion {
+    opacity: 0;
+    filter: blur(var(--button-presence-blur));
+  }
+}
+
+/* A retained transition layer already animates its children as a group. */
+.status-transition-layer .button-outline-motion {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button-outline-motion {
+    --button-presence-blur: 0px;
+    transition-duration: 120ms;
+  }
+}
