@@ -10,6 +10,8 @@ from pathlib import Path
 import re
 import socket
 import struct
+import subprocess
+import sys
 import tempfile
 import threading
 
@@ -67,7 +69,7 @@ class DisplayServer:
         self.socket = None
         self.palette = palette()
         # Jobs display staged copies (input/s00000.fits); map back to the original name.
-        self.source_name = source_name or (lambda alias: None)
+        self.source_name = source_name or (lambda alias, directory: None)
 
     @property
     def device(self):
@@ -114,7 +116,7 @@ class DisplayServer:
             if read:
                 connection.sendall(self.read_wcs(z).encode().ljust(WCS_BYTES, b'\0')[:WCS_BYTES])
             else:
-                self.write_wcs(z, t, receive(connection, size))
+                self.write_wcs(z, t, receive(connection, size), lambda: peer_directory(connection))
         elif kind == MEMORY:
             if read:
                 connection.sendall(self.read_memory(z, x & XY_MASK, y & XY_MASK, size))
@@ -146,22 +148,23 @@ class DisplayServer:
             frame = self.frames.get(self.numbers(mask)[0])
             return frame.wcs if frame and frame.wcs else '[NOSUCHFRAME]\n1.0 0.0 0.0 -1.0 1.0 1.0 0.0 0.0 1\n'
 
-    def write_wcs(self, mask, t, data):
+    def write_wcs(self, mask, t, data, directory=lambda: None):
+        wcs = data.split(b'\0', 1)[0].decode(errors='replace')
+        title = self.title(wcs, directory)
         with self.lock:
             self.config = (t & 0o777) + 1
             for number in self.numbers(mask):
                 self.current = number
                 frame = self.frame(number)
-                frame.wcs = data.split(b'\0', 1)[0].decode(errors='replace')
-                frame.title = self.title(frame.wcs)
+                frame.wcs, frame.title = wcs, title
                 frame.version += 1
 
-    def title(self, wcs):
-        title = describe(wcs)['title']
-        name, sep, rest = title.partition(' - ')
-        alias = name.strip().split('[', 1)[0]
-        original = self.source_name(alias) if re.fullmatch(r'input/s\d{5}\.\w+', alias) else None
-        return (original + name.strip()[len(alias):] + sep + rest) if original else title
+    def title(self, wcs, directory=lambda: None):
+        """IRAF writes `name[section] - image title`; untitled images end in ' -'."""
+        title = re.sub(r'\s+-\s*$', '', describe(wcs)['title'])
+        match = re.match(r'(input/s\d{5}\.\w+)(.*)', title)
+        original = self.source_name(match[1], directory()) if match else None
+        return original + match[2] if original else title
 
     def read_memory(self, mask, x, y, size):
         with self.lock:
@@ -194,12 +197,40 @@ class DisplayServer:
                      title=f.title, transform=describe(f.wcs)['transform'])
                 for n, f in sorted(self.frames.items()) if f.pixels.any()])
 
+    def info(self, number):
+        """Viewer metadata for a rendered 8-bit frame (frame-buffer levels, not data)."""
+        with self.lock:
+            frame = self.existing(number)
+            height, width = frame.pixels.shape
+            levels = frame.pixels
+            return dict(width=width, height=height, low=0, high=255, mean=float(levels.mean()),
+                        median=float(np.median(levels)), std=float(levels.std()),
+                        min=int(levels.min()), max=int(levels.max()), header=frame.wcs)
+
+    def pixel(self, number, x, y):
+        """A viewer position (1-based, y up) and the IRAF image pixel shown there."""
+        with self.lock:
+            frame = self.existing(number)
+            height, width = frame.pixels.shape
+            if not (1 <= x <= width and 1 <= y <= height):
+                raise ValueError('영상 밖의 좌표입니다.')
+            column, row = x - 1, height - y
+            transform = describe(frame.wcs)['transform']
+            image = None
+            if transform:
+                a, b, c, d, tx, ty = transform
+                image = dict(x=round(a * column + c * row + tx, 2), y=round(b * column + d * row + ty, 2))
+            return dict(x=x, y=y, value=None, row=[], column=[], image=image)
+
+    def existing(self, number):
+        frame = self.frames.get(number)
+        if frame is None:
+            raise KeyError(f'디스플레이 프레임 {number}이 없습니다.')
+        return frame
+
     def png(self, number):
         with self.lock:
-            frame = self.frames.get(number)
-            if frame is None:
-                raise KeyError(f'디스플레이 프레임 {number}이 없습니다.')
-            image = Image.fromarray(frame.pixels.copy(), 'P')
+            image = Image.fromarray(self.existing(number).pixels.copy(), 'P')
         image.putpalette(self.palette)
         out = io.BytesIO()
         image.save(out, format='PNG')
@@ -227,8 +258,41 @@ def receive(connection, size):
 SERVER = None
 
 
+def display_number(id):
+    """Viewer asset ids for display frames: `display:N`."""
+    if isinstance(id, str) and id.startswith('display:'):
+        return int(id.split(':', 1)[1])
+    return None
+
+
+def peer_directory(connection):
+    """Working directory of the IRAF process writing to the display: its job folder."""
+    try:
+        if sys.platform == 'darwin':
+            pid = struct.unpack('i', connection.getsockopt(0, 0x002, 4))[0]  # SOL_LOCAL, LOCAL_PEERPID
+            listing = subprocess.run(['lsof', '-a', '-p', str(pid), '-d', 'cwd', '-Fn'],
+                                     capture_output=True, text=True, timeout=2).stdout
+            return next(Path(line[1:]) for line in listing.splitlines() if line.startswith('n'))
+        pid = struct.unpack('3i', connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[0]
+        return Path(os.readlink(f'/proc/{pid}/cwd'))
+    except (OSError, ValueError, AttributeError, StopIteration, struct.error, subprocess.SubprocessError):
+        return None
+
+
+def source_name(alias, directory):
+    """Original name of a staged input, from the writing job's own sources.json."""
+    import json
+    for folder in [directory, *directory.parents[:2]] if directory else []:
+        try:
+            sources = json.loads((folder / 'sources.json').read_text())
+        except (OSError, ValueError):
+            continue
+        return next((Path(s['original']).name for s in sources if s.get('alias') == alias), None)
+    return running_source_name(alias)
+
+
 def running_source_name(alias):
-    """Original file name of a staged input in the one active job using it."""
+    """Fallback without a known writer: the one active job using the alias."""
     import json
     from .jobs import RUNS
     names = set()
@@ -259,7 +323,7 @@ def start_display():
     if SERVER is None:
         remove_stale_sockets()
         from .task_capabilities import installed_root
-        SERVER = DisplayServer(configs=read_configs(installed_root()), source_name=running_source_name).start()
+        SERVER = DisplayServer(configs=read_configs(installed_root()), source_name=source_name).start()
         os.environ['IMTDEV'] = SERVER.device
     return SERVER
 
@@ -271,3 +335,10 @@ def stop_display():
         if os.environ.get('IMTDEV') == SERVER.device:
             del os.environ['IMTDEV']
         SERVER = None
+
+
+def display_number(id):
+    """Viewer asset ids for display frames: `display:N`."""
+    if isinstance(id, str) and id.startswith('display:'):
+        return int(id.split(':', 1)[1])
+    return None

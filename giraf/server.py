@@ -25,7 +25,7 @@ from starlette.concurrency import run_in_threadpool
 from .api_contract import request_payload, LocalOriginMiddleware, validation_error, api_error, http_error
 from .workflow_preferences import document_action, initial_preferences
 from .image_rendering import image_info, image_png, image_pixel
-from .display import start_display, stop_display
+from .display import display_number, start_display, stop_display
 from .workflow_documents import WorkflowDocuments
 from .jobs import ROOT, RUNS, start, status, atomic_json
 from .model import Settings, inspect_file, scan, validate
@@ -425,17 +425,25 @@ async def alignment_star_endpoint(request: Request):
 
 async def info_endpoint(request: Request):
     q = request.query_params
+    if (frame := display_number(q['id'])) is not None:
+        return JSONResponse(start_display().info(frame))
     return JSONResponse(await run_in_threadpool(image_info, get_file(q['id'])))
 
 
 async def image_endpoint(request: Request):
     q = request.query_params
+    if (frame := display_number(q['id'])) is not None:
+        # Display frames are already rendered by IRAF; stretch does not apply.
+        png = await run_in_threadpool(start_display().png, frame)
+        return Response(png, media_type='image/png', headers={'Cache-Control': 'no-store'})
     png = await run_in_threadpool(image_png, get_file(q['id']), q.get('low'), q.get('high'), q.get('stretch', 'asinh'))
     return Response(png, media_type='image/png')
 
 
 async def pixel_endpoint(request: Request):
     q = request.query_params
+    if (frame := display_number(q['id'])) is not None:
+        return JSONResponse(start_display().pixel(frame, int(q['x']), int(q['y'])))
     return JSONResponse(image_pixel(get_file(q['id']), int(q['x']), int(q['y'])))
 
 
@@ -530,12 +538,6 @@ async def display_endpoint(request: Request):
     return JSONResponse(start_display().state())
 
 
-async def display_frame_endpoint(request: Request):
-    frame = int(request.query_params.get('frame', '1'))
-    png = await run_in_threadpool(start_display().png, frame)
-    return Response(png, media_type='image/png', headers={'Cache-Control': 'no-store'})
-
-
 api_routes = [
     Route('/catalog', catalog_endpoint, methods=['GET'], name='catalog'),
     Route('/workflow-diagnostics', workflow_diagnostics_endpoint, methods=['POST'], name='workflow-diagnostics'),
@@ -570,7 +572,6 @@ api_routes = [
     Route('/reveal', reveal_endpoint, methods=['POST'], name='reveal'),
     Route('/download', download_endpoint, methods=['GET'], name='download'),
     Route('/display', display_endpoint, methods=['GET'], name='display'),
-    Route('/display-frame', display_frame_endpoint, methods=['GET'], name='display-frame'),
 ]
 
 app = Starlette(

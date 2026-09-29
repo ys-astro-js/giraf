@@ -17,7 +17,9 @@ import {
 } from "@/components/toolbar"
 import { SearchField } from "@/components/search-field"
 import { WorkflowEdge } from "@/components/workflow-edge"
-import { useMemo, useSyncExternalStore } from "react"
+import { useMemo, useState, useSyncExternalStore } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { displayQueryOptions } from "@/lib/display"
 import {
   ConnectionLineType,
   Background,
@@ -34,6 +36,7 @@ import {
   LocateFixed,
   Unplug,
   Terminal,
+  Monitor,
   X,
 } from "lucide-react"
 import { diagnostics } from "@/lib/diagnostics"
@@ -82,6 +85,8 @@ export function TaskMapView({
   workflowBusy,
   runDisabled,
 }: TaskMapViewProps) {
+  const [displayOpen, setDisplayOpen] = useState(true)
+  const hasDisplay = !!useQuery(displayQueryOptions).data?.frames.length
   const diagnosticEntries = useSyncExternalStore(
     diagnostics.subscribe,
     diagnostics.getSnapshot,
@@ -405,6 +410,15 @@ export function TaskMapView({
                         <BroomSparkles />
                       )}
                     </ToolbarButton>
+                    <ToolbarItem hidden={!hasDisplay}>
+                      <ToolbarButton
+                        label="IRAF 디스플레이"
+                        aria-pressed={displayOpen}
+                        onClick={() => setDisplayOpen((open) => !open)}
+                      >
+                        <Monitor />
+                      </ToolbarButton>
+                    </ToolbarItem>
                   </ToolbarGroup>
                 </ToolbarCluster>
               </Panel>
@@ -486,7 +500,7 @@ export function TaskMapView({
           </WorkflowContext.Provider>
         </div>
       )}
-      <DisplayWindow />
+      <DisplayWindow open={displayOpen} />
     </section>
   )
 }

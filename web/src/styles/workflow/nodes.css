@@ -86,6 +86,14 @@
 .workflow-search { position:absolute; inset-block-end:12px; inset-inline:0; margin-inline:auto; z-index:6; width:min(240px, calc(100% - 300px)); min-width:120px; }
 .workflow-search .search-field { height:38px; }
 .map-workspace { container-type:inline-size; }
+/* A narrow canvas cannot fit tools, search and zoom in one row: search rises above it. */
+@container (max-width: 520px) {
+  /* Left-aligned so it ends before the minimap (96px + 12px inset + 8px gap). */
+  .workflow-search { inset-block-end:58px; inset-inline:12px auto; margin-inline:0; width:calc(100% - 140px); }
+}
+@media (pointer:coarse) {
+  @container (max-width: 520px) { .workflow-search { inset-block-end:70px; } }
+}
 .map-viewport .workflow-tools, .map-viewport .workflow-zoom { margin:12px; }
 @media (pointer:coarse) {
   .workflow-search .search-field { height:50px; }
