@@ -161,10 +161,10 @@
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
-/* Over content, a clear top bar that holds something (a title, a control
-   beyond the pill) blurs what runs beneath it, strongest at the window's
-   edge and fading out toward the content. Fullscreen, the band is the
-   app's bar, which always holds controls. */
+/* Over content, a clear top bar that carries a title blurs what runs
+   beneath it, strongest at the window's edge and fading out toward the
+   content; controls alone float on the content. Fullscreen, the title sits
+   in the app's bar, which the band then covers. */
 .window-bar-blur {
   display: none;
   position: absolute;
@@ -174,16 +174,10 @@
 .dockview-theme-giraf
   .dv-groupview:has(.dock-window[data-canvas]):not(
     :has(.dv-tabs-container > .dv-tab + .dv-tab)
-  ):has(
-    :is(.window-title-slot, .window-toolbar-slot)
-      :is(
-        .window-title:not([data-inactive]),
-        .toolbar-slot[data-hidden="false"],
-        .window-toolbar-cluster:not([data-inactive]) > :is(button, .search-field)
-      )
-  )
+  ):has(.window-title-slot .window-title:not([data-inactive]))
   .window-bar-blur,
-.dockview-theme-giraf
+.giraf-app:has(.workbench-toolbar .window-title:not([data-inactive]))
+  .dockview-theme-giraf
   .dv-groupview[data-fullscreen]:has(.dock-window[data-canvas]):not(
     :has(.dv-tabs-container > .dv-tab + .dv-tab)
   )
