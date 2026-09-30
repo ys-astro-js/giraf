@@ -27,8 +27,8 @@ import { Blank } from "@/components/workbench-controls"
 import { RevealFile, ViewerPopover } from "./controls"
 import { WindowToolbar } from "@/features/dock/WindowToolbar"
 
-import type { ViewerViewport, ViewerMarker, ViewerChrome } from "./types"
-export type { ViewerViewport, ViewerMarker, ViewerChrome } from "./types"
+import type { ViewerViewport, ViewerMarker } from "./types"
+export type { ViewerViewport, ViewerMarker } from "./types"
 export function ImageViewer({
   frame,
   onPick,
@@ -46,7 +46,6 @@ export function ImageViewer({
   navigationTools = true,
   imageOverlay,
   headerActions,
-  chrome,
   analysis = true,
   revision,
   windowBars = false,
@@ -67,8 +66,6 @@ export function ImageViewer({
   navigationTools?: boolean
   imageOverlay?: React.ReactNode
   headerActions?: React.ReactNode
-  /** A host window's own controls, placed in the same floating row as the viewer tools. */
-  chrome?: ViewerChrome
   /** Display, statistics and profile tools; off for images IRAF already rendered. */
   analysis?: boolean
   /** Reloads the image without resetting the view when a live frame changes. */
@@ -320,9 +317,7 @@ export function ImageViewer({
           </>
         ) : (
           <div className="viewer-top-bar">
-            {chrome?.title ? (
-              <div className="viewer-title">{chrome.title}</div>
-            ) : !embedded ? (
+            {!embedded ? (
               <h2 className="viewer-title" title={frame?.label}>
                 {onChoose ? (
                   <Button
@@ -342,7 +337,7 @@ export function ImageViewer({
             ) : (
               <span />
             )}
-            <div className="viewer-top-center">{chrome?.center}</div>
+            <div className="viewer-top-center" />
             <ToolbarCluster edge="end" size="sm" className="viewer-top-tools">
               {analysisTools}
               <ToolbarSpacer />
@@ -375,12 +370,6 @@ export function ImageViewer({
                 <>
                   <ToolbarSpacer />
                   <ToolbarGroup label="보기">{headerActions}</ToolbarGroup>
-                </>
-              )}
-              {chrome?.actions && (
-                <>
-                  <ToolbarSpacer />
-                  {chrome.actions}
                 </>
               )}
             </ToolbarCluster>

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { X } from "lucide-react"
 import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
 import { Blank } from "@/components/workbench-controls"
 import { toast } from "@/components/ui/toast"
 import { usePanel } from "@/features/dock/context"
-import { revealPanel } from "@/features/dock/store"
+import { registerCloseAction, revealPanel } from "@/features/dock/store"
+import { WindowTitle, WindowToolbar } from "@/features/dock/WindowToolbar"
 import { ImageViewer } from "./ImageViewer"
 import {
   displayQueryOptions,
@@ -32,6 +32,22 @@ export function DisplayPanel() {
     else if (hadFrames.current) panel?.api.close()
   }, [frames.length, panel])
 
+  // Closing the window ends IRAF's display session, like closing ds9.
+  useEffect(
+    () =>
+      panel &&
+      registerCloseAction(panel.id, () => {
+        api<DisplayState>("display-close", {})
+          .then((state) =>
+            queryClient.setQueryData(displayQueryOptions.queryKey, state)
+          )
+          .catch((error: Error) =>
+            toast.add({ title: error.message, type: "error" })
+          )
+      }),
+    [panel, queryClient]
+  )
+
   if (!frames.length)
     return (
       <div className="viewer-window">
@@ -42,54 +58,38 @@ export function DisplayPanel() {
   const chosen = choice?.current === current ? choice?.frame : undefined
   const frame = frames.find((f) => f.frame === (chosen ?? current)) || frames[0]
   const row = displayRow(frame)
-  async function close() {
-    try {
-      queryClient.setQueryData<DisplayState>(
-        displayQueryOptions.queryKey,
-        await api<DisplayState>("display-close", {})
-      )
-    } catch (error) {
-      toast.add({ title: (error as Error).message, type: "error" })
-    }
-  }
   return (
     <div className="viewer-window">
+      <WindowTitle
+        title={row.label}
+        subtitle={`프레임 ${frame.frame}`}
+        tooltip={row.label}
+      />
+      {frames.length > 1 && (
+        <WindowToolbar>
+          <ToolbarGroup label="디스플레이 프레임">
+            {frames.map((f) => (
+              <ToolbarButton
+                key={f.frame}
+                label={`프레임 ${f.frame}`}
+                aria-pressed={f.frame === frame.frame}
+                className="tabular-nums"
+                onClick={() => setChoice({ frame: f.frame, current })}
+              >
+                {f.frame}
+              </ToolbarButton>
+            ))}
+          </ToolbarGroup>
+        </WindowToolbar>
+      )}
       <div className="viewer-grid">
         <ImageViewer
           key={row.id}
           frame={row}
           embedded
+          windowBars
           analysis={false}
           revision={frame.version}
-          chrome={{
-            title: (
-              <span className="viewer-filename glass-surface" title={row.label}>
-                <span>{row.label}</span>
-              </span>
-            ),
-            center: frames.length > 1 && (
-              <ToolbarGroup label="디스플레이 프레임" size="sm">
-                {frames.map((f) => (
-                  <ToolbarButton
-                    key={f.frame}
-                    label={`프레임 ${f.frame}`}
-                    aria-pressed={f.frame === frame.frame}
-                    className="tabular-nums"
-                    onClick={() => setChoice({ frame: f.frame, current })}
-                  >
-                    {f.frame}
-                  </ToolbarButton>
-                ))}
-              </ToolbarGroup>
-            ),
-            actions: (
-              <ToolbarGroup label="디스플레이">
-                <ToolbarButton label="디스플레이 프레임 닫기" onClick={close}>
-                  <X />
-                </ToolbarButton>
-              </ToolbarGroup>
-            ),
-          }}
         />
       </div>
     </div>

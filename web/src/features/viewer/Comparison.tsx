@@ -5,7 +5,6 @@ import { Columns2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { Frame } from "@/lib/workbench"
-import type { ViewerChrome } from "./types"
 
 import { ViewerToolButton } from "./controls"
 
@@ -17,9 +16,7 @@ export function ViewerWorkspace({
   rows,
   onChoose,
   onStatistics,
-  chrome,
 }: {
-  chrome?: ViewerChrome
   comparisonInHeader?: boolean
   /** A lone image puts its tools in the host window's bars. */
   windowBars?: boolean
@@ -104,7 +101,6 @@ export function ViewerWorkspace({
             sharedRange={range}
             embedded={ids.length === 1}
             onStatistics={onStatistics}
-            chrome={ids.length === 1 ? chrome : undefined}
             windowBars={windowBars && ids.length === 1}
             onChoose={() => onChoose(id === ids[1])}
           />

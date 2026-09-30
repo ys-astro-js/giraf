@@ -120,6 +120,7 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     icon: Monitor,
     component: DisplayPanel,
     home: "float",
+    canvas: true,
     closable: true,
   },
 }

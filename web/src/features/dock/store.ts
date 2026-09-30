@@ -345,11 +345,21 @@ export function toggleLock(panel: IDockviewPanel) {
   saveLayout()
 }
 
+/** What closing a tab also ends, such as IRAF's display session. */
+const closeActions = new Map<string, () => void>()
+export function registerCloseAction(panelId: string, action: () => void) {
+  closeActions.set(panelId, action)
+  return () => {
+    if (closeActions.get(panelId) === action) closeActions.delete(panelId)
+  }
+}
+
 /**
  * Document-like tabs and the extra tabs a lock opened close for good;
  * built-in tabs wait in the tray, since nothing else brings them back.
  */
 export function closeTab(panel: IDockviewPanel) {
+  closeActions.get(panel.id)?.()
   const component = panel.view.contentComponent
   const disposable =
     !!PANELS[component as PanelId]?.closable || panel.id !== component
