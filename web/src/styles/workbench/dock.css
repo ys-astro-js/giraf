@@ -115,7 +115,7 @@
   flex-wrap: wrap;
   align-items: center;
   height: auto;
-  padding: 6px 8px 0;
+  padding: 6px 8px 8px;
   row-gap: 6px;
   background: transparent;
   border-bottom: 0;
@@ -132,10 +132,13 @@
 }
 .dockview-theme-giraf .dv-scrollable {
   display: flex;
-  flex: 0 1 auto;
+  flex: 1 0 100%;
   min-width: 0;
-  max-width: 100%;
-  height: 32px;
+  height: 28px;
+}
+.dockview-theme-giraf .dv-scrollable > .dv-tabs-container {
+  flex: 1;
+  min-width: 0;
 }
 .dockview-theme-giraf .dv-tabs-and-actions-container:has(.dv-tabs-container > .dv-tab:only-child) .dv-scrollable {
   display: none;
@@ -155,30 +158,51 @@
   min-width: 0;
 }
 
-/* The tab bar: a floating capsule like the toolbar's, with named tabs. */
+/* The tab bar: a segmented pill across the window; the shown tab rises
+   out of the track as a raised segment. */
 .dockview-theme-giraf .dv-tabs-container {
-  height: 32px;
+  height: 28px;
   padding: 2px;
   box-sizing: border-box;
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
-  background: var(--glass-background);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
+  border-radius: 14px;
+  background: var(--muted);
 }
 .dockview-theme-giraf .dv-tabs-container > .dv-tab {
-  flex: 0 1 auto;
+  flex: 1 1 0;
   min-width: 28px;
   height: 100%;
   padding: 0;
-  border-radius: 14px;
+  border-radius: 12px;
+  color: color-mix(in oklch, var(--foreground) 60%, transparent);
   transition:
     background-color var(--motion-quick) ease-out,
-    color var(--motion-quick) ease-out;
+    color var(--motion-quick) ease-out,
+    box-shadow var(--motion-quick) ease-out;
+}
+/* Each tab measures itself: too narrow for its name, it keeps its symbol. */
+.dockview-theme-giraf .dv-tabs-container > .dv-tab {
+  container-type: inline-size;
+}
+@container (max-width: 88px) {
+  .dock-tab { justify-content: center; padding: 0; }
+  .dock-tab-title:has(svg) .dock-tab-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .dock-tab .dock-tab-button { display: none; }
+}
+.dockview-theme-giraf .dv-tabs-container > .dv-tab:hover:not(.dv-active-tab) {
+  color: var(--foreground);
 }
 .dockview-theme-giraf .dv-tabs-container > .dv-tab.dv-active-tab {
-  background: var(--selection);
-  color: var(--selection-foreground);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.08),
+    0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent);
 }
 .dockview-theme-giraf .dv-tabs-container > .dv-tab:focus-visible {
   outline: 2px solid var(--ring);
@@ -191,7 +215,7 @@
   gap: 2px;
   width: 100%;
   height: 100%;
-  padding: 0 4px 0 12px;
+  padding: 0 4px 0 10px;
   box-sizing: border-box;
   font-size: 12.5px;
   font-weight: 500;
@@ -207,7 +231,9 @@
   min-width: 0;
 }
 .dock-tab-title svg {
-  display: none;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 .dock-tab-label {
   min-width: 0;
