@@ -490,12 +490,15 @@ export function toggleMaximized(group: DockviewGroupPanel) {
       width: rect.width,
       height: rect.height,
     })
+    // Fullscreen first: the workbench grows under the app's bar, and the
+    // window takes the workbench as it then is.
+    useDock.setState({ maximized: group.id })
+    syncDock()
     const host = floatHost()
     const bounds = root()?.getBoundingClientRect() ?? host
     box.style.left = `${bounds.left - host.left}px`
     box.style.top = `${bounds.top - host.top}px`
     group.api.setSize({ width: bounds.width, height: bounds.height })
-    useDock.setState({ maximized: group.id })
   }
   syncDock()
   group.activePanel?.api.setActive()
