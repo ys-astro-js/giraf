@@ -157,10 +157,11 @@ function maximizedWindow(dock: DockviewApi, current?: string) {
  */
 function markFullscreen(dock: DockviewApi) {
   const { maximized, minimized } = useDock.getState()
+  // Read from the layout, not the page: mid-change, sizes lag behind.
   const shown = dock.groups.filter((group) => {
     if (minimized.some((item) => item.group === group.id)) return false
-    const rect = group.element.getBoundingClientRect()
-    return rect.width > 0 && rect.height > 0
+    if (!group.panels.length) return false
+    return isFloating(group) ? !floatingBox(group)?.hidden : group.api.isVisible
   })
   const id = maximized ?? (shown.length === 1 ? shown[0].id : undefined)
   for (const group of dock.groups)
