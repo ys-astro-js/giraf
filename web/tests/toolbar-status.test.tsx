@@ -21,8 +21,12 @@ const render = (executionStatus?: ExecutionStatus) =>
         runDisabled={false}
         onRun={() => {}}
         onCancel={() => {}}
+        sidebarVisible
+
         settingsVisible
         trayOpen={false}
+        onSidebar={() => {}}
+
         onSettings={() => {}}
         onTray={() => {}}
       />

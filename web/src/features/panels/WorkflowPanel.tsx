@@ -4,6 +4,8 @@ import { Blank } from "@/components/workbench-controls"
 import { TaskMapView } from "@/features/workflow/WorkflowCanvas"
 import { useWorkbench } from "@/features/workbench/context"
 import { useLayout } from "@/features/workbench/layout-store"
+import { revealPanel } from "@/features/dock/store"
+import { WindowControls } from "@/features/dock/WindowControls"
 
 export function WorkflowPanel() {
   const w = useWorkbench()
@@ -11,9 +13,9 @@ export function WorkflowPanel() {
   const revealConnection = useLayout((state) => state.revealedConnection)
   const requestInput = useLayout((state) => state.requestInput)
   const clearInputRequest = useLayout((state) => state.clearInputRequest)
-  const setOpen = useLayout((state) => state.setOpen)
   return (
     <main className="main-workspace">
+      <WindowControls className="window-controls-overlay" />
       {!w.ready ? (
         <div className="flex min-h-0 flex-1 flex-col p-6">
           {w.loadError ? (
@@ -62,7 +64,7 @@ export function WorkflowPanel() {
             onInput={requestInput}
             onSelect={() => {
               clearInputRequest()
-              setOpen("inspector", true)
+              revealPanel("inspector")
               w.setTaskError("")
             }}
             removeLink={w.removeLink}

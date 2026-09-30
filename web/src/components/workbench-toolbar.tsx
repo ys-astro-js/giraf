@@ -19,7 +19,6 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useSidebar } from "@/components/ui/sidebar"
 import {
   ToolbarButton,
   ToolbarCluster,
@@ -57,16 +56,15 @@ type Props = {
   runDisabled: boolean
   onRun: () => void
   onCancel: () => void
+  sidebarVisible: boolean
   settingsVisible: boolean
   trayOpen: boolean
-  onSettings: (open: boolean) => void
-  onTray: (open: boolean) => void
+  onSidebar: () => void
+  onSettings: () => void
+  onTray: () => void
 }
 
 export function WorkbenchToolbar(props: Props) {
-  const { open, openMobile, isMobile, toggleSidebar } = useSidebar()
-  const sidebarVisible = isMobile ? openMobile : open
-  const backgroundVisible = sidebarVisible || props.settingsVisible
   const status = props.executionStatus
   const completedKey =
     status?.state === "completed"
@@ -106,14 +104,13 @@ export function WorkbenchToolbar(props: Props) {
   return (
     <header
       className="workbench-toolbar"
-      data-background-visible={backgroundVisible}
       aria-label="도구 막대"
     >
       <ToolbarCluster className="toolbar-leading" edge="start">
         <ToolbarGroup label="사이드바">
           <ToolbarButton
-            label={sidebarVisible ? "사이드바 닫기" : "사이드바 열기"}
-            onClick={toggleSidebar}
+            label={props.sidebarVisible ? "사이드바 닫기" : "사이드바 열기"}
+            onClick={props.onSidebar}
           >
             <PanelLeft />
           </ToolbarButton>
@@ -282,13 +279,13 @@ export function WorkbenchToolbar(props: Props) {
         <ToolbarGroup label="패널 표시">
           <ToolbarButton
             label={props.trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
-            onClick={() => props.onTray(!props.trayOpen)}
+            onClick={props.onTray}
           >
             <PanelBottom />
           </ToolbarButton>
           <ToolbarButton
             label={props.settingsVisible ? "설정 패널 닫기" : "설정 패널 열기"}
-            onClick={() => props.onSettings(!props.settingsVisible)}
+            onClick={props.onSettings}
           >
             <PanelRight />
           </ToolbarButton>

@@ -77,9 +77,9 @@ export function useTaskEditing({
       `${map.tasks.find((task) => task.id === id)?.label || "작업"} 복제`
     )
   }
-  function edit(fn: (t: Instance) => Instance) {
-    if (!task) return
-    const id = task.id
+  function edit(fn: (t: Instance) => Instance, id = task?.id) {
+    const target = map.tasks.find((t) => t.id === id)
+    if (!id || !target) return
     update((m) => {
       const before = m.tasks.find((t) => t.id === id)!
       const after = fn(before)
@@ -101,7 +101,7 @@ export function useTaskEditing({
           )
       }
       return next
-    }, `${task.label} 설정 변경`)
+    }, `${target.label} 설정 변경`)
   }
 
   function template() {

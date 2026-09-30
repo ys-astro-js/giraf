@@ -15,7 +15,7 @@ import {
   type Job,
 } from "@/lib/workbench"
 import { workflowRequest, type TaskMap } from "@/lib/task-map"
-import { showPanel } from "@/features/workbench/layout-store"
+import { revealPanel } from "@/features/dock/store"
 import type * as React from "react"
 
 const workflowOptions = apiQueryOptions<WorkflowRun | null>("workflow")
@@ -122,7 +122,7 @@ export function useWorkflowExecution({
     }
     if (workflow.currentJob && workflow.state === "waiting") {
       setSelectedJob(workflow.currentJob.id)
-      showPanel("history")
+      revealPanel("history")
     }
   }, [
     ready,

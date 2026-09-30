@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -6,16 +6,17 @@ import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from "@
 import { stateLabel } from "@/lib/task-map"
 import { taskDisplayName, type Job, type Frame } from "@/lib/workbench"
 
-type Props = { initialDetail?: Detail; jobs: Job[]; onSelect: (id: string) => void; onOpen: (file: Frame) => void; onCancel: (id: string) => void }
+type Props = { controls?: ReactNode; initialDetail?: Detail; jobs: Job[]; onSelect: (id: string) => void; onOpen: (file: Frame) => void; onCancel: (id: string) => void }
 type Detail = { id: string; kind: "log" | "files" | "settings" }
 const labels = { log: "로그", files: "결과 파일", settings: "실행 설정" }
 function time(id: string) { return /^\d{8}-\d{6}/.test(id) ? `${id.slice(4,6)}/${id.slice(6,8)} ${id.slice(9,11)}:${id.slice(11,13)}:${id.slice(13,15)}` : id }
-export function RunHistory({jobs,onSelect,onOpen,onCancel,initialDetail}:Props) {
+export function RunHistory({jobs,onSelect,onOpen,onCancel,initialDetail,controls}:Props) {
  const [detail,setDetail]=useState<Detail|null>(initialDetail || null)
  const job=detail ? jobs.find(j=>j.id===detail.id) : undefined
  const show=(j:Job,kind:Detail["kind"])=>{ onSelect(j.id);setDetail({id:j.id,kind}) }
  return <section className="run-tray" aria-label="실행 기록과 로그">
   <header className="tray-header">
+   {controls}
    {detail && job ? <>
     <Button size="sm" variant="ghost" onClick={()=>setDetail(null)}><ArrowLeft data-icon="inline-start"/>실행 기록으로</Button>
     <span className="run-detail-title"><strong title={job.task || job.name}>{taskDisplayName(job.name)}</strong><span title={job.id}>{time(job.id)}</span><span>{labels[detail.kind]}</span></span>

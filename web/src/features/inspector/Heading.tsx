@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useRef, useState, type ReactNode } from "react"
 import { taskDisplayName } from "@/lib/workbench"
 import { Pencil, Check, X, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -15,7 +15,9 @@ export function InspectorHeading({
   checking,
   busy,
   onRun,
+  controls,
 }: {
+  controls?: ReactNode
   task: Instance
   edit: (fn: (task: Instance) => Instance) => void
   spec: Spec
@@ -40,6 +42,7 @@ export function InspectorHeading({
   }
   return (
     <header className="inspector-heading">
+      {controls}
       <div className="inspector-title">
         {identityDraft ? (
           <div

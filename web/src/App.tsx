@@ -1,4 +1,4 @@
-import { WorkbenchShell } from "@/components/workbench-shell"
+import { DockShell } from "@/features/dock/DockShell"
 import { Toaster } from "@/components/ui/toast"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { WorkbenchContext } from "@/features/workbench/context"
@@ -24,7 +24,7 @@ function App() {
             if (event.target.matches(editableField)) workbench.finishEdit()
           }}
         >
-          <WorkbenchShell header={<WorkbenchHeader />} />
+          <DockShell header={<WorkbenchHeader />} />
           <Toaster />
           <WorkbenchDialogs />
         </div>

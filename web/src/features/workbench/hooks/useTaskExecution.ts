@@ -8,7 +8,7 @@ import { useRef, useState } from "react"
 import { api, type Catalog, type Workspace, type Job, type Manifest } from "@/lib/workbench"
 import { daoeditSession, type DaoeditSession } from "@/lib/daoedit"
 import { payloadFor, type TaskMap } from "@/lib/task-map"
-import { showPanel } from "@/features/workbench/layout-store"
+import { revealPanel } from "@/features/dock/store"
 import type * as React from "react"
 
 export function useTaskExecution({
@@ -50,7 +50,7 @@ export function useTaskExecution({
       setLastExecution({ kind: "job", id: j.id })
       setJobs((old) => [j, ...old])
       setSelectedJob(j.id)
-      showPanel("history")
+      revealPanel("history")
       publishJob(j.manifest?.instanceId || map.view.selected, j)
       setPlan(null)
       return j
@@ -60,8 +60,8 @@ export function useTaskExecution({
       setBusy(false)
     }
   }
-  async function run() {
-    const task = map.tasks.find((t) => t.id === map.view.selected)
+  async function run(id = map.view.selected) {
+    const task = map.tasks.find((t) => t.id === id)
     if (!catalog || !task || runLock.current || workflowActive(workflow)) return
     runLock.current = true
     setTaskError("")

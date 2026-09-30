@@ -48,8 +48,12 @@ export function Fixture() {
             setStep(0)
           }}
           onCancel={() => setStep(-1)}
+          sidebarVisible
+
           settingsVisible
           trayOpen={false}
+          onSidebar={() => {}}
+
           onSettings={() => {}}
           onTray={() => {}}
           diagnostics={

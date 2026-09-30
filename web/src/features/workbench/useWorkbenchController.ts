@@ -34,6 +34,7 @@ import { toast } from "@/components/ui/toast"
 import { useJobDiagnostics } from "@/hooks/use-job-diagnostics"
 import type { PickerRequest } from "@/features/file-picker/FilePicker"
 import { useLayout } from "@/features/workbench/layout-store"
+import { revealPanel } from "@/features/dock/store"
 import { useAssetViewer } from "@/features/workbench/hooks/useAssetViewer"
 import { useWorkflowDocuments } from "@/features/workbench/hooks/useWorkflowDocuments"
 import { useWorkbenchBootstrap } from "@/features/workbench/hooks/useWorkbenchBootstrap"
@@ -357,7 +358,7 @@ export function useWorkbenchController() {
     if (!id) return
     setMapSearch("")
     selectNode(id)
-    layout().setOpen("inspector", true)
+    revealPanel("inspector")
     if (entry.connectionId) layout().revealConnection(entry.connectionId)
   }
   function viewLog(id: string) {
@@ -445,13 +446,13 @@ export function useWorkbenchController() {
     setAddOpen(false)
     if (ids === selectedFiles) setSelectedFiles([])
     layout().setInspectorTab("input")
-    layout().setOpen("inspector", true)
+    revealPanel("inspector")
     setTaskError("")
   }
-  function edit(fn: (task: Instance) => Instance) {
-    if (!task) return
+  function edit(fn: (task: Instance) => Instance, id = task?.id) {
+    if (!id) return
     setTaskError("")
-    taskEditing.edit(fn)
+    taskEditing.edit(fn, id)
   }
   function remove(id: string) {
     taskEditing.remove(id)

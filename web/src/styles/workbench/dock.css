@@ -1,0 +1,183 @@
+/* The workbench is a toolbar row above dockable windows. */
+.dock-body { position: relative; display: flex; flex: 1; min-height: 0; min-width: 0; }
+.dock-root { position: relative; flex: 1; min-width: 0; min-height: 0; }
+.dock-root > * { height: 100%; }
+
+.dockview-theme-giraf {
+  color-scheme: light;
+  --dv-group-view-background-color: var(--background);
+  --dv-tabs-and-actions-container-background-color: var(--background);
+  --dv-tabs-and-actions-container-height: 52px;
+  --dv-tabs-and-actions-container-font-size: 13px;
+  --dv-tab-font-size: 13px;
+  --dv-separator-border: var(--border);
+  --dv-paneview-header-border-color: var(--border);
+  --dv-sash-color: transparent;
+  --dv-active-sash-color: var(--border);
+  --dv-active-sash-transition-duration: 0.1s;
+  --dv-active-sash-transition-delay: 0.3s;
+  --dv-drag-over-background-color: color-mix(in oklch, var(--primary) 12%, transparent);
+  --dv-drag-over-border-color: color-mix(in oklch, var(--primary) 60%, transparent);
+  --dv-drag-over-border: 2px solid var(--dv-drag-over-border-color);
+  --dv-edge-dock-indicator-color: var(--primary);
+  --dv-floating-box-shadow: 0 16px 48px rgb(0 0 0 / 0.18), 0 2px 8px rgb(0 0 0 / 0.08);
+  --dv-floating-border: 1px solid var(--border);
+  --dv-floating-group-border: 1px solid var(--border);
+  --dv-floating-group-dragging-opacity: 0.85;
+  --dv-overlay-z-index: 40;
+  --dv-border-radius: 16px;
+  --dv-tab-margin: 0;
+  --dv-spacing-padding: 0px;
+  --dv-tab-border-radius: 999px;
+  --dv-sash-border-radius: 0px;
+  --dv-dropdown-border-radius: 12px;
+  --dv-tab-divider-color: transparent;
+  --dv-icon-hover-background-color: var(--muted);
+  --dv-tabs-container-scrollbar-color: var(--border);
+  --dv-scrollbar-background-color: var(--border);
+  --dv-context-menu-background-color: var(--popover);
+  --dv-context-menu-color: var(--popover-foreground);
+  --dv-activegroup-visiblepanel-tab-background-color: var(--background);
+  --dv-activegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-inactivegroup-visiblepanel-tab-background-color: var(--background);
+  --dv-inactivegroup-hiddenpanel-tab-background-color: transparent;
+  --dv-activegroup-visiblepanel-tab-color: var(--foreground);
+  --dv-activegroup-hiddenpanel-tab-color: color-mix(in oklch, var(--foreground) 60%, transparent);
+  --dv-inactivegroup-visiblepanel-tab-color: var(--foreground);
+  --dv-inactivegroup-hiddenpanel-tab-color: color-mix(in oklch, var(--foreground) 60%, transparent);
+  font-family: inherit;
+}
+.dark .dockview-theme-giraf { color-scheme: dark; }
+
+/* Windows fill their group; library windows share the sidebar surface. */
+.dock-window { display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; background: var(--background); }
+.dock-window[data-surface="sidebar"] { background: var(--sidebar); color: var(--sidebar-foreground); }
+.dock-window > * { flex: 1; min-height: 0; }
+.library-window { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.dv-groupview:has(.dock-window[data-surface="sidebar"]) { --dv-tabs-and-actions-container-background-color: var(--sidebar); }
+
+/* Window tabs: the segmented pill, the only tab style for switching windows. */
+.dockview-theme-giraf .dv-tabs-and-actions-container { align-items: center; gap: 4px; padding: 8px; }
+.dockview-theme-giraf .dv-scrollable { display: flex; flex: 1; min-width: 0; height: 36px; }
+.dockview-theme-giraf .dv-scrollable > .dv-tabs-container { flex: 1; min-width: 0; }
+.dockview-theme-giraf .dv-tabs-container {
+  height: 36px;
+  padding: 4px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: var(--muted);
+}
+.dockview-theme-giraf .dv-tabs-container > .dv-tab {
+  flex: 1 1 0;
+  min-width: 28px;
+  height: 100%;
+  padding: 0;
+  border-radius: 999px;
+  transition: background-color var(--motion-quick) ease-out, color var(--motion-quick) ease-out;
+}
+.dockview-theme-giraf .dv-tabs-container > .dv-tab.dv-active-tab {
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent);
+}
+.dockview-theme-giraf .dv-tabs-container > .dv-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.dockview-theme-giraf .dv-void-container { display: none; }
+.dockview-theme-giraf .dv-pre-actions-container { display: flex; align-items: center; }
+
+.dock-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 0 10px;
+  box-sizing: border-box;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.dock-tab svg { width: 16px; height: 16px; flex-shrink: 0; }
+.dock-tab .dock-tab-lock { width: 13px; height: 13px; color: var(--primary); }
+.dock-tab-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Tool windows fall back to their symbol when the strip is crowded. */
+.dockview-theme-giraf .dv-tabs-container { container-type: inline-size; }
+@container (max-width: 300px) {
+  .dock-tab:has(svg:not(.dock-tab-lock)) .dock-tab-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}
+
+/* Window controls: dots on the active window that open into a capsule. */
+.window-controls {
+  position: relative;
+  display: grid;
+  flex: 0 0 28px;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+}
+.window-controls-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: default;
+  transition: background-color var(--motion-quick) ease-out;
+}
+.window-controls-dots i { width: 4px; height: 4px; border-radius: 50%; background: color-mix(in oklch, var(--foreground) 35%, transparent); }
+.window-controls-dots:hover, .window-controls-dots:focus-visible { background: var(--muted); outline: none; }
+.window-controls-lock { width: 14px; height: 14px; color: var(--primary); }
+.window-controls > .toolbar-slot {
+  position: absolute;
+  top: 50%;
+  left: -3px;
+  z-index: 30;
+  translate: 0 -50%;
+  overflow: visible;
+}
+.window-controls .toolbar-group {
+  background: var(--background);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
+  animation: window-controls-open var(--motion-quick) var(--motion-ease);
+}
+.window-controls-divider { width: 1px; height: 16px; margin-inline: 2px; background: var(--border); }
+.window-controls-grip { cursor: grab; color: var(--muted-foreground); }
+.window-controls-grip:active { cursor: grabbing; }
+@keyframes window-controls-open {
+  from { opacity: 0; clip-path: inset(0 calc(100% - 28px) 0 0 round 19px); }
+  to { opacity: 1; clip-path: inset(0 0 0 0 round 19px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .window-controls .toolbar-group { animation: none; }
+}
+/* Where a window has no first row of its own, the slot floats on it. */
+.window-controls-overlay { position: absolute; top: 12px; left: 12px; z-index: 20; }
+.window-controls-row:empty { display: none; }
+.window-controls-row { display: flex; padding: 12px 12px 0; }
+.tray-header > span:first-child:has(.window-controls) { display: contents; }
+
+/* Minimized windows wait in a strip on their edge. */
+.dock-strip { display: flex; align-items: center; justify-content: flex-start; padding: 8px 4px; background: var(--sidebar); }
+.dock-strip[data-edge="left"] { border-right: 1px solid var(--border); flex-direction: column; }
+.dock-strip[data-edge="right"] { border-left: 1px solid var(--border); flex-direction: column; }
+.dock-strip[data-edge="bottom"] { border-top: 1px solid var(--border); padding: 4px 8px; }
+.dock-strip[data-edge="left"] > .toolbar-group,
+.dock-strip[data-edge="right"] > .toolbar-group { flex-direction: column; }
+
+.dock-drag-ghost {
+  position: fixed;
+  top: -100px;
+  left: -100px;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgb(0 0 0 / 0.18);
+  font: 500 13px/1 var(--font-sans, system-ui);
+}

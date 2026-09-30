@@ -8,7 +8,7 @@ import { InspectorInfo } from "./InfoTab"
 import { NodeDependencies } from "@/components/node-dependencies"
 import { ParameterGroupNav } from "@/components/parameter-editor"
 import { taskDisplayName } from "@/lib/workbench"
-import { useEffect, useEffectEvent, useRef, useState } from "react"
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react"
 import {
   Info,
   SquareArrowRightEnter,
@@ -72,6 +72,7 @@ type Props = {
   onSelectNode?: (id: string) => void
   activeTab?: string
   onTabChange?: (value: string) => void
+  controls?: ReactNode
 }
 export function TaskInspector({
   catalog,
@@ -94,6 +95,7 @@ export function TaskInspector({
   activeTab,
   onSelectNode,
   onTabChange,
+  controls,
 }: Props) {
   const spec: Spec = catalog.tasks.find((s) => s.name === task.task) || {
       name: task.task,
@@ -285,6 +287,7 @@ export function TaskInspector({
       aria-label="선택 작업"
     >
       <InspectorHeading
+        controls={controls}
         edit={edit}
         task={task}
         spec={spec}
@@ -302,7 +305,7 @@ export function TaskInspector({
           }}
         >
           <SidebarHeader className="shrink-0">
-            <TabsList className="w-full" aria-label="작업 상세">
+            <TabsList variant="line" className="w-full" aria-label="작업 상세">
               {[
                 { value: "info", label: "정보", icon: Info },
                 { value: "input", label: "입력", icon: SquareArrowRightEnter },

@@ -86,8 +86,8 @@ export function TaskMapView({
   workflowBusy,
   runDisabled,
 }: TaskMapViewProps) {
-  const displayOpen = useLayout((state) => state.open.display)
-  const setPanelOpen = useLayout((state) => state.setOpen)
+  const displayOpen = useLayout((state) => state.displayOpen)
+  const setDisplayOpen = useLayout((state) => state.setDisplayOpen)
   const hasDisplay = !!useQuery(displayQueryOptions).data?.frames.length
   const diagnosticEntries = useSyncExternalStore(
     diagnostics.subscribe,
@@ -416,7 +416,7 @@ export function TaskMapView({
                       <ToolbarButton
                         label="IRAF 디스플레이"
                         aria-pressed={displayOpen}
-                        onClick={() => setPanelOpen("display", !displayOpen)}
+                        onClick={() => setDisplayOpen(!displayOpen)}
                       >
                         <Monitor />
                       </ToolbarButton>
@@ -504,7 +504,7 @@ export function TaskMapView({
       )}
       <DisplayWindow
         open={displayOpen}
-        onMinimize={() => setPanelOpen("display", false)}
+        onMinimize={() => setDisplayOpen(false)}
       />
     </section>
   )

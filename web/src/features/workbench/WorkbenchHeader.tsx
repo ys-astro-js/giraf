@@ -4,13 +4,11 @@ import { DiagnosticsButton } from "@/components/diagnostics-button"
 import { WorkflowSelector } from "@/components/workflow-selector"
 import { resolveDiagnosticNode } from "@/lib/diagnostics"
 import { useWorkbench } from "./context"
-import { useLayout } from "./layout-store"
+import { toggleEdge, useDock } from "@/features/dock/store"
 
 export function WorkbenchHeader() {
   const w = useWorkbench()
-  const inspectorOpen = useLayout((state) => state.open.inspector)
-  const historyOpen = useLayout((state) => state.open.history)
-  const setOpen = useLayout((state) => state.setOpen)
+  const edges = useDock((state) => state.edges)
   return (
     <WorkbenchToolbar
       historyControls={
@@ -54,10 +52,12 @@ export function WorkbenchHeader() {
       }
       onRun={() => w.runWorkflow()}
       onCancel={w.cancelWorkflow}
-      settingsVisible={inspectorOpen}
-      trayOpen={historyOpen}
-      onSettings={(open) => setOpen("inspector", open)}
-      onTray={(open) => setOpen("history", open)}
+      sidebarVisible={edges.left}
+      settingsVisible={edges.right}
+      trayOpen={edges.bottom}
+      onSidebar={() => toggleEdge("left")}
+      onSettings={() => toggleEdge("right")}
+      onTray={() => toggleEdge("bottom")}
     />
   )
 }

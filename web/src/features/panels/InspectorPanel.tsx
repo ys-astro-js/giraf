@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -5,6 +6,9 @@ import { Blank } from "@/components/workbench-controls"
 import { TaskInspector } from "@/features/inspector/Inspector"
 import { useWorkbench } from "@/features/workbench/context"
 import { useLayout } from "@/features/workbench/layout-store"
+import { usePanel } from "@/features/dock/context"
+import { registerLockTarget } from "@/features/dock/store"
+import { WindowControls } from "@/features/dock/WindowControls"
 import { activeJob } from "@/lib/queries"
 import { parsePort } from "@/lib/calibration-ports"
 import { connectInputPort } from "@/lib/workflow-flow"
@@ -15,17 +19,38 @@ import {
   type Source,
 } from "@/lib/task-map"
 
+/**
+ * The node window: follows the selected node, or keeps showing one node
+ * while locked so it can sit beside another for comparison.
+ */
 export function InspectorPanel() {
   const w = useWorkbench()
+  const dockWindow = usePanel()
+  const locked = dockWindow?.params.locked
   const inspectorTab = useLayout((state) => state.inspectorTab)
   const setInspectorTab = useLayout((state) => state.setInspectorTab)
   const inputRequest = useLayout((state) => state.inputRequest)
   const requestInput = useLayout((state) => state.requestInput)
-  const { task, catalog } = w
+  const { catalog } = w
+  const task = w.map.tasks.find((t) => t.id === (locked ?? w.map.view.selected))
+  const taskJob = locked
+    ? w.jobs.find((job) => job.manifest?.instanceId === task?.id)
+    : w.taskJob
+  const panel = dockWindow?.panel
+  const title = locked ? task?.label || task?.task || "노드" : "노드"
+  useEffect(() => {
+    if (panel && panel.title !== title) panel.api.setTitle(title)
+  }, [panel, title])
+  useEffect(
+    () => panel && registerLockTarget(panel.id, () => task?.id),
+    [panel, task?.id]
+  )
+  const controls = <WindowControls />
 
   if (!w.ready)
     return (
       <div className="inspector-pane">
+        <div className="window-controls-row">{controls}</div>
         {w.loadError ? (
           <Blank>설정을 불러오지 못했습니다.</Blank>
         ) : (
@@ -54,6 +79,7 @@ export function InspectorPanel() {
   if (!task || !catalog)
     return (
       <div className="inspector-pane">
+        <div className="window-controls-row">{controls}</div>
         <Blank
           action={
             <Button variant="outline" onClick={() => w.setAddOpen(true)}>
@@ -61,7 +87,7 @@ export function InspectorPanel() {
             </Button>
           }
         >
-          설정할 작업을 선택하세요
+          {locked ? "잠근 노드가 삭제되었습니다" : "설정할 작업을 선택하세요"}
         </Blank>
       </div>
     )
@@ -153,11 +179,12 @@ export function InspectorPanel() {
     <div className="inspector-pane">
       <TaskInspector
         key={task.id}
+        controls={controls}
         inputRequest={
           inputRequest?.taskId === task.id ? inputRequest : undefined
         }
-        activeTab={inspectorTab}
-        onTabChange={setInspectorTab}
+        activeTab={locked ? undefined : inspectorTab}
+        onTabChange={locked ? undefined : setInspectorTab}
         onSelectNode={(id) => {
           w.selectNode(id)
           w.setTaskError("")
@@ -166,7 +193,7 @@ export function InspectorPanel() {
         map={w.map}
         task={task}
         rows={w.rows}
-        edit={w.edit}
+        edit={(fn) => w.edit(fn, task.id)}
         reorderInput={(role, ids) =>
           w.update(
             (m) => replaceRoleInputs(m, task.id, role, ids, w.rows),
@@ -175,18 +202,19 @@ export function InspectorPanel() {
         }
         pick={w.pick}
         onOpen={w.assetViewer.open}
-        onRun={w.run}
-        busy={w.workflowBusy || w.busy || !!(w.taskJob && activeJob(w.taskJob))}
+        onRun={() => w.run(task.id)}
+        busy={w.workflowBusy || w.busy || !!(taskJob && activeJob(taskJob))}
         error={w.taskError}
         onErrorFocus={focusError}
-        job={w.taskJob}
+        job={taskJob}
         saveDefaults={() => w.saveTaskDefaults(task)}
         onRemove={() => w.remove(task.id)}
         onDuplicate={() => w.duplicate(task.id)}
         onInputSource={setInputSource}
         checking={w.checking}
       />
-      {origin?.editorId === task.id &&
+      {!locked &&
+        origin?.editorId === task.id &&
         w.taskJob?.products?.some((p) => p.asset === "image") && (
           <div className="p-4">
             <Button onClick={returnEdited}>

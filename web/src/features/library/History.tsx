@@ -1,5 +1,5 @@
 import type { ExecutionGroup } from "@/lib/execution-history"
-import { type Dispatch, type ReactNode, type SetStateAction } from "react"
+import { type Dispatch, type SetStateAction } from "react"
 import {
   ChevronRight,
   Clock,
@@ -28,8 +28,7 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "@/components/ui/tooltip"
-import { TabsContent } from "@/components/ui/tabs"
-import { Empty, EmptyHeader, EmptyDescription } from "@/components/ui/empty"
+import { NoFiles } from "./shared"
 import { Checkbox } from "@/components/ui/checkbox"
 import { runLabel, toggleFileSelection } from "@/lib/file-library"
 import { taskDisplayName, type Frame } from "@/lib/workbench"
@@ -58,42 +57,31 @@ function JobStatus({ state }: { state: string }) {
     </Icon>
   )
 }
-function NoFiles({ children }: { children: ReactNode }) {
-  return (
-    <Empty className="px-3 py-4">
-      <EmptyHeader>
-        <EmptyDescription>{children}</EmptyDescription>
-      </EmptyHeader>
-    </Empty>
-  )
-}
 export function LibraryHistory({
   executions,
   runOpen,
   setRunOpen,
-  selectionMode,
+  selecting,
   runSelection,
   deletableRuns,
-  setSelectionMode,
+  onSelectMode,
   setSelectedRuns,
   onViewLog,
-  setOpenMobile,
   fileList,
 }: {
   executions: ExecutionGroup[]
   runOpen: Record<string, boolean>
   setRunOpen: Dispatch<SetStateAction<Record<string, boolean>>>
-  selectionMode: "files" | "history" | null
+  selecting: boolean
   runSelection: ExecutionGroup[]
   deletableRuns: ExecutionGroup[]
-  setSelectionMode: Dispatch<SetStateAction<"files" | "history" | null>>
+  onSelectMode: () => void
   setSelectedRuns: Dispatch<SetStateAction<string[]>>
   onViewLog: (id: string) => void
-  setOpenMobile: (open: boolean) => void
   fileList: (files: Frame[], key: string) => React.JSX.Element
 }) {
   return (
-    <TabsContent value="history" className="min-h-0">
+    <>
       <SidebarGroup>
         <SidebarGroupContent>
           <SidebarMenu>
@@ -110,7 +98,7 @@ export function LibraryHistory({
                 >
                   <div
                     className="library-file-row relative"
-                    data-selecting={selectionMode === "history"}
+                    data-selecting={selecting}
                   >
                     <CollapsibleTrigger
                       render={
@@ -155,7 +143,7 @@ export function LibraryHistory({
                       disabled={!deletableRuns.includes(group)}
                       checked={runSelection.includes(group)}
                       onCheckedChange={(checked) => {
-                        setSelectionMode("history")
+                        onSelectMode()
                         setSelectedRuns((ids) =>
                           toggleFileSelection(ids, group.id, checked)
                         )
@@ -197,7 +185,6 @@ export function LibraryHistory({
                                   aria-label={`${name} 로그 보기`}
                                   onClick={() => {
                                     onViewLog(job.id)
-                                    setOpenMobile(false)
                                   }}
                                 >
                                   <Logs />
@@ -226,6 +213,6 @@ export function LibraryHistory({
           {!executions.length && <NoFiles>실행 기록이 없습니다.</NoFiles>}
         </SidebarGroupContent>
       </SidebarGroup>
-    </TabsContent>
+    </>
   )
 }
