@@ -109,7 +109,9 @@ export function syncDock() {
 
 function homeGroup(component: string) {
   const home = PANELS[component as PanelId]?.home ?? "center"
-  return home === "center" ? undefined : api()?.getEdgeGroup(home)
+  return home === "center" || home === "float"
+    ? undefined
+    : api()?.getEdgeGroup(home)
 }
 
 function addWindow(
@@ -135,6 +137,9 @@ function addWindow(
           ? { referencePanel: workflow, direction: "right" }
           : undefined,
   })
+  // Floating windows open in the dock's top-right corner.
+  if (!beside && PANELS[component as PanelId]?.home === "float")
+    floatAt(panel, Number.MAX_SAFE_INTEGER, 16)
   const edge = edgeOf(panel.group)
   if (edge) showEdge(dock, edge)
   return panel
@@ -165,8 +170,11 @@ function follower(component: PanelId) {
   )
 }
 
-/** Shows a window wherever it is: restores, re-opens or un-hides its edge. */
-export function revealPanel(id: PanelId) {
+/**
+ * Shows a window wherever it is: restores, re-opens or un-hides its edge.
+ * Background reveals leave the focused window alone.
+ */
+export function revealPanel(id: PanelId, { activate = true } = {}) {
   const dock = api()
   if (!dock) return
   const minimized = useDock
@@ -187,8 +195,14 @@ export function revealPanel(id: PanelId) {
     : (dock.getPanel(id) ?? addWindow(id, id, PANELS[id].title))
   const edge = edgeOf(panel.group)
   if (edge) showEdge(dock, edge)
-  panel.api.setActive()
+  if (activate) panel.api.setActive()
   syncDock()
+}
+
+/** Whether a window is in the layout rather than closed or minimized. */
+export function useWindowShown(id: PanelId) {
+  useDock((state) => state.revision)
+  return !!useDock.getState().api?.getPanel(id)
 }
 
 /** The toolbar's edge toggles: show or hide everything docked there. */
@@ -225,7 +239,10 @@ export function registerLockTarget(
  * lock opened can close; the rest minimize.
  */
 export function canClose(panel: IDockviewPanel) {
-  return panel.id !== panel.view.contentComponent
+  return (
+    !!PANELS[panel.view.contentComponent as PanelId]?.closable ||
+    panel.id !== panel.view.contentComponent
+  )
 }
 
 export function canLock(panel: IDockviewPanel) {
@@ -324,19 +341,30 @@ export function endWindowDrag(event: DragEvent) {
   floatWindow(panel, event.clientX, event.clientY)
 }
 
+const FLOAT_SIZE = { width: 480, height: 360 }
+
+/** Floats a window centered under a point, kept inside the dock. */
 function floatWindow(panel: IDockviewPanel, x: number, y: number) {
+  const root = document.querySelector(".dock-root")?.getBoundingClientRect()
+  floatAt(
+    panel,
+    x - (root?.left ?? 0) - FLOAT_SIZE.width / 2,
+    y - (root?.top ?? 0) - 16
+  )
+}
+
+function floatAt(panel: IDockviewPanel, left: number, top: number) {
   const dock = api()
   if (!dock || isFloating(panel.group)) return
   const root = document.querySelector(".dock-root")?.getBoundingClientRect()
-  const width = 480
-  const height = 360
+  const maxLeft = (root?.width ?? window.innerWidth) - FLOAT_SIZE.width - 16
+  const maxTop = (root?.height ?? window.innerHeight) - FLOAT_SIZE.height - 16
   dock.addFloatingGroup(panel, {
     position: {
-      left: Math.max(0, x - (root?.left ?? 0) - width / 2),
-      top: Math.max(0, y - (root?.top ?? 0) - 16),
+      left: Math.max(0, Math.min(left, maxLeft)),
+      top: Math.max(0, Math.min(top, maxTop)),
     },
-    width,
-    height,
+    ...FLOAT_SIZE,
   })
   syncDock()
 }
@@ -389,6 +417,7 @@ export function loadLayout(dock: DockviewApi) {
 function ensureWindows(dock: DockviewApi) {
   const minimized = useDock.getState().minimized
   for (const id of Object.keys(PANELS) as PanelId[]) {
+    if (PANELS[id].closable) continue
     const present =
       dock.panels.some((panel) => panel.view.contentComponent === id) ||
       minimized.some((item) => item.component === id)

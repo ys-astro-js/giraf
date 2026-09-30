@@ -72,8 +72,17 @@ export function buildPreset(dock: DockviewApi, preset: PresetId) {
     minimumSize: 160,
   })
   addTo(dock, left, LIBRARY)
-  if (preset === "review") addTo(dock, right, ["inspector", "history"])
-  else {
+  if (preset === "review") {
+    addTo(dock, right, ["inspector", "history"])
+    // Results take the main area; the workflow drops below them.
+    dock.addPanel({
+      id: "viewer",
+      component: "viewer",
+      title: PANELS.viewer.title,
+      position: { referencePanel: "workflow", direction: "above" },
+      initialHeight: 520,
+    })
+  } else {
     addTo(dock, right, ["inspector"])
     addTo(dock, bottom, ["history"])
   }

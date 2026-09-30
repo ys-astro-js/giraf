@@ -3,6 +3,8 @@ import {
   Clock,
   FolderClosed,
   History,
+  Image,
+  Monitor,
   PanelRight,
   SlidersHorizontal,
   SquareFunction,
@@ -16,20 +18,32 @@ import { SettingsPanel } from "@/features/library/SettingsPanel"
 import { WorkflowPanel } from "@/features/panels/WorkflowPanel"
 import { InspectorPanel } from "@/features/panels/InspectorPanel"
 import { HistoryPanel } from "@/features/panels/HistoryPanel"
+import { ViewerPanel } from "@/features/viewer/ViewerPanel"
+import { DisplayPanel } from "@/features/viewer/DisplayPanel"
 
 export type PanelId =
-  "files" | "runs" | "tasks" | "settings" | "workflow" | "inspector" | "history"
+  | "files"
+  | "runs"
+  | "tasks"
+  | "settings"
+  | "workflow"
+  | "inspector"
+  | "history"
+  | "viewer"
+  | "display"
 
 export type PanelDefinition = {
   title: string
   icon: LucideIcon
   component: ComponentType
   /** Where the window opens when it is not in the layout. */
-  home: "left" | "right" | "bottom" | "center"
+  home: "left" | "right" | "bottom" | "center" | "float"
   /** Library windows share the sidebar surface. */
   surface?: "sidebar"
   /** Follows the selection until the window is locked. */
   follows?: boolean
+  /** Document-like windows close; built-in tools only minimize. */
+  closable?: boolean
 }
 
 /**
@@ -83,5 +97,20 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     icon: History,
     component: HistoryPanel,
     home: "bottom",
+  },
+  viewer: {
+    title: "뷰어",
+    icon: Image,
+    component: ViewerPanel,
+    home: "center",
+    follows: true,
+    closable: true,
+  },
+  display: {
+    title: "IRAF 디스플레이",
+    icon: Monitor,
+    component: DisplayPanel,
+    home: "float",
+    closable: true,
   },
 }

@@ -11,6 +11,7 @@ import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
 import { PanelContext } from "./context"
 import { DockTab } from "./DockTab"
 import { HeaderControls } from "./WindowControls"
+import { DisplayWatcher } from "@/features/viewer/DisplayPanel"
 import { PANELS, type PanelDefinition, type PanelId } from "./panels"
 import {
   beginWindowDrag,
@@ -119,6 +120,7 @@ export function DockShell({ header }: { header: ReactNode }) {
   )
   return (
     <SidebarProvider className="giraf-app" open>
+      <DisplayWatcher />
       {header}
       <div className="dock-body">
         <MinimizedStrip edge="left" />

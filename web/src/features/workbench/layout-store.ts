@@ -10,7 +10,6 @@ type LayoutState = {
   revealedNode?: Request
   revealedConnection?: Request
   logRequest: Request | null
-  displayOpen: boolean
   setInspectorTab: (tab: string) => void
   requestInput: (taskId: string, role: string) => void
   clearInputRequest: () => void
@@ -18,7 +17,6 @@ type LayoutState = {
   revealConnection: (id: string) => void
   viewLog: (id: string) => void
   clearLog: () => void
-  setDisplayOpen: (open: boolean) => void
 }
 
 const next = (previous: Request | null | undefined, id: string) => ({
@@ -34,7 +32,6 @@ export const useLayout = create<LayoutState>()((set) => ({
   inspectorTab: "info",
   inputRequest: null,
   logRequest: null,
-  displayOpen: true,
   setInspectorTab: (inspectorTab) => set({ inspectorTab }),
   requestInput: (taskId, role) =>
     set((state) => ({
@@ -57,5 +54,4 @@ export const useLayout = create<LayoutState>()((set) => ({
     revealPanel("history")
   },
   clearLog: () => set({ logRequest: null }),
-  setDisplayOpen: (displayOpen) => set({ displayOpen }),
 }))

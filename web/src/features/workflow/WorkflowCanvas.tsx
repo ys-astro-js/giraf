@@ -1,5 +1,4 @@
 import { useTaskMapInteraction } from "./useCanvasInteraction"
-import { DisplayWindow } from "@/features/viewer/DisplayWindow"
 import type { TaskMapViewProps } from "./types"
 import { WorkflowContext } from "./context"
 import { TaskNode } from "./TaskNode"
@@ -40,7 +39,7 @@ import {
   X,
 } from "lucide-react"
 import { diagnostics } from "@/lib/diagnostics"
-import { useLayout } from "@/features/workbench/layout-store"
+import { revealPanel, useWindowShown } from "@/features/dock/store"
 import { Button } from "@/components/ui/button"
 import { Blank } from "@/components/workbench-controls"
 import { SubflowEditor } from "@/components/subflow-editor"
@@ -86,8 +85,7 @@ export function TaskMapView({
   workflowBusy,
   runDisabled,
 }: TaskMapViewProps) {
-  const displayOpen = useLayout((state) => state.displayOpen)
-  const setDisplayOpen = useLayout((state) => state.setDisplayOpen)
+  const displayOpen = useWindowShown("display")
   const hasDisplay = !!useQuery(displayQueryOptions).data?.frames.length
   const diagnosticEntries = useSyncExternalStore(
     diagnostics.subscribe,
@@ -416,7 +414,7 @@ export function TaskMapView({
                       <ToolbarButton
                         label="IRAF 디스플레이"
                         aria-pressed={displayOpen}
-                        onClick={() => setDisplayOpen(!displayOpen)}
+                        onClick={() => revealPanel("display")}
                       >
                         <Monitor />
                       </ToolbarButton>
@@ -502,10 +500,6 @@ export function TaskMapView({
           </WorkflowContext.Provider>
         </div>
       )}
-      <DisplayWindow
-        open={displayOpen}
-        onMinimize={() => setDisplayOpen(false)}
-      />
     </section>
   )
 }

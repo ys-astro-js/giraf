@@ -2,7 +2,6 @@ import { FilePicker } from "@/features/file-picker/FilePicker"
 import { AddTaskDialog } from "./dialogs/AddTask"
 import { WorkflowConfirmationDialog } from "./dialogs/WorkflowConfirmation"
 import { ConnectInputDialog } from "./dialogs/ConnectInput"
-import { AssetDialog } from "./dialogs/Asset"
 import { TaskConfirmationDialog } from "./dialogs/TaskConfirmation"
 import { TaskInteractionDialog } from "./dialogs/TaskInteraction"
 import { DaoeditViewer } from "@/features/viewer/DaoeditViewer"
@@ -50,20 +49,6 @@ export function WorkbenchDialogs() {
         pick={w.pick}
         update={w.update}
         setError={w.setError}
-      />
-      <AssetDialog
-        asset={w.assetViewer.asset}
-        setAsset={w.assetViewer.setAsset}
-        chooseViewerImage={w.assetViewer.chooseViewerImage}
-        assetView={w.assetViewer.assetView}
-        setAssetView={w.assetViewer.setAssetView}
-        link={w.link}
-        assetText={w.assetViewer.assetText}
-        compare={w.assetViewer.compare}
-        add={w.add}
-        rows={w.rows}
-        headerEdit={w.assetViewer.headerEdit}
-        headers={w.assetViewer.headers}
       />
       <TaskConfirmationDialog
         plan={w.plan}

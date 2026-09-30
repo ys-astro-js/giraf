@@ -277,9 +277,7 @@ export function useWorkbenchController() {
     jobs.find((j) => j.manifest?.instanceId === task?.id)
   const taskJob = jobs.find((j) => j.manifest?.instanceId === task?.id)
   const assetViewer = useAssetViewer({
-    setError,
     cache,
-    pick,
     task,
     catalog,
     prefs,
@@ -288,7 +286,7 @@ export function useWorkbenchController() {
     map,
     setSelectedJob,
   })
-  const { asset, setAsset, setCompare } = assetViewer
+  const { asset, setAsset } = assetViewer
   function pick(slot: Slot, ids: string[], apply: (ids: string[]) => void) {
     setPicker({ slot, initial: ids, apply })
   }
@@ -404,7 +402,6 @@ export function useWorkbenchController() {
     editor.removeLibrary(fileIds, jobIds)
     queueSave()
     if (asset && fileIds.has(asset.row.id)) setAsset(null)
-    setCompare((previous) => previous.filter((id) => !fileIds.has(id)))
     if (jobIds.has(selectedJob)) {
       setSelectedJob("")
       layout().clearLog()
