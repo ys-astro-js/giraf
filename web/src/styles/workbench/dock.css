@@ -126,7 +126,12 @@
   --window-bar: color-mix(in oklch, var(--background) 50%, transparent);
   --window-control-surface: color-mix(in oklch, var(--background) 75%, transparent);
   --window-blur: blur(20px) saturate(1.6);
-  --window-header: calc(var(--window-inset) * 2 + var(--window-toolbar));
+  /* Room above the bars for the app's top bar, when this window runs under
+     it (fullscreen, see below). */
+  --window-top: 0px;
+  --window-header: calc(
+    var(--window-top) + var(--window-inset) * 2 + var(--window-toolbar)
+  );
 }
 .dockview-theme-giraf .dv-groupview:has(.dock-window[data-surface="sidebar"]) {
   --window-bar: color-mix(in oklch, var(--sidebar) 50%, transparent);
@@ -156,13 +161,15 @@
   flex-wrap: wrap;
   align-items: center;
   height: auto;
-  padding: var(--window-inset);
+  padding: calc(var(--window-top) + var(--window-inset)) var(--window-inset)
+    var(--window-inset);
   row-gap: var(--window-inset);
   border-bottom: 0;
 }
 .dockview-theme-giraf .dv-groupview:has(.dv-tabs-container > .dv-tab + .dv-tab) {
   --window-header: calc(
-    var(--window-inset) * 3 + var(--window-toolbar) + var(--window-tabs)
+    var(--window-top) + var(--window-inset) * 3 + var(--window-toolbar) +
+      var(--window-tabs)
   );
 }
 .dockview-theme-giraf .dv-groupview > .dv-tabs-and-actions-container {
@@ -553,11 +560,22 @@
 /* The header is the window's handle. */
 .dockview-theme-giraf .dv-tabs-and-actions-container { cursor: default; }
 
-/* Maximized: the window fills the whole workbench above the others. */
-.dv-groupview[data-window-maximized] {
-  position: fixed !important;
-  z-index: 36;
-  box-shadow: 0 0 0 1px var(--border);
+/* Fullscreen: when one window is the whole workbench (maximized, or the
+   only one shown), the workbench runs up under the app's top bar and that
+   window's top bar grows to take it in. The app's bar then draws no band of
+   its own, so it reads exactly like the window's: clear over rich content,
+   translucent over text or several tabs. */
+.giraf-app:has(.dv-groupview[data-fullscreen]) .dock-body {
+  margin-top: calc(var(--toolbar-height, 56px) * -1);
+}
+.giraf-app:has(.dv-groupview[data-fullscreen]) .workbench-toolbar::before {
+  border-bottom-color: transparent;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.dockview-theme-giraf .dv-groupview[data-fullscreen] {
+  --window-top: var(--toolbar-height, 56px);
 }
 /* Floating windows: rounded, with generous resize edges and a floor on size. */
 .dockview-theme-giraf { --dv-floating-titlebar-height: 0px; }

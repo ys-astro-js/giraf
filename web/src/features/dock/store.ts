@@ -43,6 +43,11 @@ type DockState = {
   stowed: StowedTab[]
   /** The window filling the whole workbench, if any. */
   maximized?: string
+  /**
+   * The window that is the whole workbench: the maximized one, or the only
+   * one shown. It runs under the app's top bar, which takes its bar's look.
+   */
+  fullscreen?: string
   /** Bumped on every structural change so window chrome re-reads it. */
   revision: number
 }
@@ -127,10 +132,41 @@ export function syncDock() {
       ) as Record<Edge, boolean>,
       // A window whose tabs all moved away is no longer minimized.
       minimized: state.minimized.filter((item) => groups.has(item.group)),
+      maximized: maximizedWindow(dock, state.maximized),
       revision: state.revision + 1,
     }
   })
-  placeMaximized()
+  markFullscreen(dock)
+}
+
+/** The maximized window: dockview's for docked windows, ours for floating. */
+function maximizedWindow(dock: DockviewApi, current?: string) {
+  const docked = dock.groups.find(
+    (group) => group.api.location.type === "grid" && group.api.isMaximized()
+  )
+  if (docked) return docked.id
+  const floating = current && dock.getGroup(current)
+  return floating && isFloating(floating as DockviewGroupPanel)
+    ? current
+    : undefined
+}
+
+/**
+ * Marks the window that is the whole workbench (see DockState.fullscreen)
+ * on its element, where the app's bars read it.
+ */
+function markFullscreen(dock: DockviewApi) {
+  const { maximized, minimized } = useDock.getState()
+  const shown = dock.groups.filter((group) => {
+    if (minimized.some((item) => item.group === group.id)) return false
+    const rect = group.element.getBoundingClientRect()
+    return rect.width > 0 && rect.height > 0
+  })
+  const id = maximized ?? (shown.length === 1 ? shown[0].id : undefined)
+  for (const group of dock.groups)
+    if (group.id === id) group.element.dataset.fullscreen = ""
+    else delete group.element.dataset.fullscreen
+  if (useDock.getState().fullscreen !== id) useDock.setState({ fullscreen: id })
 }
 
 const SIDE_SIZE: Record<Edge, number> = { left: 256, right: 384, bottom: 240 }
@@ -421,39 +457,54 @@ export function restoreWindow(groupId: string) {
   saveLayout()
 }
 
-/** Keeps the maximized window over the whole workbench as it resizes. */
-function placeMaximized() {
-  const id = useDock.getState().maximized
-  for (const element of document.querySelectorAll<HTMLElement>(
-    "[data-window-maximized]"
-  ))
-    if (element.dataset.windowMaximized !== id) {
-      delete element.dataset.windowMaximized
-      element.style.removeProperty("inset")
-      element.style.removeProperty("width")
-      element.style.removeProperty("height")
-    }
-  const group = id && (api()?.getGroup(id) as DockviewGroupPanel | undefined)
-  const box = root()?.getBoundingClientRect()
-  if (!group || !box) return
-  const element = group.element
-  element.dataset.windowMaximized = id
-  element.style.inset = `${box.top}px auto auto ${box.left}px`
-  element.style.width = `${box.width}px`
-  element.style.height = `${box.height}px`
-}
+/** Where a floating window was before it was maximized. */
+const floatingBefore = new Map<
+  string,
+  { left: string; top: string; width: number; height: number }
+>()
 
-/** Fills the whole workbench with a window, or puts it back. */
+/**
+ * Fills the whole workbench with a window, or puts it back. Docked windows
+ * use dockview's own maximize, which lays their contents out; a floating
+ * window grows over the workbench and returns to where it was.
+ */
 export function toggleMaximized(group: DockviewGroupPanel) {
-  useDock.setState((state) => ({
-    maximized: state.maximized === group.id ? undefined : group.id,
-  }))
-  placeMaximized()
+  const dock = api()
+  if (!dock) return
+  if (!isFloating(group)) {
+    if (group.api.isMaximized()) group.api.exitMaximized()
+    else group.api.maximize()
+    syncDock()
+    group.activePanel?.api.setActive()
+    return
+  }
+  const box = floatingBox(group)
+  if (!box) return
+  const before = floatingBefore.get(group.id)
+  if (useDock.getState().maximized === group.id && before) {
+    floatingBefore.delete(group.id)
+    box.style.left = before.left
+    box.style.top = before.top
+    group.api.setSize({ width: before.width, height: before.height })
+    useDock.setState({ maximized: undefined })
+  } else {
+    const rect = box.getBoundingClientRect()
+    floatingBefore.set(group.id, {
+      left: box.style.left,
+      top: box.style.top,
+      width: rect.width,
+      height: rect.height,
+    })
+    const host = floatHost()
+    const bounds = root()?.getBoundingClientRect() ?? host
+    box.style.left = `${bounds.left - host.left}px`
+    box.style.top = `${bounds.top - host.top}px`
+    group.api.setSize({ width: bounds.width, height: bounds.height })
+    useDock.setState({ maximized: group.id })
+  }
+  syncDock()
   group.activePanel?.api.setActive()
 }
-
-if (typeof window !== "undefined")
-  window.addEventListener("resize", () => placeMaximized())
 
 /* Floating: dragging a window's ··· pill lifts it out of the layout. */
 
@@ -787,7 +838,7 @@ export function applyPreset(preset: PresetId) {
     stowed: [],
     hidden: { left: [], right: [], bottom: [] },
   })
-  placeMaximized()
+  if (dock.hasMaximizedGroup()) dock.exitMaximizedGroup()
   dock.clear()
   buildPreset(dock, preset)
   syncDock()

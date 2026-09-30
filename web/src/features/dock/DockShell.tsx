@@ -102,6 +102,7 @@ function ready(api: DockviewApi) {
   api.onDidMovePanel(syncDock)
   api.onDidAddGroup(syncDock)
   api.onDidRemoveGroup(syncDock)
+  api.onDidMaximizedGroupChange(syncDock)
 }
 
 /** The workbench: toolbar above dockable windows and minimized strips. */
