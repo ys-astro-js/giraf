@@ -33,7 +33,7 @@ export function WindowToolbar({ children }: { children: ReactNode }) {
   const slot = useSlots((slots) => (panel ? slots[panel.group.id] : undefined))
   if (!panel || !slot || panel.group.activePanel?.id !== panel.id) return null
   return createPortal(
-    <ToolbarCluster edge="end" size="sm">
+    <ToolbarCluster edge="end">
       {children}
     </ToolbarCluster>,
     slot

@@ -50,8 +50,8 @@ export function WindowPill({
           setOpen(false)
       }}
     >
-      <ToolbarCluster edge="start" size="sm" className="window-pill-cluster">
-        <ToolbarGroup label="창 조작" size="sm">
+      <ToolbarCluster edge="start" className="window-pill-cluster">
+        <ToolbarGroup label="창 조작">
           <button
             type="button"
             className="window-pill-handle"
