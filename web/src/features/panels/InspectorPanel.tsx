@@ -8,7 +8,6 @@ import { useWorkbench } from "@/features/workbench/context"
 import { useLayout } from "@/features/workbench/layout-store"
 import { usePanel } from "@/features/dock/context"
 import { registerLockTarget } from "@/features/dock/store"
-import { WindowControls } from "@/features/dock/WindowControls"
 import { activeJob } from "@/lib/queries"
 import { parsePort } from "@/lib/calibration-ports"
 import { connectInputPort } from "@/lib/workflow-flow"
@@ -45,12 +44,10 @@ export function InspectorPanel() {
     () => panel && registerLockTarget(panel.id, () => task?.id),
     [panel, task?.id]
   )
-  const controls = <WindowControls />
 
   if (!w.ready)
     return (
       <div className="inspector-pane">
-        <div className="window-controls-row">{controls}</div>
         {w.loadError ? (
           <Blank>설정을 불러오지 못했습니다.</Blank>
         ) : (
@@ -79,7 +76,6 @@ export function InspectorPanel() {
   if (!task || !catalog)
     return (
       <div className="inspector-pane">
-        <div className="window-controls-row">{controls}</div>
         <Blank
           action={
             <Button variant="outline" onClick={() => w.setAddOpen(true)}>
@@ -179,7 +175,6 @@ export function InspectorPanel() {
     <div className="inspector-pane">
       <TaskInspector
         key={task.id}
-        controls={controls}
         inputRequest={
           inputRequest?.taskId === task.id ? inputRequest : undefined
         }

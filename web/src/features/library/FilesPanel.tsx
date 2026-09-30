@@ -17,7 +17,6 @@ import {
   partitionFiles,
 } from "@/lib/file-library"
 import { useWorkbench } from "@/features/workbench/context"
-import { WindowControls } from "@/features/dock/WindowControls"
 import { ListBar, ListSkeleton, NoFiles, RefreshButton } from "./shared"
 import { useFileList, useRefresh } from "./lists"
 
@@ -73,7 +72,6 @@ export function FilesPanel() {
       <div className="library-window">
         <SidebarHeader>
           <div className="flex min-w-0 items-center gap-2">
-            <WindowControls />
             <SearchField
               className="min-w-0 flex-1"
               label="파일명 검색"

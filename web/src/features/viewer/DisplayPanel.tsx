@@ -6,7 +6,6 @@ import { Blank } from "@/components/workbench-controls"
 import { toast } from "@/components/ui/toast"
 import { usePanel } from "@/features/dock/context"
 import { revealPanel } from "@/features/dock/store"
-import { WindowControls } from "@/features/dock/WindowControls"
 import { ImageViewer } from "./ImageViewer"
 import {
   displayQueryOptions,
@@ -36,9 +35,6 @@ export function DisplayPanel() {
   if (!frames.length)
     return (
       <div className="viewer-window">
-        <div className="window-controls-row">
-          <WindowControls />
-        </div>
         <Blank>IRAF가 표시한 영상이 없습니다</Blank>
       </div>
     )
@@ -67,14 +63,8 @@ export function DisplayPanel() {
           revision={frame.version}
           chrome={{
             title: (
-              <span className="viewer-title-row">
-                <WindowControls />
-                <span
-                  className="viewer-filename glass-surface"
-                  title={row.label}
-                >
-                  <span>{row.label}</span>
-                </span>
+              <span className="viewer-filename glass-surface" title={row.label}>
+                <span>{row.label}</span>
               </span>
             ),
             center: frames.length > 1 && (

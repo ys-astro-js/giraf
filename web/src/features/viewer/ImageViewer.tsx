@@ -370,10 +370,7 @@ export function ImageViewer({
         {error && (
           <div className="viewer-load-state" role="alert">
             <span>{error}</span>
-            <Button
-              variant="outline"
-              onClick={retryImage}
-            >
+            <Button variant="outline" onClick={retryImage}>
               다시 시도
             </Button>
           </div>

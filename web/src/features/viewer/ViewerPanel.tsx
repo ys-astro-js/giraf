@@ -22,7 +22,6 @@ import { useWorkbench } from "@/features/workbench/context"
 import type { AssetTarget } from "@/features/workbench/hooks/useAssetViewer"
 import { usePanel } from "@/features/dock/context"
 import { registerLockTarget } from "@/features/dock/store"
-import { WindowControls } from "@/features/dock/WindowControls"
 import { api, type Frame } from "@/lib/workbench"
 import type { Source } from "@/lib/task-map"
 
@@ -42,12 +41,14 @@ export function ViewerPanel() {
         return row && { row }
       })()
     : (following ?? undefined)
+  const panel = usePanel()?.panel
+  const empty = !target
+  useEffect(() => {
+    if (empty && panel && panel.title !== "뷰어") panel.api.setTitle("뷰어")
+  }, [empty, panel])
   if (!target)
     return (
       <div className="viewer-window">
-        <div className="window-controls-row">
-          <WindowControls />
-        </div>
         <Blank>
           {locked
             ? "잠근 파일을 찾을 수 없습니다"
@@ -112,26 +113,21 @@ function AssetView({ target }: { target: AssetTarget }) {
       }
     )
   }
-  // A single image hosts the window row in its own floating bar.
+  // A single image carries its tools in the floating bar over it.
   const chromeInViewer = isImage && view === "image" && compare.length < 2
   const chrome: ViewerChrome = {
-    title: (
-      <span className="viewer-title-row">
-        <WindowControls />
-        {isImage ? (
-          <Button
-            variant="ghost"
-            className="viewer-filename glass-surface"
-            onClick={() => choose()}
-            title="영상 변경"
-          >
-            <span>{row.label}</span>
-          </Button>
-        ) : (
-          <span className="viewer-filename glass-surface" title={row.label}>
-            <span>{row.label}</span>
-          </span>
-        )}
+    title: isImage ? (
+      <Button
+        variant="ghost"
+        className="viewer-filename glass-surface"
+        onClick={() => choose()}
+        title="영상 변경"
+      >
+        <span>{row.label}</span>
+      </Button>
+    ) : (
+      <span className="viewer-filename glass-surface" title={row.label}>
+        <span>{row.label}</span>
       </span>
     ),
     center: isImage && (

@@ -14,15 +14,12 @@ import { HeaderControls } from "./WindowControls"
 import { DisplayWatcher } from "@/features/viewer/DisplayPanel"
 import { PANELS, type PanelDefinition, type PanelId } from "./panels"
 import {
-  beginWindowDrag,
-  endWindowDrag,
   loadLayout,
+  restoreTab,
   restoreWindow,
   saveLayout,
   syncDock,
   useDock,
-  windowMoved,
-  type Edge,
   type WindowParams,
 } from "./store"
 import "@/styles/workbench/dock.css"
@@ -53,24 +50,45 @@ function frame(definition: PanelDefinition) {
   }
 }
 
-/** Windows minimized toward one edge, restored by a click. */
-function MinimizedStrip({ edge }: { edge: Edge }) {
+/**
+ * Minimized windows and closed built-in tabs wait in a floating toolbar at
+ * the bottom of the workbench, only while there is something in it.
+ */
+function WindowTray() {
   const minimized = useDock((state) => state.minimized)
-  const items = minimized.filter((item) => item.edge === edge)
+  const stowed = useDock((state) => state.stowed)
+  const dock = useDock((state) => state.api)
+  const windows = minimized.flatMap((item) => {
+    const group = dock?.getGroup(item.group)
+    const panel = group?.activePanel ?? group?.panels[0]
+    if (!group || !panel) return []
+    return [
+      {
+        key: item.group,
+        label: group.panels.map((p) => p.title).join(", "),
+        component: panel.view.contentComponent,
+        restore: () => restoreWindow(item.group),
+      },
+    ]
+  })
+  const tabs = stowed.map((item) => ({
+    key: item.id,
+    label: item.title,
+    component: item.component,
+    restore: () => restoreTab(item.id),
+  }))
+  const items = [...windows, ...tabs]
   if (!items.length) return null
   return (
-    <nav className="dock-strip" data-edge={edge} aria-label="최소화한 창">
-      <ToolbarGroup label="최소화한 창" size="sm">
+    <nav className="dock-tray" aria-label="최소화한 창">
+      <ToolbarGroup label="최소화한 창">
         {items.map((item) => {
           const Icon = PANELS[item.component as PanelId]?.icon
           return (
             <ToolbarButton
-              key={item.id}
-              label={item.title}
-              tooltipSide={
-                edge === "left" ? "right" : edge === "right" ? "left" : "top"
-              }
-              onClick={() => restoreWindow(item.id)}
+              key={item.key}
+              label={item.label}
+              onClick={item.restore}
             >
               {Icon && <Icon />}
             </ToolbarButton>
@@ -92,18 +110,9 @@ function ready(api: DockviewApi) {
   api.onDidActiveGroupChange(syncDock)
   api.onDidAddPanel(syncDock)
   api.onDidRemovePanel(syncDock)
-  api.onDidMovePanel(() => {
-    windowMoved()
-    syncDock()
-  })
-  api.onDidMaximizedGroupChange(syncDock)
-  // A tab dropped where nothing docks it floats at the drop point.
-  api.onWillDragPanel((event) => {
-    const target = event.nativeEvent.target
-    if (!(target instanceof HTMLElement)) return
-    beginWindowDrag(event.panel)
-    target.addEventListener("dragend", endWindowDrag, { once: true })
-  })
+  api.onDidMovePanel(syncDock)
+  api.onDidAddGroup(syncDock)
+  api.onDidRemoveGroup(syncDock)
 }
 
 /** The workbench: toolbar above dockable windows and minimized strips. */
@@ -123,7 +132,6 @@ export function DockShell({ header }: { header: ReactNode }) {
       <DisplayWatcher />
       {header}
       <div className="dock-body">
-        <MinimizedStrip edge="left" />
         <div className="dock-root">
           <DockviewReact
             components={components}
@@ -137,9 +145,8 @@ export function DockShell({ header }: { header: ReactNode }) {
             onReady={(event) => ready(event.api)}
           />
         </div>
-        <MinimizedStrip edge="right" />
+        <WindowTray />
       </div>
-      <MinimizedStrip edge="bottom" />
     </SidebarProvider>
   )
 }

@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { DeleteSelectionButton } from "@/components/delete-selection-button"
 import { groupExecutions } from "@/lib/execution-history"
 import { useWorkbench } from "@/features/workbench/context"
-import { WindowControls } from "@/features/dock/WindowControls"
 import { LibraryHistory } from "./History"
 import { ListBar, ListSkeleton, NoFiles } from "./shared"
 import { useFileList } from "./lists"
@@ -58,54 +57,46 @@ export function RunsPanel() {
     <TooltipProvider delay={0}>
       <div className="library-window">
         <SidebarHeader>
-          <div className="flex min-w-0 items-center gap-1">
-            <WindowControls />
-            <div className="min-w-0 flex-1">
-              <ListBar
-                label="실행 기록 관리"
-                count={executions.length}
-                selection={{
-                  active: mode !== null,
-                  selectedCount: files ? selected.length : runSelection.length,
-                  allLabel: files
-                    ? "표시된 파일 전체 선택"
-                    : "실행 기록 전체 선택",
-                  allChecked: files
-                    ? products.length > 0 &&
-                      products.every((file) => selectedSet.has(file.id))
-                    : deletableRuns.length > 0 &&
-                      runSelection.length === deletableRuns.length,
-                  someChecked: files
-                    ? products.some((file) => selectedSet.has(file.id))
-                    : runSelection.length > 0,
-                  allDisabled:
-                    !w.ready ||
-                    !(files ? products.length : deletableRuns.length),
-                  onAll: (checked) =>
-                    files
-                      ? w.setSelectedFiles((ids) =>
-                          checked
-                            ? [
-                                ...new Set([
-                                  ...ids,
-                                  ...products.map((file) => file.id),
-                                ]),
-                              ]
-                            : ids.filter(
-                                (id) => !products.some((file) => file.id === id)
-                              )
-                        )
-                      : setSelectedRuns(
-                          checked ? deletableRuns.map((group) => group.id) : []
-                        ),
-                  onDone: done,
-                  startLabel: "실행 기록 선택 모드",
-                  startDisabled: !w.ready || !deletableRuns.length,
-                  onStart: () => setMode("runs"),
-                }}
-              />
-            </div>
-          </div>
+          <ListBar
+            label="실행 기록 관리"
+            count={executions.length}
+            selection={{
+              active: mode !== null,
+              selectedCount: files ? selected.length : runSelection.length,
+              allLabel: files ? "표시된 파일 전체 선택" : "실행 기록 전체 선택",
+              allChecked: files
+                ? products.length > 0 &&
+                  products.every((file) => selectedSet.has(file.id))
+                : deletableRuns.length > 0 &&
+                  runSelection.length === deletableRuns.length,
+              someChecked: files
+                ? products.some((file) => selectedSet.has(file.id))
+                : runSelection.length > 0,
+              allDisabled:
+                !w.ready || !(files ? products.length : deletableRuns.length),
+              onAll: (checked) =>
+                files
+                  ? w.setSelectedFiles((ids) =>
+                      checked
+                        ? [
+                            ...new Set([
+                              ...ids,
+                              ...products.map((file) => file.id),
+                            ]),
+                          ]
+                        : ids.filter(
+                            (id) => !products.some((file) => file.id === id)
+                          )
+                    )
+                  : setSelectedRuns(
+                      checked ? deletableRuns.map((group) => group.id) : []
+                    ),
+              onDone: done,
+              startLabel: "실행 기록 선택 모드",
+              startDisabled: !w.ready || !deletableRuns.length,
+              onStart: () => setMode("runs"),
+            }}
+          />
         </SidebarHeader>
         <SidebarContent
           className="scroll-fade scroll-fade-4"

@@ -14,10 +14,6 @@
 /* A viewer window gives the file the whole window; its row floats on top. */
 .viewer-window { display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; }
 .viewer-window > .asset-content, .viewer-window > .viewer-grid { flex: 1; }
-.viewer-title-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
-/* Over an image the window controls sit on the same glass chip as the file name. */
-.viewer-title-row .window-controls:has(> *) { width: 38px; height: 38px; flex-basis: 38px; border: 1px solid var(--glass-border); border-radius: 19px; background: var(--glass-background); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
-.viewer-title-row > span:first-child:empty { display: none; }
 .asset-content { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; gap: 0; }
 /* Window controls float in the viewer's row; other views keep the same row above their content. */
 .asset-content[data-chrome="dialog"] { padding-top: 62px; }

@@ -4,7 +4,6 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -13,7 +12,6 @@ import { Button } from "@/components/ui/button"
 import { Choice } from "@/components/workbench-controls"
 import { useTheme } from "@/components/theme-provider"
 import { useWorkbench } from "@/features/workbench/context"
-import { WindowControls } from "@/features/dock/WindowControls"
 import { applyPreset } from "@/features/dock/store"
 import { PRESETS, type PresetId } from "@/features/dock/presets"
 
@@ -24,9 +22,6 @@ export function SettingsPanel() {
   const [preset, setPreset] = useState<PresetId>("default")
   return (
     <div className="library-window">
-      <SidebarHeader className="empty:hidden">
-        <WindowControls />
-      </SidebarHeader>
       <SidebarContent className="scroll-fade scroll-fade-4">
         <SidebarGroup>
           <SidebarGroupContent className="flex flex-col gap-4">

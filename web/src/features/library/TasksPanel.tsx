@@ -23,7 +23,6 @@ import { SearchField } from "@/components/search-field"
 import { taskPackageTree, type TaskPackage } from "@/lib/task-tree"
 import { taskDisplayName } from "@/lib/workbench"
 import { useWorkbench } from "@/features/workbench/context"
-import { WindowControls } from "@/features/dock/WindowControls"
 import { ListBar, ListSkeleton, NoFiles, RefreshButton } from "./shared"
 import { useRefresh } from "./lists"
 
@@ -97,7 +96,6 @@ export function TasksPanel() {
       <div className="library-window">
         <SidebarHeader>
           <div className="flex min-w-0 items-center gap-2">
-            <WindowControls />
             <SearchField
               className="min-w-0 flex-1"
               label="작업 검색"

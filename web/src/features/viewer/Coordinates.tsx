@@ -113,7 +113,9 @@ export function ViewerCoordinates({
                     inputMode={selectionMode ? "decimal" : "numeric"}
                     value={coordinates[i]}
                     disabled={!info}
-                    onChange={(event) => changeCoordinate(i, event.target.value)}
+                    onChange={(event) =>
+                      changeCoordinate(i, event.target.value)
+                    }
                   />
                 </Field>
               ))}
