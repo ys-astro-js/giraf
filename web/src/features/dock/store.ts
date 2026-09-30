@@ -6,6 +6,7 @@ import type {
 } from "dockview-react"
 import { PANELS, type PanelId } from "./panels"
 import { buildPreset, type PresetId } from "./presets"
+import { recordBars } from "./morph"
 
 /** A side of the workbench; its toolbar toggle hides the windows along it. */
 export type Edge = "left" | "right" | "bottom"
@@ -240,6 +241,7 @@ export function revealPanel(id: PanelId, { activate = true } = {}) {
     ? follower(id)
     : (dock.getPanel(id) ?? addWindow(id, id, PANELS[id].title))
   restoreGroup(panel.group)
+  if (activate && panel.group.activePanel !== panel) recordBars(panel.group)
   if (activate) panel.api.setActive()
   syncDock()
 }

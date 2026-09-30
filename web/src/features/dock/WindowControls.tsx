@@ -15,7 +15,7 @@ import {
 } from "@/components/toolbar"
 import { WindowSlot } from "./WindowToolbar"
 import { useBarOverflow } from "./bars"
-import { morphBar } from "./morph"
+import { morphBars } from "./morph"
 import { useToolbarOverflow } from "@/components/toolbar-overflow"
 import { PANELS, type PanelId } from "./panels"
 import {
@@ -124,15 +124,15 @@ export function HeaderControls(props: IDockviewHeaderActionsProps) {
   useLayoutEffect(() => {
     useBarOverflow.setState({ [id]: overflow.context })
   }, [id, overflow.context])
-  // Before a newly shown tab renders its toolbar, record the bar to morph it.
-  const [row, setRow] = useState<HTMLDivElement | null>(null)
+  // A newly shown tab morphs the window's bars from the last tab's.
   useEffect(() => {
-    if (!row) return
-    const listener = props.group.api.onDidActivePanelChange(() => morphBar(row))
+    const listener = props.group.api.onDidActivePanelChange(() =>
+      morphBars(props.group)
+    )
     return () => listener.dispose()
-  }, [row, props.group])
+  }, [props.group])
   return (
-    <div className="window-toolbar" ref={setRow}>
+    <div className="window-toolbar">
       <WindowPill group={props.group} active={props.isGroupActive} />
       <WindowSlot
         owner={id}

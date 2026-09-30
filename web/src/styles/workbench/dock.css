@@ -618,28 +618,18 @@ body[data-window-dragging] {
   border-radius: calc(var(--window-toolbar) / 2);
 }
 
-/* Switching tabs (see dock/morph.ts): while the bar morphs, the real
-   capsules keep their final layout with no motion of their own and draw no
-   background; stand-in capsules carry the shape from the old tab's layout to
-   the new one, and old contents fade as ghosts. */
-.window-toolbar[data-morphing] {
-  position: relative;
-}
-/* Transitions stay off a moment past the morph (data-settling) so the real
-   capsules take over from the stand-ins without fading back in. */
-.window-toolbar:is([data-morphing], [data-settling])
-  .window-toolbar-slot:not(.window-leading-slot)
-  :is(.toolbar-slot, .toolbar-group, .toolbar-item, .toolbar-item-content, .toolbar-button) {
+/* Switching tabs (see dock/morph.ts): while the bars morph, the real
+   capsules hold their final layout with no motion of their own and stay
+   hidden; stand-in capsules carry shape and contents from the old tab's
+   layout to the new one. Transitions stay off a moment past the morph
+   (data-settling) so the real capsules take over without fading back in. */
+.dv-groupview:is([data-morphing], [data-settling])
+  :is(.window-toolbar-slot, .window-bottom-bar)
+  :is(.toolbar-slot, .toolbar-group, .toolbar-item, .toolbar-item-content, .toolbar-button, .search-field) {
   transition: none !important;
 }
-.window-toolbar[data-morphing] .window-toolbar-slot:not(.window-leading-slot) .toolbar-group {
-  border-color: transparent;
-  background: transparent !important;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-.window-toolbar[data-morphing] .window-toolbar-slot:not(.window-leading-slot) .toolbar-group > * {
-  opacity: 0;
+[data-morph-hidden] {
+  visibility: hidden !important;
 }
 .window-morph-layer {
   position: absolute;
@@ -664,6 +654,11 @@ body[data-window-dragging] {
   top: -1px;
   box-sizing: border-box;
   margin: 0;
+  visibility: visible !important;
+}
+/* Groups and fields are drawn by their stand-in; a lone button (a primary
+   fill) keeps its own look. */
+.window-morph-face:is(.toolbar-group, .search-field) {
   border-color: transparent !important;
   background: transparent !important;
   -webkit-backdrop-filter: none !important;

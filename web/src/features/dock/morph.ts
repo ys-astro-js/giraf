@@ -1,17 +1,21 @@
+import type { DockviewGroupPanel } from "dockview-react"
+
 /**
- * Switching tabs morphs a window's top bar capsule by capsule. Each tab
- * brings its own toolbar, so while the switch plays the bar hides its real
+ * Switching tabs morphs a window's bars capsule by capsule. Each tab brings
+ * its own controls, so while the switch plays the window hides the real
  * capsules and moves stand-ins, each carrying the old and the new contents,
  * from the old layout to the new one; the real capsules take over where the
- * stand-ins land.
+ * stand-ins land. Search fields and buttons are capsules alike.
  *
- * The trailing section is anchored at its end: capsules pair up from the
- * right. An old capsule with no partner is absorbed into its right-hand
- * neighbor, paired capsules resize (a lone button grows into a group) while
- * their contents cross-fade, and a new capsule with no partner splits out of
- * its neighbor. These overlap as one cascade, in that order. Where there is
- * no neighbor at all, capsules materialize (blur in or out). Motion uses the
- * toolbar's own timing, so it reads like the rest of the toolbar.
+ * A section is anchored at its outer end, and its capsules pair up from
+ * there: the top bar's trailing section and the bottom bar's trailing half
+ * from the right, the leading controls and the bottom bar's leading half
+ * from the left. An old capsule with no partner is absorbed into its
+ * neighbor toward the anchor, paired capsules resize while their contents
+ * cross-fade, and a new capsule with no partner splits out of that
+ * neighbor, as one overlapping cascade in that order. With no neighbor at
+ * all, capsules materialize (blur in or out). The title does not travel; it
+ * cross-fades in place (see dock.css). Motion uses the toolbar's own timing.
  */
 
 /** The toolbar's shift (see toolbar.css --motion-shift, --motion-ease). */
@@ -19,30 +23,111 @@ const SHIFT = 380
 const EASE = "cubic-bezier(0.22, 1, 0.36, 1)"
 /** How far each step of the cascade trails the one before. */
 const STAGGER = 0.35 * SHIFT
-const CAPSULES =
-  ".window-toolbar-slot:not(.window-leading-slot) .toolbar-slot:not([data-hidden='true']) > .toolbar-group"
+/** How long a recorded bar stays good for the switch that follows it. */
+const FRESH = 1000
 
+type Anchor = "left" | "right"
 type Box = { left: number; top: number; width: number; height: number }
-type Capsule = { element: HTMLElement; box: Box }
+type Capsule = { element: HTMLElement; box: Box; face: HTMLElement }
+type Section = { anchor: Anchor; capsules: Capsule[] }
+type Bars = Record<"top" | "leading" | "start" | "end", Section>
 
-/** Visible capsules of a bar, right to left, in the row's coordinates. */
-function capsules(row: HTMLElement): Capsule[] {
-  const origin = row.getBoundingClientRect()
-  return [...row.querySelectorAll<HTMLElement>(CAPSULES)]
+const visibleGroups = (root: Element | null) =>
+  root
+    ? [
+        ...root.querySelectorAll<HTMLElement>(
+          ".toolbar-slot:not([data-hidden='true']) > .toolbar-group"
+        ),
+      ]
+    : []
+
+/** A capsule's contents, drawn without its capsule, held to one end. */
+function face(element: HTMLElement, box: Box, anchor: Anchor) {
+  const copy = element.cloneNode(true) as HTMLElement
+  copy.classList.add("window-morph-face")
+  copy.removeAttribute("data-morph-hidden")
+  copy.style.width = `${box.width}px`
+  copy.style.height = `${box.height}px`
+  copy.style.setProperty(anchor, "-1px")
+  return copy
+}
+
+function measure(
+  elements: HTMLElement[],
+  origin: DOMRect,
+  anchor: Anchor
+): Section {
+  const capsules = elements
     .map((element) => {
       const rect = element.getBoundingClientRect()
-      return {
-        element,
-        box: {
-          left: rect.left - origin.left,
-          top: rect.top - origin.top,
-          width: rect.width,
-          height: rect.height,
-        },
+      const box = {
+        left: rect.left - origin.left,
+        top: rect.top - origin.top,
+        width: rect.width,
+        height: rect.height,
       }
+      return { element, box, face: face(element, box, anchor) }
     })
     .filter((capsule) => capsule.box.width > 1)
-    .sort((a, b) => b.box.left - a.box.left)
+    .sort((a, b) =>
+      anchor === "right" ? b.box.left - a.box.left : a.box.left - b.box.left
+    )
+  return { anchor, capsules }
+}
+
+/** Everything a window's bars show now, in the window's coordinates. */
+function bars(group: DockviewGroupPanel): Bars {
+  const root = group.element
+  const origin = root.getBoundingClientRect()
+  const top = root.querySelector(
+    ".window-toolbar-slot:not(.window-leading-slot)"
+  )
+  const leading = root.querySelector(".window-leading-slot")
+  const bottom = root.querySelector<HTMLElement>(".window-bottom-bar")
+  // The bottom bar's controls split at its middle into two sections.
+  const lower = bottom
+    ? [
+        ...visibleGroups(bottom),
+        ...bottom.querySelectorAll<HTMLElement>(
+          ".window-toolbar-cluster > :is(.search-field, button)"
+        ),
+      ]
+    : []
+  const middle = bottom
+    ? (() => {
+        const rect = bottom.getBoundingClientRect()
+        return rect.left + rect.width / 2
+      })()
+    : 0
+  const center = (element: HTMLElement) => {
+    const rect = element.getBoundingClientRect()
+    return rect.left + rect.width / 2
+  }
+  return {
+    top: measure(visibleGroups(top), origin, "right"),
+    leading: measure(visibleGroups(leading), origin, "left"),
+    start: measure(
+      lower.filter((element) => center(element) < middle),
+      origin,
+      "left"
+    ),
+    end: measure(
+      lower.filter((element) => center(element) >= middle),
+      origin,
+      "right"
+    ),
+  }
+}
+
+const recorded = new WeakMap<DockviewGroupPanel, { at: number; bars: Bars }>()
+
+/**
+ * Records a window's bars just before its shown tab may change. The bottom
+ * bar belongs to the tab, which leaves the page as the switch begins, so it
+ * has to be caught beforehand: on a tab press, or before code shows a tab.
+ */
+export function recordBars(group: DockviewGroupPanel) {
+  recorded.set(group, { at: performance.now(), bars: bars(group) })
 }
 
 const place = (box: Box) => ({
@@ -52,21 +137,17 @@ const place = (box: Box) => ({
   height: `${box.height}px`,
 })
 
-/** A capsule tucked behind a neighbor's leading edge, as small as it gets. */
-const tucked = (neighbor: Box, own: Box): Box => ({
-  ...own,
-  left: neighbor.left,
-  width: Math.min(own.height, own.width),
-})
-
-/** A capsule's contents, drawn without the capsule, held to one end. */
-function face(capsule: Capsule, end: "left" | "right") {
-  const copy = capsule.element.cloneNode(true) as HTMLElement
-  copy.classList.add("window-morph-face")
-  copy.style.width = `${capsule.box.width}px`
-  copy.style.height = `${capsule.box.height}px`
-  copy.style.setProperty(end, "-1px")
-  return copy
+/** A capsule tucked behind a neighbor's edge that faces the anchor's way. */
+const tucked = (neighbor: Box, own: Box, anchor: Anchor): Box => {
+  const width = Math.min(own.height, own.width)
+  return {
+    ...own,
+    left:
+      anchor === "right"
+        ? neighbor.left
+        : neighbor.left + neighbor.width - width,
+    width,
+  }
 }
 
 function stand(box: Box) {
@@ -76,11 +157,9 @@ function stand(box: Box) {
   return element
 }
 
-const running = new WeakMap<HTMLElement, () => void>()
-
 /**
- * Runs once the new tab's toolbar has rendered: after two frames, or a short
- * timer when frames are not coming (a hidden window).
+ * Runs once the new tab's controls have rendered: after two frames, or a
+ * short timer when frames are not coming (a hidden window).
  */
 function afterRender(run: () => void) {
   let ran = false
@@ -93,55 +172,68 @@ function afterRender(run: () => void) {
   window.setTimeout(once, 50)
 }
 
+const running = new WeakMap<HTMLElement, () => void>()
+
 /**
- * Call when a window's shown tab is about to change, before the new tab's
- * toolbar renders: it records the bar as it is and plays the morph once the
- * new toolbar is in place.
+ * Call when a window's shown tab changes, before the new tab's controls
+ * render: it takes the bars as recorded (or as they still are) and plays
+ * the morph once the new controls are in place.
  */
-export function morphBar(row: HTMLElement) {
-  running.get(row)?.()
+export function morphBars(group: DockviewGroupPanel) {
+  const root = group.element
+  running.get(root)?.()
+  const record = recorded.get(group)
+  recorded.delete(group)
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
-  const before = capsules(row)
+  const now = bars(group)
+  const fresh = record && performance.now() - record.at < FRESH
+  // The top bar is still on the page; the bottom bar only in the record.
+  const before: Bars = {
+    top: now.top,
+    leading: now.leading,
+    start: fresh ? record.bars.start : { anchor: "left", capsules: [] },
+    end: fresh ? record.bars.end : { anchor: "right", capsules: [] },
+  }
+
   const layer = document.createElement("div")
   layer.className = "window-morph-layer"
   layer.inert = true
-  // Until the new toolbar is measured, the old one stays drawn as it was.
-  layer.append(
-    ...before.map((capsule) => {
+  // Until the new controls are measured, the old ones stay drawn as they were.
+  for (const section of Object.values(before))
+    for (const capsule of section.capsules) {
       const element = stand(capsule.box)
-      element.append(face(capsule, "right"))
-      return element
-    })
-  )
-  row.dataset.morphing = ""
-  row.append(layer)
+      element.append(capsule.face.cloneNode(true))
+      layer.append(element)
+    }
+  root.dataset.morphing = ""
+  root.append(layer)
 
+  const hidden = new Set<HTMLElement>()
   const animations: Animation[] = []
   let done = false
   const finish = () => {
     if (done) return
     done = true
     // The real capsules show as they are, without transitions, then settle.
-    row.dataset.settling = ""
-    delete row.dataset.morphing
+    root.dataset.settling = ""
+    delete root.dataset.morphing
+    for (const element of hidden) delete element.dataset.morphHidden
     layer.remove()
     for (const animation of animations) animation.cancel()
-    running.delete(row)
-    afterRender(() => delete row.dataset.settling)
+    running.delete(root)
+    afterRender(() => delete root.dataset.settling)
   }
-  running.set(row, finish)
+  running.set(root, finish)
 
   afterRender(() => {
     if (done) return
-    const after = capsules(row)
-    const paired = Math.min(before.length, after.length)
-    const leaving = before.length > paired
-    const resizeAt = leaving && paired ? STAGGER : 0
-    const splitAt = resizeAt + (paired ? STAGGER : 0)
+    const after = bars(group)
+    const below: HTMLElement[] = []
+    const above: HTMLElement[] = []
     let end = 0
 
     const play = (
-      element: HTMLElement,
+      element: Element,
       frames: Keyframe[],
       delay: number,
       duration = SHIFT,
@@ -152,7 +244,7 @@ export function morphBar(row: HTMLElement) {
       )
       end = Math.max(end, delay + duration)
     }
-    const fade = (element: HTMLElement, into: boolean, at: number, blur = 4) =>
+    const fade = (element: Element, into: boolean, at: number, blur = 4) =>
       play(
         element,
         into
@@ -168,18 +260,20 @@ export function morphBar(row: HTMLElement) {
         into ? 260 : 200,
         into ? "ease-out" : "ease-in"
       )
-    /** Old contents leave toward the bar's end; new ones come from there. */
+    /** Contents leave toward the section's anchor and come from there. */
     const crossFade = (
-      out: HTMLElement | null,
-      into: HTMLElement,
-      at: number
+      out: Element | null,
+      into: Element,
+      at: number,
+      anchor: Anchor
     ) => {
+      const away = `translateX(${anchor === "right" ? 12 : -12}px)`
       if (out)
         play(
           out,
           [
             { opacity: 1, filter: "blur(0)", transform: "none" },
-            { opacity: 0, filter: "blur(4px)", transform: "translateX(12px)" },
+            { opacity: 0, filter: "blur(4px)", transform: away },
           ],
           at,
           200,
@@ -188,7 +282,7 @@ export function morphBar(row: HTMLElement) {
       play(
         into,
         [
-          { opacity: 0, filter: "blur(4px)", transform: "translateX(12px)" },
+          { opacity: 0, filter: "blur(4px)", transform: away },
           { opacity: 1, filter: "blur(0)", transform: "none" },
         ],
         at + 60,
@@ -197,54 +291,60 @@ export function morphBar(row: HTMLElement) {
       )
     }
 
-    const below: HTMLElement[] = []
-    const above: HTMLElement[] = []
-    // Absorb: old capsules without a partner slide into their neighbor.
-    before.forEach((capsule, index) => {
-      if (index < paired) return
-      const element = stand(capsule.box)
-      element.append(face(capsule, "left"))
-      below.push(element)
-      if (!paired) return fade(element, false, 0, 8)
-      const neighbor = before[paired - 1].box
-      play(
-        element,
-        [place(capsule.box), place(tucked(neighbor, capsule.box))],
-        0
-      )
-      fade(element, false, 0)
-    })
-    // Resize: paired capsules travel and resize, contents cross-fading.
-    for (let index = 0; index < paired; index++) {
-      const element = stand(before[index].box)
-      const old = face(before[index], "right")
-      const next = face(after[index], "right")
-      element.append(old, next)
-      above.push(element)
-      play(
-        element,
-        [place(before[index].box), place(after[index].box)],
-        resizeAt
-      )
-      crossFade(old, next, resizeAt)
+    for (const key of ["top", "leading", "start", "end"] as const) {
+      const { anchor } = after[key]
+      const old = before[key].capsules
+      const next = after[key].capsules
+      for (const capsule of next) {
+        capsule.element.dataset.morphHidden = ""
+        hidden.add(capsule.element)
+      }
+      const paired = Math.min(old.length, next.length)
+      const resizeAt = old.length > paired && paired ? STAGGER : 0
+      const splitAt = resizeAt + (paired ? STAGGER : 0)
+
+      // Absorb: old capsules without a partner slide into their neighbor.
+      old.forEach((capsule, index) => {
+        if (index < paired) return
+        const element = stand(capsule.box)
+        element.append(capsule.face.cloneNode(true))
+        below.push(element)
+        if (!paired) return fade(element, false, 0, 8)
+        const neighbor = old[paired - 1].box
+        play(
+          element,
+          [place(capsule.box), place(tucked(neighbor, capsule.box, anchor))],
+          0
+        )
+        fade(element, false, 0)
+      })
+      // Resize: paired capsules travel and resize, contents cross-fading.
+      for (let index = 0; index < paired; index++) {
+        const element = stand(old[index].box)
+        const out = old[index].face.cloneNode(true) as HTMLElement
+        const into = next[index].face
+        element.append(out, into)
+        above.push(element)
+        play(element, [place(old[index].box), place(next[index].box)], resizeAt)
+        crossFade(out, into, resizeAt, anchor)
+      }
+      // Split: new capsules without a partner come out of their neighbor.
+      next.forEach((capsule, index) => {
+        if (index < paired) return
+        const element = stand(capsule.box)
+        element.append(capsule.face)
+        below.push(element)
+        if (!paired) return fade(element, true, 0, 8)
+        const neighbor = next[paired - 1].box
+        play(
+          element,
+          [place(tucked(neighbor, capsule.box, anchor)), place(capsule.box)],
+          splitAt
+        )
+        fade(element, true, splitAt)
+        crossFade(null, capsule.face, splitAt, anchor)
+      })
     }
-    // Split: new capsules without a partner come out of their neighbor.
-    after.forEach((capsule, index) => {
-      if (index < paired) return
-      const element = stand(capsule.box)
-      const next = face(capsule, "left")
-      element.append(next)
-      below.push(element)
-      if (!paired) return fade(element, true, 0, 8)
-      const neighbor = after[paired - 1].box
-      play(
-        element,
-        [place(tucked(neighbor, capsule.box)), place(capsule.box)],
-        splitAt
-      )
-      fade(element, true, splitAt)
-      crossFade(null, next, splitAt)
-    })
     // Capsules that tuck away or come out pass behind their neighbors.
     layer.replaceChildren(...below, ...above)
     window.setTimeout(finish, end + 30)

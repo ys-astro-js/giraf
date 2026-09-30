@@ -1,4 +1,5 @@
 import type { DockviewGroupPanel, IDockviewPanel } from "dockview-react"
+import { recordBars } from "./morph"
 import {
   dockWindow,
   dropPreview,
@@ -182,6 +183,8 @@ export function headerPointerDown(event: PointerEvent) {
   if (!group) return
   const id = target.closest<HTMLElement>("[data-panel-id]")?.dataset.panelId
   const panel = id ? group.panels.find((p) => p.id === id) : undefined
+  // The shown tab may change: its bars leave with it, so record them now.
+  if (panel && group.activePanel !== panel) recordBars(group)
   if (panel && group.panels.length > 1)
     startTabDrag(panel, event.clientX, event.clientY)
   else startWindowDrag(group, event.clientX, event.clientY)
