@@ -17,6 +17,7 @@ import {
   ToolbarCluster,
   ToolbarGroup,
   ToolbarText,
+  ToolbarSpacer,
 } from "@/components/toolbar"
 import { Button } from "@/components/ui/button"
 import { stepPixel } from "@/lib/viewer-navigation"
@@ -24,6 +25,7 @@ import type { Frame } from "@/lib/workbench"
 import { Blank } from "@/components/workbench-controls"
 
 import { RevealFile, ViewerPopover } from "./controls"
+import { WindowToolbar } from "@/features/dock/WindowToolbar"
 
 import type { ViewerViewport, ViewerMarker, ViewerChrome } from "./types"
 export type { ViewerViewport, ViewerMarker, ViewerChrome } from "./types"
@@ -47,6 +49,7 @@ export function ImageViewer({
   chrome,
   analysis = true,
   revision,
+  windowBars = false,
 }: {
   frame?: Frame
   onPick?: (x: number, y: number) => void
@@ -70,6 +73,11 @@ export function ImageViewer({
   analysis?: boolean
   /** Reloads the image without resetting the view when a live frame changes. */
   revision?: number
+  /**
+   * In a window of its own, the tools go to the window's bars (analysis at
+   * the top, coordinates and zoom at the bottom) instead of floating rows.
+   */
+  windowBars?: boolean
 }) {
   const uid = useId()
   const {
@@ -117,6 +125,65 @@ export function ImageViewer({
     selectedMarker,
     revision,
   })
+  const analysisTools = (
+    <ToolbarGroup label="영상 분석" hidden={!analysis}>
+      <ViewerDisplaySettings
+        info={info}
+        sharedRange={sharedRange}
+        range={range}
+        applyRange={applyRange}
+        resetRange={resetRange}
+        uid={uid}
+        stretch={stretch}
+        setStretch={setStretch}
+        rangeError={rangeError}
+        changeRange={changeRange}
+      />
+      {!selectionMode && (
+        <ViewerStatistics info={info} onStatistics={onStatistics} />
+      )}
+      {!onPick && <ViewerPixelProfile info={info} pixel={pixel} />}
+    </ToolbarGroup>
+  )
+  const zoomTools = (
+    <ToolbarGroup label="확대 및 축소">
+      <ToolbarButton
+        label="축소"
+        disabled={!image}
+        onClick={() => zoom(1 / 1.25)}
+      >
+        <Minus />
+      </ToolbarButton>
+      <ToolbarText className="min-w-14 text-center">
+        <output aria-label="현재 배율">
+          {info ? `${Math.round(actualScale * 1000) / 10}%` : "—"}
+        </output>
+      </ToolbarText>
+      <ToolbarButton label="확대" disabled={!image} onClick={() => zoom(1.25)}>
+        <Plus />
+      </ToolbarButton>
+      <ToolbarButton label="화면에 맞춤" disabled={!image} onClick={reset}>
+        <Scan />
+      </ToolbarButton>
+    </ToolbarGroup>
+  )
+  const coordinateTools = (
+    <ViewerCoordinates
+      size={windowBars ? undefined : "sm"}
+      coordinatesOpen={coordinatesOpen}
+      setCoordinatesOpen={setCoordinatesOpen}
+      info={info}
+      cross={cross}
+      selectionMode={selectionMode}
+      pixel={pixel}
+      coordinates={coordinates}
+      submitCoordinates={submitCoordinates}
+      coordinateError={coordinateError}
+      uid={uid}
+      changeCoordinate={changeCoordinate}
+      onPick={onPick}
+    />
+  )
   return (
     <section
       aria-label={frame?.label || "영상"}
@@ -240,128 +307,96 @@ export function ImageViewer({
           </div>
         )}
         {imageOverlay}
-        <div className="viewer-top-bar">
-          {chrome?.title ? (
-            <div className="viewer-title">{chrome.title}</div>
-          ) : !embedded ? (
-            <h2 className="viewer-title" title={frame?.label}>
-              {onChoose ? (
-                <Button
-                  variant="ghost"
-                  className="viewer-filename glass-surface"
-                  onClick={onChoose}
-                  title="영상 변경"
-                >
-                  <span>{frame?.label || "영상 선택"}</span>
-                </Button>
-              ) : (
-                <span className="viewer-filename glass-surface">
-                  <span>{frame?.label || "영상"}</span>
-                </span>
-              )}
-            </h2>
-          ) : (
-            <span />
-          )}
-          <div className="viewer-top-center">{chrome?.center}</div>
-          <ToolbarCluster edge="end" size="sm" className="viewer-top-tools">
-            <ToolbarGroup label="영상 분석" hidden={!analysis}>
-              <ViewerDisplaySettings
-                info={info}
-                sharedRange={sharedRange}
-                range={range}
-                applyRange={applyRange}
-                resetRange={resetRange}
-                uid={uid}
-                stretch={stretch}
-                setStretch={setStretch}
-                rangeError={rangeError}
-                changeRange={changeRange}
-              />
-              {!selectionMode && (
-                <ViewerStatistics info={info} onStatistics={onStatistics} />
-              )}
-              {!onPick && <ViewerPixelProfile info={info} pixel={pixel} />}
-            </ToolbarGroup>
-            {!embedded && (
-              <ToolbarGroup label="파일 동작">
-                {onReload && (
-                  <ToolbarButton label="영상 다시 불러오기" onClick={onReload}>
-                    <RotateCw />
-                  </ToolbarButton>
+        {windowBars ? (
+          <>
+            <WindowToolbar className="viewer-window-tools">
+              {analysisTools}
+            </WindowToolbar>
+            <WindowToolbar placement="bottom">
+              {navigationTools && coordinateTools}
+              <ToolbarSpacer flexible />
+              {navigationTools && zoomTools}
+            </WindowToolbar>
+          </>
+        ) : (
+          <div className="viewer-top-bar">
+            {chrome?.title ? (
+              <div className="viewer-title">{chrome.title}</div>
+            ) : !embedded ? (
+              <h2 className="viewer-title" title={frame?.label}>
+                {onChoose ? (
+                  <Button
+                    variant="ghost"
+                    className="viewer-filename glass-surface"
+                    onClick={onChoose}
+                    title="영상 변경"
+                  >
+                    <span>{frame?.label || "영상 선택"}</span>
+                  </Button>
+                ) : (
+                  <span className="viewer-filename glass-surface">
+                    <span>{frame?.label || "영상"}</span>
+                  </span>
                 )}
-                {info && (
-                  <ViewerPopover label="FITS 헤더" icon={TableProperties}>
-                    <pre className="max-h-80 overflow-auto text-xs">
-                      {info.header}
-                    </pre>
-                  </ViewerPopover>
-                )}
-                {onCompare && (
-                  <ToolbarButton label="영상 비교" onClick={onCompare}>
-                    <Columns2 />
-                  </ToolbarButton>
-                )}
-                {frame && <RevealFile id={frame.id} />}
-              </ToolbarGroup>
+              </h2>
+            ) : (
+              <span />
             )}
-            {!embedded && headerActions && (
-              <ToolbarGroup label="보기">{headerActions}</ToolbarGroup>
-            )}
-            {chrome?.actions}
-          </ToolbarCluster>
-        </div>
-        {navigationTools && (
+            <div className="viewer-top-center">{chrome?.center}</div>
+            <ToolbarCluster edge="end" size="sm" className="viewer-top-tools">
+              {analysisTools}
+              <ToolbarSpacer />
+              {!embedded && (
+                <ToolbarGroup label="파일 동작">
+                  {onReload && (
+                    <ToolbarButton
+                      label="영상 다시 불러오기"
+                      onClick={onReload}
+                    >
+                      <RotateCw />
+                    </ToolbarButton>
+                  )}
+                  {info && (
+                    <ViewerPopover label="FITS 헤더" icon={TableProperties}>
+                      <pre className="max-h-80 overflow-auto text-xs">
+                        {info.header}
+                      </pre>
+                    </ViewerPopover>
+                  )}
+                  {onCompare && (
+                    <ToolbarButton label="영상 비교" onClick={onCompare}>
+                      <Columns2 />
+                    </ToolbarButton>
+                  )}
+                  {frame && <RevealFile id={frame.id} />}
+                </ToolbarGroup>
+              )}
+              {!embedded && headerActions && (
+                <>
+                  <ToolbarSpacer />
+                  <ToolbarGroup label="보기">{headerActions}</ToolbarGroup>
+                </>
+              )}
+              {chrome?.actions && (
+                <>
+                  <ToolbarSpacer />
+                  {chrome.actions}
+                </>
+              )}
+            </ToolbarCluster>
+          </div>
+        )}
+        {navigationTools && !windowBars && (
           <ToolbarCluster
             edge="end"
             placement="bottom"
             size="sm"
             className="viewer-zoom"
           >
-            <ToolbarGroup label="확대 및 축소">
-              <ToolbarButton
-                label="축소"
-                disabled={!image}
-                onClick={() => zoom(1 / 1.25)}
-              >
-                <Minus />
-              </ToolbarButton>
-              <ToolbarText className="min-w-14 text-center">
-                <output aria-label="현재 배율">
-                  {info ? `${Math.round(actualScale * 1000) / 10}%` : "—"}
-                </output>
-              </ToolbarText>
-              <ToolbarButton
-                label="확대"
-                disabled={!image}
-                onClick={() => zoom(1.25)}
-              >
-                <Plus />
-              </ToolbarButton>
-              <ToolbarButton
-                label="화면에 맞춤"
-                disabled={!image}
-                onClick={reset}
-              >
-                <Scan />
-              </ToolbarButton>
-            </ToolbarGroup>
+            {zoomTools}
           </ToolbarCluster>
         )}
-        <ViewerCoordinates
-          coordinatesOpen={coordinatesOpen}
-          setCoordinatesOpen={setCoordinatesOpen}
-          info={info}
-          cross={cross}
-          selectionMode={selectionMode}
-          pixel={pixel}
-          coordinates={coordinates}
-          submitCoordinates={submitCoordinates}
-          coordinateError={coordinateError}
-          uid={uid}
-          changeCoordinate={changeCoordinate}
-          onPick={onPick}
-        />
+        {!windowBars && coordinateTools}
         {loading && (
           <div className="viewer-load-state" role="status">
             영상 불러오는 중…

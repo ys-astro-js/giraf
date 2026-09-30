@@ -9,7 +9,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { ToolbarCluster, ToolbarGroup } from "@/components/toolbar"
+import {
+  ToolbarCluster,
+  ToolbarGroup,
+  ToolbarSpacer,
+} from "@/components/toolbar"
 import { Button } from "@/components/ui/button"
 import { SearchField } from "@/components/search-field"
 import { ImageViewer } from "@/features/viewer/ImageViewer"
@@ -54,7 +58,12 @@ function ResultPreview({
             <ToolbarGroup label="파일 동작">
               <RevealFile id={frame.id} />
             </ToolbarGroup>
-            {actions && <ToolbarGroup label="보기">{actions}</ToolbarGroup>}
+            {actions && (
+              <>
+                <ToolbarSpacer />
+                <ToolbarGroup label="보기">{actions}</ToolbarGroup>
+              </>
+            )}
           </ToolbarCluster>
         </header>
       )}

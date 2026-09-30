@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { SidebarContent, SidebarGroup } from "@/components/ui/sidebar"
-import { ToolbarGroup } from "@/components/toolbar"
+import { ToolbarGroup, ToolbarSpacer } from "@/components/toolbar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button"
 import { SearchField } from "@/components/search-field"
@@ -105,6 +105,7 @@ export function FilesPanel() {
                   resetLimits()
                 }}
               />
+              <ToolbarSpacer />
               <ToolbarGroup label="필터">
                 <FileFilterButton
                   inToolbar
@@ -127,6 +128,7 @@ export function FilesPanel() {
               >
                 작업에 사용
               </Button>
+              <ToolbarSpacer />
               <DeleteSelectionButton
                 ids={selected}
                 label="선택한 파일 삭제"

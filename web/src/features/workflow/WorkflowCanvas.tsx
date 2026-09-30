@@ -10,9 +10,8 @@ import {
 } from "@/components/workflow-tools"
 import {
   ToolbarButton,
-  ToolbarCluster,
   ToolbarGroup,
-  ToolbarItem,
+  ToolbarSpacer,
 } from "@/components/toolbar"
 import { SearchField } from "@/components/search-field"
 import { WorkflowEdge } from "@/components/workflow-edge"
@@ -163,16 +162,6 @@ export function TaskMapView({
       }}
     >
       <h1 className="sr-only">워크플로우</h1>
-      {onSearch && (
-        <div className="workflow-search">
-          <SearchField
-            variant="glass"
-            label="작업 검색"
-            value={search}
-            onValueChange={onSearch}
-          />
-        </div>
-      )}
       {editingGroup !== null && (
         <SubflowEditor
           key={editingGroup}
@@ -360,16 +349,33 @@ export function TaskMapView({
                 maskColor="var(--workflow-minimap-mask)"
               />
               <WorkflowClickConnection />
+              {/* Navigation and the display window can go to the menu when
+                  space runs short; arranging and grouping stay. */}
               <WindowToolbar>
-                <ToolbarGroup label="워크플로우 구성">
-                  <ToolbarItem hidden={!map.view.selected}>
-                    <ToolbarButton
-                      label="선택한 작업 보기"
-                      onClick={revealSelected}
-                    >
-                      <LocateFixed />
-                    </ToolbarButton>
-                  </ToolbarItem>
+                <ToolbarGroup
+                  label="선택한 작업"
+                  hidden={!map.view.selected}
+                  overflow
+                >
+                  <ToolbarButton
+                    label="선택한 작업 보기"
+                    onClick={revealSelected}
+                  >
+                    <LocateFixed />
+                  </ToolbarButton>
+                </ToolbarGroup>
+                <ToolbarSpacer />
+                <ToolbarGroup label="디스플레이" hidden={!hasDisplay} overflow>
+                  <ToolbarButton
+                    label="IRAF 디스플레이"
+                    aria-pressed={displayOpen}
+                    onClick={() => revealPanel("display")}
+                  >
+                    <Monitor />
+                  </ToolbarButton>
+                </ToolbarGroup>
+                <ToolbarSpacer />
+                <ToolbarGroup label="배치">
                   <WorkflowEdgeStyleButton
                     straight={map.view.edgeStyle === "smoothstep"}
                     disabled={layoutBusy || !onStraightEdges}
@@ -386,6 +392,21 @@ export function TaskMapView({
                     }}
                   />
                   <ToolbarButton
+                    label={layoutBusy ? "배치 중…" : "자동 배치"}
+                    onClick={onAutoLayout}
+                    disabled={layoutBusy || !onAutoLayout}
+                    aria-busy={layoutBusy}
+                  >
+                    {layoutBusy ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <BroomSparkles />
+                    )}
+                  </ToolbarButton>
+                </ToolbarGroup>
+                <ToolbarSpacer />
+                <ToolbarGroup label="그룹">
+                  <ToolbarButton
                     label="그룹 만들기"
                     aria-pressed={selectingGroup}
                     disabled={!map.tasks.some((t) => !t.subflowId)}
@@ -398,34 +419,23 @@ export function TaskMapView({
                   >
                     <SquareDashedMousePointer />
                   </ToolbarButton>
-                  <ToolbarButton
-                    label={layoutBusy ? "배치 중…" : "자동 배치"}
-                    onClick={onAutoLayout}
-                    disabled={layoutBusy || !onAutoLayout}
-                    aria-busy={layoutBusy}
-                  >
-                    {layoutBusy ? (
-                      <LoaderCircle className="animate-spin" />
-                    ) : (
-                      <BroomSparkles />
-                    )}
-                  </ToolbarButton>
-                  <ToolbarItem hidden={!hasDisplay}>
-                    <ToolbarButton
-                      label="IRAF 디스플레이"
-                      aria-pressed={displayOpen}
-                      onClick={() => revealPanel("display")}
-                    >
-                      <Monitor />
-                    </ToolbarButton>
-                  </ToolbarItem>
                 </ToolbarGroup>
               </WindowToolbar>
-              <Panel position="bottom-right" className="workflow-zoom">
-                <ToolbarCluster edge="end" placement="bottom" size="sm">
-                  <WorkflowZoomControls />
-                </ToolbarCluster>
-              </Panel>
+              {/* Search sits in the middle of the bottom bar, zoom at its end. */}
+              <WindowToolbar placement="bottom">
+                <ToolbarSpacer flexible />
+                {onSearch && (
+                  <SearchField
+                    variant="glass"
+                    className="workflow-bar-search"
+                    label="작업 검색"
+                    value={search}
+                    onValueChange={onSearch}
+                  />
+                )}
+                <ToolbarSpacer flexible />
+                <WorkflowZoomControls />
+              </WindowToolbar>
               {selectingGroup && (editingGroup === null || groupFormHidden) && (
                 <Panel
                   position="top-center"

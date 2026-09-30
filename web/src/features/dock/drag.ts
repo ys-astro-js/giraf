@@ -1,4 +1,5 @@
 import type { DockviewGroupPanel, IDockviewPanel } from "dockview-react"
+import { switchTab } from "./morph"
 import {
   dockWindow,
   dropPreview,
@@ -182,6 +183,11 @@ export function headerPointerDown(event: PointerEvent) {
   if (!group) return
   const id = target.closest<HTMLElement>("[data-panel-id]")?.dataset.panelId
   const panel = id ? group.panels.find((p) => p.id === id) : undefined
+  // Showing another tab morphs the bars; dockview skips a handled press.
+  if (panel && group.activePanel !== panel) {
+    event.preventDefault()
+    switchTab(panel)
+  }
   if (panel && group.panels.length > 1)
     startTabDrag(panel, event.clientX, event.clientY)
   else startWindowDrag(group, event.clientX, event.clientY)

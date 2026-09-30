@@ -129,6 +129,15 @@
   --window-bar: color-mix(in oklch, var(--sidebar) 50%, transparent);
   --window-control-surface: color-mix(in oklch, var(--sidebar) 75%, transparent);
 }
+/* A content-rich window alone (a canvas, an image) keeps its bars clear so
+   the content fills the window; merged into tabs it reads like the rest. */
+.dockview-theme-giraf
+  .dv-groupview:has(
+    .dock-window[data-canvas]:not(:has([data-window-content="text"]))
+  ):not(:has(.dv-tabs-container > .dv-tab + .dv-tab)) {
+  --window-bar: transparent;
+  --window-blur: none;
+}
 .dockview-theme-giraf .dv-tabs-and-actions-container,
 .window-bottom-bar {
   background: var(--window-bar);
@@ -166,7 +175,8 @@
 .dock-window:has(> .window-bottom-bar:not(:empty)) {
   --window-footer: calc(var(--window-inset) * 2 + var(--window-toolbar));
 }
-.dock-window:not([data-canvas], [data-scroll-under]) {
+.dock-window:not([data-canvas], [data-scroll-under]),
+.dock-window[data-canvas]:has([data-window-content="text"]) {
   padding-top: var(--window-header);
   padding-bottom: var(--window-footer);
 }
@@ -176,7 +186,17 @@
   scroll-padding-block: var(--window-header) var(--window-footer);
 }
 .dock-window[data-canvas] .react-flow__panel.top {
-  margin-top: calc(var(--window-header) + 12px);
+  margin-top: calc(var(--window-header) + var(--window-inset));
+}
+/* A canvas's own floating pieces keep to the bars' inset, above the bottom bar. */
+.dock-window[data-canvas] .react-flow__minimap {
+  margin: var(--window-inset);
+  bottom: var(--window-footer);
+}
+/* The workflow search is a centered field, not a stretch across the bar. */
+.window-bottom-bar .search-field.workflow-bar-search {
+  flex: 0 1 240px;
+  min-width: 120px;
 }
 
 .window-bottom-bar {
@@ -194,10 +214,9 @@
 }
 .window-bottom-bar > .window-toolbar-cluster {
   flex: 1;
-  gap: var(--window-inset);
 }
 .window-bottom-bar .search-field {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
   height: var(--window-toolbar);
   border-radius: calc(var(--window-toolbar) / 2);
@@ -234,22 +253,43 @@
   min-width: 0;
   height: var(--window-toolbar);
 }
+/* The title takes what the toolbar leaves, down to a short stub; past that
+   the toolbar gives way, sending its overflow groups to the menu. */
 .window-title-slot {
   display: flex;
-  flex: 1;
+  flex: 1 1 0;
   align-items: center;
+  min-width: 72px;
+}
+.window-title-slot:empty,
+.window-toolbar:has(.window-overflow > .toolbar-slot:not([data-hidden="true"]))
+  .window-title-slot {
   min-width: 0;
 }
+/* Sized to its content, so it starts its items at the leading edge: what no
+   longer fits spills past the trailing edge, where it can be measured. */
 .window-toolbar-slot {
   display: flex;
   flex: 0 1 auto;
-  justify-content: flex-end;
   gap: var(--window-inset);
   min-width: 0;
+  overflow: hidden;
 }
-/* The lock belongs to the tab, not its actions: it leads them. */
+.window-toolbar-slot > .toolbar-cluster {
+  flex-shrink: 0;
+}
+/* The overflow menu takes no room until it has something to hold. */
+.window-overflow > .toolbar-slot[data-hidden="true"] {
+  grid-template-columns: minmax(0, 0fr);
+  padding-inline-start: 0;
+}
+/* The lock belongs to the tab, not its actions: it leads them. A viewer's
+   file actions come after its image tools. */
 .window-toolbar-slot > .window-lock-cluster {
   order: -1;
+}
+.window-toolbar-slot > .viewer-file-tools {
+  order: 1;
 }
 
 /* Capsules on the bars are more opaque than the bars themselves. */
@@ -509,4 +549,52 @@ body[data-window-dragging] {
   height: var(--window-toolbar);
   min-width: var(--window-toolbar);
   border-radius: calc(var(--window-toolbar) / 2);
+}
+
+/* Switching tabs (see dock/morph.ts): the page itself does not cross-fade;
+   each paired capsule's box travels and resizes while its old and new faces
+   cross-fade at their natural size, held to the bar's anchoring end and
+   clipped to the capsule, so buttons never stretch. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+::view-transition-group(.window-top),
+::view-transition-group(.window-bottom),
+::view-transition-group(.window-title) {
+  animation-duration: var(--motion-shift);
+  animation-timing-function: var(--motion-ease);
+}
+::view-transition-image-pair(.window-top),
+::view-transition-image-pair(.window-bottom) {
+  overflow: hidden;
+  border-radius: calc(var(--window-toolbar) / 2);
+  background: color-mix(in oklch, var(--background) 75%, transparent);
+  box-shadow: inset 0 0 0 1px var(--glass-border);
+}
+::view-transition-image-pair(.window-title) {
+  overflow: hidden;
+}
+::view-transition-old(.window-top),
+::view-transition-new(.window-top),
+::view-transition-old(.window-bottom),
+::view-transition-new(.window-bottom),
+::view-transition-old(.window-title),
+::view-transition-new(.window-title) {
+  width: auto;
+  height: 100%;
+  object-fit: none;
+  animation-duration: var(--motion-shift);
+}
+::view-transition-old(.window-top),
+::view-transition-new(.window-top) {
+  inset-inline: auto 0;
+  object-position: right center;
+}
+::view-transition-old(.window-bottom),
+::view-transition-new(.window-bottom),
+::view-transition-old(.window-title),
+::view-transition-new(.window-title) {
+  inset-inline: 0 auto;
+  object-position: left center;
 }

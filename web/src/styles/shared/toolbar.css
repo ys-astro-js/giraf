@@ -35,7 +35,15 @@
     filter 260ms ease-out,
     visibility 0s;
 }
-.toolbar-cluster > .toolbar-slot + .toolbar-slot { padding-inline-start: 8px; }
+/* Spacing comes from spacers (ToolbarSpacer). A fixed spacer lends the item
+   after it a standard gap, which a leaving item takes with it; a flexible one
+   takes the free space and still keeps that gap. Items with nothing between
+   them join into one capsule. */
+.toolbar-spacer { flex: none; }
+.toolbar-spacer[data-kind="flexible"] { flex: 1 1 0; min-width: 0; }
+.toolbar-cluster:has(> .toolbar-spacer[data-kind="flexible"]) { flex: 1; }
+.toolbar-cluster > .toolbar-spacer + .toolbar-slot { padding-inline-start: 8px; }
+.toolbar-cluster > .toolbar-spacer + :not(.toolbar-slot, .toolbar-spacer) { margin-inline-start: 8px; }
 .toolbar-slot[data-edge="end"] > .toolbar-group { justify-self: end; }
 
 .toolbar-group {
@@ -77,16 +85,27 @@
     visibility 0s linear 200ms;
 }
 /* Beside a neighbor, it slides out from behind that neighbor and back again. */
-.toolbar-cluster > .toolbar-slot:not(:only-child)[data-hidden="true"] {
+.toolbar-cluster > .toolbar-slot:not(:only-of-type)[data-hidden="true"] {
   grid-template-columns: minmax(0, 0fr);
   padding-inline-start: 0;
   filter: blur(4px);
 }
-.toolbar-cluster > .toolbar-slot[data-hidden="true"]:first-child + .toolbar-slot { padding-inline-start: 0; }
-.toolbar-cluster > .toolbar-slot:not(:only-child)[data-hidden="true"][data-edge="start"] > .toolbar-group { transform: translateX(-28px); }
-.toolbar-cluster > .toolbar-slot:not(:only-child)[data-hidden="true"][data-edge="end"] > .toolbar-group { transform: translateX(28px); }
+.toolbar-cluster > .toolbar-slot[data-hidden="true"]:first-child + .toolbar-spacer + .toolbar-slot { padding-inline-start: 0; }
+.toolbar-cluster > .toolbar-slot:not(:only-of-type)[data-hidden="true"][data-edge="start"] > .toolbar-group { transform: translateX(-28px); }
+.toolbar-cluster > .toolbar-slot:not(:only-of-type)[data-hidden="true"][data-edge="end"] > .toolbar-group { transform: translateX(28px); }
 
-/* Joined groups read as one capsule. */
+/* Joined groups read as one capsule: adjacent ones, or all in a joined cluster. */
+.toolbar-cluster > .toolbar-slot:has(+ .toolbar-slot:not([data-hidden="true"])):not([data-hidden="true"]) > .toolbar-group {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+  border-inline-end-color: transparent;
+}
+.toolbar-cluster > .toolbar-slot:not([data-hidden="true"]) + .toolbar-slot:not([data-hidden="true"]) { margin-inline-start: -1px; }
+.toolbar-cluster > .toolbar-slot:not([data-hidden="true"]) + .toolbar-slot:not([data-hidden="true"]) > .toolbar-group {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  border-inline-start-color: transparent;
+}
 .toolbar-cluster[data-joined="true"] > .toolbar-slot + .toolbar-slot { padding-inline-start: 0; margin-inline-start: -1px; }
 .toolbar-cluster[data-joined="true"] > .toolbar-slot:not(:last-child) > .toolbar-group {
   border-start-end-radius: 0;

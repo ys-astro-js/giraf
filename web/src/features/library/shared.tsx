@@ -10,7 +10,12 @@ import {
 import { MiddleEllipsis } from "@/components/middle-ellipsis"
 import { toggleFileSelection } from "@/lib/file-library"
 import { Checkbox } from "@/components/ui/checkbox"
-import { ToolbarButton, ToolbarGroup, ToolbarMorph } from "@/components/toolbar"
+import {
+  ToolbarButton,
+  ToolbarGroup,
+  ToolbarMorph,
+  ToolbarSpacer,
+} from "@/components/toolbar"
 import { WindowTitle, WindowToolbar } from "@/features/dock/WindowToolbar"
 import { Empty, EmptyHeader, EmptyDescription } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -132,7 +137,8 @@ export type ListSelection = {
 
 /**
  * A list window's bars. The top bar titles the list with its count and holds
- * its actions: symbols (refresh) apart from text actions (select, done).
+ * its actions: symbols (refresh, first to the overflow menu) apart from text
+ * actions (select all, select or done), each in its own capsule.
  * The bottom bar holds search and filters, or while selecting, what to do
  * with the selection.
  */
@@ -164,12 +170,13 @@ export function ListBars({
       />
       <WindowToolbar>
         {tools && (
-          <ToolbarGroup label={`${title} 도구`} hidden={selecting}>
+          <ToolbarGroup label={`${title} 도구`} hidden={selecting} overflow>
             {tools}
           </ToolbarGroup>
         )}
         {selection && (
           <>
+            {tools && <ToolbarSpacer />}
             <ToolbarGroup label="전체 선택" hidden={!selecting}>
               <ToolbarButton
                 label={selection.allLabel}
@@ -180,6 +187,7 @@ export function ListBars({
                 {selection.allChecked ? "선택 해제" : "전체 선택"}
               </ToolbarButton>
             </ToolbarGroup>
+            <ToolbarSpacer />
             <ToolbarGroup label="선택">
               <ToolbarMorph
                 active={selecting}

@@ -9,7 +9,7 @@ import {
   type NodeProps,
 } from "@xyflow/react"
 import { ArrowUpFromLine, ArrowDownFromLine, GitCommitHorizontal, Network } from "lucide-react"
-import { ToolbarButton, ToolbarCluster, ToolbarGroup } from "./toolbar"
+import { ToolbarButton, ToolbarCluster, ToolbarGroup, ToolbarSpacer } from "./toolbar"
 import { WorkflowZoomControls } from "./workflow-tools"
 import {
   dependencyGraph,
@@ -117,6 +117,7 @@ function GraphControls({
               {scope === "direct" ? <Network /> : <GitCommitHorizontal />}
             </ToolbarButton>
           </ToolbarGroup>
+          <ToolbarSpacer />
           <ToolbarGroup label="표시 방향">
             <ToolbarButton
               label="이전 노드"

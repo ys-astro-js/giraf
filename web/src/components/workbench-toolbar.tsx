@@ -25,6 +25,7 @@ import {
   ToolbarGroup,
   ToolbarItem,
   ToolbarMorph,
+  ToolbarSpacer,
 } from "@/components/toolbar"
 import {
   Tooltip,
@@ -117,6 +118,7 @@ export function WorkbenchToolbar(props: Props) {
             <PanelLeft />
           </ToolbarButton>
         </ToolbarGroup>
+        <ToolbarSpacer />
         <ToolbarGroup label="일괄 실행">
           <ToolbarMorph
             variant={props.workflowBusy ? "ghost" : "default"}
@@ -129,6 +131,7 @@ export function WorkbenchToolbar(props: Props) {
             disabled={!props.workflowBusy && props.runDisabled}
           />
         </ToolbarGroup>
+        <ToolbarSpacer />
         {props.historyControls}
       </ToolbarCluster>
       <div className="toolbar-center">
@@ -279,6 +282,7 @@ export function WorkbenchToolbar(props: Props) {
       </div>
       <ToolbarCluster className="toolbar-panels" edge="end">
         {props.windows}
+        <ToolbarSpacer />
         <ToolbarGroup
           label="패널 표시"
           hidden={

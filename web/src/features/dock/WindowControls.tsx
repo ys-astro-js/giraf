@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useLayoutEffect, useState } from "react"
 import { Maximize2, Minimize2, Minus, X } from "lucide-react"
 import type {
   DockviewGroupPanel,
@@ -9,9 +9,13 @@ import {
   ToolbarCluster,
   ToolbarGroup,
   ToolbarItem,
+  ToolbarOverflowMenu,
+  ToolbarSpacer,
 } from "@/components/toolbar"
 import { startWindowDrag } from "./drag"
 import { WindowSlot } from "./WindowToolbar"
+import { useBarOverflow } from "./bars"
+import { useToolbarOverflow } from "@/components/toolbar-overflow"
 import { PANELS, type PanelId } from "./panels"
 import {
   closeWindow,
@@ -94,25 +98,57 @@ export function WindowPill({
   )
 }
 
+/** The title keeps this much width before the toolbar gives way (see dock.css). */
+const TITLE_STUB = 72
+
 /**
  * A window's top bar row, above its tab bar: the pill, the shown tab's
  * title, then its toolbar. The bar's empty space drags the window.
  */
 export function HeaderControls(props: IDockviewHeaderActionsProps) {
   useDock((state) => state.revision)
+  const id = props.group.id
+  // The toolbar slot is the room the tab's toolbar has; past it, groups
+  // marked overflow go to the menu at the end of the bar.
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null)
+  const overflow = useToolbarOverflow(
+    () => {
+      const content = slot
+      const row = content?.parentElement
+      if (!content || !row) return null
+      return {
+        content,
+        container: row,
+        // The row less the pill, the title's stub and the gaps between them.
+        room: () => {
+          const style = getComputedStyle(row)
+          const gap = parseFloat(style.columnGap) || 0
+          const pill = row.querySelector(".window-pill")?.clientWidth ?? 0
+          const title = row.querySelector(".window-title") ? TITLE_STUB : 0
+          return row.clientWidth - pill - title - gap * 3
+        },
+      }
+    },
+    true,
+    slot
+  )
+  useLayoutEffect(() => {
+    useBarOverflow.setState({ [id]: overflow.context })
+  }, [id, overflow.context])
   return (
     <div className="window-toolbar">
       <WindowPill group={props.group} active={props.isGroupActive} />
+      <WindowSlot owner={id} slot="title" className="window-title-slot" />
       <WindowSlot
-        owner={props.group.id}
-        slot="title"
-        className="window-title-slot"
-      />
-      <WindowSlot
-        owner={props.group.id}
+        owner={id}
         slot="top"
         className="window-toolbar-slot"
+        onElement={setSlot}
       />
+      <ToolbarCluster edge="end" className="window-overflow">
+        <ToolbarSpacer />
+        <ToolbarOverflowMenu overflow={overflow} />
+      </ToolbarCluster>
     </div>
   )
 }

@@ -111,6 +111,7 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     icon: Image,
     component: ViewerPanel,
     home: "center",
+    canvas: true,
     follows: true,
     closable: true,
   },

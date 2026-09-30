@@ -12,6 +12,7 @@ import { ViewerToolButton } from "./controls"
 import { ImageViewer } from "./ImageViewer"
 export function ViewerWorkspace({
   comparisonInHeader = false,
+  windowBars = false,
   ids,
   rows,
   onChoose,
@@ -20,6 +21,8 @@ export function ViewerWorkspace({
 }: {
   chrome?: ViewerChrome
   comparisonInHeader?: boolean
+  /** A lone image puts its tools in the host window's bars. */
+  windowBars?: boolean
   ids: string[]
   rows: Frame[]
   onChoose: (second?: boolean) => void
@@ -102,6 +105,7 @@ export function ViewerWorkspace({
             embedded={ids.length === 1}
             onStatistics={onStatistics}
             chrome={ids.length === 1 ? chrome : undefined}
+            windowBars={windowBars && ids.length === 1}
             onChoose={() => onChoose(id === ids[1])}
           />
         ))}

@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { SearchField } from "@/components/search-field"
 import { WorkflowToolButton } from "@/components/workflow-tools"
-import { ToolbarButton, ToolbarCluster, ToolbarGroup, ToolbarItem, ToolbarMorph } from "@/components/toolbar"
+import { ToolbarButton, ToolbarCluster, ToolbarGroup, ToolbarItem, ToolbarMorph, ToolbarSpacer } from "@/components/toolbar"
 import { Empty, EmptyDescription, EmptyHeader } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
@@ -103,6 +103,7 @@ export function WorkflowSelector(props: Props) {
                 </DropdownMenuContent>
               </DropdownMenu>
             </ToolbarGroup>
+            <ToolbarSpacer />
             <ToolbarGroup label="선택">
               <ToolbarMorph active={selecting} idle="선택" activeContent={<X />} label="선택" activeLabel="선택 취소" aria-pressed={selecting} disabled={busy} onClick={() => { setSelecting(!selecting); setSelected([]) }} />
             </ToolbarGroup>

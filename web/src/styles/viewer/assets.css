@@ -16,8 +16,6 @@
 .viewer-window > .asset-content, .viewer-window > .viewer-grid { flex: 1; }
 .asset-content { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; gap: 0; }
 /* Window controls float in the viewer's row; other views keep the same row above their content. */
-.asset-content[data-chrome="dialog"] { padding-top: 62px; }
-.asset-topbar { position: absolute; top: 12px; inset-inline: 12px; z-index: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; pointer-events: none; }
 .asset-image-panel, .asset-header-panel { flex: 1; min-height: 0; min-width: 0; }
 .asset-image-panel { display: flex; overflow: hidden; }
 .asset-image-panel[hidden], .asset-header-panel[hidden] { display: none; }

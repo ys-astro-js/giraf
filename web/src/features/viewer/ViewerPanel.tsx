@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react"
-import { Columns2, Image, Link2, TableProperties } from "lucide-react"
+import { Columns2, Image, Link2, Replace, TableProperties } from "lucide-react"
 import {
   ToolbarButton,
-  ToolbarCluster,
   ToolbarGroup,
+  ToolbarSpacer,
 } from "@/components/toolbar"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,10 +17,10 @@ import {
 import { Blank } from "@/components/workbench-controls"
 import { RevealFile } from "@/features/viewer/controls"
 import { ViewerWorkspace } from "@/features/viewer/Comparison"
-import type { ViewerChrome } from "@/features/viewer/types"
 import { useWorkbench } from "@/features/workbench/context"
 import type { AssetTarget } from "@/features/workbench/hooks/useAssetViewer"
 import { usePanel } from "@/features/dock/context"
+import { WindowTitle, WindowToolbar } from "@/features/dock/WindowToolbar"
 import { registerLockTarget } from "@/features/dock/store"
 import { api, type Frame } from "@/lib/workbench"
 import type { Source } from "@/lib/task-map"
@@ -113,79 +113,64 @@ function AssetView({ target }: { target: AssetTarget }) {
       }
     )
   }
-  // A single image carries its tools in the floating bar over it.
-  const chromeInViewer = isImage && view === "image" && compare.length < 2
-  const chrome: ViewerChrome = {
-    title: isImage ? (
-      <Button
-        variant="ghost"
-        className="viewer-filename glass-surface"
-        onClick={() => choose()}
-        title="영상 변경"
-      >
-        <span>{row.label}</span>
-      </Button>
-    ) : (
-      <span className="viewer-filename glass-surface" title={row.label}>
-        <span>{row.label}</span>
-      </span>
-    ),
-    center: isImage && (
-      <ToolbarGroup label="파일 보기" size="sm">
-        <ToolbarButton
-          label="영상"
-          aria-pressed={view === "image"}
-          onClick={() => setView("image")}
-        >
-          <Image />
-        </ToolbarButton>
-        <ToolbarButton
-          label="헤더"
-          aria-pressed={view === "header"}
-          onClick={() => setView("header")}
-        >
-          <TableProperties />
-        </ToolbarButton>
-      </ToolbarGroup>
-    ),
-    actions: (
-      <ToolbarGroup label="파일 동작">
-        {isImage && (
-          <ToolbarButton label="영상 비교" onClick={() => choose(true)}>
-            <Columns2 />
-          </ToolbarButton>
-        )}
-        <ToolbarButton
-          label="입력으로 사용"
-          onClick={() =>
-            w.link(undefined, {
-              kind: row.job ? "result" : "files",
-              ...(row.job ? { runId: row.job } : { label: row.label }),
-              ids: [row.id],
-            } as Source)
-          }
-        >
-          <Link2 />
-        </ToolbarButton>
-        <RevealFile id={row.id} />
-      </ToolbarGroup>
-    ),
-  }
+  // A lone image fills the window under clear bars; the header table, text
+  // and comparisons are read between the bars like other text windows.
+  const loneImage = isImage && view === "image" && compare.length < 2
   return (
     <div className="viewer-window">
+      <WindowTitle title={row.label} tooltip={row.label} />
+      <WindowToolbar className="viewer-file-tools">
+        {isImage && (
+          <>
+            <ToolbarGroup label="파일 보기">
+              <ToolbarButton
+                label="영상"
+                aria-pressed={view === "image"}
+                onClick={() => setView("image")}
+              >
+                <Image />
+              </ToolbarButton>
+              <ToolbarButton
+                label="헤더"
+                aria-pressed={view === "header"}
+                onClick={() => setView("header")}
+              >
+                <TableProperties />
+              </ToolbarButton>
+            </ToolbarGroup>
+            <ToolbarSpacer />
+          </>
+        )}
+        <ToolbarGroup label="파일 동작" overflow>
+          {isImage && (
+            <>
+              <ToolbarButton label="영상 변경" onClick={() => choose()}>
+                <Replace />
+              </ToolbarButton>
+              <ToolbarButton label="영상 비교" onClick={() => choose(true)}>
+                <Columns2 />
+              </ToolbarButton>
+            </>
+          )}
+          <ToolbarButton
+            label="입력으로 사용"
+            onClick={() =>
+              w.link(undefined, {
+                kind: row.job ? "result" : "files",
+                ...(row.job ? { runId: row.job } : { label: row.label }),
+                ids: [row.id],
+              } as Source)
+            }
+          >
+            <Link2 />
+          </ToolbarButton>
+          <RevealFile id={row.id} />
+        </ToolbarGroup>
+      </WindowToolbar>
       <div
         className="asset-content"
-        data-chrome={chromeInViewer ? "viewer" : "dialog"}
+        data-window-content={loneImage ? undefined : "text"}
       >
-        {!chromeInViewer && (
-          <header className="asset-topbar">
-            <div className="viewer-title">{chrome.title}</div>
-            <div className="viewer-top-center">{chrome.center}</div>
-            <ToolbarCluster edge="end" size="sm" className="viewer-top-tools">
-              {chrome.actions}
-            </ToolbarCluster>
-          </header>
-        )}
         {kind === "plot" ? (
           <img
             className="asset-plot"
@@ -203,7 +188,7 @@ function AssetView({ target }: { target: AssetTarget }) {
             >
               <ViewerWorkspace
                 comparisonInHeader
-                chrome={chrome}
+                windowBars
                 ids={compare}
                 onStatistics={() => w.add("imstatistics", [row.id])}
                 rows={w.rows}

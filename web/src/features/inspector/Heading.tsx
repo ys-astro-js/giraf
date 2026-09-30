@@ -3,7 +3,11 @@ import { taskDisplayName } from "@/lib/workbench"
 import { Pencil, Check, X, Play } from "lucide-react"
 import { WindowTitle, WindowToolbar } from "@/features/dock/WindowToolbar"
 import { Button } from "@/components/ui/button"
-import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
+import {
+  ToolbarButton,
+  ToolbarGroup,
+  ToolbarSpacer,
+} from "@/components/toolbar"
 import { Input } from "@/components/ui/input"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { type Spec } from "@/lib/workbench"
@@ -56,7 +60,7 @@ export function InspectorHeading({
         tooltip={`${spec.package}.${spec.taskName || taskDisplayName(spec.name)}\n${description}`}
       />
       <WindowToolbar>
-        <ToolbarGroup label="노드 편집">
+        <ToolbarGroup label="노드 편집" overflow>
           <ToolbarButton
             ref={identityButton}
             label="제목과 설명 편집"
@@ -70,6 +74,7 @@ export function InspectorHeading({
             <Pencil />
           </ToolbarButton>
         </ToolbarGroup>
+        <ToolbarSpacer />
         <ToolbarGroup label="작업 실행">
           <ToolbarButton
             label={checking ? "확인 중" : busy ? "실행 중" : "이 작업 실행"}

@@ -2,6 +2,8 @@ import { useCallback, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { create } from "zustand"
 import { ToolbarCluster } from "@/components/toolbar"
+import { OverflowContext } from "@/components/toolbar-context"
+import { useBarOverflow } from "./bars"
 import { cn } from "@/lib/utils"
 import { usePanel } from "./context"
 import { useDock } from "./store"
@@ -26,21 +28,26 @@ export function WindowSlot({
   owner,
   slot,
   className,
+  onElement,
 }: {
   owner: string
   slot: Slot
   className?: string
+  /** Hands the slot element to its window, which measures it. */
+  onElement?: (element: HTMLDivElement | null) => void
 }) {
   const ref = useCallback(
     (element: HTMLDivElement) => {
       const id = key(owner, slot)
       useSlots.setState({ [id]: element })
+      onElement?.(element)
       return () => {
         if (useSlots.getState()[id] === element)
           useSlots.setState({ [id]: undefined })
+        onElement?.(null)
       }
     },
-    [owner, slot]
+    [owner, slot, onElement]
   )
   return <div className={className} data-window-slot={slot} ref={ref} />
 }
@@ -71,15 +78,21 @@ export function WindowToolbar({
   children: ReactNode
 }) {
   const slot = useShownSlot(placement)
+  const group = usePanel()?.panel.group.id
+  const overflow = useBarOverflow((bars) =>
+    placement === "top" && group ? bars[group] : undefined
+  )
   if (!slot) return null
   return createPortal(
-    <ToolbarCluster
-      edge={placement === "top" ? "end" : "start"}
-      placement={placement}
-      className={cn("window-toolbar-cluster", className)}
-    >
-      {children}
-    </ToolbarCluster>,
+    <OverflowContext.Provider value={overflow ?? null}>
+      <ToolbarCluster
+        edge={placement === "top" ? "end" : "start"}
+        placement={placement}
+        className={cn("window-toolbar-cluster", className)}
+      >
+        {children}
+      </ToolbarCluster>
+    </OverflowContext.Provider>,
     slot
   )
 }

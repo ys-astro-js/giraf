@@ -19,8 +19,10 @@ import { displayNumber } from "@/lib/viewer-navigation"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import type * as React from "react"
+import type { ToolbarSize } from "@/components/toolbar-context"
 
 export function ViewerCoordinates({
+  size,
   coordinatesOpen,
   setCoordinatesOpen,
   info,
@@ -46,13 +48,15 @@ export function ViewerCoordinates({
   uid: string
   changeCoordinate: (index: number, value: string) => void
   onPick: ((x: number, y: number) => void) | undefined
+  /** Floating over an image it is compact; in a window bar it takes the bar's size. */
+  size?: ToolbarSize
 }) {
   return (
     <ToolbarCluster
       edge="start"
       placement="bottom"
-      size="sm"
-      className="viewer-coordinate-overlay"
+      size={size}
+      className={size ? "viewer-coordinate-overlay" : undefined}
     >
       <Popover open={coordinatesOpen} onOpenChange={setCoordinatesOpen}>
         <ToolbarGroup label="픽셀 좌표">

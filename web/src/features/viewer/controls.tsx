@@ -15,6 +15,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
+import { ToolbarButton } from "@/components/toolbar"
 import { api } from "@/lib/workbench"
 
 export function ViewerToolButton({
@@ -40,8 +41,9 @@ export function RevealFile({ id }: { id: string }) {
     : /Win/.test(navigator.platform)
       ? "탐색기에서 보기"
       : "파일 위치 열기"
+  // Always placed in a toolbar group, so it takes the toolbar's size.
   return (
-    <ViewerToolButton
+    <ToolbarButton
       label={label}
       disabled={busy}
       aria-busy={busy}
@@ -57,7 +59,7 @@ export function RevealFile({ id }: { id: string }) {
       }}
     >
       {busy ? <LoaderCircle className="animate-spin" /> : <FolderOpen />}
-    </ViewerToolButton>
+    </ToolbarButton>
   )
 }
 

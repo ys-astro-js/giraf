@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { SidebarContent } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { ToolbarSpacer } from "@/components/toolbar"
 import { Button } from "@/components/ui/button"
 import { DeleteSelectionButton } from "@/components/delete-selection-button"
 import { groupExecutions } from "@/lib/execution-history"
@@ -99,6 +100,7 @@ export function RunsPanel() {
                   작업에 사용
                 </Button>
               )}
+              <ToolbarSpacer />
               <DeleteSelectionButton
                 ids={files ? selected : runSelection.map((group) => group.id)}
                 label={files ? "선택한 파일 삭제" : "선택한 실행 기록 삭제"}
