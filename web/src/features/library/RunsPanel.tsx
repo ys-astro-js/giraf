@@ -1,16 +1,12 @@
 import { useMemo, useState } from "react"
-import {
-  SidebarContent,
-  SidebarFooter,
-  SidebarHeader,
-} from "@/components/ui/sidebar"
+import { SidebarContent } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button"
 import { DeleteSelectionButton } from "@/components/delete-selection-button"
 import { groupExecutions } from "@/lib/execution-history"
 import { useWorkbench } from "@/features/workbench/context"
 import { LibraryHistory } from "./History"
-import { ListBar, ListSkeleton, NoFiles } from "./shared"
+import { ListBars, ListSkeleton, NoFiles } from "./shared"
 import { useFileList } from "./lists"
 
 const ACTIVE = ["queued", "running", "waiting"]
@@ -56,78 +52,44 @@ export function RunsPanel() {
   return (
     <TooltipProvider delay={0}>
       <div className="library-window">
-        <SidebarHeader>
-          <ListBar
-            label="실행 기록 관리"
-            count={executions.length}
-            selection={{
-              active: mode !== null,
-              selectedCount: files ? selected.length : runSelection.length,
-              allLabel: files ? "표시된 파일 전체 선택" : "실행 기록 전체 선택",
-              allChecked: files
-                ? products.length > 0 &&
-                  products.every((file) => selectedSet.has(file.id))
-                : deletableRuns.length > 0 &&
-                  runSelection.length === deletableRuns.length,
-              someChecked: files
-                ? products.some((file) => selectedSet.has(file.id))
-                : runSelection.length > 0,
-              allDisabled:
-                !w.ready || !(files ? products.length : deletableRuns.length),
-              onAll: (checked) =>
-                files
-                  ? w.setSelectedFiles((ids) =>
-                      checked
-                        ? [
-                            ...new Set([
-                              ...ids,
-                              ...products.map((file) => file.id),
-                            ]),
-                          ]
-                        : ids.filter(
-                            (id) => !products.some((file) => file.id === id)
-                          )
-                    )
-                  : setSelectedRuns(
-                      checked ? deletableRuns.map((group) => group.id) : []
-                    ),
-              onDone: done,
-              startLabel: "실행 기록 선택 모드",
-              startDisabled: !w.ready || !deletableRuns.length,
-              onStart: () => setMode("runs"),
-            }}
-          />
-        </SidebarHeader>
-        <SidebarContent
-          className="scroll-fade scroll-fade-4"
-          aria-busy={!w.ready && !w.loadError}
-        >
-          {w.loadError ? (
-            <NoFiles>자료를 불러오지 못했습니다.</NoFiles>
-          ) : !w.ready ? (
-            <ListSkeleton />
-          ) : (
-            <LibraryHistory
-              executions={executions}
-              runOpen={runOpen}
-              setRunOpen={setRunOpen}
-              selecting={mode === "runs"}
-              runSelection={runSelection}
-              deletableRuns={deletableRuns}
-              onSelectMode={() => setMode("runs")}
-              setSelectedRuns={setSelectedRuns}
-              onViewLog={w.viewLog}
-              fileList={fileList}
-            />
-          )}
-        </SidebarContent>
-        {mode && (
-          <SidebarFooter>
-            <div
-              className="flex min-h-9 flex-wrap items-center justify-end gap-4"
-              role="group"
-              aria-label={files ? "선택한 파일 작업" : "선택한 실행 기록 작업"}
-            >
+        <ListBars
+          title="실행 기록"
+          count={executions.length}
+          selection={{
+            active: mode !== null,
+            selectedCount: files ? selected.length : runSelection.length,
+            allLabel: files ? "표시된 파일 전체 선택" : "실행 기록 전체 선택",
+            allChecked: files
+              ? products.length > 0 &&
+                products.every((file) => selectedSet.has(file.id))
+              : deletableRuns.length > 0 &&
+                runSelection.length === deletableRuns.length,
+            allDisabled:
+              !w.ready || !(files ? products.length : deletableRuns.length),
+            onAll: (checked: boolean) =>
+              files
+                ? w.setSelectedFiles((ids) =>
+                    checked
+                      ? [
+                          ...new Set([
+                            ...ids,
+                            ...products.map((file) => file.id),
+                          ]),
+                        ]
+                      : ids.filter(
+                          (id) => !products.some((file) => file.id === id)
+                        )
+                  )
+                : setSelectedRuns(
+                    checked ? deletableRuns.map((group) => group.id) : []
+                  ),
+            onDone: done,
+            startLabel: "실행 기록 선택 모드",
+            startDisabled: !w.ready || !deletableRuns.length,
+            onStart: () => setMode("runs"),
+          }}
+          selectionActions={
+            <>
               {files && (
                 <Button
                   className="min-w-0 flex-1"
@@ -157,9 +119,29 @@ export function RunsPanel() {
                   done()
                 }}
               />
-            </div>
-          </SidebarFooter>
-        )}
+            </>
+          }
+        />
+        <SidebarContent data-window-scroll aria-busy={!w.ready && !w.loadError}>
+          {w.loadError ? (
+            <NoFiles>자료를 불러오지 못했습니다.</NoFiles>
+          ) : !w.ready ? (
+            <ListSkeleton />
+          ) : (
+            <LibraryHistory
+              executions={executions}
+              runOpen={runOpen}
+              setRunOpen={setRunOpen}
+              selecting={mode === "runs"}
+              runSelection={runSelection}
+              deletableRuns={deletableRuns}
+              onSelectMode={() => setMode("runs")}
+              setSelectedRuns={setSelectedRuns}
+              onViewLog={w.viewLog}
+              fileList={fileList}
+            />
+          )}
+        </SidebarContent>
       </div>
     </TooltipProvider>
   )

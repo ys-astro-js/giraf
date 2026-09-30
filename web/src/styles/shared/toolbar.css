@@ -146,6 +146,8 @@
 .toolbar-morph[data-edge="start"] > .toolbar-morph-face { inset-inline-start: 0; }
 .toolbar-morph[data-edge="end"] > .toolbar-morph-face { inset-inline-end: 0; }
 .toolbar-morph-face[data-kind="text"] { padding-inline: 12px; }
+/* A text action in a group: as tall as a symbol button, as wide as its word. */
+.toolbar-button.toolbar-text-button { width: auto; padding-inline: 12px; }
 .toolbar-morph-face[data-kind="icon"] { width: calc(var(--spacing) * 9); }
 .toolbar-morph[data-size="icon-sm"] > .toolbar-morph-face[data-kind="icon"] { width: calc(var(--spacing) * 8); }
 .toolbar-morph[data-active="true"] > [data-face="idle"],

@@ -44,8 +44,10 @@ export type PanelDefinition = {
   follows?: boolean
   /** Document-like windows close; built-in tools only minimize. */
   closable?: boolean
-  /** A canvas runs on under the window's clear header instead of below it. */
+  /** A canvas runs on under the window's bars instead of between them. */
   canvas?: boolean
+  /** Its list scrolls under the window's bars (see `data-window-scroll`). */
+  scrollUnder?: boolean
 }
 
 /**
@@ -59,6 +61,7 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     component: FilesPanel,
     home: "left",
     surface: "sidebar",
+    scrollUnder: true,
   },
   runs: {
     title: "실행 기록",
@@ -66,6 +69,7 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     component: RunsPanel,
     home: "left",
     surface: "sidebar",
+    scrollUnder: true,
   },
   tasks: {
     title: "작업",
@@ -73,6 +77,7 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     component: TasksPanel,
     home: "left",
     surface: "sidebar",
+    scrollUnder: true,
   },
   settings: {
     title: "설정",

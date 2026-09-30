@@ -4,7 +4,6 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -23,7 +22,7 @@ import { SearchField } from "@/components/search-field"
 import { taskPackageTree, type TaskPackage } from "@/lib/task-tree"
 import { taskDisplayName } from "@/lib/workbench"
 import { useWorkbench } from "@/features/workbench/context"
-import { ListBar, ListSkeleton, NoFiles, RefreshButton } from "./shared"
+import { ListBars, ListSkeleton, NoFiles, RefreshButton } from "./shared"
 import { useRefresh } from "./lists"
 
 /** IRAF packages and tasks; choosing a task adds it to the workflow. */
@@ -94,30 +93,28 @@ export function TasksPanel() {
   return (
     <TooltipProvider delay={0}>
       <div className="library-window">
-        <SidebarHeader>
-          <div className="flex min-w-0 items-center gap-2">
+        <ListBars
+          title="작업"
+          count={matchingTasks.length}
+          tools={
+            <RefreshButton
+              label="작업 목록 새로고침"
+              disabled={!w.ready}
+              refreshing={refreshing}
+              onRefresh={refresh}
+            />
+          }
+          search={
             <SearchField
-              className="min-w-0 flex-1"
+              variant="glass"
               label="작업 검색"
               value={query}
               onValueChange={setQuery}
             />
-          </div>
-          <ListBar
-            label="작업 관리"
-            count={matchingTasks.length}
-            leading={
-              <RefreshButton
-                label="작업 목록 새로고침"
-                disabled={!w.ready}
-                refreshing={refreshing}
-                onRefresh={refresh}
-              />
-            }
-          />
-        </SidebarHeader>
+          }
+        />
         <SidebarContent
-          className="scroll-fade scroll-fade-4"
+          data-window-scroll
           aria-busy={(!w.ready && !w.loadError) || refreshing}
         >
           {w.loadError ? (

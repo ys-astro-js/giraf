@@ -113,23 +113,35 @@
   --dv-tabs-and-actions-container-background-color: var(--sidebar);
 }
 
-/* Every window's header is clear: a toolbar row (its pill, then the shown
-   tab's controls) above a tab bar, which hides while the window has one tab.
-   The clear parts of the header drag the window. */
+/* A window's bars, after macOS and iPadOS windows: the top bar (pill,
+   title, the shown tab's toolbar, then the tab bar, which hides while the
+   window has one tab) and the tab's bottom bar float over the content as
+   translucent blur, so what scrolls beneath shows through. Their empty space
+   drags the window. */
+.dockview-theme-giraf .dv-groupview {
+  position: relative;
+  --window-bar: color-mix(in oklch, var(--background) 50%, transparent);
+  --window-control-surface: color-mix(in oklch, var(--background) 75%, transparent);
+  --window-blur: blur(20px) saturate(1.6);
+  --window-header: calc(var(--window-inset) * 2 + var(--window-toolbar));
+}
+.dockview-theme-giraf .dv-groupview:has(.dock-window[data-surface="sidebar"]) {
+  --window-bar: color-mix(in oklch, var(--sidebar) 50%, transparent);
+  --window-control-surface: color-mix(in oklch, var(--sidebar) 75%, transparent);
+}
+.dockview-theme-giraf .dv-tabs-and-actions-container,
+.window-bottom-bar {
+  background: var(--window-bar);
+  -webkit-backdrop-filter: var(--window-blur);
+  backdrop-filter: var(--window-blur);
+}
 .dockview-theme-giraf .dv-tabs-and-actions-container {
   flex-wrap: wrap;
   align-items: center;
   height: auto;
   padding: var(--window-inset);
   row-gap: var(--window-inset);
-  background: transparent;
   border-bottom: 0;
-}
-/* The header floats over the window's content, so nothing paints behind
-   it: content sits below it, a canvas runs on underneath. */
-.dockview-theme-giraf .dv-groupview {
-  position: relative;
-  --window-header: calc(var(--window-inset) * 2 + var(--window-toolbar));
 }
 .dockview-theme-giraf .dv-groupview:has(.dv-tabs-container > .dv-tab + .dv-tab) {
   --window-header: calc(
@@ -144,9 +156,51 @@
 .dockview-theme-giraf .dv-groupview > .dv-content-container {
   height: 100%;
 }
-.dock-window:not([data-canvas]) {
-  padding-top: var(--window-header);
+/* Content clears the bars: most windows sit between them, a canvas runs
+   under both, and a list scrolls under them from a padded start. */
+.dock-window {
+  position: relative;
   box-sizing: border-box;
+  --window-footer: 0px;
+}
+.dock-window:has(> .window-bottom-bar:not(:empty)) {
+  --window-footer: calc(var(--window-inset) * 2 + var(--window-toolbar));
+}
+.dock-window:not([data-canvas], [data-scroll-under]) {
+  padding-top: var(--window-header);
+  padding-bottom: var(--window-footer);
+}
+.dock-window[data-scroll-under] [data-window-scroll] {
+  padding-top: var(--window-header);
+  padding-bottom: var(--window-footer);
+  scroll-padding-block: var(--window-header) var(--window-footer);
+}
+.dock-window[data-canvas] .react-flow__panel.top {
+  margin-top: calc(var(--window-header) + 12px);
+}
+
+.window-bottom-bar {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  height: calc(var(--window-inset) * 2 + var(--window-toolbar));
+  padding: var(--window-inset);
+  box-sizing: border-box;
+}
+.window-bottom-bar:empty {
+  display: none;
+}
+.window-bottom-bar > .window-toolbar-cluster {
+  flex: 1;
+  gap: var(--window-inset);
+}
+.window-bottom-bar .search-field {
+  flex: 1;
+  min-width: 0;
+  height: var(--window-toolbar);
+  border-radius: calc(var(--window-toolbar) / 2);
 }
 
 .dockview-theme-giraf .dv-pre-actions-container {
@@ -180,11 +234,53 @@
   min-width: 0;
   height: var(--window-toolbar);
 }
-.window-toolbar-slot {
+.window-title-slot {
   display: flex;
   flex: 1;
-  justify-content: flex-end;
+  align-items: center;
   min-width: 0;
+}
+.window-toolbar-slot {
+  display: flex;
+  flex: 0 1 auto;
+  justify-content: flex-end;
+  gap: var(--window-inset);
+  min-width: 0;
+}
+/* The lock belongs to the tab, not its actions: it leads them. */
+.window-toolbar-slot > .window-lock-cluster {
+  order: -1;
+}
+
+/* Capsules on the bars are more opaque than the bars themselves. */
+.window-toolbar .toolbar-group,
+.window-bottom-bar .toolbar-group,
+.window-bottom-bar .search-field[data-variant="glass"] {
+  background: var(--window-control-surface);
+}
+
+/* The title is text on the bar, not a control: no capsule around it. */
+.window-title {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding-inline: 4px;
+  line-height: 1.25;
+}
+.window-title-main,
+.window-title-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.window-title-main {
+  font-size: 13px;
+  font-weight: 600;
+}
+.window-title-sub {
+  font-size: 11.5px;
+  color: var(--muted-foreground);
 }
 
 /* The tab bar: a segmented pill across the window; the shown tab rises
@@ -406,4 +502,11 @@ body[data-window-dragging] {
 /* Toolbar items that join a group arrive the way hidden ones leave. */
 @starting-style {
   .toolbar-panels .toolbar-item[data-hidden="false"] { grid-template-columns: minmax(0, 0fr); opacity: 0; filter: blur(4px); }
+}
+
+/* Buttons placed straight on a bar take the bar's capsule height. */
+.window-bottom-bar .window-toolbar-cluster > :is(button, [data-slot="button"]) {
+  height: var(--window-toolbar);
+  min-width: var(--window-toolbar);
+  border-radius: calc(var(--window-toolbar) / 2);
 }

@@ -11,7 +11,7 @@ import { SidebarProvider } from "@/components/ui/sidebar"
 import { PanelContext } from "./context"
 import { DockTab } from "./DockTab"
 import { HeaderControls } from "./WindowControls"
-import { WindowToolbar } from "./WindowToolbar"
+import { WindowSlot, WindowToolbar } from "./WindowToolbar"
 import { Lock, LockOpen } from "lucide-react"
 import { ToolbarButton, ToolbarGroup, ToolbarItem } from "@/components/toolbar"
 import { headerPointerDown } from "./drag"
@@ -38,7 +38,7 @@ const theme: DockviewTheme = {
 function LockControl({ panel }: { panel: IDockviewPanel }) {
   const locked = !!(panel.params as WindowParams | undefined)?.locked
   return (
-    <WindowToolbar>
+    <WindowToolbar className="window-lock-cluster">
       <ToolbarGroup label="탭">
         <ToolbarItem>
           <ToolbarButton
@@ -64,8 +64,14 @@ function frame(definition: PanelDefinition) {
         className="dock-window"
         data-surface={definition.surface}
         data-canvas={definition.canvas}
+        data-scroll-under={definition.scrollUnder}
       >
         <Content />
+        <WindowSlot
+          owner={props.api.id}
+          slot="bottom"
+          className="window-bottom-bar"
+        />
       </div>
     )
     if (!panel) return content

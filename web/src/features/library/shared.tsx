@@ -9,8 +9,9 @@ import {
 } from "@/components/ui/tooltip"
 import { MiddleEllipsis } from "@/components/middle-ellipsis"
 import { toggleFileSelection } from "@/lib/file-library"
-import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { ToolbarButton, ToolbarGroup, ToolbarMorph } from "@/components/toolbar"
+import { WindowTitle, WindowToolbar } from "@/features/dock/WindowToolbar"
 import { Empty, EmptyHeader, EmptyDescription } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -106,15 +107,13 @@ export function RefreshButton({
   onRefresh: () => void
 }) {
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label={label}
+    <ToolbarButton
+      label={label}
       disabled={disabled || refreshing}
       onClick={onRefresh}
     >
       <RefreshCw className={refreshing ? "animate-spin" : undefined} />
-    </Button>
+    </ToolbarButton>
   )
 }
 
@@ -123,7 +122,6 @@ export type ListSelection = {
   selectedCount: number
   allLabel: string
   allChecked: boolean
-  someChecked: boolean
   allDisabled: boolean
   onAll: (checked: boolean) => void
   onDone: () => void
@@ -133,77 +131,70 @@ export type ListSelection = {
 }
 
 /**
- * The count row above a list: item count and refresh, or while selecting,
- * the select-all checkbox, selected count and done.
+ * A list window's bars. The top bar titles the list with its count and holds
+ * its actions: symbols (refresh) apart from text actions (select, done).
+ * The bottom bar holds search and filters, or while selecting, what to do
+ * with the selection.
  */
-export function ListBar({
-  label,
+export function ListBars({
+  title,
   count,
-  leading,
+  tools,
   selection,
+  search,
+  selectionActions,
 }: {
-  label: string
+  title: string
   count: number
-  leading?: ReactNode
+  /** Symbol actions, hidden while selecting. */
+  tools?: ReactNode
   selection?: ListSelection
+  search?: ReactNode
+  selectionActions?: ReactNode
 }) {
+  const selecting = !!selection?.active
+  const bottom = selecting ? selectionActions : search
   return (
-    <div
-      className="flex min-h-9 min-w-0 flex-wrap items-center justify-between gap-x-1 gap-y-1"
-      role="group"
-      aria-label={label}
-    >
-      {selection?.active ? (
-        <>
-          <div className="flex min-w-0 items-center gap-2 pl-3">
-            <Checkbox
-              title="전체 선택"
-              aria-label={selection.allLabel}
-              disabled={selection.allDisabled}
-              checked={selection.allChecked}
-              indeterminate={selection.someChecked && !selection.allChecked}
-              onCheckedChange={selection.onAll}
-            />
-            <span
-              className="text-xs whitespace-nowrap text-muted-foreground"
-              role="status"
-              aria-label={`${selection.selectedCount}개 선택`}
-            >
-              {`${selection.selectedCount}개 항목`}
-            </span>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <Button size="default" variant="ghost" onClick={selection.onDone}>
-              완료
-            </Button>
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="flex min-w-0 items-center gap-1 pl-3">
-            <span
-              role="status"
-              className="text-xs whitespace-nowrap text-muted-foreground"
-            >
-              {`${count}개 항목`}
-            </span>
-            {leading}
-          </div>
-          {selection && (
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                size="default"
-                variant="ghost"
-                aria-label={selection.startLabel}
-                disabled={selection.startDisabled}
-                onClick={selection.onStart}
+    <>
+      <WindowTitle
+        title={title}
+        subtitle={
+          selecting ? `${selection.selectedCount}개 선택` : `${count}개 항목`
+        }
+      />
+      <WindowToolbar>
+        {tools && (
+          <ToolbarGroup label={`${title} 도구`} hidden={selecting}>
+            {tools}
+          </ToolbarGroup>
+        )}
+        {selection && (
+          <>
+            <ToolbarGroup label="전체 선택" hidden={!selecting}>
+              <ToolbarButton
+                label={selection.allLabel}
+                className="toolbar-text-button"
+                disabled={selection.allDisabled}
+                onClick={() => selection.onAll(!selection.allChecked)}
               >
-                선택
-              </Button>
-            </div>
-          )}
-        </>
-      )}
-    </div>
+                {selection.allChecked ? "선택 해제" : "전체 선택"}
+              </ToolbarButton>
+            </ToolbarGroup>
+            <ToolbarGroup label="선택">
+              <ToolbarMorph
+                active={selecting}
+                idle="선택"
+                activeContent="완료"
+                label={selection.startLabel}
+                activeLabel="선택 완료"
+                disabled={!selecting && selection.startDisabled}
+                onClick={selecting ? selection.onDone : selection.onStart}
+              />
+            </ToolbarGroup>
+          </>
+        )}
+      </WindowToolbar>
+      {bottom && <WindowToolbar placement="bottom">{bottom}</WindowToolbar>}
+    </>
   )
 }

@@ -27,10 +27,13 @@ export function FileFilterButton({
   filters,
   bands,
   onChange,
+  inToolbar = false,
 }: {
   filters: FileFilters
   bands: string[]
   onChange: (filters: FileFilters) => void
+  /** In a toolbar group, the button takes the group's capsule as its frame. */
+  inToolbar?: boolean
 }) {
   const id = useId()
   const rangeError = exposureError(filters)
@@ -43,9 +46,13 @@ export function FileFilterButton({
       <PopoverTrigger
         render={
           <Button
-            variant={filterCount > 0 ? "secondary" : "outline"}
-            size={filterCount ? "sm" : "icon"}
-            className="shrink-0"
+            variant={
+              filterCount > 0 ? "secondary" : inToolbar ? "ghost" : "outline"
+            }
+            size={filterCount && !inToolbar ? "sm" : "icon"}
+            className={
+              inToolbar && filterCount ? "w-auto shrink-0 px-3" : "shrink-0"
+            }
           />
         }
         aria-label={`파일 필터${filterCount ? ` ${filterCount}개 적용` : ""}`}

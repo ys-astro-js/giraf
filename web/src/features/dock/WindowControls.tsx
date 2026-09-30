@@ -11,7 +11,7 @@ import {
   ToolbarItem,
 } from "@/components/toolbar"
 import { startWindowDrag } from "./drag"
-import { WindowToolbarSlot } from "./WindowToolbar"
+import { WindowSlot } from "./WindowToolbar"
 import { PANELS, type PanelId } from "./panels"
 import {
   closeWindow,
@@ -95,15 +95,24 @@ export function WindowPill({
 }
 
 /**
- * A window's toolbar row, above its tab bar: the pill, then the shown tab's
- * own controls. The row itself is clear and drags the window.
+ * A window's top bar row, above its tab bar: the pill, the shown tab's
+ * title, then its toolbar. The bar's empty space drags the window.
  */
 export function HeaderControls(props: IDockviewHeaderActionsProps) {
   useDock((state) => state.revision)
   return (
     <div className="window-toolbar">
       <WindowPill group={props.group} active={props.isGroupActive} />
-      <WindowToolbarSlot group={props.group.id} />
+      <WindowSlot
+        owner={props.group.id}
+        slot="title"
+        className="window-title-slot"
+      />
+      <WindowSlot
+        owner={props.group.id}
+        slot="top"
+        className="window-toolbar-slot"
+      />
     </div>
   )
 }
