@@ -1,33 +1,28 @@
 # 도킹 창 작업 인계 (2026-10-01)
 
-브랜치 `claude/window-based-layout-review-68f4ad`, 마지막 커밋 `5942c48`.
-결정 사항과 dockview 함정은 메모리 `giraf-dockable-panels`에 있다. 먼저 읽을 것.
+창 기반 레이아웃은 어느 정도 안정화되어 main에 들어갔다. 결정 사항과 함정은 메모리
+`giraf-dockable-panels`, `giraf-spacing-consistency`에 있다. 먼저 읽을 것.
 
-## 코드 위치
-- `web/src/features/dock/` — `store.ts`(창·탭·최소화·최대화·떠 있는 창 좌표·배치 저장), `drag.ts`(머리줄 포인터 드래그, dockview DnD는 `disableDnd`로 끔), `WindowControls.tsx`(··· 알약 `WindowPill`, 상단 툴바의 `WindowTray`), `DockTab.tsx`(탭: 잠금·닫기), `DockShell.tsx`, `panels.ts`(창 등록표), `presets.ts`(기본/결과 검토).
-- 스타일: `web/src/styles/workbench/dock.css`.
-- 미리보기: `.claude/launch.json`의 `web`(5174). 개발 프록시에서는 POST가 출처 검사로 403이 나는 기존 문제가 있다.
-- 브라우저 확인 팁: store 모듈은 HMR 후 인스턴스가 갈리니 새로고침 후 테스트. 모듈 직접 접근은 `performance.getEntriesByType('resource')`에서 `store.ts?t=` URL을 찾아 `import()`.
+## 구조
+- `web/src/features/dock/`
+  - `store.ts`: 창·탭·최소화·최대화·전체 화면·배치 저장. 가장자리 그룹 없이 한 격자.
+    측면 토글은 그쪽 끝에 붙은 창을 숨기고 보인다.
+  - `drag.ts`: 머리줄 빈 곳으로 창 끌기, 탭 끌기(dockview DnD는 끔).
+  - `WindowToolbar.tsx`: 패널이 쓰는 `WindowTitle`, `WindowToolbar placement="leading|top|bottom"`.
+  - `WindowControls.tsx`: 창 조작 알약(닫기·최소화·최대화), 머리줄, 최소화 트레이.
+  - `bars.ts`: 막대 칸 등록부. 최대화한 창은 칸 주인이 `APP`(앱 상단 막대)로 바뀐다.
+  - `morph.ts`: 탭 전환 시 막대 모핑(대역 캡슐, WAAPI).
+  - `panels.ts`: 창 등록표(`canvas`는 콘텐츠 위주, `scrollUnder`는 목록이 막대 아래로 스크롤).
+- `web/src/components/toolbar.tsx`: `ToolbarSpacer`(고정/유연), `ToolbarGroup overflow`, `ToolbarButton prominent`, 넘침 메뉴. 넘침 측정은 `toolbar-overflow.ts`.
+- 스타일: `web/src/styles/workbench/dock.css`, `web/src/styles/shared/toolbar.css`.
 
-## 이번 세션(2026-10-01)에서 처리
-- 1·4번: dockview 가장자리 그룹을 없애고 한 격자로 합침. 어디서든 좌우·상하 분할과 탭 합치기가 됨. 툴바의 좌·우·하단 토글은 "그쪽 끝에 붙은 창(반대편 끝과 워크플로우 창은 제외) 숨기기/보이기"(`store.ts`의 `sideWindows`, `hideSide`, `toggleEdge`). 작업대 가장자리 띠에 놓으면 그쪽 전체 폭/높이로 붙음. 배치 저장 버전 3.
-- 2번: `dropTargetAt`이 `elementsFromPoint`로 맨 위 창을 찾음. 떠 있는 창 머리줄에 놓으면 탭으로 합쳐짐(떠 있는 창은 분할 불가).
-- 3·5번: 사용자 결정 — 머리줄은 창마다 투명한 "상단 툴바" 줄. 맨 앞 ···(특별 버튼: 항상 보임, 창 전체용, 호버 시 제자리에서 펼쳐져 옆 컨트롤을 밀어냄), 그 뒤 탭마다 다른 컨트롤(`WindowToolbar.tsx`의 `<WindowToolbar>`로 포털), 그 아래 탭 바(텍스트 레이블 캡슐, 탭 하나면 숨김). 빈 곳을 잡으면 창이 끌림. 잠금 버튼은 탭에서 툴바 줄로 옮김.
+## 확인 요령
+- 미리보기 `.claude/launch.json`의 `web`(autoPort). 개발 프록시에서 POST가 403 나는 기존 문제가 있어 오류 토스트가 뜬다. 토스트를 스크립트로 DOM에서 지우지 말 것(React가 무너진다).
+- 인앱 브라우저 창이 가려져 있으면 `document.timeline`과 ResizeObserver가 멈춘다. 애니메이션은 `Animation.currentTime`을 옮겨 가며 확인하고, 레이아웃은 수치로 잰다.
+- store 모듈은 HMR 뒤 인스턴스가 갈리니 새로고침 후 `performance.getEntriesByType('resource')`에서 `store.ts` URL을 찾아 `import()`.
 
-## 다음 할 일
-- 탭별로 어떤 컨트롤을 창 툴바 줄로 올릴지 목업으로 확인받고 옮기기(워크플로우 캔버스 하단 컨트롤, 노드 창 상단 실행 버튼, 뷰어 등). 지금은 잠금만 있음.
-- 창을 없앤 칸의 폭이 워크플로우가 아니라 옆 창으로 가는 경우가 있음(dockview 분배).
-- `tests/generic-tasks.test.tsx` 1건 실패는 도킹과 무관한 기존 실패.
-
-## (지난 세션) 사용자 피드백
-1. **도킹 상태에서 상하 분할이 안 된다.** 창을 다른 창 위/아래 테두리에 놓아도 위아래로 나뉘지 않는 것으로 보임. `dropTargetAt`/`dockWindow`의 top/bottom 판정(머리줄 아래 기준 `SPLIT_BAND`)과 `moveTo` position 확인.
-2. **창 모드(떠 있는 창)끼리 탭으로 합치기가 안 된다.** 현재 `dropTargetAt`이 떠 있는 창을 대상에서 제외함. 떠 있는 창 머리줄 위에 놓으면 합쳐져야 함.
-3. **··· 알약이 호버 안 한 상태에서도 창 상단(탭 제목)을 가린다.** 알약 클러스터가 절대 위치로 머리줄을 덮음.
-4. **좌·우 사이드바, 하단 바 자리에 여전히 뭔가 고정되어 있다.** dockview 가장자리 그룹(edge group)이 빈 상태여도 자리/흔적을 남기는지, 또는 edge 개념 자체가 사용자 기대(모든 창이 자유롭게 붙는 영역)와 어긋나는지 검토.
-5. **창마다 상단바가 항상 보여 답답하다.** 새 방향:
-   - 창 상단바를 완전히 투명하게(배경·구분선 없이).
-   - 탭은 "탭 바" 형식: 툴바와 비슷한 플로팅 캡슐 디자인이지만 탭으로 동작. 툴바와 달리 **텍스트 레이블**을 보여준다.
-   - **탭이 하나뿐이면 탭 바를 보여주지 않는다.**
-   - ··· 알약(창 조작)은 유지하되 3번 문제를 함께 해결.
-
-UI 배치가 바뀌는 항목은 사용자 선호대로 목업이나 짧은 확인을 거친 뒤 구현한다(메모리 `giraf-design-collaboration`).
+## 남은 일
+- 최대화한 창에서 탭 전환 시 앱 막대의 컨트롤은 모핑 없이 바뀐다.
+- 새로고침하면 dockview가 저장한 최대화 상태가 복원된다. 풀고 시작할지 미정.
+- 한 탭 안의 변화(선택 모드 등)는 기존 툴바 모션을 쓴다. 맨 오른쪽 그룹이 사라질 때는 이웃이 없는데도 오른쪽으로 빠진다.
+- `tests/generic-tasks.test.tsx` 1건은 이 작업 전부터 실패한다.
