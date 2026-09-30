@@ -161,8 +161,10 @@
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
-/* Over content, the clear top bar still blurs what runs beneath it,
-   strongest at the window's edge and fading out toward the content. */
+/* Over content, a clear top bar that holds something (a title, a control
+   beyond the pill) blurs what runs beneath it, strongest at the window's
+   edge and fading out toward the content. Fullscreen, the band is the
+   app's bar, which always holds controls. */
 .window-bar-blur {
   display: none;
   position: absolute;
@@ -171,6 +173,18 @@
 }
 .dockview-theme-giraf
   .dv-groupview:has(.dock-window[data-canvas]):not(
+    :has(.dv-tabs-container > .dv-tab + .dv-tab)
+  ):has(
+    :is(.window-title-slot, .window-toolbar-slot)
+      :is(
+        .window-title:not([data-inactive]),
+        .toolbar-slot[data-hidden="false"],
+        .window-toolbar-cluster:not([data-inactive]) > :is(button, .search-field)
+      )
+  )
+  .window-bar-blur,
+.dockview-theme-giraf
+  .dv-groupview[data-fullscreen]:has(.dock-window[data-canvas]):not(
     :has(.dv-tabs-container > .dv-tab + .dv-tab)
   )
   .window-bar-blur {
