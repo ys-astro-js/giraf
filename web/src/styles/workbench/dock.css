@@ -618,3 +618,47 @@ body[data-window-dragging] {
   min-width: var(--window-toolbar);
   border-radius: calc(var(--window-toolbar) / 2);
 }
+
+/* Switching tabs (see dock/morph.ts): while the bar morphs, the real
+   capsules keep their final layout with no motion of their own and draw no
+   background; stand-in capsules carry the shape from the old tab's layout to
+   the new one, and old contents fade as ghosts. */
+.window-toolbar[data-morphing] {
+  position: relative;
+}
+.window-toolbar[data-morphing] .window-toolbar-slot :is(.toolbar-slot, .toolbar-group, .toolbar-item, .toolbar-item-content) {
+  transition: none !important;
+}
+.window-toolbar[data-morphing] .window-toolbar-slot .toolbar-group {
+  border-color: transparent;
+  background: transparent !important;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.window-toolbar[data-morphing] .window-toolbar-slot .toolbar-group > * {
+  opacity: 0;
+}
+.window-morph-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.window-morph-capsule {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--glass-border);
+  border-radius: calc(var(--window-toolbar) / 2);
+  background: var(--window-control-surface);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+}
+.window-morph-ghost {
+  position: absolute;
+  box-sizing: border-box;
+  margin: 0;
+  border-color: transparent !important;
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}

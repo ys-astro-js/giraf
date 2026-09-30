@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from "react"
+import { useEffect, useLayoutEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { Maximize2, Minimize2, Minus, X } from "lucide-react"
 import type {
@@ -15,6 +15,7 @@ import {
 } from "@/components/toolbar"
 import { WindowSlot } from "./WindowToolbar"
 import { useBarOverflow } from "./bars"
+import { morphBar } from "./morph"
 import { useToolbarOverflow } from "@/components/toolbar-overflow"
 import { PANELS, type PanelId } from "./panels"
 import {
@@ -122,8 +123,15 @@ export function HeaderControls(props: IDockviewHeaderActionsProps) {
   useLayoutEffect(() => {
     useBarOverflow.setState({ [id]: overflow.context })
   }, [id, overflow.context])
+  // Before a newly shown tab renders its toolbar, record the bar to morph it.
+  const [row, setRow] = useState<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!row) return
+    const listener = props.group.api.onDidActivePanelChange(() => morphBar(row))
+    return () => listener.dispose()
+  }, [row, props.group])
   return (
-    <div className="window-toolbar">
+    <div className="window-toolbar" ref={setRow}>
       <WindowPill group={props.group} active={props.isGroupActive} />
       <WindowSlot
         owner={id}
