@@ -113,7 +113,8 @@ export function HeaderControls(props: IDockviewHeaderActionsProps) {
           const items = [...row.children].filter(
             (child) => getComputedStyle(child).display !== "none"
           ).length
-          return row.clientWidth - pill - leading - title - gap * (items - 1)
+          // The leading slot gives back its gap (see dock.css).
+          return row.clientWidth - pill - leading - title - gap * (items - 2)
         },
       }
     },

@@ -121,10 +121,13 @@ export function morphBar(row: HTMLElement) {
   const finish = () => {
     if (done) return
     done = true
+    // The real capsules show as they are, without transitions, then settle.
+    row.dataset.settling = ""
     delete row.dataset.morphing
     layer.remove()
     for (const animation of animations) animation.cancel()
     running.delete(row)
+    afterRender(() => delete row.dataset.settling)
   }
   running.set(row, finish)
 

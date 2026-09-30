@@ -299,7 +299,7 @@
 }
 /* Each tab brings its own cluster, and the window adds its overflow menu.
    The clusters open up (display: contents) so the bar lays out their groups
-   as one row: the lock first, then the tab's tools, the overflow menu, and a
+   as one row: the tab's tools, then the overflow menu, and a
    primary action last (HIG: the prominent action ends the bar). Every group
    keeps a fixed space from the one before unless it joins it; the slot takes
    back the first space. Hidden tabs' groups fold away with the toolbar's
@@ -325,9 +325,6 @@
   grid-template-columns: minmax(0, 0fr);
   padding-inline-start: 0;
 }
-.window-toolbar-slot > .window-lock-cluster > * {
-  order: -1;
-}
 .window-toolbar-slot > .viewer-file-tools > * {
   order: 1;
 }
@@ -337,9 +334,11 @@
 .window-toolbar-slot > .toolbar-cluster > .toolbar-slot[data-prominent] {
   order: 3;
 }
-/* Leading controls are rare: the slot leaves the row until a tab has some. */
-.window-leading-slot:not(:has(> .toolbar-cluster:not([data-inactive]))) {
-  display: none;
+/* Leading controls (the lock) come after the pill and before the title.
+   Empty, the slot gives back the row's gap; each control brings its own, so
+   tab switches fold them in and out with the toolbar's motion. */
+.window-toolbar-slot.window-leading-slot {
+  margin-inline-start: calc(var(--window-inset) * -1);
 }
 /* The overflow menu takes no room until it has something to hold. */
 .window-toolbar-slot > .window-overflow > .toolbar-slot[data-hidden="true"] {
@@ -626,16 +625,20 @@ body[data-window-dragging] {
 .window-toolbar[data-morphing] {
   position: relative;
 }
-.window-toolbar[data-morphing] .window-toolbar-slot :is(.toolbar-slot, .toolbar-group, .toolbar-item, .toolbar-item-content) {
+/* Transitions stay off a moment past the morph (data-settling) so the real
+   capsules take over from the stand-ins without fading back in. */
+.window-toolbar:is([data-morphing], [data-settling])
+  .window-toolbar-slot:not(.window-leading-slot)
+  :is(.toolbar-slot, .toolbar-group, .toolbar-item, .toolbar-item-content, .toolbar-button) {
   transition: none !important;
 }
-.window-toolbar[data-morphing] .window-toolbar-slot .toolbar-group {
+.window-toolbar[data-morphing] .window-toolbar-slot:not(.window-leading-slot) .toolbar-group {
   border-color: transparent;
   background: transparent !important;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
-.window-toolbar[data-morphing] .window-toolbar-slot .toolbar-group > * {
+.window-toolbar[data-morphing] .window-toolbar-slot:not(.window-leading-slot) .toolbar-group > * {
   opacity: 0;
 }
 .window-morph-layer {

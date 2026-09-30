@@ -38,7 +38,7 @@ const theme: DockviewTheme = {
 function LockControl({ panel }: { panel: IDockviewPanel }) {
   const locked = !!(panel.params as WindowParams | undefined)?.locked
   return (
-    <WindowToolbar className="window-lock-cluster">
+    <WindowToolbar placement="leading" className="window-lock-cluster">
       <ToolbarGroup label="탭">
         <ToolbarItem>
           <ToolbarButton
