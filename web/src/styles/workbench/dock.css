@@ -23,7 +23,8 @@
   --window-toolbar: 42px;
   --window-tabs: 28px;
   /* The window pill at rest, a step below the tab bar. */
-  --window-pill: 24px;
+  --window-pill: 22px;
+  --window-pill-button: calc(var(--window-pill) - 6px);
   color-scheme: light;
   --dv-group-view-background-color: var(--background);
   --dv-tabs-and-actions-container-background-color: var(--background);
@@ -505,7 +506,7 @@
 .window-pill {
   position: relative;
   flex: 0 0 auto;
-  width: calc(28px + 6px);
+  width: calc(var(--window-pill-button) * 3 + 6px);
   height: var(--window-pill);
 }
 .window-pill > .toolbar-cluster {
@@ -516,41 +517,39 @@
   translate: 0 -50%;
 }
 .window-pill .toolbar-group { gap: 0; }
-/* Buttons still tucked away keep to the small pill's height. */
-.window-pill .toolbar-item {
-  max-height: calc(var(--window-toolbar) - 6px);
-  overflow: hidden;
-  transition: max-height var(--motion-shift) var(--motion-ease);
+/* At rest the buttons are small and quiet; opened they are toolbar size. */
+.window-pill .toolbar-button {
+  width: var(--window-pill-button);
+  height: var(--window-pill-button);
+  min-width: 0;
+  min-height: 0;
+  color: color-mix(in oklch, var(--foreground) 55%, transparent);
+  transition:
+    width var(--motion-shift) var(--motion-ease),
+    height var(--motion-shift) var(--motion-ease),
+    color var(--motion-quick) ease-out;
 }
-.window-pill .toolbar-item[data-hidden="true"] {
-  max-height: calc(var(--window-pill) - 6px);
-}
-.window-pill-handle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2.5px;
-  width: 28px;
-  height: calc(var(--window-pill) - 6px);
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  cursor: grab;
-  touch-action: none;
+.window-pill .toolbar-button svg {
+  width: 9px;
+  height: 9px;
+  stroke-width: 3.5;
   transition:
     width var(--motion-shift) var(--motion-ease),
     height var(--motion-shift) var(--motion-ease);
 }
-.window-pill[data-open="true"] .window-pill-handle {
+.window-pill[data-active="true"] .toolbar-button {
+  color: color-mix(in oklch, var(--foreground) 80%, transparent);
+}
+.window-pill[data-open="true"] .toolbar-button {
   width: calc(var(--window-toolbar) - 6px);
   height: calc(var(--window-toolbar) - 6px);
+  color: var(--foreground);
 }
-.window-pill-handle:active { cursor: grabbing; }
-.window-pill[data-open="true"] .window-pill-handle i { width: 3px; height: 3px; }
-.window-pill-handle i { width: 2.5px; height: 2.5px; border-radius: 50%; background: color-mix(in oklch, var(--foreground) 45%, transparent); }
-.window-pill[data-active="true"] .window-pill-handle i { background: color-mix(in oklch, var(--foreground) 75%, transparent); }
-.window-pill-handle:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.window-pill[data-open="true"] .toolbar-button svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+}
 
 /* The header is the window's handle. */
 .dockview-theme-giraf .dv-tabs-and-actions-container { cursor: default; }

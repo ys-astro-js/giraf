@@ -13,7 +13,6 @@ import {
   ToolbarOverflowMenu,
   ToolbarSpacer,
 } from "@/components/toolbar"
-import { startWindowDrag } from "./drag"
 import { WindowSlot } from "./WindowToolbar"
 import { useBarOverflow } from "./bars"
 import { useToolbarOverflow } from "@/components/toolbar-overflow"
@@ -28,10 +27,10 @@ import {
 } from "./store"
 
 /**
- * The window's handle at the start of its toolbar row. Unlike the tab
- * controls beside it, it is always there, belongs to the window rather than
- * a tab, grows into close, minimize and maximize on hover, and moves the
- * window when dragged.
+ * The window's own controls at the start of its top bar: close, minimize and
+ * maximize, shown small at rest so they say what they do, and grown to
+ * toolbar size over the title on hover. The bar's empty space moves the
+ * window, so the pill needs no handle of its own.
  */
 export function WindowPill({
   group,
@@ -57,42 +56,21 @@ export function WindowPill({
     >
       <ToolbarCluster edge="start" className="window-pill-cluster">
         <ToolbarGroup label="창 조작">
-          <button
-            type="button"
-            className="window-pill-handle"
-            aria-label="창 옮기기"
-            title="끌어서 창 옮기기"
-            onPointerDown={(event) => {
-              if (event.button !== 0) return
-              event.preventDefault()
-              startWindowDrag(group, event.clientX, event.clientY)
-            }}
+          <ToolbarButton label="창 닫기" onClick={() => closeWindow(group)}>
+            <X />
+          </ToolbarButton>
+          <ToolbarButton
+            label="창 최소화"
+            onClick={() => minimizeWindow(group)}
           >
-            <i />
-            <i />
-            <i />
-          </button>
-          <ToolbarItem hidden={!open}>
-            <ToolbarButton label="창 닫기" onClick={() => closeWindow(group)}>
-              <X />
-            </ToolbarButton>
-          </ToolbarItem>
-          <ToolbarItem hidden={!open}>
-            <ToolbarButton
-              label="창 최소화"
-              onClick={() => minimizeWindow(group)}
-            >
-              <Minus />
-            </ToolbarButton>
-          </ToolbarItem>
-          <ToolbarItem hidden={!open}>
-            <ToolbarButton
-              label={maximized ? "원래 크기로" : "창 최대화"}
-              onClick={() => toggleMaximized(group)}
-            >
-              {maximized ? <Minimize2 /> : <Maximize2 />}
-            </ToolbarButton>
-          </ToolbarItem>
+            <Minus />
+          </ToolbarButton>
+          <ToolbarButton
+            label={maximized ? "원래 크기로" : "창 최대화"}
+            onClick={() => toggleMaximized(group)}
+          >
+            {maximized ? <Minimize2 /> : <Maximize2 />}
+          </ToolbarButton>
         </ToolbarGroup>
       </ToolbarCluster>
     </span>
