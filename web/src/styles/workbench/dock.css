@@ -108,65 +108,81 @@
   --dv-tabs-and-actions-container-background-color: var(--sidebar);
 }
 
-/* Every window has a header row: its pill, then its tabs. */
+/* Every window's header is clear: a toolbar row (its pill, then the shown
+   tab's controls) above a tab bar, which hides while the window has one tab.
+   The clear parts of the header drag the window. */
 .dockview-theme-giraf .dv-tabs-and-actions-container {
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  padding: 0 8px;
-  border-bottom: 1px solid var(--border);
+  height: auto;
+  padding: 6px 8px 0;
+  row-gap: 6px;
+  background: transparent;
+  border-bottom: 0;
 }
 .dockview-theme-giraf .dv-pre-actions-container {
   display: flex;
+  flex: 1 0 100%;
   align-items: center;
+  min-width: 0;
 }
-.dockview-theme-giraf .dv-void-container {
+.dockview-theme-giraf .dv-void-container,
+.dockview-theme-giraf .dv-right-actions-container {
   display: none;
 }
 .dockview-theme-giraf .dv-scrollable {
   display: flex;
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
-  height: 28px;
+  max-width: 100%;
+  height: 32px;
 }
-.dockview-theme-giraf .dv-scrollable > .dv-tabs-container {
+.dockview-theme-giraf .dv-tabs-and-actions-container:has(.dv-tabs-container > .dv-tab:only-child) .dv-scrollable {
+  display: none;
+}
+.window-toolbar {
+  display: flex;
   flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 32px;
+}
+.window-toolbar-slot {
+  display: flex;
+  flex: 1;
+  justify-content: flex-end;
   min-width: 0;
 }
 
-/* Window tabs: the segmented pill; a lone tab reads as the window title. */
+/* The tab bar: a floating capsule like the toolbar's, with named tabs. */
 .dockview-theme-giraf .dv-tabs-container {
-  height: 28px;
+  height: 32px;
   padding: 2px;
   box-sizing: border-box;
-  border-radius: 14px;
-  background: var(--muted);
-  container-type: inline-size;
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  background: var(--glass-background);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
 }
 .dockview-theme-giraf .dv-tabs-container > .dv-tab {
-  flex: 1 1 0;
+  flex: 0 1 auto;
   min-width: 28px;
   height: 100%;
   padding: 0;
-  border-radius: 12px;
+  border-radius: 14px;
   transition:
     background-color var(--motion-quick) ease-out,
     color var(--motion-quick) ease-out;
 }
 .dockview-theme-giraf .dv-tabs-container > .dv-tab.dv-active-tab {
-  box-shadow: 0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent);
+  background: var(--selection);
+  color: var(--selection-foreground);
 }
 .dockview-theme-giraf .dv-tabs-container > .dv-tab:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
-}
-.dockview-theme-giraf .dv-tabs-container:has(> .dv-tab:only-child) {
-  background: transparent;
-  padding: 0;
-}
-.dockview-theme-giraf .dv-tabs-container > .dv-tab:only-child {
-  flex: 0 0 auto;
-  background: transparent;
-  box-shadow: none;
 }
 
 .dock-tab {
@@ -175,16 +191,12 @@
   gap: 2px;
   width: 100%;
   height: 100%;
-  padding: 0 4px 0 10px;
+  padding: 0 4px 0 12px;
   box-sizing: border-box;
   font-size: 12.5px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
-}
-.dv-tab:only-child .dock-tab {
-  padding-left: 4px;
-  font-weight: 600;
 }
 .dock-tab-title {
   display: flex;
@@ -194,23 +206,15 @@
   gap: 6px;
   min-width: 0;
 }
-.dv-tab:only-child .dock-tab-label {
-  overflow: visible;
-}
-.dv-tab:only-child .dock-tab-title {
-  justify-content: flex-start;
-}
 .dock-tab-title svg {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
+  display: none;
 }
 .dock-tab-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* Tab buttons act on that tab alone; they show on hover, on the shown tab, and a lock stays while locked. */
+/* A tab's close shows on hover and on the shown tab. */
 .dock-tab-button {
   display: grid;
   flex-shrink: 0;
@@ -221,7 +225,7 @@
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: color-mix(in oklch, var(--foreground) 55%, transparent);
+  color: inherit;
   opacity: 0;
   transition:
     opacity var(--motion-quick) ease-out,
@@ -232,8 +236,7 @@
   height: 12px;
 }
 .dock-tab-button:hover {
-  background: color-mix(in oklch, var(--foreground) 8%, transparent);
-  color: var(--foreground);
+  background: color-mix(in oklch, currentColor 12%, transparent);
 }
 .dock-tab-button:focus-visible {
   opacity: 1;
@@ -242,29 +245,18 @@
 }
 .dv-tab:hover .dock-tab-button,
 .dv-active-tab .dock-tab-button {
-  opacity: 1;
+  opacity: 0.7;
 }
-.dock-tab-lock[aria-pressed="true"] {
-  opacity: 1;
+.window-lock[aria-pressed="true"] {
   color: var(--primary);
 }
-/* Crowded strips keep each window's symbol and drop its name. */
-@container (max-width: 300px) {
-  .dv-tab:not(:only-child) .dock-tab-title:has(svg) .dock-tab-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-}
 
-/* The window pill: a toolbar capsule, always there, small; its buttons slide
-   out of it with the toolbar's own motion, over the tabs. */
-.window-pill { position: relative; flex: 0 0 34px; width: 34px; height: 26px; }
-.window-pill-cluster { position: absolute; top: 50%; left: 0; z-index: 3; translate: 0 -50%; }
-.window-pill .toolbar-group { gap: 0; padding: 1px; background: var(--background); }
-.window-pill[data-open="true"] .toolbar-group { box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); }
+/* The window pill: not one of the row's controls but the window's own
+   handle, always there at the start; hovering grows its buttons in place,
+   pushing the tab's controls along rather than covering anything. */
+.window-pill { display: flex; flex: 0 0 auto; }
+.window-pill .toolbar-group { gap: 0; padding: 1px; border-color: transparent; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.window-pill[data-open="true"] .toolbar-group { border-color: var(--glass-border); background: var(--glass-background); }
 .window-pill .toolbar-button { width: 24px; height: 24px; min-width: 0; min-height: 0; }
 .window-pill .toolbar-button svg { width: 14px; height: 14px; }
 .window-pill-handle {
@@ -273,22 +265,21 @@
   justify-content: center;
   gap: 3px;
   width: 30px;
-  height: 22px;
+  height: 24px;
   padding: 0;
   border: 0;
-  border-radius: 11px;
+  border-radius: 12px;
   background: transparent;
   cursor: grab;
   touch-action: none;
 }
 .window-pill-handle:active { cursor: grabbing; }
-.window-pill-handle i { width: 3px; height: 3px; border-radius: 50%; background: color-mix(in oklch, var(--foreground) 40%, transparent); }
+.window-pill-handle i { width: 3px; height: 3px; border-radius: 50%; background: color-mix(in oklch, var(--foreground) 35%, transparent); }
 .window-pill[data-active="true"] .window-pill-handle i { background: color-mix(in oklch, var(--foreground) 70%, transparent); }
 .window-pill-handle:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 
 /* The header is the window's handle. */
 .dockview-theme-giraf .dv-tabs-and-actions-container { cursor: default; }
-.dockview-theme-giraf .dv-tab:only-child { cursor: grab; }
 
 /* Maximized: the window fills the whole workbench above the others. */
 .dv-groupview[data-window-maximized] {

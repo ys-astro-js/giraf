@@ -164,15 +164,19 @@ function reorder(panel: IDockviewPanel, x: number) {
   })
 }
 
+/** Controls in a header keep the pointer; the rest of it is a handle. */
+const CONTROLS =
+  "button, input, select, textarea, a, [role='button'], [contenteditable]"
+
 /**
- * The window header is the handle: a lone tab or the pill moves the
- * window, a tab among others moves that tab. Buttons keep their clicks.
+ * The window header is the handle: its clear toolbar row and tab bar move
+ * the window, a tab among others moves that tab. Controls keep their clicks.
  */
 export function headerPointerDown(event: PointerEvent) {
   if (event.button !== 0) return
   const target = event.target as HTMLElement
   const header = target.closest(".dv-tabs-and-actions-container")
-  if (!header || target.closest("button")) return
+  if (!header || target.closest(CONTROLS)) return
   const dock = useDock.getState().api
   const group = dock?.groups.find((g) => g.element.contains(header))
   if (!group) return

@@ -11,6 +11,7 @@ import {
   ToolbarItem,
 } from "@/components/toolbar"
 import { startWindowDrag } from "./drag"
+import { WindowToolbarSlot } from "./WindowToolbar"
 import { PANELS, type PanelId } from "./panels"
 import {
   closeWindow,
@@ -22,8 +23,9 @@ import {
 } from "./store"
 
 /**
- * The window's handle at the start of its header: a small pill that grows
- * into close, minimize and maximize for the whole window, and moves the
+ * The window's handle at the start of its toolbar row. Unlike the tab
+ * controls beside it, it is always there, belongs to the window rather than
+ * a tab, grows into close, minimize and maximize on hover, and moves the
  * window when dragged.
  */
 export function WindowPill({
@@ -92,10 +94,18 @@ export function WindowPill({
   )
 }
 
-/** Every window header starts with its pill. */
+/**
+ * A window's toolbar row, above its tab bar: the pill, then the shown tab's
+ * own controls. The row itself is clear and drags the window.
+ */
 export function HeaderControls(props: IDockviewHeaderActionsProps) {
   useDock((state) => state.revision)
-  return <WindowPill group={props.group} active={props.isGroupActive} />
+  return (
+    <div className="window-toolbar">
+      <WindowPill group={props.group} active={props.isGroupActive} />
+      <WindowToolbarSlot group={props.group.id} />
+    </div>
+  )
 }
 
 /**

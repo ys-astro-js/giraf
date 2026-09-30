@@ -1,13 +1,13 @@
 import { useSyncExternalStore, type MouseEvent } from "react"
 import type { IDockviewPanelHeaderProps } from "dockview-react"
-import { Lock, LockOpen, X } from "lucide-react"
+import { X } from "lucide-react"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { PANELS, type PanelId } from "./panels"
-import { closeTab, toggleLock, useDock, type WindowParams } from "./store"
+import { closeTab, useDock, type WindowParams } from "./store"
 
 /** Tab buttons act without activating or dragging the tab under them. */
 const own = (action: () => void) => ({
@@ -20,8 +20,8 @@ const own = (action: () => void) => ({
 })
 
 /**
- * A tab: one view in a window. It carries what acts on that view alone,
- * the follow-selection lock and close; the window pill acts on them all.
+ * A tab in a window's tab bar: its name and close. The tab's other
+ * controls sit in the window's toolbar row while it is shown.
  */
 export function DockTab({
   api,
@@ -52,21 +52,6 @@ export function DockTab({
         </TooltipTrigger>
         <TooltipContent>{title}</TooltipContent>
       </Tooltip>
-      {definition?.follows && (
-        <button
-          type="button"
-          className="dock-tab-button dock-tab-lock"
-          aria-pressed={locked}
-          aria-label={locked ? `${title} 잠금 해제` : `${title} 잠금`}
-          title={locked ? "잠금 해제" : "선택을 따라가지 않도록 잠금"}
-          {...own(() => {
-            const target = panel()
-            if (target) toggleLock(target)
-          })}
-        >
-          {locked ? <Lock /> : <LockOpen />}
-        </button>
-      )}
       <button
         type="button"
         className="dock-tab-button dock-tab-close"

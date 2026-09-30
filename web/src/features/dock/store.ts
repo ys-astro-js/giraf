@@ -7,8 +7,14 @@ import type {
 import { PANELS, type PanelId } from "./panels"
 import { buildPreset, type PresetId } from "./presets"
 
+/** A side of the workbench; its toolbar toggle hides the windows along it. */
 export type Edge = "left" | "right" | "bottom"
 export const EDGES: Edge[] = ["left", "right", "bottom"]
+const OPPOSITE: Record<Edge, "left" | "right" | "top"> = {
+  left: "right",
+  right: "left",
+  bottom: "top",
+}
 
 /** What a locked tab keeps showing instead of following the selection. */
 export type WindowParams = { locked?: string }
@@ -26,10 +32,12 @@ export type StowedTab = {
 
 type DockState = {
   api?: DockviewApi
-  /** Edges shown on screen. */
+  /** Sides whose windows are shown. */
   edges: Record<Edge, boolean>
-  /** Edges holding windows, shown or not: only these get a toolbar toggle. */
+  /** Sides holding windows, shown or not: only these get a toolbar toggle. */
   docked: Record<Edge, boolean>
+  /** Windows a side's toggle hid, to bring back together. */
+  hidden: Record<Edge, string[]>
   minimized: MinimizedWindow[]
   stowed: StowedTab[]
   /** The window filling the whole workbench, if any. */
@@ -41,16 +49,18 @@ type DockState = {
 export const useDock = create<DockState>()(() => ({
   edges: { left: false, right: false, bottom: false },
   docked: { left: false, right: false, bottom: false },
+  hidden: { left: [], right: [], bottom: [] },
   minimized: [],
   stowed: [],
   revision: 0,
 }))
 
 const LAYOUT_KEY = "giraf-dock-layout"
-const LAYOUT_VERSION = 2
+const LAYOUT_VERSION = 3
 type SavedLayout = {
   version: number
   layout: unknown
+  hidden: Record<Edge, string[]>
   minimized: MinimizedWindow[]
   stowed: StowedTab[]
 }
@@ -58,39 +68,35 @@ type SavedLayout = {
 const api = () => useDock.getState().api
 const root = () => document.querySelector(".dock-root")
 
-export function edgeOf(group: DockviewGroupPanel): Edge | undefined {
-  return EDGES.find((edge) => api()?.getEdgeGroup(edge)?.id === group.id)
-}
-
 export const isFloating = (group: DockviewGroupPanel) =>
   group.api.location.type === "floating"
 
+const isMain = (group: DockviewGroupPanel) =>
+  group.panels.some((panel) => panel.id === "workflow")
+
 /**
- * Shows an edge at full size. dockview collapses an edge to a strip when it
- * empties, and showing it again does not expand it.
+ * The shown windows along a side: they touch it but not the side across,
+ * so windows spanning the workbench and the workflow's window stay put.
  */
-export function showEdge(dock: DockviewApi, edge: Edge) {
-  const group = dock.getEdgeGroup(edge)
-  if (!group) return
-  dock.setEdgeGroupVisible(edge, true)
-  if (group.isCollapsed()) group.expand()
+function sideWindows(dock: DockviewApi, edge: Edge) {
+  const box = root()?.getBoundingClientRect()
+  if (!box) return []
+  const touches = (rect: DOMRect, side: Edge | "top") =>
+    Math.abs(rect[side] - box[side]) < 2
+  return dock.groups.filter((group) => {
+    if (group.api.location.type !== "grid" || isMain(group)) return false
+    const rect = group.element.getBoundingClientRect()
+    if (!rect.width || !rect.height) return false
+    return touches(rect, edge) && !touches(rect, OPPOSITE[edge])
+  })
 }
 
-/** Every window keeps its header row on top; empty edges hide. */
+/** Every window keeps its header row on top. */
 function syncHeaders(dock: DockviewApi) {
   for (const group of dock.groups) {
     if (group.api.getHeaderPosition() !== "top")
       group.api.setHeaderPosition("top")
     group.model.header.hidden = false
-  }
-  for (const edge of EDGES) {
-    const group = dock.getEdgeGroup(edge)
-    if (
-      group &&
-      !dock.getGroup(group.id)?.panels.length &&
-      dock.isEdgeGroupVisible(edge)
-    )
-      dock.setEdgeGroupVisible(edge, false)
   }
 }
 
@@ -100,31 +106,55 @@ export function syncDock() {
   if (!dock) return
   syncHeaders(dock)
   const groups = new Set(dock.groups.map((group) => group.id))
-  useDock.setState((state) => ({
-    edges: Object.fromEntries(
+  useDock.setState((state) => {
+    const hidden = Object.fromEntries(
       EDGES.map((edge) => [
         edge,
-        !!dock.getEdgeGroup(edge) && dock.isEdgeGroupVisible(edge),
+        state.hidden[edge].filter((id) => groups.has(id)),
       ])
-    ) as Record<Edge, boolean>,
-    docked: Object.fromEntries(
-      EDGES.map((edge) => {
-        const group = dock.getEdgeGroup(edge)
-        return [edge, !!group && !!dock.getGroup(group.id)?.panels.length]
-      })
-    ) as Record<Edge, boolean>,
-    // A window whose tabs all moved away is no longer minimized.
-    minimized: state.minimized.filter((item) => groups.has(item.group)),
-    revision: state.revision + 1,
-  }))
+    ) as Record<Edge, string[]>
+    const shown = Object.fromEntries(
+      EDGES.map((edge) => [edge, sideWindows(dock, edge).length > 0])
+    ) as Record<Edge, boolean>
+    return {
+      hidden,
+      edges: Object.fromEntries(
+        EDGES.map((edge) => [edge, shown[edge] && !hidden[edge].length])
+      ) as Record<Edge, boolean>,
+      docked: Object.fromEntries(
+        EDGES.map((edge) => [edge, shown[edge] || hidden[edge].length > 0])
+      ) as Record<Edge, boolean>,
+      // A window whose tabs all moved away is no longer minimized.
+      minimized: state.minimized.filter((item) => groups.has(item.group)),
+      revision: state.revision + 1,
+    }
+  })
   placeMaximized()
 }
 
+const SIDE_SIZE: Record<Edge, number> = { left: 256, right: 384, bottom: 240 }
+
+const homeOf = (component: string) =>
+  PANELS[component as PanelId]?.home ?? "center"
+
+/** Sizes a window that just joined a side of the workbench. */
+function sizeForSide(group: DockviewGroupPanel, edge: Edge) {
+  group.api.setSize(
+    edge === "bottom"
+      ? { height: SIDE_SIZE.bottom }
+      : { width: SIDE_SIZE[edge] }
+  )
+}
+
+/** A docked window already holding tabs that share a home side. */
 function homeGroup(component: string) {
-  const home = PANELS[component as PanelId]?.home ?? "center"
-  return home === "center" || home === "float"
-    ? undefined
-    : api()?.getEdgeGroup(home)
+  const home = homeOf(component)
+  if (home === "center" || home === "float") return
+  return api()?.groups.find(
+    (group) =>
+      group.api.location.type === "grid" &&
+      group.panels.some((panel) => homeOf(panel.view.contentComponent) === home)
+  )
 }
 
 function addWindow(
@@ -135,32 +165,37 @@ function addWindow(
   beside?: DockviewGroupPanel
 ) {
   const dock = api()!
-  const edgeGroup = beside ? undefined : homeGroup(component)
+  const home = homeOf(component)
+  const joined = beside ?? homeGroup(component)
   const workflow = dock.getPanel("workflow")
-  // Without the workflow, center windows join the main grid, not an edge.
-  const grid = dock.groups.find(
-    (group) => group.api.location.type === "grid" && !edgeOf(group)
-  )
+  const grid = dock.groups.find((group) => group.api.location.type === "grid")
+  const side = home === "center" || home === "float" ? undefined : home
   const panel = dock.addPanel({
     id,
     component,
     title,
     params,
-    position: beside
-      ? { referenceGroup: beside }
-      : edgeGroup
-        ? { referenceGroup: edgeGroup.id }
-        : workflow
-          ? { referencePanel: workflow, direction: "right" }
-          : grid
-            ? { referenceGroup: grid, direction: "right" }
-            : { direction: "right" },
+    position: joined
+      ? { referenceGroup: joined }
+      : side === "bottom" && workflow
+        ? { referencePanel: workflow, direction: "below" }
+        : side
+          ? { direction: side }
+          : workflow
+            ? { referencePanel: workflow, direction: "right" }
+            : grid
+              ? { referenceGroup: grid, direction: "right" }
+              : { direction: "right" },
+    ...(side && !joined
+      ? side === "bottom"
+        ? { initialHeight: SIDE_SIZE.bottom }
+        : { initialWidth: SIDE_SIZE[side] }
+      : {}),
   })
+  if (joined) restoreGroup(joined)
   // Floating windows open in the dock's top-right corner.
-  if (!beside && PANELS[component as PanelId]?.home === "float")
+  if (!beside && home === "float")
     floatAt(panel.group, Number.MAX_SAFE_INTEGER, 16)
-  const edge = edgeOf(panel.group)
-  if (edge) showEdge(dock, edge)
   return panel
 }
 
@@ -205,8 +240,6 @@ export function revealPanel(id: PanelId, { activate = true } = {}) {
     ? follower(id)
     : (dock.getPanel(id) ?? addWindow(id, id, PANELS[id].title))
   restoreGroup(panel.group)
-  const edge = edgeOf(panel.group)
-  if (edge) showEdge(dock, edge)
   if (activate) panel.api.setActive()
   syncDock()
 }
@@ -217,25 +250,41 @@ export function useWindowShown(id: PanelId) {
   return !!useDock.getState().api?.getPanel(id)
 }
 
-/** The toolbar's edge toggles: show or hide everything docked there. */
+/** Hides the windows along a side until its toggle brings them back. */
+export function hideSide(edge: Edge, groups = sideWindows(api()!, edge)) {
+  for (const group of groups) group.api.setVisible(false)
+  useDock.setState((state) => ({
+    hidden: {
+      ...state.hidden,
+      [edge]: [...state.hidden[edge], ...groups.map((group) => group.id)],
+    },
+  }))
+}
+
+/** The toolbar's side toggles: hide or show the windows along a side. */
 export function toggleEdge(edge: Edge) {
   const dock = api()
   if (!dock) return
-  const group = dock.getEdgeGroup(edge)
-  const minimized =
-    group && useDock.getState().minimized.some((m) => m.group === group.id)
-  const visible = !!group && dock.isEdgeGroupVisible(edge) && !minimized
-  if (visible) dock.setEdgeGroupVisible(edge, false)
-  else if (group && dock.getGroup(group.id)?.panels.length) {
-    restoreWindow(group.id)
-    showEdge(dock, edge)
-  } else {
+  const hidden = useDock.getState().hidden[edge]
+  const shown = sideWindows(dock, edge)
+  if (hidden.length) {
+    useDock.setState((state) => ({
+      hidden: { ...state.hidden, [edge]: [] },
+    }))
+    // Shown in reverse of hiding, windows that share a side keep their sizes.
+    for (const id of [...hidden].reverse()) {
+      const group = dock.getGroup(id) as DockviewGroupPanel | undefined
+      if (group) restoreGroup(group, true)
+    }
+  } else if (shown.length) hideSide(edge, shown)
+  else {
     const home = (Object.keys(PANELS) as PanelId[]).find(
       (id) => PANELS[id].home === edge
     )
     if (home) revealPanel(home)
   }
   syncDock()
+  saveLayout()
 }
 
 /* Tabs: lock and close act on one tab. */
@@ -323,12 +372,7 @@ function floatingBox(group: DockviewGroupPanel) {
 }
 
 function hideGroup(group: DockviewGroupPanel, hidden: boolean) {
-  const dock = api()!
-  const edge = edgeOf(group)
-  if (edge) {
-    if (hidden) dock.setEdgeGroupVisible(edge, false)
-    else showEdge(dock, edge)
-  } else if (isFloating(group)) {
+  if (isFloating(group)) {
     const box = floatingBox(group)
     if (box) box.hidden = hidden
   } else group.api.setVisible(!hidden)
@@ -348,10 +392,20 @@ export function minimizeWindow(group: DockviewGroupPanel) {
   saveLayout()
 }
 
-function restoreGroup(group: DockviewGroupPanel) {
-  if (!useDock.getState().minimized.some((m) => m.group === group.id)) return
+/** Shows a window that was minimized or hidden with its side. */
+function restoreGroup(group: DockviewGroupPanel, force = false) {
+  const state = useDock.getState()
+  const minimized = state.minimized.some((m) => m.group === group.id)
+  const sided = EDGES.some((edge) => state.hidden[edge].includes(group.id))
+  if (!minimized && !sided && !force) return
   useDock.setState((state) => ({
     minimized: state.minimized.filter((m) => m.group !== group.id),
+    hidden: Object.fromEntries(
+      EDGES.map((edge) => [
+        edge,
+        state.hidden[edge].filter((id) => id !== group.id),
+      ])
+    ) as Record<Edge, string[]>,
   }))
   hideGroup(group, false)
 }
@@ -437,13 +491,28 @@ export type DropPosition = "center" | "left" | "right" | "top" | "bottom"
 
 /** How close to a window's border a drop splits it. */
 const SPLIT_BAND = 48
-/** How close to the workbench's border a drop docks to that edge. */
+/** How close to the workbench's border a drop docks along that whole side. */
 const EDGE_BAND = 24
+
+/**
+ * The window drawn topmost at a point, other than the one being dragged:
+ * floating windows cover docked ones, and later-focused floats the rest.
+ */
+function windowAt(x: number, y: number, dragged: DockviewGroupPanel) {
+  const dock = api()
+  if (!dock) return
+  for (const element of document.elementsFromPoint(x, y)) {
+    if (dragged.element.contains(element)) continue
+    const group = dock.groups.find((g) => g.element.contains(element))
+    if (group) return group
+  }
+}
 
 /**
  * Where a window dragged to a point would dock, if anywhere. Only a
  * window's header (join its tabs) and the bands along its borders (split)
- * dock; everywhere else the window stays floating.
+ * dock; everywhere else the window stays floating. A floating window only
+ * takes tabs: it holds a single group and cannot split.
  */
 export function dropTargetAt(
   x: number,
@@ -453,33 +522,32 @@ export function dropTargetAt(
   const dock = api()
   const box = root()?.getBoundingClientRect()
   if (!dock || !box) return
-  if (x - box.left < EDGE_BAND) return { kind: "edge", edge: "left" }
-  if (box.right - x < EDGE_BAND) return { kind: "edge", edge: "right" }
-  if (box.bottom - y < EDGE_BAND) return { kind: "edge", edge: "bottom" }
-  for (const group of dock.groups) {
-    if (group === dragged || isFloating(group)) continue
-    if (useDock.getState().minimized.some((m) => m.group === group.id)) continue
-    const rect = group.element.getBoundingClientRect()
-    if (!rect.width || !rect.height) continue
-    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom)
-      continue
-    const header =
-      group.element
-        .querySelector(".dv-tabs-and-actions-container")
-        ?.getBoundingClientRect().height ?? 40
-    if (y - rect.top < header)
-      return { kind: "group", group, position: "center" }
-    const sides: [DropPosition, number][] = [
-      ["left", x - rect.left],
-      ["right", rect.right - x],
-      ["top", y - rect.top - header],
-      ["bottom", rect.bottom - y],
-    ]
-    const [side, distance] = sides.sort((a, b) => a[1] - b[1])[0]
-    return distance < SPLIT_BAND
-      ? { kind: "group", group, position: side }
-      : undefined
+  const group = windowAt(x, y, dragged)
+  const floating = group && isFloating(group)
+  if (!floating) {
+    if (x - box.left < EDGE_BAND) return { kind: "edge", edge: "left" }
+    if (box.right - x < EDGE_BAND) return { kind: "edge", edge: "right" }
+    if (box.bottom - y < EDGE_BAND) return { kind: "edge", edge: "bottom" }
   }
+  if (!group) return
+  if (useDock.getState().minimized.some((m) => m.group === group.id)) return
+  const rect = group.element.getBoundingClientRect()
+  const header =
+    group.element
+      .querySelector(".dv-tabs-and-actions-container")
+      ?.getBoundingClientRect().height ?? 40
+  if (y - rect.top < header) return { kind: "group", group, position: "center" }
+  if (floating) return
+  const sides: [DropPosition, number][] = [
+    ["left", x - rect.left],
+    ["right", rect.right - x],
+    ["top", y - rect.top - header],
+    ["bottom", rect.bottom - y],
+  ]
+  const [side, distance] = sides.sort((a, b) => a[1] - b[1])[0]
+  return distance < SPLIT_BAND
+    ? { kind: "group", group, position: side }
+    : undefined
 }
 
 /** The area a drop target would take, in viewport pixels. */
@@ -580,18 +648,9 @@ export function liftWindow(
   const box = floatHost()
   const left = x - (box?.left ?? 0) - dx
   const top = y - (box?.top ?? 0) - dy
-  let floating = group
-  if (edgeOf(group)) {
-    const [first, ...rest] = group.panels
-    const active = group.activePanel
-    if (!first) return { window: group, dx, dy }
-    floatAt(first.group, left, top, size, first)
-    floating = first.group
-    for (const panel of rest) panel.api.moveTo({ group: floating })
-    active?.api.setActive()
-  } else floatAt(group, left, top, size)
+  floatAt(group, left, top, size)
   syncDock()
-  return { window: floating, dx, dy }
+  return { window: group, dx, dy }
 }
 
 /** Pulls one tab out of its window into a floating window of its own. */
@@ -639,11 +698,10 @@ export function dockWindow(group: DockviewGroupPanel, target: DropTarget) {
   const dock = api()
   if (!dock) return
   if (target.kind === "edge") {
-    const edge = dock.getEdgeGroup(target.edge)
-    const edgeGroup = edge && (dock.getGroup(edge.id) as DockviewGroupPanel)
-    if (!edgeGroup) return
-    group.api.moveTo({ group: edgeGroup, position: "center" })
-    showEdge(dock, target.edge)
+    // Without a group, dockview adds one along the whole side.
+    const panel = group.activePanel
+    group.api.moveTo({ position: target.edge })
+    if (panel) sizeForSide(panel.group, target.edge)
   } else group.api.moveTo({ group: target.group, position: target.position })
   syncDock()
   saveLayout()
@@ -658,6 +716,7 @@ export function saveLayout() {
     const saved: SavedLayout = {
       version: LAYOUT_VERSION,
       layout: dock.toJSON(),
+      hidden: useDock.getState().hidden,
       minimized: useDock.getState().minimized,
       stowed: useDock.getState().stowed,
     }
@@ -681,6 +740,7 @@ export function loadLayout(dock: DockviewApi) {
           stowed: saved.stowed.filter(
             (item) => item.component in PANELS && !dock.getPanel(item.id)
           ),
+          hidden: saved.hidden,
           minimized: [],
         })
         for (const item of saved.minimized) {
@@ -712,15 +772,19 @@ function ensureWindows(dock: DockviewApi) {
       stowed.some((item) => item.component === id)
     if (present) continue
     const panel = addWindow(id, id, PANELS[id].title)
-    const edge = edgeOf(panel.group)
-    if (edge === "bottom") dock.setEdgeGroupVisible(edge, false)
+    if (PANELS[id].home === "bottom") hideSide("bottom", [panel.group])
   }
 }
 
 export function applyPreset(preset: PresetId) {
   const dock = api()
   if (!dock) return
-  useDock.setState({ maximized: undefined, minimized: [], stowed: [] })
+  useDock.setState({
+    maximized: undefined,
+    minimized: [],
+    stowed: [],
+    hidden: { left: [], right: [], bottom: [] },
+  })
   placeMaximized()
   dock.clear()
   buildPreset(dock, preset)
