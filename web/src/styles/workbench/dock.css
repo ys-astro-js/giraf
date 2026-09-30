@@ -16,15 +16,19 @@
   height: 100%;
 }
 
-.dockview-theme-giraf {
-  /* A window header's one inset (edges and between rows); its toolbar row
-     holds full-size toolbar controls, its tab bar is a slimmer pill. */
+/* Window bar metrics, app-wide: a fullscreen window's controls sit in the
+   app's top bar too. A header's one inset (edges and between rows); its
+   toolbar row holds full-size toolbar controls, its tab bar is a slimmer
+   pill; the window pill rests a step below the tab bar. */
+.giraf-app {
   --window-inset: 8px;
   --window-toolbar: 42px;
   --window-tabs: 28px;
-  /* The window pill at rest, a step below the tab bar. */
   --window-pill: 22px;
   --window-pill-button: calc(var(--window-pill) - 6px);
+}
+
+.dockview-theme-giraf {
   color-scheme: light;
   --dv-group-view-background-color: var(--background);
   --dv-tabs-and-actions-container-background-color: var(--background);
@@ -511,6 +515,7 @@
    next to it instead of pushing the bar along. */
 .window-pill {
   position: relative;
+  display: block;
   flex: 0 0 auto;
   width: calc(var(--window-pill-button) * 3 + 6px);
   height: var(--window-pill);
@@ -565,8 +570,12 @@
    window's top bar grows to take it in. The app's bar then draws no band of
    its own, so it reads exactly like the window's: clear over rich content,
    translucent over text or several tabs. */
-.giraf-app:has(.dv-groupview[data-fullscreen]) .dock-body {
-  margin-top: calc(var(--toolbar-height, 56px) * -1);
+.giraf-app:has(.dv-groupview[data-fullscreen]) {
+  position: relative;
+}
+.giraf-app:has(.dv-groupview[data-fullscreen]) .workbench-toolbar {
+  position: absolute;
+  inset: 0 0 auto;
 }
 .giraf-app:has(.dv-groupview[data-fullscreen]) .workbench-toolbar::before {
   border-bottom-color: transparent;
@@ -574,8 +583,33 @@
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+/* Its own top bar row moves into the app's bar; only a tab bar (several
+   tabs) stays, just below the app's bar. */
 .dockview-theme-giraf .dv-groupview[data-fullscreen] {
   --window-top: var(--toolbar-height, 56px);
+  --window-header: var(--window-top);
+}
+.dockview-theme-giraf
+  .dv-groupview[data-fullscreen]:has(.dv-tabs-container > .dv-tab + .dv-tab) {
+  --window-header: calc(
+    var(--window-top) + var(--window-inset) * 2 + var(--window-tabs)
+  );
+}
+.dockview-theme-giraf
+  .dv-groupview[data-fullscreen]
+  .dv-pre-actions-container {
+  display: none;
+}
+.dockview-theme-giraf
+  .dv-groupview[data-fullscreen]
+  > .dv-tabs-and-actions-container {
+  padding: var(--window-top) var(--window-inset) 0;
+}
+.dockview-theme-giraf
+  .dv-groupview[data-fullscreen]:has(.dv-tabs-container > .dv-tab + .dv-tab)
+  > .dv-tabs-and-actions-container {
+  padding: calc(var(--window-top) + var(--window-inset)) var(--window-inset)
+    var(--window-inset);
 }
 /* Floating windows: rounded, with generous resize edges and a floor on size. */
 .dockview-theme-giraf { --dv-floating-titlebar-height: 0px; }

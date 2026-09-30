@@ -14,7 +14,7 @@ import {
   ToolbarSpacer,
 } from "@/components/toolbar"
 import { WindowSlot } from "./WindowToolbar"
-import { useBarOverflow } from "./bars"
+import { APP, slotKey, useBarOverflow, useSlots } from "./bars"
 import { morphBars } from "./morph"
 import { useToolbarOverflow } from "@/components/toolbar-overflow"
 import { PANELS, type PanelId } from "./panels"
@@ -124,6 +124,12 @@ export function HeaderControls(props: IDockviewHeaderActionsProps) {
   useLayoutEffect(() => {
     useBarOverflow.setState({ [id]: overflow.context })
   }, [id, overflow.context])
+  const fullscreen = useDock((state) => state.fullscreen === id)
+  const appPill = useSlots((slots) => slots[slotKey(APP, "pill")])
+  // Fullscreen, the window's toolbar sits in the app's bar with room to
+  // spare, so it has no overflow menu.
+  const overflowSlot = fullscreen ? undefined : slot
+  const pill = <WindowPill group={props.group} active={props.isGroupActive} />
   // A newly shown tab morphs the window's bars from the last tab's.
   useEffect(() => {
     const listener = props.group.api.onDidActivePanelChange(() =>
@@ -133,7 +139,8 @@ export function HeaderControls(props: IDockviewHeaderActionsProps) {
   }, [props.group])
   return (
     <div className="window-toolbar">
-      <WindowPill group={props.group} active={props.isGroupActive} />
+      {/* Fullscreen, the window's controls join the app's top bar. */}
+      {fullscreen && appPill ? createPortal(pill, appPill) : pill}
       <WindowSlot
         owner={id}
         slot="leading"
@@ -148,13 +155,13 @@ export function HeaderControls(props: IDockviewHeaderActionsProps) {
       />
       {/* The overflow menu joins the tab's toolbar, just before a primary
           action at the very end (see dock.css). */}
-      {slot &&
+      {overflowSlot &&
         createPortal(
           <ToolbarCluster edge="end" className="window-overflow">
             <ToolbarSpacer />
             <ToolbarOverflowMenu overflow={overflow} />
           </ToolbarCluster>,
-          slot
+          overflowSlot
         )}
     </div>
   )

@@ -6,6 +6,8 @@ import { resolveDiagnosticNode } from "@/lib/diagnostics"
 import { useWorkbench } from "./context"
 import { toggleEdge, useDock } from "@/features/dock/store"
 import { WindowTray } from "@/features/dock/WindowControls"
+import { WindowSlot } from "@/features/dock/WindowToolbar"
+import { APP } from "@/features/dock/bars"
 
 export function WorkbenchHeader() {
   const w = useWorkbench()
@@ -55,6 +57,28 @@ export function WorkbenchHeader() {
       onRun={() => w.runWorkflow()}
       onCancel={w.cancelWorkflow}
       windows={<WindowTray />}
+      windowLeading={
+        <>
+          <WindowSlot owner={APP} slot="pill" className="app-window-slot" />
+          <WindowSlot
+            owner={APP}
+            slot="leading"
+            className="app-window-slot window-toolbar-slot window-leading-slot"
+          />
+          <WindowSlot
+            owner={APP}
+            slot="title"
+            className="app-window-slot window-title-slot"
+          />
+        </>
+      }
+      windowTrailing={
+        <WindowSlot
+          owner={APP}
+          slot="top"
+          className="app-window-slot window-toolbar-slot"
+        />
+      }
       docked={docked}
       sidebarVisible={edges.left}
       settingsVisible={edges.right}

@@ -44,8 +44,8 @@ type DockState = {
   /** The window filling the whole workbench, if any. */
   maximized?: string
   /**
-   * The window that is the whole workbench: the maximized one, or the only
-   * one shown. It runs under the app's top bar, which takes its bar's look.
+   * The maximized window, which is the whole workbench: it runs under the
+   * app's top bar and moves its own top bar controls into it.
    */
   fullscreen?: string
   /** Bumped on every structural change so window chrome re-reads it. */
@@ -152,18 +152,12 @@ function maximizedWindow(dock: DockviewApi, current?: string) {
 }
 
 /**
- * Marks the window that is the whole workbench (see DockState.fullscreen)
- * on its element, where the app's bars read it.
+ * Marks the fullscreen window (see DockState.fullscreen) on its element,
+ * where the app's bars read it. Only a maximized window is fullscreen; a
+ * window that happens to be alone stays an ordinary window.
  */
 function markFullscreen(dock: DockviewApi) {
-  const { maximized, minimized } = useDock.getState()
-  // Read from the layout, not the page: mid-change, sizes lag behind.
-  const shown = dock.groups.filter((group) => {
-    if (minimized.some((item) => item.group === group.id)) return false
-    if (!group.panels.length) return false
-    return isFloating(group) ? !floatingBox(group)?.hidden : group.api.isVisible
-  })
-  const id = maximized ?? (shown.length === 1 ? shown[0].id : undefined)
+  const id = useDock.getState().maximized
   for (const group of dock.groups)
     if (group.id === id) group.element.dataset.fullscreen = ""
     else delete group.element.dataset.fullscreen

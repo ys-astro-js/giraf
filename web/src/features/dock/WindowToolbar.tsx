@@ -1,30 +1,27 @@
 import { useCallback, useSyncExternalStore, type ReactNode } from "react"
 import { createPortal } from "react-dom"
-import { create } from "zustand"
 import { ToolbarCluster } from "@/components/toolbar"
 import {
   OverflowContext,
   ToolbarHiddenContext,
 } from "@/components/toolbar-context"
-import { useBarOverflow } from "./bars"
+import {
+  APP,
+  slotKey as key,
+  useBarOverflow,
+  useSlots,
+  type Slot,
+} from "./bars"
 import { cn } from "@/lib/utils"
 import { usePanel } from "./context"
 import { useDock } from "./store"
 
-/**
+/*
  * A window's bars, like a macOS or iPadOS window: the top bar holds the
  * window pill, an optional title and the shown tab's toolbar; the bottom bar
- * holds the tab's secondary controls. Content runs underneath both.
+ * holds the tab's secondary controls. Content runs underneath both. A
+ * fullscreen window shares the app's top bar instead (see bars.ts).
  */
-type Slot = "leading" | "title" | "top" | "bottom"
-
-/**
- * Bar slots for tabs to fill: the top bar's by window (group id), shared by
- * its tabs; the bottom bar's by tab (panel id), since it sits in the tab.
- */
-const useSlots = create<Record<string, HTMLElement | undefined>>()(() => ({}))
-
-const key = (owner: string, slot: Slot) => `${owner}:${slot}`
 
 /** Where the shown tab's title or controls land in a window's bars. */
 export function WindowSlot({
@@ -63,7 +60,11 @@ export function WindowSlot({
 function useTabSlot(slot: Slot) {
   const panel = usePanel()?.panel
   useDock((state) => state.revision)
-  const owner = slot === "bottom" ? panel?.id : panel?.group.id
+  const fullscreen = useDock(
+    (state) => !!panel && state.fullscreen === panel.group.id
+  )
+  const owner =
+    slot === "bottom" ? panel?.id : fullscreen ? APP : panel?.group.id
   const element = useSlots((slots) =>
     owner ? slots[key(owner, slot)] : undefined
   )
@@ -95,8 +96,10 @@ export function WindowToolbar({
 }) {
   const { element, shown } = useTabSlot(placement)
   const group = usePanel()?.panel.group.id
+  // In the app's roomy bar, a fullscreen window sends nothing to a menu.
+  const fullscreen = useDock((state) => !!group && state.fullscreen === group)
   const overflow = useBarOverflow((bars) =>
-    placement === "top" && group ? bars[group] : undefined
+    placement === "top" && group && !fullscreen ? bars[group] : undefined
   )
   if (!element) return null
   return createPortal(

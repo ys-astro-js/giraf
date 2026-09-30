@@ -72,13 +72,19 @@
 .toolbar-status-transition > svg { color: var(--muted-foreground); }
 .toolbar-status-content[data-state="completed"] .toolbar-status-transition > svg { color: var(--primary); }
 .toolbar-status-content[data-state="failed"] .toolbar-status-transition > svg { color: var(--destructive); }
-.toolbar-panels { justify-self: end; }
+/* Each end holds the app's controls and, while a window is fullscreen, that
+   window's own: its pill, leading controls and title after the app's leading
+   ones, its toolbar before the app's trailing ones. */
+.toolbar-start, .toolbar-end { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.toolbar-end { justify-self: end; }
+.app-window-slot { display: flex; align-items: center; }
+.app-window-slot:empty { display: none; }
 @container (max-width: 600px) {
   .workbench-toolbar { gap: 8px; padding-inline: 8px; }
 }
 
 @container (max-width: 480px) {
   .workbench-toolbar { grid-template-columns: minmax(0, 1fr) auto; }
-  .toolbar-panels { grid-column: 2; grid-row: 1; }
+  .toolbar-end { grid-column: 2; grid-row: 1; }
   .toolbar-status { grid-column: 1 / -1; grid-row: 2; padding-block: 0 8px; }
 }

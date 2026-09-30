@@ -47,6 +47,9 @@ const COMPLETION_HOLD_MS = 3000
 
 type Props = {
   historyControls?: React.ReactNode
+  /** A fullscreen window's own controls: after the leading ones, before the trailing ones. */
+  windowLeading?: React.ReactNode
+  windowTrailing?: React.ReactNode
   diagnostics?: React.ReactNode
   workflowSelector?: React.ReactNode
   executionStatus?: ExecutionStatus
@@ -109,31 +112,34 @@ export function WorkbenchToolbar(props: Props) {
   const StatusIcon = status ? statusIcons[status.state] : LoaderCircle
   return (
     <header className="workbench-toolbar" aria-label="도구 막대">
-      <ToolbarCluster className="toolbar-leading" edge="start">
-        <ToolbarGroup label="사이드바" hidden={props.docked?.left === false}>
-          <ToolbarButton
-            label={props.sidebarVisible ? "사이드바 닫기" : "사이드바 열기"}
-            onClick={props.onSidebar}
-          >
-            <PanelLeft />
-          </ToolbarButton>
-        </ToolbarGroup>
-        <ToolbarSpacer />
-        <ToolbarGroup label="일괄 실행">
-          <ToolbarMorph
-            variant={props.workflowBusy ? "ghost" : "default"}
-            active={props.workflowBusy}
-            idle={<Play />}
-            activeContent={<Square />}
-            label="일괄 실행"
-            activeLabel="중단"
-            onClick={props.workflowBusy ? props.onCancel : props.onRun}
-            disabled={!props.workflowBusy && props.runDisabled}
-          />
-        </ToolbarGroup>
-        <ToolbarSpacer />
-        {props.historyControls}
-      </ToolbarCluster>
+      <div className="toolbar-start">
+        <ToolbarCluster className="toolbar-leading" edge="start">
+          <ToolbarGroup label="사이드바" hidden={props.docked?.left === false}>
+            <ToolbarButton
+              label={props.sidebarVisible ? "사이드바 닫기" : "사이드바 열기"}
+              onClick={props.onSidebar}
+            >
+              <PanelLeft />
+            </ToolbarButton>
+          </ToolbarGroup>
+          <ToolbarSpacer />
+          <ToolbarGroup label="일괄 실행">
+            <ToolbarMorph
+              variant={props.workflowBusy ? "ghost" : "default"}
+              active={props.workflowBusy}
+              idle={<Play />}
+              activeContent={<Square />}
+              label="일괄 실행"
+              activeLabel="중단"
+              onClick={props.workflowBusy ? props.onCancel : props.onRun}
+              disabled={!props.workflowBusy && props.runDisabled}
+            />
+          </ToolbarGroup>
+          <ToolbarSpacer />
+          {props.historyControls}
+        </ToolbarCluster>
+        {props.windowLeading}
+      </div>
       <div className="toolbar-center">
         <div
           className="toolbar-status text-sm"
@@ -280,35 +286,38 @@ export function WorkbenchToolbar(props: Props) {
           </div>
         </div>
       </div>
-      <ToolbarCluster className="toolbar-panels" edge="end">
-        {props.windows}
-        <ToolbarSpacer />
-        <ToolbarGroup
-          label="패널 표시"
-          hidden={
-            props.docked?.bottom === false && props.docked?.right === false
-          }
-        >
-          <ToolbarItem hidden={props.docked?.bottom === false}>
-            <ToolbarButton
-              label={props.trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
-              onClick={props.onTray}
-            >
-              <PanelBottom />
-            </ToolbarButton>
-          </ToolbarItem>
-          <ToolbarItem hidden={props.docked?.right === false}>
-            <ToolbarButton
-              label={
-                props.settingsVisible ? "설정 패널 닫기" : "설정 패널 열기"
-              }
-              onClick={props.onSettings}
-            >
-              <PanelRight />
-            </ToolbarButton>
-          </ToolbarItem>
-        </ToolbarGroup>
-      </ToolbarCluster>
+      <div className="toolbar-end">
+        {props.windowTrailing}
+        <ToolbarCluster className="toolbar-panels" edge="end">
+          {props.windows}
+          <ToolbarSpacer />
+          <ToolbarGroup
+            label="패널 표시"
+            hidden={
+              props.docked?.bottom === false && props.docked?.right === false
+            }
+          >
+            <ToolbarItem hidden={props.docked?.bottom === false}>
+              <ToolbarButton
+                label={props.trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
+                onClick={props.onTray}
+              >
+                <PanelBottom />
+              </ToolbarButton>
+            </ToolbarItem>
+            <ToolbarItem hidden={props.docked?.right === false}>
+              <ToolbarButton
+                label={
+                  props.settingsVisible ? "설정 패널 닫기" : "설정 패널 열기"
+                }
+                onClick={props.onSettings}
+              >
+                <PanelRight />
+              </ToolbarButton>
+            </ToolbarItem>
+          </ToolbarGroup>
+        </ToolbarCluster>
+      </div>
     </header>
   )
 }
