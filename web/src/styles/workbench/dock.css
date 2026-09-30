@@ -647,14 +647,18 @@ body[data-window-dragging] {
 .window-morph-capsule {
   position: absolute;
   box-sizing: border-box;
+  overflow: hidden;
   border: 1px solid var(--glass-border);
   border-radius: calc(var(--window-toolbar) / 2);
   background: var(--window-control-surface);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
 }
-.window-morph-ghost {
+/* A capsule's contents ride inside its stand-in, held to one end and cut
+   by the stand-in's edge as it resizes. */
+.window-morph-face {
   position: absolute;
+  top: -1px;
   box-sizing: border-box;
   margin: 0;
   border-color: transparent !important;
