@@ -17,7 +17,7 @@ import {
 } from "@/components/toolbar"
 import { SearchField } from "@/components/search-field"
 import { WorkflowEdge } from "@/components/workflow-edge"
-import { useMemo, useState, useSyncExternalStore } from "react"
+import { useMemo, useSyncExternalStore } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { displayQueryOptions } from "@/lib/display"
 import {
@@ -40,6 +40,7 @@ import {
   X,
 } from "lucide-react"
 import { diagnostics } from "@/lib/diagnostics"
+import { useLayout } from "@/features/workbench/layout-store"
 import { Button } from "@/components/ui/button"
 import { Blank } from "@/components/workbench-controls"
 import { SubflowEditor } from "@/components/subflow-editor"
@@ -85,7 +86,8 @@ export function TaskMapView({
   workflowBusy,
   runDisabled,
 }: TaskMapViewProps) {
-  const [displayOpen, setDisplayOpen] = useState(true)
+  const displayOpen = useLayout((state) => state.open.display)
+  const setPanelOpen = useLayout((state) => state.setOpen)
   const hasDisplay = !!useQuery(displayQueryOptions).data?.frames.length
   const diagnosticEntries = useSyncExternalStore(
     diagnostics.subscribe,
@@ -414,7 +416,7 @@ export function TaskMapView({
                       <ToolbarButton
                         label="IRAF 디스플레이"
                         aria-pressed={displayOpen}
-                        onClick={() => setDisplayOpen((open) => !open)}
+                        onClick={() => setPanelOpen("display", !displayOpen)}
                       >
                         <Monitor />
                       </ToolbarButton>
@@ -500,7 +502,10 @@ export function TaskMapView({
           </WorkflowContext.Provider>
         </div>
       )}
-      <DisplayWindow open={displayOpen} onMinimize={() => setDisplayOpen(false)} />
+      <DisplayWindow
+        open={displayOpen}
+        onMinimize={() => setPanelOpen("display", false)}
+      />
     </section>
   )
 }

@@ -21,7 +21,6 @@ export function useAssetViewer({
   catalog,
   prefs,
   update,
-  setMobilePanel,
   taskJob,
   map,
   setSelectedJob,
@@ -33,7 +32,6 @@ export function useAssetViewer({
   catalog: Catalog | null
   prefs: Preferences
   update: (fn: (m: TaskMap) => TaskMap, label?: string) => void
-  setMobilePanel: React.Dispatch<React.SetStateAction<string>>
   taskJob: Job | undefined
   map: TaskMap
   setSelectedJob: React.Dispatch<React.SetStateAction<string>>
@@ -132,7 +130,6 @@ export function useAssetViewer({
         editorId: t.id,
       })
     setAsset(null)
-    setMobilePanel("detail")
   }
   function returnEdited() {
     if (!origin || !taskJob) return

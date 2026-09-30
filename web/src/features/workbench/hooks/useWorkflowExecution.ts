@@ -15,6 +15,7 @@ import {
   type Job,
 } from "@/lib/workbench"
 import { workflowRequest, type TaskMap } from "@/lib/task-map"
+import { showPanel } from "@/features/workbench/layout-store"
 import type * as React from "react"
 
 const workflowOptions = apiQueryOptions<WorkflowRun | null>("workflow")
@@ -27,7 +28,6 @@ export function useWorkflowExecution({
   publishJob,
   catalog,
   setSelectedJob,
-  setTrayOpen,
   map,
   prefs,
   setError,
@@ -43,7 +43,6 @@ export function useWorkflowExecution({
   publishJob: (instanceId: string, job: Job, catalog?: Catalog) => void
   catalog: Catalog | null
   setSelectedJob: React.Dispatch<React.SetStateAction<string>>
-  setTrayOpen: React.Dispatch<React.SetStateAction<boolean>>
   map: TaskMap
   prefs: Preferences
   setError: React.Dispatch<React.SetStateAction<string>>
@@ -123,7 +122,7 @@ export function useWorkflowExecution({
     }
     if (workflow.currentJob && workflow.state === "waiting") {
       setSelectedJob(workflow.currentJob.id)
-      setTrayOpen(true)
+      showPanel("history")
     }
   }, [
     ready,
@@ -134,7 +133,6 @@ export function useWorkflowExecution({
     setJobs,
     setLastExecution,
     setSelectedJob,
-    setTrayOpen,
   ])
   useEffect(() => {
     if (workflowQuery.error)

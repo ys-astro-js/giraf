@@ -8,13 +8,13 @@ import { useRef, useState } from "react"
 import { api, type Catalog, type Workspace, type Job, type Manifest } from "@/lib/workbench"
 import { daoeditSession, type DaoeditSession } from "@/lib/daoedit"
 import { payloadFor, type TaskMap } from "@/lib/task-map"
+import { showPanel } from "@/features/workbench/layout-store"
 import type * as React from "react"
 
 export function useTaskExecution({
   setLastExecution,
   setJobs,
   setSelectedJob,
-  setTrayOpen,
   publishJob,
   map,
   catalog,
@@ -26,7 +26,6 @@ export function useTaskExecution({
   >
   setJobs: React.Dispatch<React.SetStateAction<Job[]>>
   setSelectedJob: React.Dispatch<React.SetStateAction<string>>
-  setTrayOpen: React.Dispatch<React.SetStateAction<boolean>>
   publishJob: (instanceId: string, job: Job, catalog?: Catalog) => void
   map: TaskMap
   catalog: Catalog | null
@@ -51,7 +50,7 @@ export function useTaskExecution({
       setLastExecution({ kind: "job", id: j.id })
       setJobs((old) => [j, ...old])
       setSelectedJob(j.id)
-      setTrayOpen(true)
+      showPanel("history")
       publishJob(j.manifest?.instanceId || map.view.selected, j)
       setPlan(null)
       return j
