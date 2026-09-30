@@ -60,7 +60,11 @@ function frame(definition: PanelDefinition) {
   return function DockWindow(props: IDockviewPanelProps) {
     const panel = props.containerApi.getPanel(props.api.id)
     const content = (
-      <div className="dock-window" data-surface={definition.surface}>
+      <div
+        className="dock-window"
+        data-surface={definition.surface}
+        data-canvas={definition.canvas}
+      >
         <Content />
       </div>
     )

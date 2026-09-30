@@ -125,6 +125,30 @@
   background: transparent;
   border-bottom: 0;
 }
+/* The header floats over the window's content, so nothing paints behind
+   it: content sits below it, a canvas runs on underneath. */
+.dockview-theme-giraf .dv-groupview {
+  position: relative;
+  --window-header: calc(var(--window-inset) * 2 + var(--window-toolbar));
+}
+.dockview-theme-giraf .dv-groupview:has(.dv-tabs-container > .dv-tab + .dv-tab) {
+  --window-header: calc(
+    var(--window-inset) * 3 + var(--window-toolbar) + var(--window-tabs)
+  );
+}
+.dockview-theme-giraf .dv-groupview > .dv-tabs-and-actions-container {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+}
+.dockview-theme-giraf .dv-groupview > .dv-content-container {
+  height: 100%;
+}
+.dock-window:not([data-canvas]) {
+  padding-top: var(--window-header);
+  box-sizing: border-box;
+}
+
 .dockview-theme-giraf .dv-pre-actions-container {
   display: flex;
   flex: 1 0 100%;

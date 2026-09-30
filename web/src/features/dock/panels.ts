@@ -44,6 +44,8 @@ export type PanelDefinition = {
   follows?: boolean
   /** Document-like windows close; built-in tools only minimize. */
   closable?: boolean
+  /** A canvas runs on under the window's clear header instead of below it. */
+  canvas?: boolean
 }
 
 /**
@@ -84,6 +86,7 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     icon: Workflow,
     component: WorkflowPanel,
     home: "center",
+    canvas: true,
   },
   inspector: {
     title: "노드",
