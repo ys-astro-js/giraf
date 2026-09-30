@@ -576,6 +576,13 @@
 .giraf-app:has(.dv-groupview[data-fullscreen]) .workbench-toolbar {
   position: absolute;
   inset: 0 0 auto;
+  z-index: 1;
+}
+/* The workbench becomes one layer beneath the app's bar, so no window in
+   it, however high it floats, can cover the bar (a maximized floating
+   window would otherwise hide the very controls that restore it). */
+.giraf-app:has(.dv-groupview[data-fullscreen]) .dock-body {
+  z-index: 0;
 }
 .giraf-app:has(.dv-groupview[data-fullscreen]) .workbench-toolbar::before {
   border-bottom-color: transparent;
