@@ -31,6 +31,8 @@ type Box = { left: number; top: number; width: number; height: number }
 type Capsule = { element: HTMLElement; box: Box; face: HTMLElement }
 type Section = { anchor: Anchor; capsules: Capsule[] }
 type Bars = Record<"top" | "leading" | "start" | "end", Section>
+/** The bottom bar's own band, drawn only while it holds controls. */
+type Band = { box: Box; background: string; filter: string }
 
 const visibleGroups = (root: Element | null) =>
   root
@@ -119,7 +121,35 @@ function bars(group: DockviewGroupPanel): Bars {
   }
 }
 
-const recorded = new WeakMap<DockviewGroupPanel, { at: number; bars: Bars }>()
+function band(group: DockviewGroupPanel): Band | null {
+  const element = group.element.querySelector<HTMLElement>(".window-bottom-bar")
+  const rect = element?.getBoundingClientRect()
+  if (!element || !rect?.width) return null
+  const origin = group.element.getBoundingClientRect()
+  const style = getComputedStyle(element)
+  return {
+    box: {
+      left: rect.left - origin.left,
+      top: rect.top - origin.top,
+      width: rect.width,
+      height: rect.height,
+    },
+    background: style.backgroundColor,
+    filter: style.backdropFilter,
+  }
+}
+
+/** Where every capsule sits, to tell when the new layout has settled. */
+const layout = (bars: Bars) =>
+  Object.values(bars)
+    .flatMap((section) => section.capsules)
+    .map(({ box }) => `${box.left},${box.top},${box.width}`)
+    .join(" ")
+
+const recorded = new WeakMap<
+  DockviewGroupPanel,
+  { at: number; bars: Bars; band: Band | null }
+>()
 
 /**
  * Records a window's bars just before its shown tab may change. The bottom
@@ -127,7 +157,11 @@ const recorded = new WeakMap<DockviewGroupPanel, { at: number; bars: Bars }>()
  * has to be caught beforehand: on a tab press, or before code shows a tab.
  */
 export function recordBars(group: DockviewGroupPanel) {
-  recorded.set(group, { at: performance.now(), bars: bars(group) })
+  recorded.set(group, {
+    at: performance.now(),
+    bars: bars(group),
+    band: band(group),
+  })
 }
 
 const place = (box: Box) => ({
@@ -195,10 +229,22 @@ export function morphBars(group: DockviewGroupPanel) {
     end: fresh ? record.bars.end : { anchor: "right", capsules: [] },
   }
 
+  const oldBand = fresh ? record.band : null
+
   const layer = document.createElement("div")
   layer.className = "window-morph-layer"
   layer.inert = true
+  const bandStand = (source: Band) => {
+    const element = document.createElement("div")
+    element.className = "window-morph-band"
+    Object.assign(element.style, place(source.box), {
+      background: source.background,
+      backdropFilter: source.filter,
+    })
+    return element
+  }
   // Until the new controls are measured, the old ones stay drawn as they were.
+  if (oldBand) layer.append(bandStand(oldBand))
   for (const section of Object.values(before))
     for (const capsule of section.capsules) {
       const element = stand(capsule.box)
@@ -208,7 +254,6 @@ export function morphBars(group: DockviewGroupPanel) {
   root.dataset.morphing = ""
   root.append(layer)
 
-  const hidden = new Set<HTMLElement>()
   const animations: Animation[] = []
   let done = false
   const finish = () => {
@@ -217,7 +262,6 @@ export function morphBars(group: DockviewGroupPanel) {
     // The real capsules show as they are, without transitions, then settle.
     root.dataset.settling = ""
     delete root.dataset.morphing
-    for (const element of hidden) delete element.dataset.morphHidden
     layer.remove()
     for (const animation of animations) animation.cancel()
     running.delete(root)
@@ -225,14 +269,30 @@ export function morphBars(group: DockviewGroupPanel) {
   }
   running.set(root, finish)
 
-  afterRender(() => {
-    if (done) return
+  // Wait for the new layout to hold still (an overflow menu may still fold
+  // groups away a frame later), up to a few frames.
+  let settled = ""
+  let tries = 0
+  const settle = () =>
+    afterRender(() => {
+      if (done) return
+      const next = layout(bars(group))
+      if (next !== settled && tries++ < 5) {
+        settled = next
+        return settle()
+      }
+      play()
+    })
+  settle()
+
+  const play = () => {
     const after = bars(group)
+    const newBand = band(group)
     const below: HTMLElement[] = []
     const above: HTMLElement[] = []
     let end = 0
 
-    const play = (
+    const animate = (
       element: Element,
       frames: Keyframe[],
       delay: number,
@@ -245,7 +305,7 @@ export function morphBars(group: DockviewGroupPanel) {
       end = Math.max(end, delay + duration)
     }
     const fade = (element: Element, into: boolean, at: number, blur = 4) =>
-      play(
+      animate(
         element,
         into
           ? [
@@ -269,7 +329,7 @@ export function morphBars(group: DockviewGroupPanel) {
     ) => {
       const away = `translateX(${anchor === "right" ? 12 : -12}px)`
       if (out)
-        play(
+        animate(
           out,
           [
             { opacity: 1, filter: "blur(0)", transform: "none" },
@@ -279,7 +339,7 @@ export function morphBars(group: DockviewGroupPanel) {
           200,
           "ease-out"
         )
-      play(
+      animate(
         into,
         [
           { opacity: 0, filter: "blur(4px)", transform: away },
@@ -295,10 +355,6 @@ export function morphBars(group: DockviewGroupPanel) {
       const { anchor } = after[key]
       const old = before[key].capsules
       const next = after[key].capsules
-      for (const capsule of next) {
-        capsule.element.dataset.morphHidden = ""
-        hidden.add(capsule.element)
-      }
       const paired = Math.min(old.length, next.length)
       const resizeAt = old.length > paired && paired ? STAGGER : 0
       const splitAt = resizeAt + (paired ? STAGGER : 0)
@@ -311,7 +367,7 @@ export function morphBars(group: DockviewGroupPanel) {
         below.push(element)
         if (!paired) return fade(element, false, 0, 8)
         const neighbor = old[paired - 1].box
-        play(
+        animate(
           element,
           [place(capsule.box), place(tucked(neighbor, capsule.box, anchor))],
           0
@@ -325,7 +381,11 @@ export function morphBars(group: DockviewGroupPanel) {
         const into = next[index].face
         element.append(out, into)
         above.push(element)
-        play(element, [place(old[index].box), place(next[index].box)], resizeAt)
+        animate(
+          element,
+          [place(old[index].box), place(next[index].box)],
+          resizeAt
+        )
         crossFade(out, into, resizeAt, anchor)
       }
       // Split: new capsules without a partner come out of their neighbor.
@@ -336,7 +396,7 @@ export function morphBars(group: DockviewGroupPanel) {
         below.push(element)
         if (!paired) return fade(element, true, 0, 8)
         const neighbor = next[paired - 1].box
-        play(
+        animate(
           element,
           [place(tucked(neighbor, capsule.box, anchor)), place(capsule.box)],
           splitAt
@@ -345,8 +405,20 @@ export function morphBars(group: DockviewGroupPanel) {
         crossFade(null, capsule.face, splitAt, anchor)
       })
     }
+    // The bottom bar's band comes and goes with its controls.
+    const bands: HTMLElement[] = []
+    if (oldBand && newBand) bands.push(bandStand(newBand))
+    else if (oldBand) {
+      const element = bandStand(oldBand)
+      fade(element, false, 0, 8)
+      bands.push(element)
+    } else if (newBand) {
+      const element = bandStand(newBand)
+      fade(element, true, 0, 8)
+      bands.push(element)
+    }
     // Capsules that tuck away or come out pass behind their neighbors.
-    layer.replaceChildren(...below, ...above)
+    layer.replaceChildren(...bands, ...below, ...above)
     window.setTimeout(finish, end + 30)
-  })
+  }
 }

@@ -628,8 +628,20 @@ body[data-window-dragging] {
   :is(.toolbar-slot, .toolbar-group, .toolbar-item, .toolbar-item-content, .toolbar-button, .search-field) {
   transition: none !important;
 }
-[data-morph-hidden] {
-  visibility: hidden !important;
+/* From the moment a switch starts, the stand-ins draw the bars: the new
+   tab's real controls and bottom band stay unseen until the morph ends. */
+.dv-groupview[data-morphing]
+  :is(.window-toolbar-slot, .window-bottom-bar)
+  :is(.toolbar-group, .search-field, .window-toolbar-cluster > button) {
+  visibility: hidden;
+}
+.dv-groupview[data-morphing] .window-bottom-bar {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.window-morph-band {
+  position: absolute;
 }
 .window-morph-layer {
   position: absolute;
