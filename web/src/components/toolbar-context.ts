@@ -39,3 +39,15 @@ export const OverflowGroupContext = createContext<{
   id: string
   shown: boolean
 } | null>(null)
+
+/**
+ * Hides every group below it with the groups' own leaving motion, e.g. a
+ * window's toolbar for a tab that is not shown, so switching tabs moves one
+ * set of controls out and the next in, as the app's top bar does.
+ */
+export const ToolbarHiddenContext = createContext(false)
+
+/** Lets a prominent button mark its group, which then keeps apart. */
+export const ProminentContext = createContext<
+  ((prominent: boolean) => void) | null
+>(null)

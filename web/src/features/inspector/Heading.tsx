@@ -77,6 +77,7 @@ export function InspectorHeading({
         <ToolbarSpacer />
         <ToolbarGroup label="작업 실행">
           <ToolbarButton
+            prominent
             label={checking ? "확인 중" : busy ? "실행 중" : "이 작업 실행"}
             disabled={busy || checking || spec.runnable === false}
             onClick={onRun}

@@ -22,6 +22,8 @@
   --window-inset: 8px;
   --window-toolbar: 42px;
   --window-tabs: 28px;
+  /* The window pill at rest, a step below the tab bar. */
+  --window-pill: 24px;
   color-scheme: light;
   --dv-group-view-background-color: var(--background);
   --dv-tabs-and-actions-container-background-color: var(--background);
@@ -129,20 +131,25 @@
   --window-bar: color-mix(in oklch, var(--sidebar) 50%, transparent);
   --window-control-surface: color-mix(in oklch, var(--sidebar) 75%, transparent);
 }
-/* A content-rich window alone (a canvas, an image) keeps its bars clear so
-   the content fills the window; merged into tabs it reads like the rest. */
-.dockview-theme-giraf
-  .dv-groupview:has(
-    .dock-window[data-canvas]:not(:has([data-window-content="text"]))
-  ):not(:has(.dv-tabs-container > .dv-tab + .dv-tab)) {
-  --window-bar: transparent;
-  --window-blur: none;
-}
 .dockview-theme-giraf .dv-tabs-and-actions-container,
 .window-bottom-bar {
   background: var(--window-bar);
   -webkit-backdrop-filter: var(--window-blur);
   backdrop-filter: var(--window-blur);
+}
+/* Content-rich tabs (a canvas, a lone image: data-canvas) keep their bars
+   clear so the content fills the window. The bottom bar belongs to the tab
+   and follows only its content; the top bar is the window's, so a window of
+   several tabs keeps it translucent. */
+.dockview-theme-giraf
+  .dv-groupview:has(.dock-window[data-canvas]):not(
+    :has(.dv-tabs-container > .dv-tab + .dv-tab)
+  )
+  > .dv-tabs-and-actions-container,
+.dock-window[data-canvas] > .window-bottom-bar {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .dockview-theme-giraf .dv-tabs-and-actions-container {
   flex-wrap: wrap;
@@ -175,8 +182,7 @@
 .dock-window:has(> .window-bottom-bar:not(:empty)) {
   --window-footer: calc(var(--window-inset) * 2 + var(--window-toolbar));
 }
-.dock-window:not([data-canvas], [data-scroll-under]),
-.dock-window[data-canvas]:has([data-window-content="text"]) {
+.dock-window:not([data-canvas], [data-scroll-under]) {
   padding-top: var(--window-header);
   padding-bottom: var(--window-footer);
 }
@@ -256,12 +262,28 @@
 /* The title takes what the toolbar leaves, down to a short stub; past that
    the toolbar gives way, sending its overflow groups to the menu. */
 .window-title-slot {
-  display: flex;
+  display: grid;
   flex: 1 1 0;
   align-items: center;
   min-width: 72px;
 }
-.window-title-slot:empty,
+/* Every tab's title sits in the same place; the shown one fades in. */
+.window-title-slot > .window-title {
+  grid-area: 1 / 1;
+  transition:
+    opacity var(--motion-shift) var(--motion-ease),
+    filter var(--motion-shift) var(--motion-ease);
+}
+.window-title-slot > .window-title[data-inactive] {
+  opacity: 0;
+  filter: blur(4px);
+  visibility: hidden;
+  transition:
+    opacity 200ms ease-in,
+    filter 200ms ease-in,
+    visibility 0s linear 200ms;
+}
+.window-title-slot:not(:has(> .window-title:not([data-inactive]))),
 .window-toolbar:has(.window-overflow > .toolbar-slot:not([data-hidden="true"]))
   .window-title-slot {
   min-width: 0;
@@ -271,25 +293,57 @@
 .window-toolbar-slot {
   display: flex;
   flex: 0 1 auto;
-  gap: var(--window-inset);
   min-width: 0;
   overflow: hidden;
 }
+/* Each tab brings its own cluster, and the window adds its overflow menu.
+   The clusters open up (display: contents) so the bar lays out their groups
+   as one row: the lock first, then the tab's tools, the overflow menu, and a
+   primary action last (HIG: the prominent action ends the bar). Every group
+   keeps a fixed space from the one before unless it joins it; the slot takes
+   back the first space. Hidden tabs' groups fold away with the toolbar's
+   leaving motion, so a tab switch moves one set out and the next in. */
 .window-toolbar-slot > .toolbar-cluster {
-  flex-shrink: 0;
+  display: contents;
 }
-/* The overflow menu takes no room until it has something to hold. */
-.window-overflow > .toolbar-slot[data-hidden="true"] {
+.window-toolbar-slot > .toolbar-cluster > .toolbar-slot:not([data-hidden="true"]) {
+  padding-inline-start: var(--window-inset);
+}
+.window-toolbar-slot
+  > .toolbar-cluster
+  > .toolbar-slot:not([data-hidden="true"], [data-prominent])
+  + .toolbar-slot:not([data-hidden="true"], [data-prominent]) {
+  padding-inline-start: 0;
+}
+.window-toolbar-slot:has(> .toolbar-cluster > .toolbar-slot:not([data-hidden="true"])) {
+  margin-inline-start: calc(var(--window-inset) * -1);
+}
+.window-toolbar-slot
+  > .toolbar-cluster[data-inactive]
+  > .toolbar-slot[data-hidden="true"] {
   grid-template-columns: minmax(0, 0fr);
   padding-inline-start: 0;
 }
-/* The lock belongs to the tab, not its actions: it leads them. A viewer's
-   file actions come after its image tools. */
-.window-toolbar-slot > .window-lock-cluster {
+.window-toolbar-slot > .window-lock-cluster > * {
   order: -1;
 }
-.window-toolbar-slot > .viewer-file-tools {
+.window-toolbar-slot > .viewer-file-tools > * {
   order: 1;
+}
+.window-toolbar-slot > .toolbar-cluster.window-overflow > .toolbar-slot {
+  order: 2;
+}
+.window-toolbar-slot > .toolbar-cluster > .toolbar-slot[data-prominent] {
+  order: 3;
+}
+/* Leading controls are rare: the slot leaves the row until a tab has some. */
+.window-leading-slot:not(:has(> .toolbar-cluster:not([data-inactive]))) {
+  display: none;
+}
+/* The overflow menu takes no room until it has something to hold. */
+.window-toolbar-slot > .window-overflow > .toolbar-slot[data-hidden="true"] {
+  grid-template-columns: minmax(0, 0fr);
+  padding-inline-start: 0;
 }
 
 /* Capsules on the bars are more opaque than the bars themselves. */
@@ -446,7 +500,21 @@
    handle, always there at the start as a small pill as tall as the tab bar.
    Hovering grows that same pill to toolbar size, its buttons sliding out in
    place and pushing the tab's controls along rather than covering them. */
-.window-pill { display: flex; flex: 0 0 auto; align-items: center; }
+/* At rest the pill holds its small footprint; opened, it grows over the title
+   next to it instead of pushing the bar along. */
+.window-pill {
+  position: relative;
+  flex: 0 0 auto;
+  width: calc(28px + 6px);
+  height: var(--window-pill);
+}
+.window-pill > .toolbar-cluster {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  z-index: 3;
+  translate: 0 -50%;
+}
 .window-pill .toolbar-group { gap: 0; }
 /* Buttons still tucked away keep to the small pill's height. */
 .window-pill .toolbar-item {
@@ -455,15 +523,15 @@
   transition: max-height var(--motion-shift) var(--motion-ease);
 }
 .window-pill .toolbar-item[data-hidden="true"] {
-  max-height: calc(var(--window-tabs) - 6px);
+  max-height: calc(var(--window-pill) - 6px);
 }
 .window-pill-handle {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  width: 34px;
-  height: calc(var(--window-tabs) - 6px);
+  gap: 2.5px;
+  width: 28px;
+  height: calc(var(--window-pill) - 6px);
   padding: 0;
   border: 0;
   border-radius: 999px;
@@ -479,7 +547,8 @@
   height: calc(var(--window-toolbar) - 6px);
 }
 .window-pill-handle:active { cursor: grabbing; }
-.window-pill-handle i { width: 3px; height: 3px; border-radius: 50%; background: color-mix(in oklch, var(--foreground) 45%, transparent); }
+.window-pill[data-open="true"] .window-pill-handle i { width: 3px; height: 3px; }
+.window-pill-handle i { width: 2.5px; height: 2.5px; border-radius: 50%; background: color-mix(in oklch, var(--foreground) 45%, transparent); }
 .window-pill[data-active="true"] .window-pill-handle i { background: color-mix(in oklch, var(--foreground) 75%, transparent); }
 .window-pill-handle:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 
@@ -549,52 +618,4 @@ body[data-window-dragging] {
   height: var(--window-toolbar);
   min-width: var(--window-toolbar);
   border-radius: calc(var(--window-toolbar) / 2);
-}
-
-/* Switching tabs (see dock/morph.ts): the page itself does not cross-fade;
-   each paired capsule's box travels and resizes while its old and new faces
-   cross-fade at their natural size, held to the bar's anchoring end and
-   clipped to the capsule, so buttons never stretch. */
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-}
-::view-transition-group(.window-top),
-::view-transition-group(.window-bottom),
-::view-transition-group(.window-title) {
-  animation-duration: var(--motion-shift);
-  animation-timing-function: var(--motion-ease);
-}
-::view-transition-image-pair(.window-top),
-::view-transition-image-pair(.window-bottom) {
-  overflow: hidden;
-  border-radius: calc(var(--window-toolbar) / 2);
-  background: color-mix(in oklch, var(--background) 75%, transparent);
-  box-shadow: inset 0 0 0 1px var(--glass-border);
-}
-::view-transition-image-pair(.window-title) {
-  overflow: hidden;
-}
-::view-transition-old(.window-top),
-::view-transition-new(.window-top),
-::view-transition-old(.window-bottom),
-::view-transition-new(.window-bottom),
-::view-transition-old(.window-title),
-::view-transition-new(.window-title) {
-  width: auto;
-  height: 100%;
-  object-fit: none;
-  animation-duration: var(--motion-shift);
-}
-::view-transition-old(.window-top),
-::view-transition-new(.window-top) {
-  inset-inline: auto 0;
-  object-position: right center;
-}
-::view-transition-old(.window-bottom),
-::view-transition-new(.window-bottom),
-::view-transition-old(.window-title),
-::view-transition-new(.window-title) {
-  inset-inline: 0 auto;
-  object-position: left center;
 }

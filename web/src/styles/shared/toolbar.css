@@ -94,14 +94,26 @@
 .toolbar-cluster > .toolbar-slot:not(:only-of-type)[data-hidden="true"][data-edge="start"] > .toolbar-group { transform: translateX(-28px); }
 .toolbar-cluster > .toolbar-slot:not(:only-of-type)[data-hidden="true"][data-edge="end"] > .toolbar-group { transform: translateX(28px); }
 
+/* HIG: the prominent action ends its toolbar, with the overflow menu just
+   before it. */
+.toolbar-cluster > .toolbar-slot:has(> .toolbar-overflow) { order: 1; }
+.toolbar-cluster > .toolbar-slot[data-prominent] { order: 2; }
+
+/* A prominent action's group never joins another: it keeps a fixed space
+   from its neighbors with or without spacers. */
+.toolbar-cluster > .toolbar-slot[data-prominent]:not(:first-child),
+.toolbar-cluster > .toolbar-slot[data-prominent] + .toolbar-slot {
+  padding-inline-start: 8px;
+}
+
 /* Joined groups read as one capsule: adjacent ones, or all in a joined cluster. */
-.toolbar-cluster > .toolbar-slot:has(+ .toolbar-slot:not([data-hidden="true"])):not([data-hidden="true"]) > .toolbar-group {
+.toolbar-cluster > .toolbar-slot:has(+ .toolbar-slot:not([data-hidden="true"], [data-prominent])):not([data-hidden="true"], [data-prominent]) > .toolbar-group {
   border-start-end-radius: 0;
   border-end-end-radius: 0;
   border-inline-end-color: transparent;
 }
-.toolbar-cluster > .toolbar-slot:not([data-hidden="true"]) + .toolbar-slot:not([data-hidden="true"]) { margin-inline-start: -1px; }
-.toolbar-cluster > .toolbar-slot:not([data-hidden="true"]) + .toolbar-slot:not([data-hidden="true"]) > .toolbar-group {
+.toolbar-cluster > .toolbar-slot:not([data-hidden="true"], [data-prominent]) + .toolbar-slot:not([data-hidden="true"], [data-prominent]) { margin-inline-start: -1px; }
+.toolbar-cluster > .toolbar-slot:not([data-hidden="true"], [data-prominent]) + .toolbar-slot:not([data-hidden="true"], [data-prominent]) > .toolbar-group {
   border-start-start-radius: 0;
   border-end-start-radius: 0;
   border-inline-start-color: transparent;

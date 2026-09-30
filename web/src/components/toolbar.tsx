@@ -8,7 +8,7 @@ import {
   type ComponentProps,
   type ReactNode,
 } from "react"
-import { Check, Menu } from "lucide-react"
+import { Check, Ellipsis } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -30,7 +30,9 @@ import {
 import {
   OverflowContext,
   OverflowGroupContext,
+  ProminentContext,
   ToolbarContext,
+  ToolbarHiddenContext,
   useToolbarButtonSize,
   type OverflowEntry,
   type ToolbarEdge,
@@ -113,10 +115,14 @@ export function ToolbarOverflowMenu({
 }) {
   const { placement } = useContext(ToolbarContext)
   return (
-    <ToolbarGroup label="더 보기" hidden={!overflow.entries.length}>
+    <ToolbarGroup
+      label="더 보기"
+      className="toolbar-overflow"
+      hidden={!overflow.entries.length}
+    >
       <DropdownMenu>
         <DropdownMenuTrigger render={<ToolbarButton label="더 보기" />}>
-          <Menu />
+          <Ellipsis />
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
@@ -162,37 +168,42 @@ export function ToolbarGroup({
 }) {
   const parent = useContext(ToolbarContext)
   const registry = useContext(OverflowContext)
+  const away = useContext(ToolbarHiddenContext)
   const id = useId()
   const movable = overflow && !!registry
-  const hidden = ownHidden || (movable && registry.collapsed)
+  const hidden = ownHidden || away || (movable && registry.collapsed)
   const group = useMemo(
-    () => (movable ? { id, shown: !ownHidden } : null),
-    [movable, id, ownHidden]
+    () => (movable ? { id, shown: !ownHidden && !away } : null),
+    [movable, id, ownHidden, away]
   )
   const groupSize = size ?? parent.size
+  const [prominent, setProminent] = useState(false)
   return (
-    <OverflowGroupContext.Provider value={group}>
-      <ToolbarContext.Provider value={{ ...parent, size: groupSize }}>
-        <div
-          className="toolbar-slot"
-          data-hidden={hidden}
-          data-edge={parent.edge}
-          inert={hidden}
-          aria-hidden={hidden || undefined}
-        >
+    <ProminentContext.Provider value={setProminent}>
+      <OverflowGroupContext.Provider value={group}>
+        <ToolbarContext.Provider value={{ ...parent, size: groupSize }}>
           <div
-            role="group"
-            aria-label={label}
-            data-slot="toolbar-group"
-            data-size={groupSize}
-            className={cn("toolbar-group", className)}
-            {...props}
+            className="toolbar-slot"
+            data-hidden={hidden}
+            data-prominent={prominent || undefined}
+            data-edge={parent.edge}
+            inert={hidden}
+            aria-hidden={hidden || undefined}
           >
-            {children}
+            <div
+              role="group"
+              aria-label={label}
+              data-slot="toolbar-group"
+              data-size={groupSize}
+              className={cn("toolbar-group", className)}
+              {...props}
+            >
+              {children}
+            </div>
           </div>
-        </div>
-      </ToolbarContext.Provider>
-    </OverflowGroupContext.Provider>
+        </ToolbarContext.Provider>
+      </OverflowGroupContext.Provider>
+    </ProminentContext.Provider>
   )
 }
 
@@ -246,14 +257,27 @@ export function ToolbarButton({
   label,
   tooltipSide,
   variant = "ghost",
+  prominent = false,
   className,
   ...props
 }: Omit<ComponentProps<typeof Button>, "title" | "aria-label" | "size"> & {
   label: string
   tooltipSide?: ComponentProps<typeof TooltipContent>["side"]
+  /**
+   * The bar's primary action (HIG "prominent"): tinted with the accent and
+   * always its own capsule. Its group stays apart from its neighbors even
+   * without a spacer, and sharing a group with other controls is an error.
+   */
+  prominent?: boolean
 }) {
   const { placement } = useContext(ToolbarContext)
   const size = useToolbarButtonSize()
+  const markGroup = useContext(ProminentContext)
+  useLayoutEffect(() => {
+    if (!prominent || !markGroup) return
+    markGroup(true)
+    return () => markGroup(false)
+  }, [prominent, markGroup])
   useOverflowEntry({
     label,
     icon: props.children,
@@ -266,9 +290,11 @@ export function ToolbarButton({
       <TooltipTrigger
         render={
           <Button
-            variant={variant}
+            ref={prominent ? checkProminent : undefined}
+            variant={prominent ? "default" : variant}
             size={size}
             className={cn("toolbar-button", className)}
+            data-prominent={prominent || undefined}
             {...props}
           />
         }
@@ -282,6 +308,18 @@ export function ToolbarButton({
       </TooltipContent>
     </Tooltip>
   )
+}
+
+/** A prominent button must be alone in its group; say so while developing. */
+function checkProminent(button: HTMLButtonElement | null) {
+  if (!import.meta.env.DEV || !button) return
+  const group = button.closest(".toolbar-group")
+  const controls = group?.querySelectorAll("button, [data-slot='button']")
+  if (controls && controls.length > 1)
+    console.error(
+      "A prominent toolbar button shares its group with other controls:",
+      group
+    )
 }
 
 /** Lists a button in its cluster's overflow menu while its group can go there. */

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import {
   DockviewReact,
   type DockviewApi,
@@ -59,11 +59,12 @@ function frame(definition: PanelDefinition) {
   const Content = definition.component
   return function DockWindow(props: IDockviewPanelProps) {
     const panel = props.containerApi.getPanel(props.api.id)
+    const [canvas, setCanvas] = useState(!!definition.canvas)
     const content = (
       <div
         className="dock-window"
         data-surface={definition.surface}
-        data-canvas={definition.canvas}
+        data-canvas={canvas || undefined}
         data-scroll-under={definition.scrollUnder}
       >
         <Content />
@@ -76,7 +77,9 @@ function frame(definition: PanelDefinition) {
     )
     if (!panel) return content
     return (
-      <PanelContext value={{ panel, params: props.params as WindowParams }}>
+      <PanelContext
+        value={{ panel, params: props.params as WindowParams, setCanvas }}
+      >
         {content}
         {definition.follows && <LockControl panel={panel} />}
       </PanelContext>

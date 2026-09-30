@@ -421,9 +421,8 @@ export function TaskMapView({
                   </ToolbarButton>
                 </ToolbarGroup>
               </WindowToolbar>
-              {/* Search sits in the middle of the bottom bar, zoom at its end. */}
+              {/* Search leads the bottom bar, zoom ends it. */}
               <WindowToolbar placement="bottom">
-                <ToolbarSpacer flexible />
                 {onSearch && (
                   <SearchField
                     variant="glass"

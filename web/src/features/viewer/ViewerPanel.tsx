@@ -116,13 +116,15 @@ function AssetView({ target }: { target: AssetTarget }) {
   // A lone image fills the window under clear bars; the header table, text
   // and comparisons are read between the bars like other text windows.
   const loneImage = isImage && view === "image" && compare.length < 2
+  const setCanvas = usePanel()?.setCanvas
+  useEffect(() => setCanvas?.(loneImage), [setCanvas, loneImage])
   return (
     <div className="viewer-window">
       <WindowTitle title={row.label} tooltip={row.label} />
       <WindowToolbar className="viewer-file-tools">
         {isImage && (
           <>
-            <ToolbarGroup label="파일 보기">
+            <ToolbarGroup label="파일 보기" overflow>
               <ToolbarButton
                 label="영상"
                 aria-pressed={view === "image"}
@@ -169,7 +171,6 @@ function AssetView({ target }: { target: AssetTarget }) {
       </WindowToolbar>
       <div
         className="asset-content"
-        data-window-content={loneImage ? undefined : "text"}
       >
         {kind === "plot" ? (
           <img

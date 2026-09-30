@@ -78,21 +78,13 @@ export function ViewerPopover({
 }) {
   return (
     <Popover>
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <PopoverTrigger
-              render={<Button variant="ghost" size="icon-sm" />}
-              disabled={disabled}
-            />
-          }
-          aria-label={label}
-          data-slot="button"
-        >
-          <Icon />
-        </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
+      {/* Always in a toolbar group, so it is that toolbar's button. */}
+      <PopoverTrigger
+        render={<ToolbarButton label={label} />}
+        disabled={disabled}
+      >
+        <Icon />
+      </PopoverTrigger>
       <PopoverContent
         align="end"
         sideOffset={8}

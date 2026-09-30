@@ -1,4 +1,5 @@
 import { useLayoutEffect, useState } from "react"
+import { createPortal } from "react-dom"
 import { Maximize2, Minimize2, Minus, X } from "lucide-react"
 import type {
   DockviewGroupPanel,
@@ -119,13 +120,21 @@ export function HeaderControls(props: IDockviewHeaderActionsProps) {
       return {
         content,
         container: row,
-        // The row less the pill, the title's stub and the gaps between them.
+        // The row less the pill, leading controls, the title's stub and the
+        // gaps between what the row shows.
         room: () => {
           const style = getComputedStyle(row)
           const gap = parseFloat(style.columnGap) || 0
           const pill = row.querySelector(".window-pill")?.clientWidth ?? 0
-          const title = row.querySelector(".window-title") ? TITLE_STUB : 0
-          return row.clientWidth - pill - title - gap * 3
+          const leading =
+            row.querySelector(".window-leading-slot")?.clientWidth ?? 0
+          const title = row.querySelector(".window-title:not([data-inactive])")
+            ? TITLE_STUB
+            : 0
+          const items = [...row.children].filter(
+            (child) => getComputedStyle(child).display !== "none"
+          ).length
+          return row.clientWidth - pill - leading - title - gap * (items - 1)
         },
       }
     },
@@ -138,6 +147,11 @@ export function HeaderControls(props: IDockviewHeaderActionsProps) {
   return (
     <div className="window-toolbar">
       <WindowPill group={props.group} active={props.isGroupActive} />
+      <WindowSlot
+        owner={id}
+        slot="leading"
+        className="window-toolbar-slot window-leading-slot"
+      />
       <WindowSlot owner={id} slot="title" className="window-title-slot" />
       <WindowSlot
         owner={id}
@@ -145,10 +159,16 @@ export function HeaderControls(props: IDockviewHeaderActionsProps) {
         className="window-toolbar-slot"
         onElement={setSlot}
       />
-      <ToolbarCluster edge="end" className="window-overflow">
-        <ToolbarSpacer />
-        <ToolbarOverflowMenu overflow={overflow} />
-      </ToolbarCluster>
+      {/* The overflow menu joins the tab's toolbar, just before a primary
+          action at the very end (see dock.css). */}
+      {slot &&
+        createPortal(
+          <ToolbarCluster edge="end" className="window-overflow">
+            <ToolbarSpacer />
+            <ToolbarOverflowMenu overflow={overflow} />
+          </ToolbarCluster>,
+          slot
+        )}
     </div>
   )
 }

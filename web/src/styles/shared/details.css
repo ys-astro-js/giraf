@@ -21,8 +21,6 @@
 /* Bottom padding clears the floating action groups (12px inset + 42px group + 12px). */
 .inspector-info-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px 20px 66px; }
 .inspector-info-body > * { flex-shrink: 0; }
-.inspector-info-actions { position: absolute; inset-inline: 12px; bottom: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; pointer-events: none; }
-.inspector-info-actions > * { pointer-events: auto; }
 .workflow-dropdown-transition { opacity: 1; filter: blur(0); transition: opacity 180ms ease-out, filter 180ms ease-out; }
 .workflow-dropdown-transition[data-starting-style], .workflow-dropdown-transition[data-ending-style] { opacity: 0; filter: blur(4px); }
 @media (prefers-reduced-motion: reduce) {

@@ -4,7 +4,12 @@ import { useSyncExternalStore } from "react"
 import { diagnostics, resolveDiagnosticNode } from "@/lib/diagnostics"
 import { HelpCircle, Trash2, Copy, CircleX } from "lucide-react"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
-import { ToolbarButton, ToolbarCluster, ToolbarGroup } from "@/components/toolbar"
+import {
+  ToolbarButton,
+  ToolbarGroup,
+  ToolbarSpacer,
+} from "@/components/toolbar"
+import { WindowToolbar } from "@/features/dock/WindowToolbar"
 import { TabsContent } from "@/components/ui/tabs"
 import {
   Table,
@@ -43,7 +48,7 @@ function NodeErrors({ map, nodeId }: { map: TaskMap; nodeId: string }) {
           {errors.map((entry) => (
             <li
               key={entry.id}
-              className="whitespace-pre-wrap wrap-anywhere leading-relaxed"
+              className="leading-relaxed wrap-anywhere whitespace-pre-wrap"
             >
               {entry.message}
             </li>
@@ -147,41 +152,39 @@ export function InspectorInfo({
           </section>
         )}
       </div>
-      <footer className="inspector-info-actions">
-        <ToolbarCluster edge="start" placement="bottom">
-          <ToolbarGroup label="작업 동작">
-            {!spec.executor && (
-              <ToolbarButton
-                label="IRAF 도움말"
-                render={
-                  <a
-                    href={`https://iraf.readthedocs.io/en/latest/tasks/${spec.package.replaceAll(".", "/")}/${spec.taskName || taskDisplayName(spec.name)}.html`}
-                    target="_blank"
-                    rel="noreferrer"
-                  />
-                }
-                nativeButton={false}
-              >
-                <HelpCircle />
-              </ToolbarButton>
-            )}
-            <ToolbarButton label="노드 복제" onClick={onDuplicate}>
-              <Copy />
-            </ToolbarButton>
-          </ToolbarGroup>
-        </ToolbarCluster>
-        <ToolbarCluster edge="end" placement="bottom">
-          <ToolbarGroup label="삭제">
+      {/* The node's own actions sit in the window's bottom bar. */}
+      <WindowToolbar placement="bottom">
+        <ToolbarGroup label="작업 동작">
+          {!spec.executor && (
             <ToolbarButton
-              label="작업 삭제"
-              className="text-destructive hover:text-destructive"
-              onClick={onRemove}
+              label="IRAF 도움말"
+              render={
+                <a
+                  href={`https://iraf.readthedocs.io/en/latest/tasks/${spec.package.replaceAll(".", "/")}/${spec.taskName || taskDisplayName(spec.name)}.html`}
+                  target="_blank"
+                  rel="noreferrer"
+                />
+              }
+              nativeButton={false}
             >
-              <Trash2 />
+              <HelpCircle />
             </ToolbarButton>
-          </ToolbarGroup>
-        </ToolbarCluster>
-      </footer>
+          )}
+          <ToolbarButton label="노드 복제" onClick={onDuplicate}>
+            <Copy />
+          </ToolbarButton>
+        </ToolbarGroup>
+        <ToolbarSpacer flexible />
+        <ToolbarGroup label="삭제">
+          <ToolbarButton
+            label="작업 삭제"
+            className="text-destructive hover:text-destructive"
+            onClick={onRemove}
+          >
+            <Trash2 />
+          </ToolbarButton>
+        </ToolbarGroup>
+      </WindowToolbar>
     </TabsContent>
   )
 }
