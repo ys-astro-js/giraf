@@ -41,7 +41,7 @@ export function DockTab({
   useDock((state) => state.revision)
   const panel = () => containerApi.getPanel(api.id)
   return (
-    <span className="dock-tab" data-locked={locked}>
+    <span className="dock-tab" data-locked={locked} data-panel-id={api.id}>
       <Tooltip>
         <TooltipTrigger
           render={<span className="dock-tab-title" />}

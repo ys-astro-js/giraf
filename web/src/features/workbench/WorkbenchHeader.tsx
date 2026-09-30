@@ -5,10 +5,12 @@ import { WorkflowSelector } from "@/components/workflow-selector"
 import { resolveDiagnosticNode } from "@/lib/diagnostics"
 import { useWorkbench } from "./context"
 import { toggleEdge, useDock } from "@/features/dock/store"
+import { WindowTray } from "@/features/dock/WindowControls"
 
 export function WorkbenchHeader() {
   const w = useWorkbench()
   const edges = useDock((state) => state.edges)
+  const docked = useDock((state) => state.docked)
   return (
     <WorkbenchToolbar
       historyControls={
@@ -52,6 +54,8 @@ export function WorkbenchHeader() {
       }
       onRun={() => w.runWorkflow()}
       onCancel={w.cancelWorkflow}
+      windows={<WindowTray />}
+      docked={docked}
       sidebarVisible={edges.left}
       settingsVisible={edges.right}
       trayOpen={edges.bottom}

@@ -26,7 +26,10 @@ export type StowedTab = {
 
 type DockState = {
   api?: DockviewApi
+  /** Edges shown on screen. */
   edges: Record<Edge, boolean>
+  /** Edges holding windows, shown or not: only these get a toolbar toggle. */
+  docked: Record<Edge, boolean>
   minimized: MinimizedWindow[]
   stowed: StowedTab[]
   /** The window filling the whole workbench, if any. */
@@ -37,6 +40,7 @@ type DockState = {
 
 export const useDock = create<DockState>()(() => ({
   edges: { left: false, right: false, bottom: false },
+  docked: { left: false, right: false, bottom: false },
   minimized: [],
   stowed: [],
   revision: 0,
@@ -102,6 +106,12 @@ export function syncDock() {
         edge,
         !!dock.getEdgeGroup(edge) && dock.isEdgeGroupVisible(edge),
       ])
+    ) as Record<Edge, boolean>,
+    docked: Object.fromEntries(
+      EDGES.map((edge) => {
+        const group = dock.getEdgeGroup(edge)
+        return [edge, !!group && !!dock.getGroup(group.id)?.panels.length]
+      })
     ) as Record<Edge, boolean>,
     // A window whose tabs all moved away is no longer minimized.
     minimized: state.minimized.filter((item) => groups.has(item.group)),
@@ -296,6 +306,18 @@ export function closeWindow(group: DockviewGroupPanel) {
   for (const panel of [...group.panels]) closeTab(panel)
 }
 
+/**
+ * Floating windows are placed relative to the central grid, not the whole
+ * workbench; every floating position is measured from here.
+ */
+function floatHost() {
+  const element =
+    document.querySelector(".dv-floating-overlay-host") ??
+    document.querySelector(".dv-shell-middle-column") ??
+    root()
+  return element?.getBoundingClientRect() ?? new DOMRect()
+}
+
 function floatingBox(group: DockviewGroupPanel) {
   return group.element.closest<HTMLElement>(".dv-resize-container")
 }
@@ -390,12 +412,16 @@ function floatAt(
 ) {
   const dock = api()
   if (!dock) return
-  const box = root()?.getBoundingClientRect()
-  const maxLeft = (box?.width ?? window.innerWidth) - size.width - 16
-  const maxTop = (box?.height ?? window.innerHeight) - size.height - 16
+  // Keep the window inside the workbench, in the float host's coordinates.
+  const host = floatHost()
+  const bounds = root()?.getBoundingClientRect() ?? host
+  const minLeft = bounds.left - host.left
+  const minTop = bounds.top - host.top
+  const maxLeft = bounds.right - host.left - size.width - 16
+  const maxTop = bounds.bottom - host.top - size.height - 16
   const position = {
-    left: Math.max(0, Math.min(left, maxLeft)),
-    top: Math.max(0, Math.min(top, maxTop)),
+    left: Math.max(minLeft, Math.min(left, maxLeft)),
+    top: Math.max(minTop, Math.min(top, maxTop)),
   }
   const floating = isFloating(group) && floatingBox(group)
   if (floating) {
@@ -521,44 +547,89 @@ export function dropPreview(target: DropTarget) {
   }
 }
 
-/**
- * Lifts a docked window so it follows the pointer, returning the floating
- * window. Edge windows cannot float whole, so their tabs move out instead.
- */
-export function liftWindow(group: DockviewGroupPanel, x: number, y: number) {
-  const dock = api()
-  if (!dock) return group
-  if (useDock.getState().maximized === group.id) toggleMaximized(group)
-  const box = root()?.getBoundingClientRect()
-  const rect = group.element.getBoundingClientRect()
-  const size = {
+/** Where the pointer holds a moving window, from its top-left corner. */
+export type Grip = { window: DockviewGroupPanel; dx: number; dy: number }
+
+function floatingSize(rect: DOMRect) {
+  return {
     width: Math.min(Math.max(rect.width, 320), 640),
     height: Math.min(Math.max(rect.height, 240), 480),
   }
-  const left = x - (box?.left ?? 0) - 24
-  const top = y - (box?.top ?? 0) - 16
+}
+
+/**
+ * Lifts a docked window so it follows the pointer, keeping the spot the
+ * pointer grabbed. Edge windows cannot float whole, so their tabs move out.
+ */
+export function liftWindow(
+  group: DockviewGroupPanel,
+  x: number,
+  y: number
+): Grip {
+  const dock = api()
+  if (useDock.getState().maximized === group.id) toggleMaximized(group)
+  const rect = group.element.getBoundingClientRect()
+  if (!dock) return { window: group, dx: x - rect.left, dy: y - rect.top }
+  const size = floatingSize(rect)
+  // The grabbed point keeps its share of the width as the window shrinks.
+  const dx = Math.min(
+    ((x - rect.left) / Math.max(rect.width, 1)) * size.width,
+    size.width - 16
+  )
+  const dy = Math.min(y - rect.top, 32)
+  const box = floatHost()
+  const left = x - (box?.left ?? 0) - dx
+  const top = y - (box?.top ?? 0) - dy
   let floating = group
   if (edgeOf(group)) {
     const [first, ...rest] = group.panels
     const active = group.activePanel
-    if (!first) return group
+    if (!first) return { window: group, dx, dy }
     floatAt(first.group, left, top, size, first)
     floating = first.group
     for (const panel of rest) panel.api.moveTo({ group: floating })
     active?.api.setActive()
   } else floatAt(group, left, top, size)
   syncDock()
-  return floating
+  return { window: floating, dx, dy }
 }
 
-/** Moves a floating window so the pill stays under the pointer. */
-export function moveFloating(group: DockviewGroupPanel, x: number, y: number) {
-  const box = root()?.getBoundingClientRect()
-  const size = floatingBox(group)?.getBoundingClientRect()
+/** Pulls one tab out of its window into a floating window of its own. */
+export function liftTab(panel: IDockviewPanel, x: number, y: number): Grip {
+  const size = floatingSize(panel.group.element.getBoundingClientRect())
+  const dx = 64
+  const dy = 20
+  const box = floatHost()
   floatAt(
-    group,
-    x - (box?.left ?? 0) - 24,
-    y - (box?.top ?? 0) - 16,
+    panel.group,
+    x - (box?.left ?? 0) - dx,
+    y - (box?.top ?? 0) - dy,
+    size,
+    panel
+  )
+  panel.api.setActive()
+  syncDock()
+  return { window: panel.group, dx, dy }
+}
+
+/** A floating window already under the pointer keeps where it was held. */
+export function holdFloating(
+  group: DockviewGroupPanel,
+  x: number,
+  y: number
+): Grip {
+  const rect = (floatingBox(group) ?? group.element).getBoundingClientRect()
+  return { window: group, dx: x - rect.left, dy: y - rect.top }
+}
+
+/** Moves a floating window so the grabbed spot stays under the pointer. */
+export function moveFloating(grip: Grip, x: number, y: number) {
+  const box = floatHost()
+  const size = floatingBox(grip.window)?.getBoundingClientRect()
+  floatAt(
+    grip.window,
+    x - (box?.left ?? 0) - grip.dx,
+    y - (box?.top ?? 0) - grip.dy,
     size ? { width: size.width, height: size.height } : FLOAT_SIZE
   )
 }

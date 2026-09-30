@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, type ReactNode } from "react"
 import {
   DockviewReact,
   type DockviewApi,
@@ -7,21 +7,13 @@ import {
 } from "dockview-react"
 import "dockview-react/dist/styles/dockview.css"
 import { SidebarProvider } from "@/components/ui/sidebar"
-import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
 import { PanelContext } from "./context"
 import { DockTab } from "./DockTab"
 import { HeaderControls } from "./WindowControls"
+import { headerPointerDown } from "./drag"
 import { DisplayWatcher } from "@/features/viewer/DisplayPanel"
-import { PANELS, type PanelDefinition, type PanelId } from "./panels"
-import {
-  loadLayout,
-  restoreTab,
-  restoreWindow,
-  saveLayout,
-  syncDock,
-  useDock,
-  type WindowParams,
-} from "./store"
+import { PANELS, type PanelDefinition } from "./panels"
+import { loadLayout, saveLayout, syncDock, type WindowParams } from "./store"
 import "@/styles/workbench/dock.css"
 
 const theme: DockviewTheme = {
@@ -48,55 +40,6 @@ function frame(definition: PanelDefinition) {
       </PanelContext>
     )
   }
-}
-
-/**
- * Minimized windows and closed built-in tabs wait in a floating toolbar at
- * the bottom of the workbench, only while there is something in it.
- */
-function WindowTray() {
-  const minimized = useDock((state) => state.minimized)
-  const stowed = useDock((state) => state.stowed)
-  const dock = useDock((state) => state.api)
-  const windows = minimized.flatMap((item) => {
-    const group = dock?.getGroup(item.group)
-    const panel = group?.activePanel ?? group?.panels[0]
-    if (!group || !panel) return []
-    return [
-      {
-        key: item.group,
-        label: group.panels.map((p) => p.title).join(", "),
-        component: panel.view.contentComponent,
-        restore: () => restoreWindow(item.group),
-      },
-    ]
-  })
-  const tabs = stowed.map((item) => ({
-    key: item.id,
-    label: item.title,
-    component: item.component,
-    restore: () => restoreTab(item.id),
-  }))
-  const items = [...windows, ...tabs]
-  if (!items.length) return null
-  return (
-    <nav className="dock-tray" aria-label="최소화한 창">
-      <ToolbarGroup label="최소화한 창">
-        {items.map((item) => {
-          const Icon = PANELS[item.component as PanelId]?.icon
-          return (
-            <ToolbarButton
-              key={item.key}
-              label={item.label}
-              onClick={item.restore}
-            >
-              {Icon && <Icon />}
-            </ToolbarButton>
-          )
-        })}
-      </ToolbarGroup>
-    </nav>
-  )
 }
 
 function ready(api: DockviewApi) {
@@ -127,12 +70,20 @@ export function DockShell({ header }: { header: ReactNode }) {
       ),
     []
   )
+  const rootRef = useRef<HTMLDivElement>(null)
+  // Header drags start before dockview's own handlers see the pointer.
+  useEffect(() => {
+    const element = rootRef.current
+    element?.addEventListener("pointerdown", headerPointerDown, true)
+    return () =>
+      element?.removeEventListener("pointerdown", headerPointerDown, true)
+  }, [])
   return (
     <SidebarProvider className="giraf-app" open>
       <DisplayWatcher />
       {header}
       <div className="dock-body">
-        <div className="dock-root">
+        <div className="dock-root" ref={rootRef}>
           <DockviewReact
             components={components}
             defaultTabComponent={DockTab}
@@ -141,11 +92,12 @@ export function DockShell({ header }: { header: ReactNode }) {
             theme={theme}
             dndStrategy="html5"
             disableTabsOverflowList
-            floatingGroupDragHandle="tabbar"
+            // Windows move by their header (see drag.ts), not dockview drags.
+            disableDnd
+            floatingGroupDragHandle="titlebar"
             onReady={(event) => ready(event.api)}
           />
         </div>
-        <WindowTray />
       </div>
     </SidebarProvider>
   )

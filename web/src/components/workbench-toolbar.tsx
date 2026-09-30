@@ -23,6 +23,7 @@ import {
   ToolbarButton,
   ToolbarCluster,
   ToolbarGroup,
+  ToolbarItem,
   ToolbarMorph,
 } from "@/components/toolbar"
 import {
@@ -56,6 +57,10 @@ type Props = {
   runDisabled: boolean
   onRun: () => void
   onCancel: () => void
+  /** Minimized windows, beside the panel toggles. */
+  windows?: React.ReactNode
+  /** Which edges hold windows; the others have no toggle. */
+  docked?: { left: boolean; right: boolean; bottom: boolean }
   sidebarVisible: boolean
   settingsVisible: boolean
   trayOpen: boolean
@@ -102,12 +107,9 @@ export function WorkbenchToolbar(props: Props) {
       : undefined
   const StatusIcon = status ? statusIcons[status.state] : LoaderCircle
   return (
-    <header
-      className="workbench-toolbar"
-      aria-label="도구 막대"
-    >
+    <header className="workbench-toolbar" aria-label="도구 막대">
       <ToolbarCluster className="toolbar-leading" edge="start">
-        <ToolbarGroup label="사이드바">
+        <ToolbarGroup label="사이드바" hidden={props.docked?.left === false}>
           <ToolbarButton
             label={props.sidebarVisible ? "사이드바 닫기" : "사이드바 열기"}
             onClick={props.onSidebar}
@@ -276,19 +278,31 @@ export function WorkbenchToolbar(props: Props) {
         </div>
       </div>
       <ToolbarCluster className="toolbar-panels" edge="end">
-        <ToolbarGroup label="패널 표시">
-          <ToolbarButton
-            label={props.trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
-            onClick={props.onTray}
-          >
-            <PanelBottom />
-          </ToolbarButton>
-          <ToolbarButton
-            label={props.settingsVisible ? "설정 패널 닫기" : "설정 패널 열기"}
-            onClick={props.onSettings}
-          >
-            <PanelRight />
-          </ToolbarButton>
+        {props.windows}
+        <ToolbarGroup
+          label="패널 표시"
+          hidden={
+            props.docked?.bottom === false && props.docked?.right === false
+          }
+        >
+          <ToolbarItem hidden={props.docked?.bottom === false}>
+            <ToolbarButton
+              label={props.trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
+              onClick={props.onTray}
+            >
+              <PanelBottom />
+            </ToolbarButton>
+          </ToolbarItem>
+          <ToolbarItem hidden={props.docked?.right === false}>
+            <ToolbarButton
+              label={
+                props.settingsVisible ? "설정 패널 닫기" : "설정 패널 열기"
+              }
+              onClick={props.onSettings}
+            >
+              <PanelRight />
+            </ToolbarButton>
+          </ToolbarItem>
         </ToolbarGroup>
       </ToolbarCluster>
     </header>

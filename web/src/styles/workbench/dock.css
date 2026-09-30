@@ -164,7 +164,7 @@
   padding: 0;
 }
 .dockview-theme-giraf .dv-tabs-container > .dv-tab:only-child {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   background: transparent;
   box-shadow: none;
 }
@@ -193,6 +193,9 @@
   justify-content: center;
   gap: 6px;
   min-width: 0;
+}
+.dv-tab:only-child .dock-tab-label {
+  overflow: visible;
 }
 .dv-tab:only-child .dock-tab-title {
   justify-content: flex-start;
@@ -256,96 +259,36 @@
   }
 }
 
-/* The window pill: always there, small; it grows into the window's capsule. */
-.window-pill {
-  position: relative;
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  height: 28px;
-}
+/* The window pill: a toolbar capsule, always there, small; its buttons slide
+   out of it with the toolbar's own motion, over the tabs. */
+.window-pill { position: relative; flex: 0 0 34px; width: 34px; height: 26px; }
+.window-pill-cluster { position: absolute; top: 50%; left: 0; z-index: 3; translate: 0 -50%; }
+.window-pill .toolbar-group { gap: 0; padding: 1px; background: var(--background); }
+.window-pill[data-open="true"] .toolbar-group { box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); }
+.window-pill .toolbar-button { width: 24px; height: 24px; min-width: 0; min-height: 0; }
+.window-pill .toolbar-button svg { width: 14px; height: 14px; }
 .window-pill-handle {
-  position: relative;
-  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 3px;
   width: 30px;
-  height: 20px;
+  height: 22px;
   padding: 0;
   border: 0;
-  border-radius: 10px;
-  background: var(--muted);
+  border-radius: 11px;
+  background: transparent;
   cursor: grab;
   touch-action: none;
-  transition: background-color var(--motion-quick) ease-out;
 }
-.window-pill-handle:active {
-  cursor: grabbing;
-}
-.window-pill-handle i {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: color-mix(in oklch, var(--foreground) 40%, transparent);
-}
-.window-pill[data-active="true"] .window-pill-handle i {
-  background: color-mix(in oklch, var(--foreground) 70%, transparent);
-}
-.window-pill-handle:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
-.window-pill-actions {
-  position: absolute;
-  top: 50%;
-  left: -4px;
-  z-index: 1;
-  display: none;
-  width: max-content;
-  translate: 0 -50%;
-}
-.window-pill-actions > .toolbar-slot {
-  display: block;
-  overflow: visible;
-}
-.window-pill[data-open="true"] .window-pill-actions {
-  display: block;
-}
-.window-pill[data-open="true"] .window-pill-handle {
-  background: transparent;
-}
-.window-pill-actions .toolbar-group {
-  gap: 0;
-  padding: 1px 2px 1px 36px;
-  background: var(--background);
-  box-shadow: 0 4px 14px rgb(0 0 0 / 0.12);
-  animation: window-pill-grow var(--motion-quick) var(--motion-ease);
-}
-.window-pill-actions .toolbar-button {
-  width: 26px;
-  height: 26px;
-  min-width: 0;
-  min-height: 0;
-}
-.window-pill-actions .toolbar-button svg {
-  width: 14px;
-  height: 14px;
-}
-@keyframes window-pill-grow {
-  from {
-    clip-path: inset(0 calc(100% - 38px) 0 0 round 14px);
-  }
-  to {
-    clip-path: inset(0 0 0 0 round 14px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .window-pill-actions .toolbar-group {
-    animation: none;
-  }
-}
+.window-pill-handle:active { cursor: grabbing; }
+.window-pill-handle i { width: 3px; height: 3px; border-radius: 50%; background: color-mix(in oklch, var(--foreground) 40%, transparent); }
+.window-pill[data-active="true"] .window-pill-handle i { background: color-mix(in oklch, var(--foreground) 70%, transparent); }
+.window-pill-handle:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+
+/* The header is the window's handle. */
+.dockview-theme-giraf .dv-tabs-and-actions-container { cursor: default; }
+.dockview-theme-giraf .dv-tab:only-child { cursor: grab; }
 
 /* Maximized: the window fills the whole workbench above the others. */
 .dv-groupview[data-window-maximized] {
@@ -353,6 +296,28 @@
   z-index: 36;
   box-shadow: 0 0 0 1px var(--border);
 }
+/* Floating windows: rounded, with generous resize edges and a floor on size. */
+.dockview-theme-giraf { --dv-floating-titlebar-height: 0px; }
+.dv-floating-titlebar { display: none; }
+.dv-resize-container { min-width: 280px; min-height: 180px; border-radius: 12px; }
+.dv-resize-container > .dv-grid-view { border-radius: 12px; overflow: hidden; }
+.dv-resize-container .dv-resize-handle-top, .dv-resize-container .dv-resize-handle-bottom { height: 10px; left: 10px; width: calc(100% - 20px); }
+.dv-resize-container .dv-resize-handle-top { top: -5px; }
+.dv-resize-container .dv-resize-handle-bottom { bottom: -5px; }
+.dv-resize-container .dv-resize-handle-left, .dv-resize-container .dv-resize-handle-right { width: 10px; top: 10px; height: calc(100% - 20px); }
+.dv-resize-container .dv-resize-handle-left { left: -5px; }
+.dv-resize-container .dv-resize-handle-right { right: -5px; }
+.dv-resize-container .dv-resize-handle-topleft, .dv-resize-container .dv-resize-handle-topright,
+.dv-resize-container .dv-resize-handle-bottomleft, .dv-resize-container .dv-resize-handle-bottomright { width: 16px; height: 16px; }
+.dv-resize-container .dv-resize-handle-topleft { top: -6px; left: -6px; }
+.dv-resize-container .dv-resize-handle-topright { top: -6px; right: -6px; }
+.dv-resize-container .dv-resize-handle-bottomleft { bottom: -6px; left: -6px; }
+.dv-resize-container .dv-resize-handle-bottomright { bottom: -6px; right: -6px; }
+/* Splitters between docked windows take the pointer a few pixels either side. */
+.dockview-theme-giraf .dv-sash::after { content: ""; position: absolute; }
+.dockview-theme-giraf .dv-horizontal > .dv-sash-container > .dv-sash::after { inset: 0 -4px; }
+.dockview-theme-giraf .dv-vertical > .dv-sash-container > .dv-sash::after { inset: -4px 0; }
+
 /* A minimized floating window is hidden in place. */
 .dv-resize-container[hidden] {
   display: none !important;
@@ -378,11 +343,7 @@ body[data-window-dragging] {
   cursor: grabbing;
 }
 
-/* Minimized windows wait in a floating toolbar at the bottom of the workbench. */
-.dock-tray {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  z-index: 45;
-  translate: -50% 0;
+/* Toolbar items that join a group arrive the way hidden ones leave. */
+@starting-style {
+  .toolbar-panels .toolbar-item[data-hidden="false"] { grid-template-columns: minmax(0, 0fr); opacity: 0; filter: blur(4px); }
 }
