@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { Maximize2, Minimize2, Minus, X } from "lucide-react"
+import { LinearBlur } from "progressive-blur"
 import type {
   DockviewGroupPanel,
   IDockviewHeaderActionsProps,
@@ -137,8 +138,29 @@ export function HeaderControls(props: IDockviewHeaderActionsProps) {
     )
     return () => listener.dispose()
   }, [props.group])
+  // The bar itself, which holds this row (hidden when fullscreen) and the
+  // tab bar; content-rich windows paint a progressive blur behind it.
+  const [bar, setBar] = useState<HTMLElement | null>(null)
   return (
-    <div className="window-toolbar">
+    <div
+      className="window-toolbar"
+      ref={(row) =>
+        setBar(
+          row?.closest<HTMLElement>(".dv-tabs-and-actions-container") ?? null
+        )
+      }
+    >
+      {bar &&
+        createPortal(
+          <LinearBlur
+            className="window-bar-blur"
+            side="top"
+            strength={24}
+            steps={6}
+            tint="var(--window-bar)"
+          />,
+          bar
+        )}
       {/* Fullscreen, the window's controls join the app's top bar. */}
       {fullscreen && appPill ? createPortal(pill, appPill) : pill}
       <WindowSlot

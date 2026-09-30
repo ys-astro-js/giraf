@@ -161,6 +161,21 @@
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+/* Over content, the clear top bar still blurs what runs beneath it,
+   strongest at the window's edge and fading out toward the content. */
+.window-bar-blur {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+.dockview-theme-giraf
+  .dv-groupview:has(.dock-window[data-canvas]):not(
+    :has(.dv-tabs-container > .dv-tab + .dv-tab)
+  )
+  .window-bar-blur {
+  display: block;
+}
 .dockview-theme-giraf .dv-tabs-and-actions-container {
   flex-wrap: wrap;
   align-items: center;
