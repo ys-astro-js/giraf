@@ -17,6 +17,9 @@
 }
 
 .dockview-theme-giraf {
+  /* A window header's one inset (edges and between rows) and control height. */
+  --window-inset: 8px;
+  --window-control: 28px;
   color-scheme: light;
   --dv-group-view-background-color: var(--background);
   --dv-tabs-and-actions-container-background-color: var(--background);
@@ -115,8 +118,8 @@
   flex-wrap: wrap;
   align-items: center;
   height: auto;
-  padding: 6px 8px 8px;
-  row-gap: 6px;
+  padding: var(--window-inset);
+  row-gap: var(--window-inset);
   background: transparent;
   border-bottom: 0;
 }
@@ -134,7 +137,7 @@
   display: flex;
   flex: 1 0 100%;
   min-width: 0;
-  height: 28px;
+  height: var(--window-control);
 }
 .dockview-theme-giraf .dv-scrollable > .dv-tabs-container {
   flex: 1;
@@ -147,9 +150,9 @@
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 6px;
+  gap: var(--window-inset);
   min-width: 0;
-  height: 32px;
+  height: var(--window-control);
 }
 .window-toolbar-slot {
   display: flex;
@@ -161,7 +164,7 @@
 /* The tab bar: a segmented pill across the window; the shown tab rises
    out of the track as a raised segment. */
 .dockview-theme-giraf .dv-tabs-container {
-  height: 28px;
+  height: var(--window-control);
   padding: 2px;
   box-sizing: border-box;
   border-radius: 14px;
@@ -281,10 +284,12 @@
    handle, always there at the start; hovering grows its buttons in place,
    pushing the tab's controls along rather than covering anything. */
 .window-pill { display: flex; flex: 0 0 auto; }
-.window-pill .toolbar-group { gap: 0; padding: 1px; border-color: transparent; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+/* Every capsule in the row is one control tall, like the tab bar. */
+.window-toolbar .toolbar-group { gap: 0; height: var(--window-control); padding: 1px; box-sizing: border-box; border-radius: calc(var(--window-control) / 2); }
+.window-toolbar .toolbar-button { width: 24px; height: 24px; min-width: 0; min-height: 0; }
+.window-toolbar .toolbar-button svg { width: 14px; height: 14px; }
+.window-pill .toolbar-group { border-color: transparent; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
 .window-pill[data-open="true"] .toolbar-group { border-color: var(--glass-border); background: var(--glass-background); }
-.window-pill .toolbar-button { width: 24px; height: 24px; min-width: 0; min-height: 0; }
-.window-pill .toolbar-button svg { width: 14px; height: 14px; }
 .window-pill-handle {
   display: flex;
   align-items: center;
