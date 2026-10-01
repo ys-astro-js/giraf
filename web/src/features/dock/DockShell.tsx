@@ -14,7 +14,13 @@ import { WindowSlot } from "./WindowToolbar"
 import { headerPointerDown } from "./drag"
 import { DisplayWatcher } from "@/features/viewer/DisplayPanel"
 import { PANELS, type PanelDefinition } from "./panels"
-import { loadLayout, saveLayout, syncDock, type WindowParams } from "./store"
+import {
+  followLayout,
+  loadLayout,
+  saveLayout,
+  syncDock,
+  type WindowParams,
+} from "./store"
 import "@/styles/workbench/dock.css"
 
 const theme: DockviewTheme = {
@@ -61,6 +67,7 @@ function ready(api: DockviewApi) {
   loadLayout(api)
   let pending = 0
   api.onDidLayoutChange(() => {
+    followLayout()
     syncDock()
     window.clearTimeout(pending)
     pending = window.setTimeout(saveLayout, 300)
@@ -94,6 +101,17 @@ export function DockShell({ header }: { header: ReactNode }) {
     element?.addEventListener("pointerdown", headerPointerDown, true)
     return () =>
       element?.removeEventListener("pointerdown", headerPointerDown, true)
+  }, [])
+  // dockview lays itself out when the workbench resizes but reports no
+  // layout change; side windows take back their sizes once it has.
+  useEffect(() => {
+    const element = rootRef.current
+    if (!element) return
+    const observer = new ResizeObserver(() =>
+      requestAnimationFrame(followLayout)
+    )
+    observer.observe(element)
+    return () => observer.disconnect()
   }, [])
   return (
     <SidebarProvider className="giraf-app" open>

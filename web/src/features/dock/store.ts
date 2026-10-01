@@ -7,6 +7,14 @@ import type {
 import { PANELS, type PanelId } from "./panels"
 import { buildPreset, type PresetId } from "./presets"
 import { recordBars } from "./morph"
+import { animateLayout, quietly } from "./transition"
+import {
+  keepSizes,
+  keptSizes,
+  restoreSizes,
+  setKeptSizes,
+  type KeptSize,
+} from "./sizes"
 
 /** A side of the workbench; its toolbar toggle hides the windows along it. */
 export type Edge = "left" | "right" | "bottom"
@@ -67,6 +75,8 @@ type SavedLayout = {
   hidden: Record<Edge, string[]>
   minimized: MinimizedWindow[]
   stowed: StowedTab[]
+  /** Side windows' own sizes (see sizes.ts); missing in older layouts. */
+  sizes?: Record<string, KeptSize>
 }
 
 const api = () => useDock.getState().api
@@ -136,6 +146,33 @@ export function syncDock() {
     }
   })
   markWindows(dock)
+}
+
+/** The workbench size the side windows' sizes were last kept at. */
+let workbench = { width: 0, height: 0 }
+
+/**
+ * Follows a layout change, or the workbench resizing: when the workbench
+ * changed size, the side windows get their kept sizes back; any other
+ * change (a splitter dragged, a window docked or shown) is what the user
+ * chose, so it is kept. A maximized window hides the rest, which keep what
+ * they had.
+ */
+export function followLayout() {
+  const dock = api()
+  if (!dock || useDock.getState().maximized) return
+  const resized =
+    dock.width !== workbench.width || dock.height !== workbench.height
+  workbench = { width: dock.width, height: dock.height }
+  if (resized) restoreSizes(dock)
+  else keepSideSizes(dock)
+}
+
+function keepSideSizes(dock: DockviewApi) {
+  keepSizes(dock, {
+    across: [...sideWindows(dock, "left"), ...sideWindows(dock, "right")],
+    along: sideWindows(dock, "bottom"),
+  })
 }
 
 /** The maximized window: dockview's for docked windows, ours for floating. */
@@ -265,20 +302,22 @@ function follower(component: PanelId) {
  * re-opens it or un-hides its edge. Background reveals keep the focus.
  */
 export function revealPanel(id: PanelId, { activate = true } = {}) {
-  const dock = api()
-  if (!dock) return
-  const stowed = useDock.getState().stowed.find((item) => item.id === id)
-  if (stowed) {
-    restoreTab(stowed.id)
-    return
-  }
-  const panel = PANELS[id].follows
-    ? follower(id)
-    : (dock.getPanel(id) ?? addWindow(id, id, PANELS[id].title))
-  restoreGroup(panel.group)
-  if (activate && panel.group.activePanel !== panel) recordBars(panel.group)
-  if (activate) panel.api.setActive()
-  syncDock()
+  animateLayout(api(), () => {
+    const dock = api()
+    if (!dock) return
+    const stowed = useDock.getState().stowed.find((item) => item.id === id)
+    if (stowed) {
+      restoreTab(stowed.id)
+      return
+    }
+    const panel = PANELS[id].follows
+      ? follower(id)
+      : (dock.getPanel(id) ?? addWindow(id, id, PANELS[id].title))
+    restoreGroup(panel.group)
+    if (activate && panel.group.activePanel !== panel) recordBars(panel.group)
+    if (activate) panel.api.setActive()
+    syncDock()
+  })
 }
 
 /** Whether a window is in the layout rather than closed. */
@@ -300,28 +339,30 @@ export function hideSide(edge: Edge, groups = sideWindows(api()!, edge)) {
 
 /** The toolbar's side toggles: hide or show the windows along a side. */
 export function toggleEdge(edge: Edge) {
-  const dock = api()
-  if (!dock) return
-  const hidden = useDock.getState().hidden[edge]
-  const shown = sideWindows(dock, edge)
-  if (hidden.length) {
-    useDock.setState((state) => ({
-      hidden: { ...state.hidden, [edge]: [] },
-    }))
-    // Shown in reverse of hiding, windows that share a side keep their sizes.
-    for (const id of [...hidden].reverse()) {
-      const group = dock.getGroup(id) as DockviewGroupPanel | undefined
-      if (group) restoreGroup(group, true)
+  animateLayout(api(), () => {
+    const dock = api()
+    if (!dock) return
+    const hidden = useDock.getState().hidden[edge]
+    const shown = sideWindows(dock, edge)
+    if (hidden.length) {
+      useDock.setState((state) => ({
+        hidden: { ...state.hidden, [edge]: [] },
+      }))
+      // Shown in reverse of hiding, windows that share a side keep their sizes.
+      for (const id of [...hidden].reverse()) {
+        const group = dock.getGroup(id) as DockviewGroupPanel | undefined
+        if (group) restoreGroup(group, true)
+      }
+    } else if (shown.length) hideSide(edge, shown)
+    else {
+      const home = (Object.keys(PANELS) as PanelId[]).find(
+        (id) => PANELS[id].home === edge
+      )
+      if (home) revealPanel(home)
     }
-  } else if (shown.length) hideSide(edge, shown)
-  else {
-    const home = (Object.keys(PANELS) as PanelId[]).find(
-      (id) => PANELS[id].home === edge
-    )
-    if (home) revealPanel(home)
-  }
-  syncDock()
-  saveLayout()
+    syncDock()
+    saveLayout()
+  })
 }
 
 /* Tabs: lock and close act on one tab. */
@@ -363,43 +404,49 @@ export function registerCloseAction(panelId: string, action: () => void) {
  * built-in tabs wait in the tray, since nothing else brings them back.
  */
 export function closeTab(panel: IDockviewPanel) {
-  closeActions.get(panel.id)?.()
-  const component = panel.view.contentComponent
-  const disposable =
-    !!PANELS[component as PanelId]?.closable || panel.id !== component
-  if (!disposable)
-    useDock.setState((state) => ({
-      stowed: [
-        ...state.stowed,
-        {
-          id: panel.id,
-          component,
-          title: panel.title ?? panel.id,
-          params: panel.params,
-        },
-      ],
-    }))
-  panel.api.close()
-  syncDock()
-  saveLayout()
+  animateLayout(api(), () => {
+    closeActions.get(panel.id)?.()
+    const component = panel.view.contentComponent
+    const disposable =
+      !!PANELS[component as PanelId]?.closable || panel.id !== component
+    if (!disposable)
+      useDock.setState((state) => ({
+        stowed: [
+          ...state.stowed,
+          {
+            id: panel.id,
+            component,
+            title: panel.title ?? panel.id,
+            params: panel.params,
+          },
+        ],
+      }))
+    panel.api.close()
+    syncDock()
+    saveLayout()
+  })
 }
 
 export function restoreTab(id: string) {
-  const item = useDock.getState().stowed.find((entry) => entry.id === id)
-  if (!item || !api()) return
-  useDock.setState((state) => ({
-    stowed: state.stowed.filter((entry) => entry !== item),
-  }))
-  const panel = addWindow(item.id, item.component, item.title, item.params)
-  panel.api.setActive()
-  syncDock()
-  saveLayout()
+  animateLayout(api(), () => {
+    const item = useDock.getState().stowed.find((entry) => entry.id === id)
+    if (!item || !api()) return
+    useDock.setState((state) => ({
+      stowed: state.stowed.filter((entry) => entry !== item),
+    }))
+    const panel = addWindow(item.id, item.component, item.title, item.params)
+    panel.api.setActive()
+    syncDock()
+    saveLayout()
+  })
 }
 
 /* Windows: the window pill acts on the whole tab group. */
 
 export function closeWindow(group: DockviewGroupPanel) {
-  for (const panel of [...group.panels]) closeTab(panel)
+  animateLayout(api(), () => {
+    for (const panel of [...group.panels]) closeTab(panel)
+  })
 }
 
 /**
@@ -427,16 +474,18 @@ function hideGroup(group: DockviewGroupPanel, hidden: boolean) {
 
 /** Hides a window in place; the tray brings it back where it was. */
 export function minimizeWindow(group: DockviewGroupPanel) {
-  if (useDock.getState().maximized === group.id) toggleMaximized(group)
-  hideGroup(group, true)
-  useDock.setState((state) => ({
-    minimized: [
-      ...state.minimized,
-      { group: group.id, panels: group.panels.map((panel) => panel.id) },
-    ],
-  }))
-  syncDock()
-  saveLayout()
+  animateLayout(api(), () => {
+    if (useDock.getState().maximized === group.id) toggleMaximized(group)
+    hideGroup(group, true)
+    useDock.setState((state) => ({
+      minimized: [
+        ...state.minimized,
+        { group: group.id, panels: group.panels.map((panel) => panel.id) },
+      ],
+    }))
+    syncDock()
+    saveLayout()
+  })
 }
 
 /** Shows a window that was minimized or hidden with its side. */
@@ -458,12 +507,14 @@ function restoreGroup(group: DockviewGroupPanel, force = false) {
 }
 
 export function restoreWindow(groupId: string) {
-  const group = api()?.getGroup(groupId) as DockviewGroupPanel | undefined
-  if (!group) return
-  restoreGroup(group)
-  group.activePanel?.api.setActive()
-  syncDock()
-  saveLayout()
+  animateLayout(api(), () => {
+    const group = api()?.getGroup(groupId) as DockviewGroupPanel | undefined
+    if (!group) return
+    restoreGroup(group)
+    group.activePanel?.api.setActive()
+    syncDock()
+    saveLayout()
+  })
 }
 
 /** Where a floating window was before it was maximized. */
@@ -478,47 +529,49 @@ const floatingBefore = new Map<
  * window grows over the workbench and returns to where it was.
  */
 export function toggleMaximized(group: DockviewGroupPanel) {
-  const dock = api()
-  if (!dock) return
-  if (!isFloating(group)) {
-    if (group.api.isMaximized()) group.api.exitMaximized()
-    else group.api.maximize()
+  animateLayout(api(), () => {
+    const dock = api()
+    if (!dock) return
+    if (!isFloating(group)) {
+      if (group.api.isMaximized()) group.api.exitMaximized()
+      else group.api.maximize()
+      syncDock()
+      group.activePanel?.api.setActive()
+      return
+    }
+    const box = floatingBox(group)
+    if (!box) return
+    const before = floatingBefore.get(group.id)
+    if (useDock.getState().maximized === group.id && before) {
+      floatingBefore.delete(group.id)
+      box.style.left = before.left
+      box.style.top = before.top
+      group.api.setSize({ width: before.width, height: before.height })
+      useDock.setState({ maximized: undefined })
+    } else {
+      const rect = box.getBoundingClientRect()
+      floatingBefore.set(group.id, {
+        left: box.style.left,
+        top: box.style.top,
+        width: rect.width,
+        height: rect.height,
+      })
+      // Fullscreen first: the workbench grows under the app's bar, and the
+      // window takes the workbench as it then is.
+      useDock.setState({ maximized: group.id })
+      syncDock()
+      const host = floatHost()
+      const bounds = dockRoot()?.getBoundingClientRect() ?? host
+      box.style.left = `${bounds.left - host.left}px`
+      box.style.top = `${bounds.top - host.top}px`
+      group.api.setSize({ width: bounds.width, height: bounds.height })
+    }
     syncDock()
     group.activePanel?.api.setActive()
-    return
-  }
-  const box = floatingBox(group)
-  if (!box) return
-  const before = floatingBefore.get(group.id)
-  if (useDock.getState().maximized === group.id && before) {
-    floatingBefore.delete(group.id)
-    box.style.left = before.left
-    box.style.top = before.top
-    group.api.setSize({ width: before.width, height: before.height })
-    useDock.setState({ maximized: undefined })
-  } else {
-    const rect = box.getBoundingClientRect()
-    floatingBefore.set(group.id, {
-      left: box.style.left,
-      top: box.style.top,
-      width: rect.width,
-      height: rect.height,
-    })
-    // Fullscreen first: the workbench grows under the app's bar, and the
-    // window takes the workbench as it then is.
-    useDock.setState({ maximized: group.id })
-    syncDock()
-    const host = floatHost()
-    const bounds = dockRoot()?.getBoundingClientRect() ?? host
-    box.style.left = `${bounds.left - host.left}px`
-    box.style.top = `${bounds.top - host.top}px`
-    group.api.setSize({ width: bounds.width, height: bounds.height })
-  }
-  syncDock()
-  group.activePanel?.api.setActive()
+  })
 }
 
-/* Floating: dragging a window's header lifts it out of the layout. */
+/* Moving: a dragged window or tab lands where it is released. */
 
 const FLOAT_SIZE = { width: 480, height: 360 }
 
@@ -554,53 +607,19 @@ export type DropTarget =
   | { kind: "edge"; edge: Edge }
 export type DropPosition = "center" | "left" | "right" | "top" | "bottom"
 
-/** Where the pointer holds a moving window, from its top-left corner. */
-export type Grip = { window: DockviewGroupPanel; dx: number; dy: number }
+/** What a drag moves: a whole window, or one tab pulled out of it. */
+export type DragSource = { group: DockviewGroupPanel; panel?: IDockviewPanel }
 
-function floatingSize(rect: DOMRect) {
+/** The size a docked window takes when it floats. */
+export function floatingSize(rect: DOMRect) {
   return {
     width: Math.min(Math.max(rect.width, 320), 640),
     height: Math.min(Math.max(rect.height, 240), 480),
   }
 }
 
-/**
- * Lifts a docked window so it follows the pointer, keeping the spot the
- * pointer grabbed. Edge windows cannot float whole, so their tabs move out.
- */
-export function liftWindow(
-  group: DockviewGroupPanel,
-  x: number,
-  y: number
-): Grip {
-  const dock = api()
-  if (useDock.getState().maximized === group.id) toggleMaximized(group)
-  const rect = group.element.getBoundingClientRect()
-  if (!dock) return { window: group, dx: x - rect.left, dy: y - rect.top }
-  const size = floatingSize(rect)
-  // The grabbed point keeps its share of the width as the window shrinks.
-  const dx = Math.min(
-    ((x - rect.left) / Math.max(rect.width, 1)) * size.width,
-    size.width - 16
-  )
-  const dy = Math.min(y - rect.top, 32)
-  const host = floatHost()
-  floatAt(group, x - host.left - dx, y - host.top - dy, size)
-  syncDock()
-  return { window: group, dx, dy }
-}
-
-/** Pulls one tab out of its window into a floating window of its own. */
-export function liftTab(panel: IDockviewPanel, x: number, y: number): Grip {
-  const size = floatingSize(panel.group.element.getBoundingClientRect())
-  const dx = 64
-  const dy = 20
-  const host = floatHost()
-  floatAt(panel.group, x - host.left - dx, y - host.top - dy, size, panel)
-  panel.api.setActive()
-  syncDock()
-  return { window: panel.group, dx, dy }
-}
+/** Where the pointer holds a moving window, from its top-left corner. */
+export type Grip = { window: DockviewGroupPanel; dx: number; dy: number }
 
 /** A floating window already under the pointer keeps where it was held. */
 export function holdFloating(
@@ -624,25 +643,49 @@ export function moveFloating(grip: Grip, x: number, y: number) {
   )
 }
 
-/** Docks a dragged window where it was released. */
-export function dockWindow(group: DockviewGroupPanel, target: DropTarget) {
-  const dock = api()
-  if (!dock) return
-  if (target.kind === "edge") {
+/** Floats a dragged window or tab with its top-left corner at a viewport point. */
+export function floatSource(
+  source: DragSource,
+  left: number,
+  top: number,
+  size: { width: number; height: number }
+) {
+  animateLayout(api(), () => {
+    const host = floatHost()
+    floatAt(source.group, left - host.left, top - host.top, size, source.panel)
+    source.panel?.api.setActive()
+    syncDock()
+  })
+  saveLayout()
+}
+
+/** Docks a dragged window or tab where it was released. */
+export function dockSource(source: DragSource, target: DropTarget) {
+  animateLayout(api(), () => {
+    const moving = source.panel ?? source.group
+    const panel = source.panel ?? source.group.activePanel
     // Without a group, dockview adds one along the whole side.
-    const panel = group.activePanel
-    group.api.moveTo({ position: target.edge })
-    if (panel) sizeForSide(panel.group, target.edge)
-  } else group.api.moveTo({ group: target.group, position: target.position })
-  syncDock()
+    if (target.kind === "edge") moving.api.moveTo({ position: target.edge })
+    else moving.api.moveTo({ group: target.group, position: target.position })
+    // dockview shares the space out again; other side windows keep theirs.
+    const dock = api()
+    if (dock) restoreSizes(dock, panel?.group)
+    if (panel && target.kind === "edge") sizeForSide(panel.group, target.edge)
+    syncDock()
+  })
   saveLayout()
 }
 
 /* Persistence */
 
+/**
+ * Saves the layout, except while a window is maximized: dockview would
+ * measure it by restoring the others for a moment, and a reload should
+ * come back to the layout the user arranged, not to one window.
+ */
 export function saveLayout() {
   const dock = api()
-  if (!dock) return
+  if (!dock || useDock.getState().maximized) return
   try {
     const saved: SavedLayout = {
       version: LAYOUT_VERSION,
@@ -650,6 +693,7 @@ export function saveLayout() {
       hidden: useDock.getState().hidden,
       minimized: useDock.getState().minimized,
       stowed: useDock.getState().stowed,
+      sizes: keptSizes(),
     }
     localStorage.setItem(LAYOUT_KEY, JSON.stringify(saved))
   } catch {
@@ -660,6 +704,10 @@ export function saveLayout() {
 /** Restores the saved layout, or builds the default preset. */
 export function loadLayout(dock: DockviewApi) {
   useDock.setState({ api: dock })
+  quietly(() => restoreLayout(dock))
+}
+
+function restoreLayout(dock: DockviewApi) {
   try {
     const saved = JSON.parse(
       localStorage.getItem(LAYOUT_KEY) || "null"
@@ -680,6 +728,11 @@ export function loadLayout(dock: DockviewApi) {
           if (group) minimizeWindow(group)
         }
         ensureWindows(dock)
+        // Laid out at this workbench's size, the side windows take back
+        // the sizes they had wherever the layout was saved.
+        setKeptSizes(saved.sizes)
+        workbench = { width: dock.width, height: dock.height }
+        restoreSizes(dock)
         syncDock()
         return
       }
@@ -708,6 +761,10 @@ function ensureWindows(dock: DockviewApi) {
 }
 
 export function applyPreset(preset: PresetId) {
+  quietly(() => buildLayout(preset))
+}
+
+function buildLayout(preset: PresetId) {
   const dock = api()
   if (!dock) return
   useDock.setState({
@@ -718,7 +775,10 @@ export function applyPreset(preset: PresetId) {
   })
   if (dock.hasMaximizedGroup()) dock.exitMaximizedGroup()
   dock.clear()
+  setKeptSizes()
   buildPreset(dock, preset)
+  workbench = { width: dock.width, height: dock.height }
+  keepSideSizes(dock)
   syncDock()
   saveLayout()
 }

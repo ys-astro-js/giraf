@@ -1,4 +1,5 @@
 import type { DockviewGroupPanel } from "dockview-react"
+import { afterRender, EASE, reducedMotion, SHIFT } from "./motion"
 
 /**
  * Switching tabs morphs a window's bars capsule by capsule. Each tab brings
@@ -18,9 +19,6 @@ import type { DockviewGroupPanel } from "dockview-react"
  * cross-fades in place (see dock.css). Motion uses the toolbar's own timing.
  */
 
-/** The toolbar's shift (see toolbar.css --motion-shift, --motion-ease). */
-const SHIFT = 380
-const EASE = "cubic-bezier(0.22, 1, 0.36, 1)"
 /** How far each step of the cascade trails the one before. */
 const STAGGER = 0.35 * SHIFT
 /** How long a recorded bar stays good for the switch that follows it. */
@@ -198,21 +196,6 @@ function bandStand(source: Band) {
   return element
 }
 
-/**
- * Runs once the new tab's controls have rendered: after two frames, or a
- * short timer when frames are not coming (a hidden window).
- */
-function afterRender(run: () => void) {
-  let ran = false
-  const once = () => {
-    if (ran) return
-    ran = true
-    run()
-  }
-  requestAnimationFrame(() => requestAnimationFrame(once))
-  window.setTimeout(once, 50)
-}
-
 const running = new WeakMap<HTMLElement, () => void>()
 
 /**
@@ -225,7 +208,7 @@ export function morphBars(group: DockviewGroupPanel) {
   running.get(root)?.()
   const record = recorded.get(group)
   recorded.delete(group)
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+  if (reducedMotion()) return
   // A fullscreen window's controls live in the app's bar; they switch in place.
   if ("fullscreen" in root.dataset) return
   const now = bars(group)

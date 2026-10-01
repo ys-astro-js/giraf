@@ -668,6 +668,86 @@ body[data-window-dragging] {
   user-select: none;
   cursor: grabbing;
 }
+/* The dragged window stays dimmed in its place; the layout holds still
+   (see dock/drag.ts). */
+.dv-groupview[data-dragging],
+.dv-tab[data-dragging] {
+  opacity: 0.45;
+  transition: opacity var(--motion-quick) ease-out;
+}
+/* The stand-in that follows the pointer is the window as it would float:
+   see-through while it may snap, solid when Shift makes it float. */
+.dock-drag-ghost {
+  position: fixed;
+  z-index: 61;
+  box-sizing: border-box;
+  pointer-events: none;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass-background);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.18), 0 2px 8px rgb(0 0 0 / 0.08);
+  opacity: 0.75;
+  transition: opacity var(--motion-quick) ease-out;
+}
+.dock-drag-ghost[data-floating="true"] {
+  opacity: 1;
+}
+.dock-drag-ghost-title {
+  position: absolute;
+  inset: var(--window-inset) 16px auto;
+  display: flex;
+  align-items: center;
+  height: var(--window-toolbar);
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Layout changes (see dock/transition.ts): a moved window opens out from
+   its old box while its frame travels beneath it, the title riding where
+   the window's title sits. A window with no box in common waits unseen. */
+[data-layout-moving] {
+  opacity: 0;
+}
+/* The frames lie beneath the windows: the grid paints no background of its
+   own (each window paints its own), and the workbench keeps the layer's
+   negative z-index inside it. */
+.dock-root {
+  isolation: isolate;
+}
+.dockview-theme-giraf .dv-grid-view {
+  background: transparent;
+}
+.window-transition-layer {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.window-transition-frame {
+  position: absolute;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.window-transition-title {
+  position: absolute;
+  inset: var(--window-inset) 16px auto
+    calc(var(--window-inset) * 2 + var(--window-pill-button) * 3 + 6px);
+  display: flex;
+  align-items: center;
+  height: var(--window-toolbar);
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 
 
 /* Switching tabs (see dock/morph.ts): while the bars morph, the real
