@@ -13,6 +13,7 @@ import { LockControl, WindowTopBar } from "./WindowControls"
 import { WindowSlot } from "./WindowToolbar"
 import { headerPointerDown } from "./drag"
 import { DropPicker } from "./DropPicker"
+import { SnapSeams } from "./SnapSeams"
 import { DisplayWatcher } from "@/features/viewer/DisplayPanel"
 import { PANELS, type PanelDefinition } from "./panels"
 import {
@@ -118,6 +119,7 @@ export function DockShell({ header }: { header: ReactNode }) {
     <SidebarProvider className="giraf-app" open>
       <DisplayWatcher />
       <DropPicker />
+      <SnapSeams />
       {header}
       <div className="dock-body">
         <div className="dock-root" ref={rootRef}>

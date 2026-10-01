@@ -1,7 +1,7 @@
 // Snapped windows tile like desktop systems: sides keep their pixel sizes,
 // the center takes the rest, and a preview asks for the same boxes.
 import { expect, test } from 'bun:test'
-import { emptySnaps, regionBoxes, resized, setHidden, snap, snapBoxes, unsnap } from '../src/features/dock/layout'
+import { dragSeam, emptySnaps, regionBoxes, seams, setHidden, snap, snapBoxes, unsnap } from '../src/features/dock/layout'
 
 const workbench = { width: 1440, height: 844 }
 
@@ -69,11 +69,34 @@ test('splitting the center sets its axis by the side', () => {
   expect(boxes.get('workflow')).toEqual({ left: 0, top: 422, width: 1440, height: 422 })
 })
 
-test('resizing a side window by its inner edge sets the side size', () => {
+test('dragging a side seam sets the side size, and the center takes the rest', () => {
   let snaps = snap(emptySnaps(), 'files', 'left')
   snaps = snap(snaps, 'workflow', 'center')
-  snaps = resized(snaps, 'files', { left: 0, top: 0, width: 320, height: 844 }, workbench)
+  const seam = seams(snaps, workbench).find((line) => line.seam.kind === 'side')!
+  expect(seam.at).toBe(256)
+  snaps = dragSeam(snaps, seam.seam, 320, workbench)
   expect(snapBoxes(snaps, workbench).get('workflow')).toEqual({ left: 320, top: 0, width: 1120, height: 844 })
+})
+
+test('dragging the seam between two windows in a region moves only those two', () => {
+  let snaps = snap(emptySnaps(), 'files', 'left')
+  snaps = snap(snaps, 'runs', 'left', { id: 'files', side: 'bottom' })
+  snaps = snap(snaps, 'workflow', 'center')
+  const seam = seams(snaps, workbench).find((line) => line.seam.kind === 'split')!
+  expect(seam).toMatchObject({ axis: 'y', at: 422 })
+  snaps = dragSeam(snaps, seam.seam, 600, workbench)
+  const boxes = snapBoxes(snaps, workbench)
+  expect(boxes.get('files')!.height).toBe(600)
+  expect(boxes.get('runs')).toEqual({ left: 0, top: 600, width: 256, height: 244 })
+  expect(boxes.get('workflow')).toEqual({ left: 256, top: 0, width: 1184, height: 844 })
+})
+
+test('a seam stops where the windows beside it reach their minimum', () => {
+  let snaps = snap(emptySnaps(), 'files', 'left')
+  snaps = snap(snaps, 'workflow', 'center')
+  const seam = seams(snaps, workbench)[0]
+  snaps = dragSeam(snaps, seam.seam, 1400, workbench)
+  expect(snapBoxes(snaps, workbench).get('workflow')!.width).toBe(240)
 })
 
 test('an empty side takes no room', () => {

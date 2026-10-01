@@ -661,8 +661,25 @@
     width 120ms var(--motion-ease),
     height 120ms var(--motion-ease);
 }
-body[data-window-dragging] {
+/* A window's bars are its handle, not text: pressing them never starts a
+   selection (fields in them still take typing; Safari would block it). */
+.dockview-theme-giraf .dv-tabs-and-actions-container {
+  -webkit-user-select: none;
   user-select: none;
+}
+.dockview-theme-giraf
+  .dv-tabs-and-actions-container
+  :is(input, textarea, [contenteditable]) {
+  -webkit-user-select: text;
+  user-select: text;
+}
+/* While a window or a seam is dragged, nothing selects. */
+body[data-window-dragging],
+body[data-window-dragging] * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+body[data-window-dragging] {
   cursor: grabbing;
 }
 /* Over a docked window's top bar, a dragged window is offered the places
@@ -744,17 +761,54 @@ body[data-window-dragging] {
   border: 1px solid var(--border);
   pointer-events: none;
 }
-.dv-resize-container[data-snapped] :is(
-  .dv-resize-handle-topleft,
-  .dv-resize-handle-topright,
-  .dv-resize-handle-bottomleft,
-  .dv-resize-handle-bottomright
-),
-.dv-resize-container[data-snapped="left"] .dv-resize-handle-left,
-.dv-resize-container[data-snapped="right"] .dv-resize-handle-right,
-.dv-resize-container[data-snapped="bottom"] .dv-resize-handle-bottom,
-.dv-resize-container[data-snapped="center"] [class*="dv-resize-handle"] {
+/* Snapped windows lie under free ones, which float above them as on any
+   desktop, and under the seams between them (see SnapSeams.tsx); a
+   fullscreen window keeps dockview's own place on top. Their own resize
+   edges give way to the seams. */
+.dv-resize-container[data-snapped]:not(:has(.dv-groupview[data-fullscreen])) {
+  z-index: 900 !important;
+}
+.dv-resize-container[data-snapped] [class*="dv-resize-handle"] {
   display: none;
+}
+.snap-seams {
+  position: absolute;
+  inset: 0;
+  z-index: 950;
+  pointer-events: none;
+}
+.snap-seam {
+  position: absolute;
+  pointer-events: auto;
+  touch-action: none;
+}
+.snap-seam[data-axis="x"] {
+  cursor: col-resize;
+}
+.snap-seam[data-axis="y"] {
+  cursor: row-resize;
+}
+/* The line the seam drags lights up under the pointer and while held. */
+.snap-seam::after {
+  content: "";
+  position: absolute;
+  background: var(--ring);
+  opacity: 0;
+  transition: opacity var(--motion-quick) ease-out;
+}
+.snap-seam[data-axis="x"]::after {
+  inset: 0 calc(50% - 1px);
+}
+.snap-seam[data-axis="y"]::after {
+  inset: calc(50% - 1px) 0;
+}
+.snap-seam:hover::after,
+.snap-seam:active::after {
+  opacity: 1;
+  transition-delay: 120ms;
+}
+.snap-seam:active::after {
+  transition-delay: 0s;
 }
 
 /* Layout changes (see dock/transition.ts): a moved window opens out from

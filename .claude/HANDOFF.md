@@ -14,13 +14,15 @@
     나뉨). 옆 영역 크기는 px로 고정, 가운데가 차이를 받는다. 창이 다 떠난 옆 영역은 `held`로 자리를
     지키고(다른 창이 넓어지지 않음), 그쪽에 다시 붙거나 가운데를 채우면 풀린다. `tests/dock-layout.test.ts`.
   - `store.ts`: 모델을 떠 있는 그룹 상자에 적용(`layOut`), 창·탭·최소화·전체 화면·저장. 바뀌는 건 붙이기,
-    측면 토글, 작업대 크기 변화, 붙은 창 경계 끌기(`followResize`)뿐이고, 창이 떠나거나 닫히면 다른 창은
+    측면 토글, 작업대 크기 변화, 분할선 끌기(`moveSeam`)뿐이고, 창이 떠나거나 닫히면 다른 창은
     그대로. 닫은 창은 `places`의 마지막 자리로 다시 열린다. 전체 화면 중에는 저장하지 않는다.
   - `drag.ts`: 집으면 바로 떠 있는 창(`liftWindow`), 작업대 끝(6px, 위는 24px과 그 위 앱 막대 전체)에
     닿으면 그 영역에 붙기, 위 끝은 가운데 채우기(가운데에 창이 있으면 그 옆에 나란히), 위 끝은
     비어 있는 가운데를 채우기(전체 화면은 버튼으로만), 다른 창 위쪽 막대는 탭 합치기, 붙은 창 막대의
     배치 선택지(`DropPicker.tsx`)는 그 영역 안에서 나란히, Esc는 되돌리기. 미리보기는 `dropBox`로
-    실제 놓을 때와 같은 계산. 붙은 창의 dockview 크기 조절 손잡이를 끌면 이웃이 따라온다.
+    실제 놓을 때와 같은 계산.
+  - `SnapSeams.tsx`: 붙은 창 사이 경계마다 8px 분할선(`seams`/`dragSeam`, layout.ts). 붙은 창의 dockview
+    크기 조절 손잡이는 숨긴다(옆 창에 깔려 잡기 어려웠음). 층: 붙은 창 900, 분할선 950, 떠 있는 창 999+.
   - `transition.ts`: 배치 변화 애니메이션(틀은 창들 아래, 창은 clip-path로 펼쳐짐). store의 배치 동작은
     `animateLayout`으로 감싸고, 불러오기·프리셋은 `quietly`.
   - `motion.ts`: 탭 모핑과 배치 애니메이션이 함께 쓰는 길이·곡선.
@@ -40,7 +42,7 @@
 - 인앱 브라우저 창이 가려져 있으면 `document.timeline`, rAF, ResizeObserver가 멈추고 스크린샷도 옛 화면이다.
   애니메이션은 `Animation.currentTime`을 옮겨 가며, 레이아웃은 수치로 확인한다. 작업대 크기 변화는
   `api.layout(w, h)` 뒤 `followLayout()`을 불러 흉내 내고, 떠 있는 그룹 안쪽 배치도 멈춰 있으니 시험할
-  때는 그룹마다 상자 크기로 `group.api.setSize`를 불러 준다. 배치 애니메이션의 정리는 타이머라 계속 돈다.
+  때는 그룹마다 상자 크기로 `group.api.setSize`를 불러 준다. 가짜 포인터는 `setPointerCapture`가 실패한다. 배치 애니메이션의 정리는 타이머라 계속 돈다.
 - store 모듈은 HMR 뒤 인스턴스가 갈리니 새로고침 후 `performance.getEntriesByType('resource')`에서 `store.ts` URL을 찾아 `import()`.
 
 ## 남은 일

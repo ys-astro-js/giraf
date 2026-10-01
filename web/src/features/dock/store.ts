@@ -9,11 +9,12 @@ import { buildPreset, type PresetId } from "./presets"
 import { recordBars } from "./morph"
 import { animateLayout, quietly } from "./transition"
 import {
+  dragSeam,
   EDGES,
   emptySnaps,
   readSnaps,
   regionOf,
-  resized,
+  seams,
   setHidden,
   sidesBeside,
   snap,
@@ -22,6 +23,7 @@ import {
   type Box,
   type Edge,
   type Region,
+  type Seam,
   type Side,
   type Snaps,
 } from "./layout"
@@ -274,18 +276,33 @@ export function followLayout() {
   if (size.width === laidOut.width && size.height === laidOut.height) return
   laidOut = size
   layOut()
+  // The seams between snapped windows move with them.
+  useDock.setState((state) => ({ revision: state.revision + 1 }))
 }
 
+/** The seams between the snapped windows now, in workbench coordinates. */
+export const currentSeams = () =>
+  useDock.getState().maximized ? [] : seams(snaps(), workbench())
+
 /**
- * Follows the user resizing a snapped window by an edge: its side's size
- * or its share of its region follows, and the snapped windows around it
- * make room.
+ * Moves a seam to a viewport point: the snapped windows on both sides of
+ * it follow at once.
  */
-export function followResize(group: DockviewGroupPanel) {
-  const box = boxOf(group)
-  if (!box || !isSnapped(group)) return
-  useDock.setState({ snaps: resized(snaps(), group.id, box, workbench()) })
+export function moveSeam(seam: Seam, x: number, y: number, axis: "x" | "y") {
+  const root = dockRoot()?.getBoundingClientRect()
+  if (!root) return
+  const at = axis === "x" ? x - root.left : y - root.top
+  useDock.setState((state) => ({
+    snaps: dragSeam(state.snaps, seam, at, workbench()),
+    revision: state.revision + 1,
+  }))
   layOut()
+}
+
+/** Keeps the arrangement a seam drag left. */
+export function settleSeam() {
+  syncDock()
+  saveLayout()
 }
 
 /* Opening windows: a window opens where it was when it closed, else it

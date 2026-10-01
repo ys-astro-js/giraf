@@ -5,7 +5,6 @@ import { EASE } from "./motion"
 import {
   dockRoot,
   dropBox,
-  followResize,
   isSnapped,
   landWindow,
   liftTab,
@@ -183,17 +182,17 @@ function track(
     end: () => void
     cancel: () => void
   },
-  threshold = DRAG_THRESHOLD,
-  capture = true
+  threshold = DRAG_THRESHOLD
 ) {
   let started = false
-  const root = capture ? dockRoot() : null
+  const root = dockRoot()
   function move(event: PointerEvent) {
     const point = { x: event.clientX, y: event.clientY }
     if (!started) {
       if (Math.hypot(point.x - from.x, point.y - from.y) < threshold) return
       started = true
       document.body.dataset.windowDragging = "true"
+      window.getSelection()?.removeAllRanges()
       try {
         root?.setPointerCapture(from.pointerId)
       } catch {
@@ -326,25 +325,6 @@ function reorder(panel: IDockviewPanel, x: number) {
   })
 }
 
-/**
- * Resizing a snapped window by an edge (dockview's own handles move the
- * edge): the snapped windows around it follow as the pointer moves.
- */
-function startResize(group: DockviewGroupPanel, from: Start) {
-  // While the pointer moves, once a frame; on release, at once.
-  let frame = 0
-  const move = () => {
-    cancelAnimationFrame(frame)
-    frame = requestAnimationFrame(() => followResize(group))
-  }
-  const done = () => {
-    cancelAnimationFrame(frame)
-    followResize(group)
-  }
-  // dockview's handle drives the edge; capturing here would take its pointer.
-  track(from, { move, end: done, cancel: done }, 0, false)
-}
-
 /** Controls in a header keep the pointer; the rest of it is a handle. */
 const CONTROLS =
   "button, input, select, textarea, a, [role='button'], [contenteditable]"
@@ -352,7 +332,6 @@ const CONTROLS =
 /**
  * The window header is the handle: its clear toolbar row and tab bar move
  * the window, a tab among others moves that tab. Controls keep their clicks.
- * A snapped window's resize edges move its neighbors with it.
  */
 export function headerPointerDown(event: PointerEvent) {
   if (event.button !== 0) return
@@ -362,13 +341,6 @@ export function headerPointerDown(event: PointerEvent) {
     x: event.clientX,
     y: event.clientY,
     pointerId: event.pointerId,
-  }
-  const handle = target.closest("[class*='dv-resize-handle']")
-  if (handle) {
-    const container = handle.closest(".dv-resize-container")
-    const group = dock?.groups.find((g) => container?.contains(g.element))
-    if (group && isSnapped(group)) startResize(group, from)
-    return
   }
   const header = target.closest(".dv-tabs-and-actions-container")
   if (!header || target.closest(CONTROLS)) return

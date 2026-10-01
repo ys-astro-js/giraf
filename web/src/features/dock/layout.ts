@@ -244,36 +244,130 @@ export function snapBoxes(snaps: Snaps, size: Size): Map<string, Box> {
 }
 
 /**
- * Takes a snapped window's box after the user resized it by an edge: its
- * side's size follows the edge facing the center, and its share follows
- * the edge facing its neighbor in the region.
+ * A boundary between snapped windows that the user can drag: a side's
+ * inner edge (its size), or the line between two windows sharing a region
+ * (their shares).
  */
-export function resized(snaps: Snaps, id: string, box: Box, size: Size): Snaps {
-  const region = regionOf(snaps, id)
-  if (!region) return snaps
-  const next = copy(snaps)
-  if (region === "left" || region === "right")
-    next.sizes[region] = Math.max(MIN.width, Math.round(box.width))
-  if (region === "bottom")
-    next.sizes.bottom = Math.max(MIN.height, Math.round(box.height))
-  const ids = next.regions[region]
-  if (ids.length > 1) {
-    const regionBox = regionBoxes(next, size)[region]
-    const axis = axisOf(next, region)
-    const length = axis === "row" ? regionBox.width : regionBox.height
-    const own = axis === "row" ? box.width : box.height
-    const index = ids.indexOf(id)
-    const neighbor = index < ids.length - 1 ? index + 1 : index - 1
-    const fractions = next.fractions[region]
-    const total = fractions.reduce((sum, f) => sum + f, 0) || 1
-    const pair = fractions[index] + fractions[neighbor]
-    const wanted = (Math.max(MIN.height, own) / length) * total
-    fractions[index] = Math.min(
-      Math.max(wanted, 0.05 * total),
-      pair - 0.05 * total
+export type Seam =
+  | { kind: "side"; edge: Edge }
+  | { kind: "split"; region: Region; index: number }
+
+/** Where a seam lies: along x (a vertical line) or y, from `from` to `to`. */
+export type SeamLine = {
+  seam: Seam
+  axis: "x" | "y"
+  at: number
+  from: number
+  to: number
+}
+
+/** Every seam between the shown snapped windows, in workbench coordinates. */
+export function seams(snaps: Snaps, size: Size): SeamLine[] {
+  const boxes = regionBoxes(snaps, size)
+  const result: SeamLine[] = []
+  const filled = (edge: Edge) =>
+    snaps.regions[edge].length > 0 && !snaps.hidden[edge]
+  if (filled("left"))
+    result.push({
+      seam: { kind: "side", edge: "left" },
+      axis: "x",
+      at: boxes.left.width,
+      from: 0,
+      to: size.height,
+    })
+  if (filled("right"))
+    result.push({
+      seam: { kind: "side", edge: "right" },
+      axis: "x",
+      at: boxes.right.left,
+      from: 0,
+      to: size.height,
+    })
+  if (filled("bottom"))
+    result.push({
+      seam: { kind: "side", edge: "bottom" },
+      axis: "y",
+      at: boxes.bottom.top,
+      from: boxes.bottom.left,
+      to: boxes.bottom.left + boxes.bottom.width,
+    })
+  for (const region of REGIONS) {
+    if (region !== "center" && snaps.hidden[region]) continue
+    const fractions = snaps.fractions[region]
+    if (fractions.length < 2) continue
+    const axis = axisOf(snaps, region)
+    const parts = share(boxes[region], fractions, axis)
+    parts.slice(0, -1).forEach((box, index) =>
+      result.push(
+        axis === "row"
+          ? {
+              seam: { kind: "split", region, index },
+              axis: "x",
+              at: box.left + box.width,
+              from: box.top,
+              to: box.top + box.height,
+            }
+          : {
+              seam: { kind: "split", region, index },
+              axis: "y",
+              at: box.top + box.height,
+              from: box.left,
+              to: box.left + box.width,
+            }
+      )
     )
-    fractions[neighbor] = pair - fractions[index]
   }
+  return result
+}
+
+/**
+ * Moves a seam to a point along its axis (workbench coordinates): a side's
+ * size, or the shares of the two windows it divides, within the minimums.
+ */
+export function dragSeam(
+  snaps: Snaps,
+  seam: Seam,
+  at: number,
+  size: Size
+): Snaps {
+  const next = copy(snaps)
+  const clamp = (value: number, low: number, high: number) =>
+    Math.round(Math.min(Math.max(value, low), Math.max(low, high)))
+  if (seam.kind === "side") {
+    const { left, right } = fitted(next, size)
+    if (seam.edge === "left")
+      next.sizes.left = clamp(
+        at,
+        MIN.width,
+        size.width - MIN_CENTER.width - right
+      )
+    else if (seam.edge === "right")
+      next.sizes.right = clamp(
+        size.width - at,
+        MIN.width,
+        size.width - MIN_CENTER.width - left
+      )
+    else
+      next.sizes.bottom = clamp(
+        size.height - at,
+        MIN.height,
+        size.height - MIN_CENTER.height
+      )
+    return next
+  }
+  const box = regionBoxes(next, size)[seam.region]
+  const axis = axisOf(next, seam.region)
+  const start = axis === "row" ? box.left : box.top
+  const length = axis === "row" ? box.width : box.height
+  const fractions = next.fractions[seam.region]
+  const total = fractions.reduce((sum, f) => sum + f, 0) || 1
+  const i = seam.index
+  const before = fractions.slice(0, i).reduce((sum, f) => sum + f, 0)
+  const pair = fractions[i] + fractions[i + 1]
+  const least = ((axis === "row" ? MIN.width : MIN.height) / length) * total
+  const wanted = ((at - start) / length) * total - before
+  fractions[i] = Math.min(Math.max(wanted, least), pair - least)
+  fractions[i + 1] = pair - fractions[i]
   return next
 }
 
