@@ -639,20 +639,17 @@
 .dv-resize-container .dv-resize-handle-topright { top: -6px; right: -6px; }
 .dv-resize-container .dv-resize-handle-bottomleft { bottom: -6px; left: -6px; }
 .dv-resize-container .dv-resize-handle-bottomright { bottom: -6px; right: -6px; }
-/* Splitters between docked windows take the pointer a few pixels either side. */
-.dockview-theme-giraf .dv-sash::after { content: ""; position: absolute; }
-.dockview-theme-giraf .dv-horizontal > .dv-sash-container > .dv-sash::after { inset: 0 -4px; }
-.dockview-theme-giraf .dv-vertical > .dv-sash-container > .dv-sash::after { inset: -4px 0; }
-
 /* A minimized floating window is hidden in place. */
 .dv-resize-container[hidden] {
   display: none !important;
 }
 
 /* Moving a window: the area it would dock into. */
+/* Above floating windows (dockview stacks them from 999), below only the
+   one being dragged, which is the topmost (1001). */
 .dock-drop-preview {
   position: fixed;
-  z-index: 60;
+  z-index: 1000;
   pointer-events: none;
   border-radius: 12px;
   background: color-mix(in oklch, var(--primary) 12%, transparent);
@@ -668,43 +665,96 @@ body[data-window-dragging] {
   user-select: none;
   cursor: grabbing;
 }
-/* The dragged window stays dimmed in its place; the layout holds still
-   (see dock/drag.ts). */
-.dv-groupview[data-dragging],
-.dv-tab[data-dragging] {
-  opacity: 0.45;
-  transition: opacity var(--motion-quick) ease-out;
-}
-/* The stand-in that follows the pointer is the window as it would float:
-   see-through while it may snap, solid when Shift makes it float. */
-.dock-drag-ghost {
+/* Over a docked window's top bar, a dragged window is offered the places
+   beside it (see dock/DropPicker.tsx): a toolbar capsule at the bar's
+   trailing end, in the toolbar row, covering that window's own controls
+   while the drag lasts. Pointer events pass through; drag.ts hit-tests. */
+.dock-drop-picker {
   position: fixed;
-  z-index: 61;
-  box-sizing: border-box;
-  pointer-events: none;
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  background: var(--glass-background);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
-  box-shadow: 0 16px 48px rgb(0 0 0 / 0.18), 0 2px 8px rgb(0 0 0 / 0.08);
-  opacity: 0.75;
-  transition: opacity var(--motion-quick) ease-out;
-}
-.dock-drag-ghost[data-floating="true"] {
-  opacity: 1;
-}
-.dock-drag-ghost-title {
-  position: absolute;
-  inset: var(--window-inset) 16px auto;
+  z-index: 1000;
   display: flex;
   align-items: center;
-  height: var(--window-toolbar);
-  overflow: hidden;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  height: calc(var(--window-toolbar) + var(--window-inset) * 2);
+  padding-inline-end: var(--window-inset);
+  pointer-events: none;
+  animation: dock-picker-in var(--motion-quick) ease-out;
+}
+.dock-drop-picker > .toolbar-group {
+  background: var(--glass-background);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12), 0 1px 3px rgb(0 0 0 / 0.08);
+}
+.dock-drop-picker-button {
+  display: grid;
+  place-items: center;
+  width: calc(var(--window-toolbar) - 6px);
+  height: calc(var(--window-toolbar) - 6px);
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  transition:
+    background-color var(--motion-quick) ease-out,
+    color var(--motion-quick) ease-out;
+}
+.dock-drop-picker-button svg {
+  width: 18px;
+  height: 18px;
+}
+.dock-drop-picker-button[aria-pressed="true"] {
+  background: var(--selection);
+  color: var(--selection-foreground);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dock-drop-picker {
+    animation-name: none;
+  }
+}
+@keyframes dock-picker-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    transform: scale(0.96);
+  }
+}
+
+/* The desktop: the workbench itself, under every window (see store.ts). */
+.dock-root {
+  background: color-mix(in oklch, var(--muted) 55%, var(--background));
+}
+
+/* A snapped window sits flush in its box like a pane: square, no shadow,
+   no size floor of its own (the snap model keeps the minimums), and the
+   same hairline border on all four sides as every other snapped window,
+   drawn over its contents; neighbors share one line (see tiles in
+   store.ts). Its resize edges facing the workbench's own edges do nothing,
+   so they are not offered. */
+.dv-resize-container[data-snapped] {
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.dv-resize-container[data-snapped] > .dv-grid-view {
+  border-radius: 0;
+}
+.dv-resize-container[data-snapped]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border: 1px solid var(--border);
+  pointer-events: none;
+}
+.dv-resize-container[data-snapped] :is(
+  .dv-resize-handle-topleft,
+  .dv-resize-handle-topright,
+  .dv-resize-handle-bottomleft,
+  .dv-resize-handle-bottomright
+),
+.dv-resize-container[data-snapped="left"] .dv-resize-handle-left,
+.dv-resize-container[data-snapped="right"] .dv-resize-handle-right,
+.dv-resize-container[data-snapped="bottom"] .dv-resize-handle-bottom,
+.dv-resize-container[data-snapped="center"] [class*="dv-resize-handle"] {
+  display: none;
 }
 
 /* Layout changes (see dock/transition.ts): a moved window opens out from
@@ -713,9 +763,9 @@ body[data-window-dragging] {
 [data-layout-moving] {
   opacity: 0;
 }
-/* The frames lie beneath the windows: the grid paints no background of its
-   own (each window paints its own), and the workbench keeps the layer's
-   negative z-index inside it. */
+/* The frames lie beneath the windows: the empty grid paints no background
+   over the desktop, and the workbench keeps the layer's negative z-index
+   inside it. */
 .dock-root {
   isolation: isolate;
 }

@@ -1,147 +1,126 @@
+import { create } from "zustand"
 import type { DockviewGroupPanel, IDockviewPanel } from "dockview-react"
 import { recordBars } from "./morph"
 import { EASE } from "./motion"
 import {
   dockRoot,
-  dockSource,
-  floatingSize,
-  floatSource,
-  holdFloating,
-  isFloating,
-  moveFloating,
-  toggleMaximized,
+  dropBox,
+  followResize,
+  isSnapped,
+  landWindow,
+  liftTab,
+  liftWindow,
+  moveWindow,
+  returnWindow,
+  sidesOf,
   useDock,
-  type DragSource,
-  type DropPosition,
   type DropTarget,
+  type Grip,
+  type Region,
+  type Side,
 } from "./store"
 
 /*
- * Moving windows by zones. While a window is dragged the layout holds
- * still: the window stays, dimmed, in its place, and a stand-in follows the
- * pointer (a floating window simply moves). The window under the pointer is
- * the target: its middle joins its tabs, the rest of it places the dragged
- * window beside it on the nearest side, and a band along the workbench's
- * own edges docks along that whole side. A new target takes over only once
- * the pointer rests on it, so passing over windows does not flicker.
- * Holding Shift drops a floating window; releasing with no target, or
- * pressing Escape, puts the window back.
+ * Moving windows the way desktop systems do. A window picked up is a free
+ * window under the pointer; a snapped one leaves its place, and nothing
+ * else moves. Released anywhere, it stays there. It snaps only where the
+ * pointer itself touches: an edge of the workbench snaps it along that
+ * side, the top edge into the space the snapped sides leave, another
+ * window's top bar takes it in as a tab, and the placement picker that a
+ * snapped window's bar then shows places it beside that window. Escape
+ * puts it back. The preview shows the very box the drop gives.
  */
 
 const DRAG_THRESHOLD = 4
 /** How far a tab leaves its strip before it becomes a window of its own. */
 const DETACH_DISTANCE = 16
-/** How close to the workbench's border a drop docks along that whole side. */
-const EDGE_BAND = 24
-/** A window's middle, as a share of its width and height, joins its tabs. */
-const MERGE_ZONE = 0.4
-/** How long the pointer rests on a new target before it takes over. */
-const DWELL = 140
-/** How much of the workbench a drop along one of its sides would take, at most. */
-const EDGE_PREVIEW = { width: 320, height: 240 }
+/** How close the pointer must come to the workbench's edge to snap there. */
+const EDGE = 6
+/**
+ * The workbench's top edge is not the screen's, where a pointer would come
+ * to rest: it borders the app's own bar. So anywhere over that bar, or this
+ * close below it, counts as the top edge.
+ */
+const TOP_EDGE = 24
 
 type Point = { x: number; y: number }
+type Start = Point & { pointerId: number }
 
 /**
- * The window drawn topmost at a point: floating windows cover docked ones,
- * and later-focused floats the rest. A window being dragged whole is not
- * a place to drop it.
+ * The placement picker a snapped window's top bar shows while a window is
+ * dragged over it, the sides it offers, and the one the pointer is on.
  */
-function windowAt(x: number, y: number, dragged?: DockviewGroupPanel) {
+export const usePicker = create<{
+  group?: string
+  sides: Side[]
+  side?: Side
+}>()(() => ({ sides: [] }))
+
+/**
+ * The window drawn topmost at a point, other than the one being dragged:
+ * later-focused windows cover the others.
+ */
+function windowAt(x: number, y: number, dragged: DockviewGroupPanel) {
   const dock = useDock.getState().api
   if (!dock) return
   for (const element of document.elementsFromPoint(x, y)) {
-    if (dragged?.element.contains(element)) continue
+    if (dragged.element.contains(element)) continue
     const group = dock.groups.find((g) => g.element.contains(element))
     if (group) return group
   }
 }
 
-/** Where a drag released at a point would land, if anywhere. */
+/** The picker button under a point, if the picker is showing. */
+function pickedSide(x: number, y: number) {
+  for (const button of document.querySelectorAll<HTMLElement>(
+    ".dock-drop-picker [data-side]"
+  )) {
+    const rect = button.getBoundingClientRect()
+    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)
+      return button.dataset.side as Side
+  }
+}
+
+/** The region a snapped window is in. */
+function regionOfGroup(group: DockviewGroupPanel) {
+  const { regions } = useDock.getState().snaps
+  return (Object.keys(regions) as Region[]).find((region) =>
+    regions[region].includes(group.id)
+  )
+}
+
+/** Where a window released at a point would land, if anywhere. */
 function targetAt(
   x: number,
   y: number,
-  source: DragSource
+  dragged: DockviewGroupPanel
 ): DropTarget | undefined {
   const box = dockRoot()?.getBoundingClientRect()
   if (!box) return
-  const group = windowAt(x, y, source.panel ? undefined : source.group)
-  // A tab may split its own window, but joining it changes nothing.
-  const self = group === source.group
-  // A floating window holds one group: it only takes tabs.
-  if (group && isFloating(group))
-    return self ? undefined : { kind: "group", group, position: "center" }
-  if (x - box.left < EDGE_BAND) return { kind: "edge", edge: "left" }
-  if (box.right - x < EDGE_BAND) return { kind: "edge", edge: "right" }
-  if (box.bottom - y < EDGE_BAND) return { kind: "edge", edge: "bottom" }
+  if (x <= box.left + EDGE) return { kind: "snap", region: "left" }
+  if (x >= box.right - EDGE) return { kind: "snap", region: "right" }
+  if (y >= box.bottom - EDGE) return { kind: "snap", region: "bottom" }
+  // The top edge fills the center; a center already holding a window takes
+  // the dragged one beside it, so the edge always does something.
+  if (y <= box.top + TOP_EDGE) return { kind: "snap", region: "center" }
+  const group = windowAt(x, y, dragged)
   if (!group) return
   if (useDock.getState().minimized.some((m) => m.group === group.id)) return
-  const rect = group.element.getBoundingClientRect()
-  const u = (x - rect.left) / rect.width
-  const v = (y - rect.top) / rect.height
-  const inset = (1 - MERGE_ZONE) / 2
-  if (u > inset && u < 1 - inset && v > inset && v < 1 - inset)
-    return self ? undefined : { kind: "group", group, position: "center" }
-  const sides: [DropPosition, number][] = [
-    ["left", u],
-    ["right", 1 - u],
-    ["top", v],
-    ["bottom", 1 - v],
-  ]
-  const [side] = sides.sort((a, b) => a[1] - b[1])[0]
-  return { kind: "group", group, position: side }
-}
-
-const targetKey = (target?: DropTarget) =>
-  !target
-    ? ""
-    : target.kind === "edge"
-      ? `edge:${target.edge}`
-      : `${target.group.id}:${target.position}`
-
-type Area = { left: number; top: number; width: number; height: number }
-
-/** A plain copy: a DOMRect's fields are getters that spreading drops. */
-const areaOf = ({ left, top, width, height }: DOMRect): Area => ({
-  left,
-  top,
-  width,
-  height,
-})
-
-/** The part of an area along one side, `width` or `height` across. */
-function along(area: Area, side: DropPosition, width: number, height: number) {
-  switch (side) {
-    case "left":
-      return { ...area, width }
-    case "right":
-      return { ...area, left: area.left + area.width - width, width }
-    case "top":
-      return { ...area, height }
-    case "bottom":
-      return { ...area, top: area.top + area.height - height, height }
-    case "center":
-      return area
-  }
-}
-
-/** The area a drop target would take, in viewport pixels. */
-function dropPreview(target: DropTarget): Area | undefined {
-  if (target.kind === "edge") {
-    const box = dockRoot()?.getBoundingClientRect()
-    if (!box) return
-    const width = Math.min(EDGE_PREVIEW.width, box.width / 3)
-    const height = Math.min(EDGE_PREVIEW.height, box.height / 3)
-    return along(areaOf(box), target.edge, width, height)
-  }
-  const rect = target.group.element.getBoundingClientRect()
-  return along(areaOf(rect), target.position, rect.width / 2, rect.height / 2)
+  const header = group.element
+    .querySelector(".dv-tabs-and-actions-container")
+    ?.getBoundingClientRect()
+  if (!header || y > header.bottom) return
+  const region = regionOfGroup(group)
+  const side = region ? pickedSide(x, y) : undefined
+  if (region && side && sidesOf(group).includes(side))
+    return { kind: "snap", region, beside: { id: group.id, side } }
+  return { kind: "merge", group }
 }
 
 /** The translucent area a released window would take. */
-function showPreview(target: DropTarget | undefined) {
+function showPreview(dragged: DockviewGroupPanel, target?: DropTarget) {
   let element = document.querySelector<HTMLElement>(".dock-drop-preview")
-  const box = target && dropPreview(target)
+  const box = target && dropBox(dragged, target)
   if (!box) {
     element?.remove()
     return
@@ -159,68 +138,83 @@ function showPreview(target: DropTarget | undefined) {
   })
 }
 
-/** The stand-in that follows the pointer: the window as it would float. */
-function createGhost(title: string, size: { width: number; height: number }) {
-  const element = document.createElement("div")
-  element.className = "dock-drag-ghost"
-  element.style.width = `${size.width}px`
-  element.style.height = `${size.height}px`
-  const label = document.createElement("span")
-  label.className = "dock-drag-ghost-title"
-  label.textContent = title
-  element.append(label)
-  document.body.append(element)
-  return element
+/** Shows the picker on the snapped window whose top bar the pointer is on. */
+function showPicker(target?: DropTarget) {
+  const dock = useDock.getState().api
+  const over =
+    target?.kind === "merge"
+      ? target.group
+      : target?.kind === "snap" && target.beside
+        ? (dock?.getGroup(target.beside.id) as DockviewGroupPanel | undefined)
+        : undefined
+  const group = over && isSnapped(over) ? over : undefined
+  usePicker.setState({
+    group: group?.id,
+    sides: group ? sidesOf(group) : [],
+    side: target?.kind === "snap" ? target.beside?.side : undefined,
+  })
 }
 
-/** The element a drag dims in place: the window, or the pulled tab. */
-function dimmed(source: DragSource) {
-  if (!source.panel) return source.group.element
-  return source.group.element
-    .querySelector(`[data-panel-id="${CSS.escape(source.panel.id)}"]`)
-    ?.closest<HTMLElement>(".dv-tab")
+/** A window just picked up settles under the pointer from where it was. */
+function settleLifted(grip: Grip) {
+  const box = grip.window.element.closest<HTMLElement>(".dv-resize-container")
+  if (!box || !grip.before) return
+  box.style.transformOrigin = `${grip.dx}px ${grip.dy}px`
+  box.animate(
+    [
+      { transform: "scale(1.04)", opacity: 0.85 },
+      { transform: "none", opacity: 1 },
+    ],
+    { duration: 180, easing: EASE }
+  )
 }
 
 /**
  * Tracks one pointer drag on window listeners, since the element that
- * started it may leave the page. Shift and Escape count while it runs.
+ * started it may leave the page. Once it starts, the workbench captures the
+ * pointer, so a drag that strays past the page's edge (as toward the top
+ * edge) keeps reporting, as browsers otherwise stop (Safari). Escape
+ * cancels it.
  */
 function track(
-  from: Point,
+  from: Start,
   handlers: {
-    start: () => void
-    move: (point: Point, shift: boolean) => void
+    move: (point: Point) => void
     end: () => void
     cancel: () => void
-  }
+  },
+  threshold = DRAG_THRESHOLD,
+  capture = true
 ) {
   let started = false
-  let point = from
+  const root = capture ? dockRoot() : null
   function move(event: PointerEvent) {
-    point = { x: event.clientX, y: event.clientY }
+    const point = { x: event.clientX, y: event.clientY }
     if (!started) {
-      if (Math.hypot(point.x - from.x, point.y - from.y) < DRAG_THRESHOLD)
-        return
+      if (Math.hypot(point.x - from.x, point.y - from.y) < threshold) return
       started = true
       document.body.dataset.windowDragging = "true"
-      handlers.start()
+      try {
+        root?.setPointerCapture(from.pointerId)
+      } catch {
+        // A pointer that already ended cannot be captured; the drag goes on.
+      }
     }
-    handlers.move(point, event.shiftKey)
+    handlers.move(point)
   }
   function key(event: KeyboardEvent) {
-    if (!started) return
-    if (event.key === "Escape") {
-      event.preventDefault()
-      stop()
-      handlers.cancel()
-    } else if (event.key === "Shift") handlers.move(point, event.shiftKey)
+    if (!started || event.key !== "Escape") return
+    event.preventDefault()
+    stop()
+    handlers.cancel()
   }
   function stop() {
+    if (root?.hasPointerCapture(from.pointerId))
+      root.releasePointerCapture(from.pointerId)
     window.removeEventListener("pointermove", move)
     window.removeEventListener("pointerup", end)
     window.removeEventListener("pointercancel", cancel)
     window.removeEventListener("keydown", key, true)
-    window.removeEventListener("keyup", key, true)
     delete document.body.dataset.windowDragging
   }
   function end() {
@@ -235,141 +229,59 @@ function track(
   window.addEventListener("pointerup", end)
   window.addEventListener("pointercancel", cancel)
   window.addEventListener("keydown", key, true)
-  window.addEventListener("keyup", key, true)
 }
 
-/**
- * One drag of a window or tab, from the point it was grabbed: follows the
- * pointer, settles on targets, and lands, floats or goes back on release.
- */
-function drag(source: DragSource, from: Point) {
-  const floating = !source.panel && isFloating(source.group)
-  if (!floating && useDock.getState().maximized === source.group.id)
-    toggleMaximized(source.group)
-  const rect = source.group.element.getBoundingClientRect()
-  const size = floatingSize(rect)
-  // The grabbed point keeps its share of the width as the window shrinks.
-  const grip = source.panel
-    ? { dx: 64, dy: 20 }
-    : {
-        dx: Math.min(
-          ((from.x - rect.left) / Math.max(rect.width, 1)) * size.width,
-          size.width - 16
-        ),
-        dy: Math.min(from.y - rect.top, 32),
-      }
-  const held = floating ? holdFloating(source.group, from.x, from.y) : undefined
-  const title = (source.panel ?? source.group.activePanel)?.title ?? ""
-  const ghost = floating ? undefined : createGhost(title, size)
-  const dim = dimmed(source)
-  if (dim) dim.dataset.dragging = ""
-
-  let point = from
-  let shift = false
+/** Moves a picked-up window with the pointer and lands it on release. */
+function follow(grip: Grip) {
   let target: DropTarget | undefined
-  let candidate: { key: string; target?: DropTarget; since: number } | undefined
-  let timer = 0
-
-  function settle() {
-    window.clearTimeout(timer)
-    const next = shift ? undefined : targetAt(point.x, point.y, source)
-    const key = targetKey(next)
-    if (shift || key === targetKey(target)) {
-      target = next
-      candidate = undefined
-    } else if (candidate?.key !== key) {
-      candidate = { key, target: next, since: performance.now() }
-      timer = window.setTimeout(settle, DWELL)
-    } else if (performance.now() - candidate.since >= DWELL) {
-      target = candidate.target
-      candidate = undefined
-    } else timer = window.setTimeout(settle, DWELL)
-    showPreview(target)
-    if (ghost) ghost.dataset.floating = shift ? "true" : "false"
+  const clear = () => {
+    showPreview(grip.window)
+    showPicker()
   }
-
-  function finish() {
-    window.clearTimeout(timer)
-    showPreview(undefined)
-    if (dim) delete dim.dataset.dragging
-  }
-
-  /** The ghost leaves where it is, or flies back to where it came from. */
-  function dismissGhost(back: boolean) {
-    if (!ghost) return
-    const home = dim?.getBoundingClientRect()
-    const frames: Keyframe[] =
-      back && home
-        ? [
-            { opacity: 1 },
-            {
-              opacity: 0,
-              left: `${home.left}px`,
-              top: `${home.top}px`,
-              width: `${home.width}px`,
-              height: `${home.height}px`,
-            },
-          ]
-        : [{ opacity: 1 }, { opacity: 0 }]
-    const duration = back ? 240 : 120
-    ghost.animate(frames, {
-      duration,
-      easing: back ? EASE : "ease-out",
-      fill: "forwards",
-    })
-    window.setTimeout(() => ghost.remove(), duration + 30)
-  }
-
   return {
-    move(next: Point, withShift: boolean) {
-      point = next
-      shift = withShift
-      if (held) moveFloating(held, point.x, point.y)
-      if (ghost) {
-        ghost.style.left = `${point.x - grip.dx}px`
-        ghost.style.top = `${point.y - grip.dy}px`
-      }
-      settle()
+    move(point: Point) {
+      moveWindow(grip, point.x, point.y)
+      target = targetAt(point.x, point.y, grip.window)
+      showPreview(grip.window, target)
+      showPicker(target)
     },
     end() {
-      finish()
-      if (target) {
-        dismissGhost(false)
-        dockSource(source, target)
-      } else if (!floating && shift) {
-        dismissGhost(false)
-        floatSource(source, point.x - grip.dx, point.y - grip.dy, size)
-      } else dismissGhost(true)
+      clear()
+      if (target) landWindow(grip.window, target)
     },
     cancel() {
-      finish()
-      if (held) moveFloating(held, from.x, from.y)
-      dismissGhost(true)
+      clear()
+      returnWindow(grip)
     },
   }
 }
 
-/** Drags a whole window to a place in the layout, or floats it. */
-export function startWindowDrag(group: DockviewGroupPanel, from: Point) {
-  let moving: ReturnType<typeof drag> | undefined
+/** Drags a whole window: a snapped one is picked up out of its place. */
+export function startWindowDrag(group: DockviewGroupPanel, from: Start) {
+  let moving: ReturnType<typeof follow> | undefined
   track(from, {
-    start: () => (moving = drag({ group }, from)),
-    move: (point, shift) => moving?.move(point, shift),
+    move(point) {
+      if (!moving) {
+        const grip = liftWindow(group, from.x, from.y)
+        settleLifted(grip)
+        moving = follow(grip)
+      }
+      moving.move(point)
+    },
     end: () => moving?.end(),
     cancel: () => moving?.cancel(),
   })
 }
 
 /**
- * Drags one tab: along its strip it reorders; pulled away it moves like a
- * window of its own.
+ * Drags one tab: along its strip it reorders; pulled away it becomes a
+ * free window of its own that moves like any other.
  */
-export function startTabDrag(panel: IDockviewPanel, from: Point) {
+export function startTabDrag(panel: IDockviewPanel, from: Start) {
   const group = panel.group
-  let moving: ReturnType<typeof drag> | undefined
+  let moving: ReturnType<typeof follow> | undefined
   track(from, {
-    start: () => {},
-    move(point, shift) {
+    move(point) {
       if (!moving) {
         const strip = group.element
           .querySelector(".dv-tabs-and-actions-container")
@@ -384,9 +296,9 @@ export function startTabDrag(panel: IDockviewPanel, from: Point) {
           reorder(panel, point.x)
           return
         }
-        moving = drag({ group, panel }, point)
+        moving = follow(liftTab(panel, point.x, point.y))
       }
-      moving.move(point, shift)
+      moving.move(point)
     },
     end: () => moving?.end(),
     cancel: () => moving?.cancel(),
@@ -414,6 +326,25 @@ function reorder(panel: IDockviewPanel, x: number) {
   })
 }
 
+/**
+ * Resizing a snapped window by an edge (dockview's own handles move the
+ * edge): the snapped windows around it follow as the pointer moves.
+ */
+function startResize(group: DockviewGroupPanel, from: Start) {
+  // While the pointer moves, once a frame; on release, at once.
+  let frame = 0
+  const move = () => {
+    cancelAnimationFrame(frame)
+    frame = requestAnimationFrame(() => followResize(group))
+  }
+  const done = () => {
+    cancelAnimationFrame(frame)
+    followResize(group)
+  }
+  // dockview's handle drives the edge; capturing here would take its pointer.
+  track(from, { move, end: done, cancel: done }, 0, false)
+}
+
 /** Controls in a header keep the pointer; the rest of it is a handle. */
 const CONTROLS =
   "button, input, select, textarea, a, [role='button'], [contenteditable]"
@@ -421,20 +352,32 @@ const CONTROLS =
 /**
  * The window header is the handle: its clear toolbar row and tab bar move
  * the window, a tab among others moves that tab. Controls keep their clicks.
+ * A snapped window's resize edges move its neighbors with it.
  */
 export function headerPointerDown(event: PointerEvent) {
   if (event.button !== 0) return
   const target = event.target as HTMLElement
+  const dock = useDock.getState().api
+  const from = {
+    x: event.clientX,
+    y: event.clientY,
+    pointerId: event.pointerId,
+  }
+  const handle = target.closest("[class*='dv-resize-handle']")
+  if (handle) {
+    const container = handle.closest(".dv-resize-container")
+    const group = dock?.groups.find((g) => container?.contains(g.element))
+    if (group && isSnapped(group)) startResize(group, from)
+    return
+  }
   const header = target.closest(".dv-tabs-and-actions-container")
   if (!header || target.closest(CONTROLS)) return
-  const dock = useDock.getState().api
   const group = dock?.groups.find((g) => g.element.contains(header))
   if (!group) return
   const id = target.closest<HTMLElement>("[data-panel-id]")?.dataset.panelId
   const panel = id ? group.panels.find((p) => p.id === id) : undefined
   // The shown tab may change: its bars leave with it, so record them now.
   if (panel && group.activePanel !== panel) recordBars(group)
-  const from = { x: event.clientX, y: event.clientY }
   if (panel && group.panels.length > 1) startTabDrag(panel, from)
   else startWindowDrag(group, from)
 }

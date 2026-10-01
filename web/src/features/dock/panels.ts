@@ -36,8 +36,6 @@ export type PanelDefinition = {
   title: string
   icon: LucideIcon
   component: ComponentType
-  /** Where the window opens when it is not in the layout. */
-  home: "left" | "right" | "bottom" | "center" | "float"
   /** Library windows share the sidebar surface. */
   surface?: "sidebar"
   /** Follows the selection until the window is locked. */
@@ -59,7 +57,6 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     title: "파일",
     icon: FolderClosed,
     component: FilesPanel,
-    home: "left",
     surface: "sidebar",
     scrollUnder: true,
   },
@@ -67,7 +64,6 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     title: "실행 기록",
     icon: Clock,
     component: RunsPanel,
-    home: "left",
     surface: "sidebar",
     scrollUnder: true,
   },
@@ -75,7 +71,6 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     title: "작업",
     icon: SquareFunction,
     component: TasksPanel,
-    home: "left",
     surface: "sidebar",
     scrollUnder: true,
   },
@@ -83,34 +78,29 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     title: "설정",
     icon: SlidersHorizontal,
     component: SettingsPanel,
-    home: "left",
     surface: "sidebar",
   },
   workflow: {
     title: "워크플로우",
     icon: Workflow,
     component: WorkflowPanel,
-    home: "center",
     canvas: true,
   },
   inspector: {
     title: "노드",
     icon: PanelRight,
     component: InspectorPanel,
-    home: "right",
     follows: true,
   },
   history: {
     title: "실행 기록",
     icon: History,
     component: HistoryPanel,
-    home: "bottom",
   },
   viewer: {
     title: "뷰어",
     icon: Image,
     component: ViewerPanel,
-    home: "center",
     canvas: true,
     follows: true,
     closable: true,
@@ -119,7 +109,6 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     title: "IRAF 디스플레이",
     icon: Monitor,
     component: DisplayPanel,
-    home: "float",
     canvas: true,
     closable: true,
   },

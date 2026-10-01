@@ -71,7 +71,7 @@ export function WindowPill({
             <Minus />
           </ToolbarButton>
           <ToolbarButton
-            label={maximized ? "원래 크기로" : "창 최대화"}
+            label={maximized ? "전체 화면 끝내기" : "전체 화면"}
             onClick={() => toggleMaximized(group)}
           >
             {maximized ? <Minimize2 /> : <Maximize2 />}

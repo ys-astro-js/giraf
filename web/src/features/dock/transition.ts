@@ -23,6 +23,8 @@ type Frame = {
   element: HTMLElement
   box: Box
   panels: string[]
+  /** The tab it shows, which a moved window brings along. */
+  active?: string
   title: string
   background: string
   radius: string
@@ -56,6 +58,7 @@ function frames(dock: DockviewApi, origin: DOMRect) {
         height: rect.height,
       },
       panels: group.panels.map((panel) => panel.id),
+      active: group.activePanel?.id,
       title: group.activePanel?.title ?? "",
       background: content
         ? getComputedStyle(content).backgroundColor
@@ -73,8 +76,14 @@ const same = (a: Box, b: Box) =>
   Math.abs(a.width - b.width) < 1 &&
   Math.abs(a.height - b.height) < 1
 
-/** The frame a window had before: its own, or that of the window its tabs came from. */
+/**
+ * The frame a window had before: that of the window its shown tab came
+ * from (a dropped window filling a slot or joining another), else its own,
+ * else that of any window its tabs came from.
+ */
 function previous(frame: Frame, before: Map<string, Frame>) {
+  for (const old of before.values())
+    if (frame.active && old.panels.includes(frame.active)) return old
   const own = before.get(frame.group.id)
   if (own) return own
   for (const old of before.values())
