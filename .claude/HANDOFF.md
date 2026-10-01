@@ -5,11 +5,13 @@
 
 ## 구조
 - `web/src/features/dock/`
-  - `store.ts`: 창·탭·최소화·최대화·전체 화면·배치 저장. 가장자리 그룹 없이 한 격자.
-    측면 토글은 그쪽 끝에 붙은 창을 숨기고 보인다.
-  - `drag.ts`: 머리줄 빈 곳으로 창 끌기, 탭 끌기(dockview DnD는 끔).
+  - `store.ts`: 창·탭·최소화·최대화(= 전체 화면)·배치 저장. 가장자리 그룹 없이 한 격자.
+    측면 토글은 그쪽 끝에 붙은 창을 숨기고 보인다. 창 요소에 `data-tabbed`(탭 여럿),
+    `data-fullscreen`(최대화)을 붙이고 dock.css가 이것으로 막대 모양을 정한다.
+  - `drag.ts`: 머리줄 빈 곳으로 창 끌기, 탭 끌기(dockview DnD는 끔), 놓을 곳 판정과 미리보기.
   - `WindowToolbar.tsx`: 패널이 쓰는 `WindowTitle`, `WindowToolbar placement="leading|top|bottom"`.
-  - `WindowControls.tsx`: 창 조작 알약(닫기·최소화·최대화), 머리줄, 최소화 트레이.
+  - `WindowControls.tsx`: 창 조작 알약(닫기·최소화·최대화), 창 상단 막대(`WindowTopBar`),
+    잠금(`LockControl`), 최소화 트레이.
   - `bars.ts`: 막대 칸 등록부. 최대화한 창은 칸 주인이 `APP`(앱 상단 막대)로 바뀐다.
   - `morph.ts`: 탭 전환 시 막대 모핑(대역 캡슐, WAAPI).
   - `panels.ts`: 창 등록표(`canvas`는 콘텐츠 위주, `scrollUnder`는 목록이 막대 아래로 스크롤).

@@ -16,10 +16,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import {
-  useToolbarOverflow,
-  type ToolbarOverflow,
-} from "@/components/toolbar-overflow"
+import type { ToolbarOverflow } from "@/components/toolbar-overflow"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,8 +46,6 @@ export function ToolbarCluster({
   edge = "start",
   placement,
   size,
-  joined = false,
-  overflow = false,
   className,
   children,
   ...props
@@ -58,56 +53,31 @@ export function ToolbarCluster({
   edge?: ToolbarEdge
   placement?: ToolbarPlacement
   size?: ToolbarSize
-  /** Every group reads as one capsule, spacers or not. */
-  joined?: boolean
-  /**
-   * When the cluster outgrows its container, groups marked `overflow` leave
-   * for a menu at the trailing end, and come back once there is room.
-   */
-  overflow?: boolean
 }) {
   const parent = useContext(ToolbarContext)
-  // Without its own overflow, a cluster passes on an enclosing one's.
-  const outer = useContext(OverflowContext)
   const context = {
     edge,
     placement: placement ?? parent.placement,
     size: size ?? parent.size,
   }
-  const ref = useRef<HTMLDivElement>(null)
-  const registry = useToolbarOverflow(
-    () =>
-      ref.current?.parentElement
-        ? { content: ref.current, container: ref.current.parentElement }
-        : null,
-    overflow
-  )
   return (
     <ToolbarContext.Provider value={context}>
-      <OverflowContext.Provider value={overflow ? registry.context : outer}>
-        <div
-          ref={ref}
-          data-slot="toolbar-cluster"
-          data-edge={edge}
-          data-joined={joined}
-          data-overflow={overflow || undefined}
-          className={cn("toolbar-cluster", className)}
-          {...props}
-        >
-          {children}
-          {overflow && (
-            <>
-              <ToolbarSpacer />
-              <ToolbarOverflowMenu overflow={registry} />
-            </>
-          )}
-        </div>
-      </OverflowContext.Provider>
+      <div
+        data-slot="toolbar-cluster"
+        data-edge={edge}
+        className={cn("toolbar-cluster", className)}
+        {...props}
+      >
+        {children}
+      </div>
     </ToolbarContext.Provider>
   )
 }
 
-/** The menu holding what an overflowing toolbar sent away; hidden until then. */
+/**
+ * The menu holding what an overflowing toolbar sent away (see
+ * useToolbarOverflow); hidden until then.
+ */
 export function ToolbarOverflowMenu({
   overflow,
 }: {

@@ -61,7 +61,7 @@ function useTabSlot(slot: Slot) {
   const panel = usePanel()?.panel
   useDock((state) => state.revision)
   const fullscreen = useDock(
-    (state) => !!panel && state.fullscreen === panel.group.id
+    (state) => !!panel && state.maximized === panel.group.id
   )
   const owner =
     slot === "bottom" ? panel?.id : fullscreen ? APP : panel?.group.id
@@ -97,7 +97,7 @@ export function WindowToolbar({
   const { element, shown } = useTabSlot(placement)
   const group = usePanel()?.panel.group.id
   // In the app's roomy bar, a fullscreen window sends nothing to a menu.
-  const fullscreen = useDock((state) => !!group && state.fullscreen === group)
+  const fullscreen = useDock((state) => !!group && state.maximized === group)
   const overflow = useBarOverflow((bars) =>
     placement === "top" && group && !fullscreen ? bars[group] : undefined
   )

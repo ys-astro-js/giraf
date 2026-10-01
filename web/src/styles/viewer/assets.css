@@ -64,3 +64,7 @@
 .viewer-filename { max-width: 100%; justify-content: flex-start; font: inherit; padding-inline: 8px; }
 .viewer-filename.glass-surface:hover { background: color-mix(in oklch, var(--glass-background), var(--foreground) 6%); }
 .viewer-filename > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* In a window's top bar, the file's own actions follow the image tools,
+   which the image viewer mounts (and remounts) after them. */
+.viewer-file-tools > .toolbar-slot { order: 1; }

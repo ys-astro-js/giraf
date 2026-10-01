@@ -41,13 +41,11 @@ type DockState = {
   hidden: Record<Edge, string[]>
   minimized: MinimizedWindow[]
   stowed: StowedTab[]
-  /** The window filling the whole workbench, if any. */
-  maximized?: string
   /**
-   * The maximized window, which is the whole workbench: it runs under the
-   * app's top bar and moves its own top bar controls into it.
+   * The window filling the whole workbench, if any. It runs under the app's
+   * top bar and moves its own top bar controls into it (fullscreen).
    */
-  fullscreen?: string
+  maximized?: string
   /** Bumped on every structural change so window chrome re-reads it. */
   revision: number
 }
@@ -72,7 +70,8 @@ type SavedLayout = {
 }
 
 const api = () => useDock.getState().api
-const root = () => document.querySelector(".dock-root")
+/** The workbench element every window lies within. */
+export const dockRoot = () => document.querySelector(".dock-root")
 
 export const isFloating = (group: DockviewGroupPanel) =>
   group.api.location.type === "floating"
@@ -85,7 +84,7 @@ const isMain = (group: DockviewGroupPanel) =>
  * so windows spanning the workbench and the workflow's window stay put.
  */
 function sideWindows(dock: DockviewApi, edge: Edge) {
-  const box = root()?.getBoundingClientRect()
+  const box = dockRoot()?.getBoundingClientRect()
   if (!box) return []
   const touches = (rect: DOMRect, side: Edge | "top") =>
     Math.abs(rect[side] - box[side]) < 2
@@ -136,7 +135,7 @@ export function syncDock() {
       revision: state.revision + 1,
     }
   })
-  markFullscreen(dock)
+  markWindows(dock)
 }
 
 /** The maximized window: dockview's for docked windows, ours for floating. */
@@ -152,16 +151,21 @@ function maximizedWindow(dock: DockviewApi, current?: string) {
 }
 
 /**
- * Marks the fullscreen window (see DockState.fullscreen) on its element,
- * where the app's bars read it. Only a maximized window is fullscreen; a
- * window that happens to be alone stays an ordinary window.
+ * Marks layout facts on each window's element for its bars' styles:
+ * `data-tabbed` while it holds several tabs (a tab bar, translucent top bar),
+ * `data-fullscreen` while it is maximized (see DockState.maximized).
  */
-function markFullscreen(dock: DockviewApi) {
-  const id = useDock.getState().maximized
-  for (const group of dock.groups)
-    if (group.id === id) group.element.dataset.fullscreen = ""
-    else delete group.element.dataset.fullscreen
-  if (useDock.getState().fullscreen !== id) useDock.setState({ fullscreen: id })
+function markWindows(dock: DockviewApi) {
+  const maximized = useDock.getState().maximized
+  for (const group of dock.groups) {
+    mark(group.element, "tabbed", group.panels.length > 1)
+    mark(group.element, "fullscreen", group.id === maximized)
+  }
+}
+
+function mark(element: HTMLElement, name: string, on: boolean) {
+  if (on) element.dataset[name] = ""
+  else delete element.dataset[name]
 }
 
 const SIDE_SIZE: Record<Edge, number> = { left: 256, right: 384, bottom: 240 }
@@ -392,7 +396,7 @@ export function restoreTab(id: string) {
   saveLayout()
 }
 
-/* Windows: the ··· capsule acts on the whole tab group. */
+/* Windows: the window pill acts on the whole tab group. */
 
 export function closeWindow(group: DockviewGroupPanel) {
   for (const panel of [...group.panels]) closeTab(panel)
@@ -406,7 +410,7 @@ function floatHost() {
   const element =
     document.querySelector(".dv-floating-overlay-host") ??
     document.querySelector(".dv-shell-middle-column") ??
-    root()
+    dockRoot()
   return element?.getBoundingClientRect() ?? new DOMRect()
 }
 
@@ -505,7 +509,7 @@ export function toggleMaximized(group: DockviewGroupPanel) {
     useDock.setState({ maximized: group.id })
     syncDock()
     const host = floatHost()
-    const bounds = root()?.getBoundingClientRect() ?? host
+    const bounds = dockRoot()?.getBoundingClientRect() ?? host
     box.style.left = `${bounds.left - host.left}px`
     box.style.top = `${bounds.top - host.top}px`
     group.api.setSize({ width: bounds.width, height: bounds.height })
@@ -514,7 +518,7 @@ export function toggleMaximized(group: DockviewGroupPanel) {
   group.activePanel?.api.setActive()
 }
 
-/* Floating: dragging a window's ··· pill lifts it out of the layout. */
+/* Floating: dragging a window's header lifts it out of the layout. */
 
 const FLOAT_SIZE = { width: 480, height: 360 }
 
@@ -529,7 +533,7 @@ function floatAt(
   if (!dock) return
   // Keep the window inside the workbench, in the float host's coordinates.
   const host = floatHost()
-  const bounds = root()?.getBoundingClientRect() ?? host
+  const bounds = dockRoot()?.getBoundingClientRect() ?? host
   const minLeft = bounds.left - host.left
   const minTop = bounds.top - host.top
   const maxLeft = bounds.right - host.left - size.width - 16
@@ -549,132 +553,6 @@ export type DropTarget =
   | { kind: "group"; group: DockviewGroupPanel; position: DropPosition }
   | { kind: "edge"; edge: Edge }
 export type DropPosition = "center" | "left" | "right" | "top" | "bottom"
-
-/** How close to a window's border a drop splits it. */
-const SPLIT_BAND = 48
-/** How close to the workbench's border a drop docks along that whole side. */
-const EDGE_BAND = 24
-
-/**
- * The window drawn topmost at a point, other than the one being dragged:
- * floating windows cover docked ones, and later-focused floats the rest.
- */
-function windowAt(x: number, y: number, dragged: DockviewGroupPanel) {
-  const dock = api()
-  if (!dock) return
-  for (const element of document.elementsFromPoint(x, y)) {
-    if (dragged.element.contains(element)) continue
-    const group = dock.groups.find((g) => g.element.contains(element))
-    if (group) return group
-  }
-}
-
-/**
- * Where a window dragged to a point would dock, if anywhere. Only a
- * window's header (join its tabs) and the bands along its borders (split)
- * dock; everywhere else the window stays floating. A floating window only
- * takes tabs: it holds a single group and cannot split.
- */
-export function dropTargetAt(
-  x: number,
-  y: number,
-  dragged: DockviewGroupPanel
-): DropTarget | undefined {
-  const dock = api()
-  const box = root()?.getBoundingClientRect()
-  if (!dock || !box) return
-  const group = windowAt(x, y, dragged)
-  const floating = group && isFloating(group)
-  if (!floating) {
-    if (x - box.left < EDGE_BAND) return { kind: "edge", edge: "left" }
-    if (box.right - x < EDGE_BAND) return { kind: "edge", edge: "right" }
-    if (box.bottom - y < EDGE_BAND) return { kind: "edge", edge: "bottom" }
-  }
-  if (!group) return
-  if (useDock.getState().minimized.some((m) => m.group === group.id)) return
-  const rect = group.element.getBoundingClientRect()
-  const header =
-    group.element
-      .querySelector(".dv-tabs-and-actions-container")
-      ?.getBoundingClientRect().height ?? 40
-  if (y - rect.top < header) return { kind: "group", group, position: "center" }
-  if (floating) return
-  const sides: [DropPosition, number][] = [
-    ["left", x - rect.left],
-    ["right", rect.right - x],
-    ["top", y - rect.top - header],
-    ["bottom", rect.bottom - y],
-  ]
-  const [side, distance] = sides.sort((a, b) => a[1] - b[1])[0]
-  return distance < SPLIT_BAND
-    ? { kind: "group", group, position: side }
-    : undefined
-}
-
-/** The area a drop target would take, in viewport pixels. */
-export function dropPreview(target: DropTarget) {
-  const dock = api()
-  const box = root()?.getBoundingClientRect()
-  if (!dock || !box) return
-  if (target.kind === "edge") {
-    const width = Math.min(320, box.width / 3)
-    const height = Math.min(240, box.height / 3)
-    if (target.edge === "left")
-      return { left: box.left, top: box.top, width, height: box.height }
-    if (target.edge === "right")
-      return {
-        left: box.right - width,
-        top: box.top,
-        width,
-        height: box.height,
-      }
-    return {
-      left: box.left,
-      top: box.bottom - height,
-      width: box.width,
-      height,
-    }
-  }
-  const rect = target.group.element.getBoundingClientRect()
-  const half = { width: rect.width / 2, height: rect.height / 2 }
-  switch (target.position) {
-    case "left":
-      return {
-        left: rect.left,
-        top: rect.top,
-        width: half.width,
-        height: rect.height,
-      }
-    case "right":
-      return {
-        left: rect.left + half.width,
-        top: rect.top,
-        width: half.width,
-        height: rect.height,
-      }
-    case "top":
-      return {
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: half.height,
-      }
-    case "bottom":
-      return {
-        left: rect.left,
-        top: rect.top + half.height,
-        width: rect.width,
-        height: half.height,
-      }
-    default:
-      return {
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-      }
-  }
-}
 
 /** Where the pointer holds a moving window, from its top-left corner. */
 export type Grip = { window: DockviewGroupPanel; dx: number; dy: number }
@@ -706,10 +584,8 @@ export function liftWindow(
     size.width - 16
   )
   const dy = Math.min(y - rect.top, 32)
-  const box = floatHost()
-  const left = x - (box?.left ?? 0) - dx
-  const top = y - (box?.top ?? 0) - dy
-  floatAt(group, left, top, size)
+  const host = floatHost()
+  floatAt(group, x - host.left - dx, y - host.top - dy, size)
   syncDock()
   return { window: group, dx, dy }
 }
@@ -719,14 +595,8 @@ export function liftTab(panel: IDockviewPanel, x: number, y: number): Grip {
   const size = floatingSize(panel.group.element.getBoundingClientRect())
   const dx = 64
   const dy = 20
-  const box = floatHost()
-  floatAt(
-    panel.group,
-    x - (box?.left ?? 0) - dx,
-    y - (box?.top ?? 0) - dy,
-    size,
-    panel
-  )
+  const host = floatHost()
+  floatAt(panel.group, x - host.left - dx, y - host.top - dy, size, panel)
   panel.api.setActive()
   syncDock()
   return { window: panel.group, dx, dy }
@@ -744,12 +614,12 @@ export function holdFloating(
 
 /** Moves a floating window so the grabbed spot stays under the pointer. */
 export function moveFloating(grip: Grip, x: number, y: number) {
-  const box = floatHost()
+  const host = floatHost()
   const size = floatingBox(grip.window)?.getBoundingClientRect()
   floatAt(
     grip.window,
-    x - (box?.left ?? 0) - grip.dx,
-    y - (box?.top ?? 0) - grip.dy,
+    x - host.left - grip.dx,
+    y - host.top - grip.dy,
     size ? { width: size.width, height: size.height } : FLOAT_SIZE
   )
 }

@@ -306,9 +306,7 @@ export function ImageViewer({
         {imageOverlay}
         {windowBars ? (
           <>
-            <WindowToolbar className="viewer-window-tools">
-              {analysisTools}
-            </WindowToolbar>
+            <WindowToolbar>{analysisTools}</WindowToolbar>
             <WindowToolbar placement="bottom">
               {navigationTools && coordinateTools}
               <ToolbarSpacer flexible />

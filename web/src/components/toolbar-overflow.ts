@@ -20,7 +20,6 @@ export type OverflowMeasure = {
  */
 export function useToolbarOverflow(
   measure: () => OverflowMeasure | null,
-  enabled = true,
   /** Measures again when this changes, e.g. the element measured. */
   target?: unknown
 ) {
@@ -30,7 +29,7 @@ export function useToolbarOverflow(
   const [listed, setListed] = useState<[string, OverflowEntry][]>([])
   useLayoutEffect(() => {
     const target = measure()
-    if (!enabled || !target) return
+    if (!target) return
     const { content, container } = target
     const room = target.room ?? (() => container.clientWidth)
     const check = () => {
@@ -62,7 +61,7 @@ export function useToolbarOverflow(
     }
     // Measured per target; the observers follow later changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, target])
+  }, [target])
   const set = useCallback((key: string, entry: OverflowEntry | null) => {
     const before = items.current.get(key)
     if (entry) items.current.set(key, entry)

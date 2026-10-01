@@ -95,9 +95,10 @@
 .toolbar-cluster > .toolbar-slot:not(:only-of-type)[data-hidden="true"][data-edge="end"] > .toolbar-group { transform: translateX(28px); }
 
 /* HIG: the prominent action ends its toolbar, with the overflow menu just
-   before it. */
-.toolbar-cluster > .toolbar-slot:has(> .toolbar-overflow) { order: 1; }
-.toolbar-cluster > .toolbar-slot[data-prominent] { order: 2; }
+   before it. Order 1 is left for a host's secondary groups that must follow
+   tools mounted after them (see viewer/assets.css). */
+.toolbar-cluster > .toolbar-slot:has(> .toolbar-overflow) { order: 2; }
+.toolbar-cluster > .toolbar-slot[data-prominent] { order: 3; }
 
 /* A prominent action's group never joins another: it keeps a fixed space
    from its neighbors with or without spacers. */
@@ -106,7 +107,7 @@
   padding-inline-start: 8px;
 }
 
-/* Joined groups read as one capsule: adjacent ones, or all in a joined cluster. */
+/* Adjacent groups (no spacer between them) read as one capsule. */
 .toolbar-cluster > .toolbar-slot:has(+ .toolbar-slot:not([data-hidden="true"], [data-prominent])):not([data-hidden="true"], [data-prominent]) > .toolbar-group {
   border-start-end-radius: 0;
   border-end-end-radius: 0;
@@ -114,17 +115,6 @@
 }
 .toolbar-cluster > .toolbar-slot:not([data-hidden="true"], [data-prominent]) + .toolbar-slot:not([data-hidden="true"], [data-prominent]) { margin-inline-start: -1px; }
 .toolbar-cluster > .toolbar-slot:not([data-hidden="true"], [data-prominent]) + .toolbar-slot:not([data-hidden="true"], [data-prominent]) > .toolbar-group {
-  border-start-start-radius: 0;
-  border-end-start-radius: 0;
-  border-inline-start-color: transparent;
-}
-.toolbar-cluster[data-joined="true"] > .toolbar-slot + .toolbar-slot { padding-inline-start: 0; margin-inline-start: -1px; }
-.toolbar-cluster[data-joined="true"] > .toolbar-slot:not(:last-child) > .toolbar-group {
-  border-start-end-radius: 0;
-  border-end-end-radius: 0;
-  border-inline-end-color: transparent;
-}
-.toolbar-cluster[data-joined="true"] > .toolbar-slot:not(:first-child) > .toolbar-group {
   border-start-start-radius: 0;
   border-end-start-radius: 0;
   border-inline-start-color: transparent;

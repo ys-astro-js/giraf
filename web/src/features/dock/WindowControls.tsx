@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useState } from "react"
 import { createPortal } from "react-dom"
-import { Maximize2, Minimize2, Minus, X } from "lucide-react"
+import { Lock, LockOpen, Maximize2, Minimize2, Minus, X } from "lucide-react"
 import { LinearBlur } from "progressive-blur"
 import type {
   DockviewGroupPanel,
   IDockviewHeaderActionsProps,
+  IDockviewPanel,
 } from "dockview-react"
 import {
   ToolbarButton,
@@ -14,7 +15,7 @@ import {
   ToolbarOverflowMenu,
   ToolbarSpacer,
 } from "@/components/toolbar"
-import { WindowSlot } from "./WindowToolbar"
+import { WindowSlot, WindowToolbar } from "./WindowToolbar"
 import { APP, slotKey, useBarOverflow, useSlots } from "./bars"
 import { morphBars } from "./morph"
 import { useToolbarOverflow } from "@/components/toolbar-overflow"
@@ -24,8 +25,10 @@ import {
   minimizeWindow,
   restoreTab,
   restoreWindow,
+  toggleLock,
   toggleMaximized,
   useDock,
+  type WindowParams,
 } from "./store"
 
 /**
@@ -79,53 +82,69 @@ export function WindowPill({
   )
 }
 
-/** The title keeps this much width before the toolbar gives way (see dock.css). */
-const TITLE_STUB = 72
+/** Following tabs can stop following the selection and keep their view. */
+export function LockControl({ panel }: { panel: IDockviewPanel }) {
+  const locked = !!(panel.params as WindowParams | undefined)?.locked
+  return (
+    <WindowToolbar placement="leading">
+      <ToolbarGroup label="탭">
+        <ToolbarItem>
+          <ToolbarButton
+            label={locked ? "잠금 해제" : "선택을 따라가지 않도록 잠금"}
+            aria-pressed={locked}
+            className="window-lock"
+            onClick={() => toggleLock(panel)}
+          >
+            {locked ? <Lock /> : <LockOpen />}
+          </ToolbarButton>
+        </ToolbarItem>
+      </ToolbarGroup>
+    </WindowToolbar>
+  )
+}
 
 /**
  * A window's top bar row, above its tab bar: the pill, the shown tab's
- * title, then its toolbar. The bar's empty space drags the window.
+ * leading controls, title, then its toolbar. The bar's empty space drags
+ * the window.
  */
-export function HeaderControls(props: IDockviewHeaderActionsProps) {
+export function WindowTopBar(props: IDockviewHeaderActionsProps) {
   useDock((state) => state.revision)
   const id = props.group.id
   // The toolbar slot is the room the tab's toolbar has; past it, groups
   // marked overflow go to the menu at the end of the bar.
   const [slot, setSlot] = useState<HTMLDivElement | null>(null)
-  const overflow = useToolbarOverflow(
-    () => {
-      const content = slot
-      const row = content?.parentElement
-      if (!content || !row) return null
-      return {
-        content,
-        container: row,
-        // The row less the pill, leading controls, the title's stub and the
-        // gaps between what the row shows.
-        room: () => {
-          const style = getComputedStyle(row)
-          const gap = parseFloat(style.columnGap) || 0
-          const pill = row.querySelector(".window-pill")?.clientWidth ?? 0
-          const leading =
-            row.querySelector(".window-leading-slot")?.clientWidth ?? 0
-          const title = row.querySelector(".window-title:not([data-inactive])")
-            ? TITLE_STUB
-            : 0
-          const items = [...row.children].filter(
-            (child) => getComputedStyle(child).display !== "none"
-          ).length
-          // The leading slot gives back its gap (see dock.css).
-          return row.clientWidth - pill - leading - title - gap * (items - 2)
-        },
-      }
-    },
-    true,
-    slot
-  )
+  const overflow = useToolbarOverflow(() => {
+    const content = slot
+    const row = content?.parentElement
+    if (!content || !row) return null
+    return {
+      content,
+      container: row,
+      // The row less the pill, leading controls, the title's stub and the
+      // gaps between what the row shows.
+      room: () => {
+        const style = getComputedStyle(row)
+        const gap = parseFloat(style.columnGap) || 0
+        const pill = row.querySelector(".window-pill")?.clientWidth ?? 0
+        const leading =
+          row.querySelector(".window-leading-slot")?.clientWidth ?? 0
+        // The title keeps a stub before the toolbar gives way (dock.css).
+        const title = row.querySelector(".window-title:not([data-inactive])")
+          ? parseFloat(style.getPropertyValue("--window-title-stub"))
+          : 0
+        const items = [...row.children].filter(
+          (child) => getComputedStyle(child).display !== "none"
+        ).length
+        // The leading slot gives back its gap (see dock.css).
+        return row.clientWidth - pill - leading - title - gap * (items - 2)
+      },
+    }
+  }, slot)
   useLayoutEffect(() => {
     useBarOverflow.setState({ [id]: overflow.context })
   }, [id, overflow.context])
-  const fullscreen = useDock((state) => state.fullscreen === id)
+  const fullscreen = useDock((state) => state.maximized === id)
   const appPill = useSlots((slots) => slots[slotKey(APP, "pill")])
   // Fullscreen, the window's toolbar sits in the app's bar with room to
   // spare, so it has no overflow menu.

@@ -1,15 +1,15 @@
 import type { DockviewGroupPanel, IDockviewPanel } from "dockview-react"
 import { recordBars } from "./morph"
 import {
+  dockRoot,
   dockWindow,
-  dropPreview,
-  dropTargetAt,
   holdFloating,
   isFloating,
   liftTab,
   liftWindow,
   moveFloating,
   useDock,
+  type DropPosition,
   type DropTarget,
   type Grip,
 } from "./store"
@@ -17,6 +17,107 @@ import {
 const DRAG_THRESHOLD = 4
 /** How far a tab leaves its strip before it becomes a window of its own. */
 const DETACH_DISTANCE = 16
+
+/** How close to a window's border a drop splits it. */
+const SPLIT_BAND = 48
+/** How close to the workbench's border a drop docks along that whole side. */
+const EDGE_BAND = 24
+/** How much of the workbench a drop along one of its sides would take, at most. */
+const EDGE_PREVIEW = { width: 320, height: 240 }
+
+/**
+ * The window drawn topmost at a point, other than the one being dragged:
+ * floating windows cover docked ones, and later-focused floats the rest.
+ */
+function windowAt(x: number, y: number, dragged: DockviewGroupPanel) {
+  const dock = useDock.getState().api
+  if (!dock) return
+  for (const element of document.elementsFromPoint(x, y)) {
+    if (dragged.element.contains(element)) continue
+    const group = dock.groups.find((g) => g.element.contains(element))
+    if (group) return group
+  }
+}
+
+/**
+ * Where a window dragged to a point would dock, if anywhere. Only a
+ * window's header (join its tabs) and the bands along its borders (split)
+ * dock; everywhere else the window stays floating. A floating window only
+ * takes tabs: it holds a single group and cannot split.
+ */
+function dropTargetAt(
+  x: number,
+  y: number,
+  dragged: DockviewGroupPanel
+): DropTarget | undefined {
+  const box = dockRoot()?.getBoundingClientRect()
+  if (!box) return
+  const group = windowAt(x, y, dragged)
+  const floating = group && isFloating(group)
+  if (!floating) {
+    if (x - box.left < EDGE_BAND) return { kind: "edge", edge: "left" }
+    if (box.right - x < EDGE_BAND) return { kind: "edge", edge: "right" }
+    if (box.bottom - y < EDGE_BAND) return { kind: "edge", edge: "bottom" }
+  }
+  if (!group) return
+  if (useDock.getState().minimized.some((m) => m.group === group.id)) return
+  const rect = group.element.getBoundingClientRect()
+  const header =
+    group.element
+      .querySelector(".dv-tabs-and-actions-container")
+      ?.getBoundingClientRect().height ?? 40
+  if (y - rect.top < header) return { kind: "group", group, position: "center" }
+  if (floating) return
+  const sides: [DropPosition, number][] = [
+    ["left", x - rect.left],
+    ["right", rect.right - x],
+    ["top", y - rect.top - header],
+    ["bottom", rect.bottom - y],
+  ]
+  const [side, distance] = sides.sort((a, b) => a[1] - b[1])[0]
+  return distance < SPLIT_BAND
+    ? { kind: "group", group, position: side }
+    : undefined
+}
+
+type Area = { left: number; top: number; width: number; height: number }
+
+/** A plain copy: a DOMRect's fields are getters that spreading drops. */
+const areaOf = ({ left, top, width, height }: DOMRect): Area => ({
+  left,
+  top,
+  width,
+  height,
+})
+
+/** The part of an area along one side, `width` or `height` across. */
+function along(area: Area, side: DropPosition, width: number, height: number) {
+  switch (side) {
+    case "left":
+      return { ...area, width }
+    case "right":
+      return { ...area, left: area.left + area.width - width, width }
+    case "top":
+      return { ...area, height }
+    case "bottom":
+      return { ...area, top: area.top + area.height - height, height }
+    case "center":
+      return area
+  }
+}
+
+/** The area a drop target would take, in viewport pixels. */
+function dropPreview(target: DropTarget): Area | undefined {
+  if (target.kind === "edge") {
+    const box = dockRoot()?.getBoundingClientRect()
+    if (!box) return
+    const width = Math.min(EDGE_PREVIEW.width, box.width / 3)
+    const height = Math.min(EDGE_PREVIEW.height, box.height / 3)
+    return along(areaOf(box), target.edge, width, height)
+  }
+  const rect = target.group.element.getBoundingClientRect()
+  return along(areaOf(rect), target.position, rect.width / 2, rect.height / 2)
+}
 
 /** The translucent area a released window would take. */
 function showPreview(target: DropTarget | undefined) {

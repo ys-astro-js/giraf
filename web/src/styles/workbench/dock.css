@@ -19,13 +19,15 @@
 /* Window bar metrics, app-wide: a fullscreen window's controls sit in the
    app's top bar too. A header's one inset (edges and between rows); its
    toolbar row holds full-size toolbar controls, its tab bar is a slimmer
-   pill; the window pill rests a step below the tab bar. */
+   pill; the window pill rests a step below the tab bar. The title keeps a
+   stub of width before the toolbar gives way (WindowTopBar reads it). */
 .giraf-app {
   --window-inset: 8px;
   --window-toolbar: 42px;
   --window-tabs: 28px;
   --window-pill: 22px;
   --window-pill-button: calc(var(--window-pill) - 6px);
+  --window-title-stub: 72px;
 }
 
 .dockview-theme-giraf {
@@ -95,12 +97,15 @@
 
 /* Windows fill their group; library windows share the sidebar surface. */
 .dock-window {
+  position: relative;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   min-width: 0;
   background: var(--background);
+  --window-footer: 0px;
 }
 .dock-window[data-surface="sidebar"] {
   background: var(--sidebar);
@@ -116,15 +121,12 @@
   height: 100%;
   min-height: 0;
 }
-.dv-groupview:has(.dock-window[data-surface="sidebar"]) {
-  --dv-tabs-and-actions-container-background-color: var(--sidebar);
-}
 
 /* A window's bars, after macOS and iPadOS windows: the top bar (pill,
-   title, the shown tab's toolbar, then the tab bar, which hides while the
-   window has one tab) and the tab's bottom bar float over the content as
-   translucent blur, so what scrolls beneath shows through. Their empty space
-   drags the window. */
+   title, the shown tab's toolbar, then the tab bar, which shows only while
+   the window holds several tabs: data-tabbed, set by the store) and the
+   tab's bottom bar float over the content as translucent blur, so what
+   scrolls beneath shows through. Their empty space drags the window. */
 .dockview-theme-giraf .dv-groupview {
   position: relative;
   --window-bar: color-mix(in oklch, var(--background) 50%, transparent);
@@ -138,6 +140,7 @@
   );
 }
 .dockview-theme-giraf .dv-groupview:has(.dock-window[data-surface="sidebar"]) {
+  --dv-tabs-and-actions-container-background-color: var(--sidebar);
   --window-bar: color-mix(in oklch, var(--sidebar) 50%, transparent);
   --window-control-surface: color-mix(in oklch, var(--sidebar) 75%, transparent);
 }
@@ -152,9 +155,7 @@
    and follows only its content; the top bar is the window's, so a window of
    several tabs keeps it translucent. */
 .dockview-theme-giraf
-  .dv-groupview:has(.dock-window[data-canvas]):not(
-    :has(.dv-tabs-container > .dv-tab + .dv-tab)
-  )
+  .dv-groupview:not([data-tabbed]):has(.dock-window[data-canvas])
   > .dv-tabs-and-actions-container,
 .dock-window[data-canvas] > .window-bottom-bar {
   background: transparent;
@@ -172,19 +173,23 @@
   z-index: -1;
 }
 .dockview-theme-giraf
-  .dv-groupview:has(.dock-window[data-canvas]):not(
-    :has(.dv-tabs-container > .dv-tab + .dv-tab)
-  ):has(.window-title-slot .window-title:not([data-inactive]))
+  .dv-groupview:not([data-tabbed]):has(.dock-window[data-canvas]):has(
+    .window-title-slot .window-title:not([data-inactive])
+  )
   .window-bar-blur,
 .giraf-app:has(.workbench-toolbar .window-title:not([data-inactive]))
   .dockview-theme-giraf
-  .dv-groupview[data-fullscreen]:has(.dock-window[data-canvas]):not(
-    :has(.dv-tabs-container > .dv-tab + .dv-tab)
+  .dv-groupview[data-fullscreen]:not([data-tabbed]):has(
+    .dock-window[data-canvas]
   )
   .window-bar-blur {
   display: block;
 }
-.dockview-theme-giraf .dv-tabs-and-actions-container {
+/* The header is the window's handle (see drag.ts). */
+.dockview-theme-giraf .dv-groupview > .dv-tabs-and-actions-container {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
   flex-wrap: wrap;
   align-items: center;
   height: auto;
@@ -192,28 +197,19 @@
     var(--window-inset);
   row-gap: var(--window-inset);
   border-bottom: 0;
+  cursor: default;
 }
-.dockview-theme-giraf .dv-groupview:has(.dv-tabs-container > .dv-tab + .dv-tab) {
+.dockview-theme-giraf .dv-groupview[data-tabbed] {
   --window-header: calc(
     var(--window-top) + var(--window-inset) * 3 + var(--window-toolbar) +
       var(--window-tabs)
   );
-}
-.dockview-theme-giraf .dv-groupview > .dv-tabs-and-actions-container {
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 2;
 }
 .dockview-theme-giraf .dv-groupview > .dv-content-container {
   height: 100%;
 }
 /* Content clears the bars: most windows sit between them, a canvas runs
    under both, and a list scrolls under them from a padded start. */
-.dock-window {
-  position: relative;
-  box-sizing: border-box;
-  --window-footer: 0px;
-}
 .dock-window:has(> .window-bottom-bar:not(:empty)) {
   --window-footer: calc(var(--window-inset) * 2 + var(--window-toolbar));
 }
@@ -234,12 +230,6 @@
   margin: var(--window-inset);
   bottom: var(--window-footer);
 }
-/* The workflow search is a centered field, not a stretch across the bar. */
-.window-bottom-bar .search-field.workflow-bar-search {
-  flex: 0 1 240px;
-  min-width: 120px;
-}
-
 .window-bottom-bar {
   position: absolute;
   inset: auto 0 0;
@@ -260,6 +250,17 @@
   flex: 1 1 0;
   min-width: 0;
   height: var(--window-toolbar);
+  border-radius: calc(var(--window-toolbar) / 2);
+}
+/* The workflow search is a centered field, not a stretch across the bar. */
+.window-bottom-bar .search-field.workflow-bar-search {
+  flex: 0 1 240px;
+  min-width: 120px;
+}
+/* Buttons placed straight on a bar take the bar's capsule height. */
+.window-bottom-bar .window-toolbar-cluster > :is(button, [data-slot="button"]) {
+  height: var(--window-toolbar);
+  min-width: var(--window-toolbar);
   border-radius: calc(var(--window-toolbar) / 2);
 }
 
@@ -283,7 +284,7 @@
   flex: 1;
   min-width: 0;
 }
-.dockview-theme-giraf .dv-tabs-and-actions-container:has(.dv-tabs-container > .dv-tab:only-child) .dv-scrollable {
+.dockview-theme-giraf .dv-groupview:not([data-tabbed]) .dv-scrollable {
   display: none;
 }
 .window-toolbar {
@@ -300,7 +301,7 @@
   display: grid;
   flex: 1 1 0;
   align-items: center;
-  min-width: 72px;
+  min-width: var(--window-title-stub);
 }
 /* Every tab's title sits in the same place; the shown one fades in. */
 .window-title-slot > .window-title {
@@ -333,11 +334,12 @@
 }
 /* Each tab brings its own cluster, and the window adds its overflow menu.
    The clusters open up (display: contents) so the bar lays out their groups
-   as one row: the tab's tools, then the overflow menu, and a
-   primary action last (HIG: the prominent action ends the bar). Every group
-   keeps a fixed space from the one before unless it joins it; the slot takes
-   back the first space. Hidden tabs' groups fold away with the toolbar's
-   leaving motion, so a tab switch moves one set out and the next in. */
+   as one row, ordered as in any toolbar (toolbar.css): the tab's tools, then
+   the overflow menu, and a primary action last. Every group keeps a fixed
+   space from the one before unless it joins it; the slot takes back the
+   first space. Hidden tabs' groups and an empty overflow menu fold away
+   with the toolbar's leaving motion, so a tab switch moves one set out and
+   the next in. */
 .window-toolbar-slot > .toolbar-cluster {
   display: contents;
 }
@@ -354,30 +356,16 @@
   margin-inline-start: calc(var(--window-inset) * -1);
 }
 .window-toolbar-slot
-  > .toolbar-cluster[data-inactive]
+  > :is(.toolbar-cluster[data-inactive], .window-overflow)
   > .toolbar-slot[data-hidden="true"] {
   grid-template-columns: minmax(0, 0fr);
   padding-inline-start: 0;
-}
-.window-toolbar-slot > .viewer-file-tools > * {
-  order: 1;
-}
-.window-toolbar-slot > .toolbar-cluster.window-overflow > .toolbar-slot {
-  order: 2;
-}
-.window-toolbar-slot > .toolbar-cluster > .toolbar-slot[data-prominent] {
-  order: 3;
 }
 /* Leading controls (the lock) come after the pill and before the title.
    Empty, the slot gives back the row's gap; each control brings its own, so
    tab switches fold them in and out with the toolbar's motion. */
 .window-toolbar-slot.window-leading-slot {
   margin-inline-start: calc(var(--window-inset) * -1);
-}
-/* The overflow menu takes no room until it has something to hold. */
-.window-toolbar-slot > .window-overflow > .toolbar-slot[data-hidden="true"] {
-  grid-template-columns: minmax(0, 0fr);
-  padding-inline-start: 0;
 }
 
 /* Capsules on the bars are more opaque than the bars themselves. */
@@ -530,12 +518,10 @@
   color: var(--primary);
 }
 
-/* The window pill: not one of the row's controls but the window's own
-   handle, always there at the start as a small pill as tall as the tab bar.
-   Hovering grows that same pill to toolbar size, its buttons sliding out in
-   place and pushing the tab's controls along rather than covering them. */
-/* At rest the pill holds its small footprint; opened, it grows over the title
-   next to it instead of pushing the bar along. */
+/* The window pill: the window's own close, minimize and maximize, always
+   there at the start as small quiet buttons. At rest the pill holds its
+   small footprint; opened (hover, focus), it grows to toolbar size over the
+   title next to it instead of pushing the bar along. */
 .window-pill {
   position: relative;
   display: block;
@@ -585,14 +571,10 @@
   stroke-width: 2;
 }
 
-/* The header is the window's handle. */
-.dockview-theme-giraf .dv-tabs-and-actions-container { cursor: default; }
-
-/* Fullscreen: when one window is the whole workbench (maximized, or the
-   only one shown), the workbench runs up under the app's top bar and that
-   window's top bar grows to take it in. The app's bar then draws no band of
-   its own, so it reads exactly like the window's: clear over rich content,
-   translucent over text or several tabs. */
+/* Fullscreen: while a window is maximized, the workbench runs up under the
+   app's top bar and that window's top bar grows to take it in. The app's
+   bar then draws no band of its own, so it reads exactly like the window's:
+   clear over rich content, translucent over text or several tabs. */
 .giraf-app:has(.dv-groupview[data-fullscreen]) {
   position: relative;
 }
@@ -619,8 +601,7 @@
   --window-top: var(--toolbar-height, 56px);
   --window-header: var(--window-top);
 }
-.dockview-theme-giraf
-  .dv-groupview[data-fullscreen]:has(.dv-tabs-container > .dv-tab + .dv-tab) {
+.dockview-theme-giraf .dv-groupview[data-fullscreen][data-tabbed] {
   --window-header: calc(
     var(--window-top) + var(--window-inset) * 2 + var(--window-tabs)
   );
@@ -636,7 +617,7 @@
   padding: var(--window-top) var(--window-inset) 0;
 }
 .dockview-theme-giraf
-  .dv-groupview[data-fullscreen]:has(.dv-tabs-container > .dv-tab + .dv-tab)
+  .dv-groupview[data-fullscreen][data-tabbed]
   > .dv-tabs-and-actions-container {
   padding: calc(var(--window-top) + var(--window-inset)) var(--window-inset)
     var(--window-inset);
@@ -688,17 +669,6 @@ body[data-window-dragging] {
   cursor: grabbing;
 }
 
-/* Toolbar items that join a group arrive the way hidden ones leave. */
-@starting-style {
-  .toolbar-panels .toolbar-item[data-hidden="false"] { grid-template-columns: minmax(0, 0fr); opacity: 0; filter: blur(4px); }
-}
-
-/* Buttons placed straight on a bar take the bar's capsule height. */
-.window-bottom-bar .window-toolbar-cluster > :is(button, [data-slot="button"]) {
-  height: var(--window-toolbar);
-  min-width: var(--window-toolbar);
-  border-radius: calc(var(--window-toolbar) / 2);
-}
 
 /* Switching tabs (see dock/morph.ts): while the bars morph, the real
    capsules hold their final layout with no motion of their own and stay

@@ -3,27 +3,18 @@ import {
   DockviewReact,
   type DockviewApi,
   type DockviewTheme,
-  type IDockviewPanel,
   type IDockviewPanelProps,
 } from "dockview-react"
 import "dockview-react/dist/styles/dockview.css"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { PanelContext } from "./context"
 import { DockTab } from "./DockTab"
-import { HeaderControls } from "./WindowControls"
-import { WindowSlot, WindowToolbar } from "./WindowToolbar"
-import { Lock, LockOpen } from "lucide-react"
-import { ToolbarButton, ToolbarGroup, ToolbarItem } from "@/components/toolbar"
+import { LockControl, WindowTopBar } from "./WindowControls"
+import { WindowSlot } from "./WindowToolbar"
 import { headerPointerDown } from "./drag"
 import { DisplayWatcher } from "@/features/viewer/DisplayPanel"
 import { PANELS, type PanelDefinition } from "./panels"
-import {
-  loadLayout,
-  saveLayout,
-  syncDock,
-  toggleLock,
-  type WindowParams,
-} from "./store"
+import { loadLayout, saveLayout, syncDock, type WindowParams } from "./store"
 import "@/styles/workbench/dock.css"
 
 const theme: DockviewTheme = {
@@ -32,27 +23,6 @@ const theme: DockviewTheme = {
   gap: 0,
   dndOverlayMounting: "relative",
   dndPanelOverlay: "group",
-}
-
-/** Following tabs can stop following the selection and keep their view. */
-function LockControl({ panel }: { panel: IDockviewPanel }) {
-  const locked = !!(panel.params as WindowParams | undefined)?.locked
-  return (
-    <WindowToolbar placement="leading" className="window-lock-cluster">
-      <ToolbarGroup label="탭">
-        <ToolbarItem>
-          <ToolbarButton
-            label={locked ? "잠금 해제" : "선택을 따라가지 않도록 잠금"}
-            aria-pressed={locked}
-            className="window-lock"
-            onClick={() => toggleLock(panel)}
-          >
-            {locked ? <Lock /> : <LockOpen />}
-          </ToolbarButton>
-        </ToolbarItem>
-      </ToolbarGroup>
-    </WindowToolbar>
-  )
 }
 
 function frame(definition: PanelDefinition) {
@@ -105,7 +75,7 @@ function ready(api: DockviewApi) {
   api.onDidMaximizedGroupChange(syncDock)
 }
 
-/** The workbench: toolbar above dockable windows and minimized strips. */
+/** The workbench: the app's toolbar above dockable windows. */
 export function DockShell({ header }: { header: ReactNode }) {
   const components = useMemo(
     () =>
@@ -134,7 +104,7 @@ export function DockShell({ header }: { header: ReactNode }) {
           <DockviewReact
             components={components}
             defaultTabComponent={DockTab}
-            prefixHeaderActionsComponent={HeaderControls}
+            prefixHeaderActionsComponent={WindowTopBar}
             watermarkComponent={() => null}
             theme={theme}
             dndStrategy="html5"

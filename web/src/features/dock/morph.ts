@@ -47,12 +47,19 @@ const visibleGroups = (root: Element | null) =>
 function face(element: HTMLElement, box: Box, anchor: Anchor) {
   const copy = element.cloneNode(true) as HTMLElement
   copy.classList.add("window-morph-face")
-  copy.removeAttribute("data-morph-hidden")
   copy.style.width = `${box.width}px`
   copy.style.height = `${box.height}px`
   copy.style.setProperty(anchor, "-1px")
   return copy
 }
+
+/** A rectangle in the window's coordinates. */
+const boxIn = (rect: DOMRect, origin: DOMRect): Box => ({
+  left: rect.left - origin.left,
+  top: rect.top - origin.top,
+  width: rect.width,
+  height: rect.height,
+})
 
 function measure(
   elements: HTMLElement[],
@@ -61,13 +68,7 @@ function measure(
 ): Section {
   const capsules = elements
     .map((element) => {
-      const rect = element.getBoundingClientRect()
-      const box = {
-        left: rect.left - origin.left,
-        top: rect.top - origin.top,
-        width: rect.width,
-        height: rect.height,
-      }
+      const box = boxIn(element.getBoundingClientRect(), origin)
       return { element, box, face: face(element, box, anchor) }
     })
     .filter((capsule) => capsule.box.width > 1)
@@ -128,12 +129,7 @@ function band(group: DockviewGroupPanel): Band | null {
   const origin = group.element.getBoundingClientRect()
   const style = getComputedStyle(element)
   return {
-    box: {
-      left: rect.left - origin.left,
-      top: rect.top - origin.top,
-      width: rect.width,
-      height: rect.height,
-    },
+    box: boxIn(rect, origin),
     background: style.backgroundColor,
     filter: style.backdropFilter,
   }
@@ -191,6 +187,17 @@ function stand(box: Box) {
   return element
 }
 
+/** A stand-in for the bottom bar's band. */
+function bandStand(source: Band) {
+  const element = document.createElement("div")
+  element.className = "window-morph-band"
+  Object.assign(element.style, place(source.box), {
+    background: source.background,
+    backdropFilter: source.filter,
+  })
+  return element
+}
+
 /**
  * Runs once the new tab's controls have rendered: after two frames, or a
  * short timer when frames are not coming (a hidden window).
@@ -236,15 +243,6 @@ export function morphBars(group: DockviewGroupPanel) {
   const layer = document.createElement("div")
   layer.className = "window-morph-layer"
   layer.inert = true
-  const bandStand = (source: Band) => {
-    const element = document.createElement("div")
-    element.className = "window-morph-band"
-    Object.assign(element.style, place(source.box), {
-      background: source.background,
-      backdropFilter: source.filter,
-    })
-    return element
-  }
   // Until the new controls are measured, the old ones stay drawn as they were.
   if (oldBand) layer.append(bandStand(oldBand))
   for (const section of Object.values(before))

@@ -88,3 +88,8 @@
   .toolbar-end { grid-column: 2; grid-row: 1; }
   .toolbar-status { grid-column: 1 / -1; grid-row: 2; padding-block: 0 8px; }
 }
+
+/* Window toggles that join the panel group arrive the way hidden ones leave. */
+@starting-style {
+  .toolbar-panels .toolbar-item[data-hidden="false"] { grid-template-columns: minmax(0, 0fr); opacity: 0; filter: blur(4px); }
+}
