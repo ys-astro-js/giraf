@@ -1,15 +1,19 @@
 import { useCallback, useSyncExternalStore, type ReactNode } from "react"
-import type { IDockviewPanel } from "dockview-react"
 import { createPortal } from "react-dom"
 import { ToolbarCluster } from "@/components/toolbar"
 import {
   OverflowContext,
   ToolbarHiddenContext,
 } from "@/components/toolbar-context"
-import { slotKey as key, useBarOverflow, useSlots, type Slot } from "./bars"
+import {
+  barOwner,
+  slotKey as key,
+  useBarOverflow,
+  useSlots,
+  type Slot,
+} from "./bars"
 import { cn } from "@/lib/utils"
 import { usePanel } from "./context"
-import { CANVAS } from "./layout"
 import { useDock } from "./store"
 
 /*
@@ -17,13 +21,6 @@ import { useDock } from "./store"
  * window pill, an optional title and the shown tab's toolbar; the bottom bar
  * holds the tab's secondary controls. Content runs underneath both.
  */
-
-/**
- * Who owns a tab's top bar slots: its window (group), shared by its tabs;
- * the canvas has a bar of its own instead of its group's header.
- */
-export const barOwner = (panel: IDockviewPanel) =>
-  panel.id === CANVAS ? CANVAS : panel.group.id
 
 /** Where the shown tab's title or controls land in a window's bars. */
 export function WindowSlot({

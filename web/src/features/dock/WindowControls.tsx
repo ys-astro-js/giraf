@@ -1,6 +1,14 @@
 import { useEffect, useLayoutEffect, useState } from "react"
 import { createPortal } from "react-dom"
-import { Lock, LockOpen, Maximize2, Minimize2, X } from "lucide-react"
+import {
+  Lock,
+  LockOpen,
+  Maximize2,
+  Minimize2,
+  PanelRightDashed,
+  PictureInPicture2,
+  X,
+} from "lucide-react"
 import { LinearBlur } from "progressive-blur"
 import type {
   DockviewGroupPanel,
@@ -17,11 +25,13 @@ import {
 } from "@/components/toolbar"
 import { WindowSlot, WindowToolbar } from "./WindowToolbar"
 import { useBarOverflow } from "./bars"
-import { CANVAS } from "./layout"
+import { CANVAS, isDocked } from "./layout"
 import { morphBars } from "./morph"
 import { useToolbarOverflow } from "@/components/toolbar-overflow"
 import {
+  attachWindow,
   closeWindow,
+  detachWindow,
   toggleLock,
   toggleMaximized,
   useDock,
@@ -29,9 +39,9 @@ import {
 } from "./store"
 
 /**
- * The window's own controls at the start of its top bar: close and
- * maximize, shown small at rest so they say what they do, and grown to
- * toolbar size over the title on hover.
+ * The window's own controls at the start of its top bar: close, maximize,
+ * and float out of the column or dock back into it. Shown small at rest so
+ * they say what they do, grown to toolbar size over the title on hover.
  */
 export function WindowPill({
   group,
@@ -42,6 +52,8 @@ export function WindowPill({
 }) {
   const [open, setOpen] = useState(false)
   const maximized = useDock((state) => state.maximized === group.id)
+  useDock((state) => state.revision)
+  const docked = isDocked(group)
   return (
     <span
       className="window-pill"
@@ -65,6 +77,12 @@ export function WindowPill({
             onClick={() => toggleMaximized(group)}
           >
             {maximized ? <Minimize2 /> : <Maximize2 />}
+          </ToolbarButton>
+          <ToolbarButton
+            label={docked ? "분리" : "오른쪽에 붙이기"}
+            onClick={() => (docked ? detachWindow : attachWindow)(group)}
+          >
+            {docked ? <PictureInPicture2 /> : <PanelRightDashed />}
           </ToolbarButton>
         </ToolbarGroup>
       </ToolbarCluster>

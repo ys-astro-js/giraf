@@ -229,17 +229,40 @@
   border-radius: calc(var(--window-toolbar) / 2);
 }
 
+/* The bar's empty space is dockview's handle (its void container, laid
+   under the whole bar): it moves a floating window, and drags a docked one
+   to another place in the column. The bar's controls and tabs sit above it;
+   everything else in the row lets the pointer through. */
 .dockview-theme-giraf .dv-pre-actions-container {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex: 1 0 100%;
   align-items: center;
   min-width: 0;
+  pointer-events: none;
 }
-.dockview-theme-giraf .dv-void-container,
+.dockview-theme-giraf
+  .dv-pre-actions-container
+  :is(.window-pill, .toolbar-group, .search-field, button, input) {
+  pointer-events: auto;
+}
+.dockview-theme-giraf .dv-groupview > .dv-tabs-and-actions-container > .dv-void-container {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  cursor: default;
+}
+.dockview-theme-giraf .dv-groupview[data-maximized] .dv-void-container {
+  pointer-events: none;
+}
 .dockview-theme-giraf .dv-right-actions-container {
   display: none;
 }
 .dockview-theme-giraf .dv-scrollable {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex: 1 0 100%;
   min-width: 0;
@@ -553,6 +576,17 @@
 .dv-resize-container .dv-resize-handle-topright { top: -6px; right: -6px; }
 .dv-resize-container .dv-resize-handle-bottomleft { bottom: -6px; left: -6px; }
 .dv-resize-container .dv-resize-handle-bottomright { bottom: -6px; right: -6px; }
+/* A floating window filling the workbench: square, its edges fixed. */
+.dv-resize-container[data-maximized] {
+  border-radius: 0;
+  box-shadow: none;
+}
+.dv-resize-container[data-maximized] > .dv-grid-view {
+  border-radius: 0;
+}
+.dv-resize-container[data-maximized] [class*="dv-resize-handle"] {
+  display: none;
+}
 
 /* A window's bars are its handle, not text: pressing them never starts a
    selection (fields in them still take typing; Safari would block it). */

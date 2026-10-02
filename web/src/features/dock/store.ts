@@ -8,6 +8,7 @@ import { PANELS, type PanelId } from "./panels"
 import { recordBars } from "./morph"
 import {
   buildDefault,
+  canDrop,
   CANVAS,
   canvasGroup,
   columnGroups,
@@ -20,6 +21,7 @@ import {
   groupKind,
   isDocked,
   KINDS,
+  type DropPlace,
 } from "./layout"
 
 /*
@@ -145,15 +147,18 @@ function followLayout() {
 export function syncDock() {
   const dock = api()
   if (!dock) return
+  // dockview knows which docked group is maximized; a floating one is ours.
   const docked = dock.groups.find((group) => group.api.isMaximized())
-  useDock.setState((state) => ({
-    maximized:
-      docked?.id ??
-      (state.maximized && dock.getGroup(state.maximized)
-        ? state.maximized
-        : undefined),
-    revision: state.revision + 1,
-  }))
+  useDock.setState((state) => {
+    const floating = state.maximized
+      ? (dock.getGroup(state.maximized) as DockviewGroupPanel | undefined)
+      : undefined
+    return {
+      maximized:
+        docked?.id ?? (floating && !isDocked(floating) ? floating.id : undefined),
+      revision: state.revision + 1,
+    }
+  })
   markWindows(dock)
 }
 
@@ -178,8 +183,36 @@ function mark(element: HTMLElement, name: string, on: boolean) {
   else delete element.dataset[name]
 }
 
+type DropEvent = {
+  kind: DropPlace["on"]
+  position: DropPlace["position"]
+  group?: DockviewGroupPanel
+  getData(): { groupId: string; panelId: string | null } | undefined
+  preventDefault(): void
+}
+
+/** Turns a drop dockview is about to offer or make away unless it may. */
+function guardDrop(dock: DockviewApi, event: DropEvent) {
+  const data = event.getData()
+  const allowed =
+    !!data &&
+    canDrop(dock, {
+      on: event.kind,
+      position: event.position,
+      target: event.group,
+      source: data.panelId
+        ? { panel: dock.getPanel(data.panelId) }
+        : { group: dock.getGroup(data.groupId) as DockviewGroupPanel },
+    })
+  if (!allowed) event.preventDefault()
+}
+
 /** Wires the dock's events once it is ready. */
 export function watchDock(dock: DockviewApi) {
+  // Tabs gather only with their own kind (see canDrop).
+  dock.onWillShowOverlay((event) => guardDrop(dock, event))
+  dock.onWillDrop((event) => guardDrop(dock, event))
+  dock.onDidDrop(() => fitColumn(dock, useDock.getState().column))
   let pending = 0
   dock.onDidLayoutChange(() => {
     followLayout()
@@ -327,7 +360,7 @@ export function closeTab(panel: IDockviewPanel) {
 /* Windows: the window pill acts on the whole group. */
 
 export function closeWindow(group: DockviewGroupPanel) {
-  if (useDock.getState().maximized === group.id) toggleMaximized(group)
+  if (isMaximized(group)) toggleMaximized(group)
   for (const panel of [...group.panels]) closeTab(panel)
 }
 
@@ -335,6 +368,11 @@ function maximizedGroup() {
   const id = useDock.getState().maximized
   return id ? (api()?.getGroup(id) as DockviewGroupPanel | undefined) : undefined
 }
+
+const isMaximized = (group: DockviewGroupPanel) =>
+  isDocked(group)
+    ? group.api.isMaximized()
+    : useDock.getState().maximized === group.id
 
 /** Where a floating window was before it filled the workbench. */
 const beforeMaximized = new Map<string, Box>()
@@ -349,7 +387,7 @@ export function toggleMaximized(group: DockviewGroupPanel) {
   if (!dock) return
   const maximized = maximizedGroup()
   if (maximized && maximized !== group) toggleMaximized(maximized)
-  if (useDock.getState().maximized === group.id) {
+  if (isMaximized(group)) {
     if (isDocked(group)) group.api.exitMaximized()
     else {
       const box = beforeMaximized.get(group.id)
@@ -378,7 +416,7 @@ const FLOAT = { width: 480, height: 400 }
 export function detachWindow(group: DockviewGroupPanel) {
   const dock = api()
   if (!dock || !isDocked(group)) return
-  if (useDock.getState().maximized === group.id) toggleMaximized(group)
+  if (isMaximized(group)) toggleMaximized(group)
   const box = boxOf(group)
   const width = Math.min(Math.max(box.width, 320), FLOAT.width)
   const height = Math.min(Math.max(box.height * 0.8, 240), FLOAT.height)
@@ -398,7 +436,7 @@ export function detachWindow(group: DockviewGroupPanel) {
 export function attachWindow(group: DockviewGroupPanel) {
   const dock = api()
   if (!dock || isDocked(group)) return
-  if (useDock.getState().maximized === group.id) toggleMaximized(group)
+  if (isMaximized(group)) toggleMaximized(group)
   const kind = groupKind(group)
   if (!kind) return
   const active = group.activePanel
