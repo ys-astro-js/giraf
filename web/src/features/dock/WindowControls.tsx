@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState } from "react"
 import { createPortal } from "react-dom"
-import { Lock, LockOpen, Maximize2, Minimize2, Minus, X } from "lucide-react"
+import { Lock, LockOpen, Maximize2, Minimize2, X } from "lucide-react"
 import { LinearBlur } from "progressive-blur"
 import type {
   DockviewGroupPanel,
@@ -16,15 +16,12 @@ import {
   ToolbarSpacer,
 } from "@/components/toolbar"
 import { WindowSlot, WindowToolbar } from "./WindowToolbar"
-import { APP, slotKey, useBarOverflow, useSlots } from "./bars"
+import { useBarOverflow } from "./bars"
+import { CANVAS } from "./layout"
 import { morphBars } from "./morph"
 import { useToolbarOverflow } from "@/components/toolbar-overflow"
-import { PANELS, type PanelId } from "./panels"
 import {
   closeWindow,
-  minimizeWindow,
-  restoreTab,
-  restoreWindow,
   toggleLock,
   toggleMaximized,
   useDock,
@@ -32,10 +29,9 @@ import {
 } from "./store"
 
 /**
- * The window's own controls at the start of its top bar: close, minimize and
+ * The window's own controls at the start of its top bar: close and
  * maximize, shown small at rest so they say what they do, and grown to
- * toolbar size over the title on hover. The bar's empty space moves the
- * window, so the pill needs no handle of its own.
+ * toolbar size over the title on hover.
  */
 export function WindowPill({
   group,
@@ -65,13 +61,7 @@ export function WindowPill({
             <X />
           </ToolbarButton>
           <ToolbarButton
-            label="창 최소화"
-            onClick={() => minimizeWindow(group)}
-          >
-            <Minus />
-          </ToolbarButton>
-          <ToolbarButton
-            label={maximized ? "전체 화면 끝내기" : "전체 화면"}
+            label={maximized ? "최대화 끝내기" : "최대화"}
             onClick={() => toggleMaximized(group)}
           >
             {maximized ? <Minimize2 /> : <Maximize2 />}
@@ -105,12 +95,24 @@ export function LockControl({ panel }: { panel: IDockviewPanel }) {
 
 /**
  * A window's top bar row, above its tab bar: the pill, the shown tab's
- * leading controls, title, then its toolbar. The bar's empty space drags
- * the window.
+ * leading controls, title, then its toolbar. The canvas has the row without
+ * the pill (`controls`), floating over it. The bar's empty space drags the
+ * window.
  */
-export function WindowTopBar(props: IDockviewHeaderActionsProps) {
+export function WindowBar({
+  group,
+  owner = group.id,
+  active,
+  controls = true,
+}: {
+  group: DockviewGroupPanel
+  /** Whose bar slots these are (see `barOwner`). */
+  owner?: string
+  active: boolean
+  controls?: boolean
+}) {
   useDock((state) => state.revision)
-  const id = props.group.id
+  const id = owner
   // The toolbar slot is the room the tab's toolbar has; past it, groups
   // marked overflow go to the menu at the end of the bar.
   const [slot, setSlot] = useState<HTMLDivElement | null>(null)
@@ -144,21 +146,13 @@ export function WindowTopBar(props: IDockviewHeaderActionsProps) {
   useLayoutEffect(() => {
     useBarOverflow.setState({ [id]: overflow.context })
   }, [id, overflow.context])
-  const fullscreen = useDock((state) => state.maximized === id)
-  const appPill = useSlots((slots) => slots[slotKey(APP, "pill")])
-  // Fullscreen, the window's toolbar sits in the app's bar with room to
-  // spare, so it has no overflow menu.
-  const overflowSlot = fullscreen ? undefined : slot
-  const pill = <WindowPill group={props.group} active={props.isGroupActive} />
   // A newly shown tab morphs the window's bars from the last tab's.
   useEffect(() => {
-    const listener = props.group.api.onDidActivePanelChange(() =>
-      morphBars(props.group)
-    )
+    const listener = group.api.onDidActivePanelChange(() => morphBars(group))
     return () => listener.dispose()
-  }, [props.group])
-  // The bar itself, which holds this row (hidden when fullscreen) and the
-  // tab bar; content-rich windows paint a progressive blur behind it.
+  }, [group])
+  // The bar itself, which holds this row and the tab bar; content-rich
+  // windows paint a progressive blur behind it.
   const [bar, setBar] = useState<HTMLElement | null>(null)
   return (
     <div
@@ -180,8 +174,7 @@ export function WindowTopBar(props: IDockviewHeaderActionsProps) {
           />,
           bar
         )}
-      {/* Fullscreen, the window's controls join the app's top bar. */}
-      {fullscreen && appPill ? createPortal(pill, appPill) : pill}
+      {controls && <WindowPill group={group} active={active} />}
       <WindowSlot
         owner={id}
         slot="leading"
@@ -196,59 +189,20 @@ export function WindowTopBar(props: IDockviewHeaderActionsProps) {
       />
       {/* The overflow menu joins the tab's toolbar, just before a primary
           action at the very end (see dock.css). */}
-      {overflowSlot &&
+      {slot &&
         createPortal(
           <ToolbarCluster edge="end" className="window-overflow">
             <ToolbarSpacer />
             <ToolbarOverflowMenu overflow={overflow} />
           </ToolbarCluster>,
-          overflowSlot
+          slot
         )}
     </div>
   )
 }
 
-/**
- * Minimized windows and closed built-in tabs, as a group in the top
- * toolbar; it slides in and out with the toolbar's own motion.
- */
-export function WindowTray() {
-  const minimized = useDock((state) => state.minimized)
-  const stowed = useDock((state) => state.stowed)
-  const dock = useDock((state) => state.api)
-  const items = [
-    ...minimized.flatMap((item) => {
-      const group = dock?.getGroup(item.group)
-      const panel = group?.activePanel ?? group?.panels[0]
-      if (!group || !panel) return []
-      return [
-        {
-          key: item.group,
-          label: group.panels.map((p) => p.title).join(", "),
-          component: panel.view.contentComponent,
-          restore: () => restoreWindow(item.group),
-        },
-      ]
-    }),
-    ...stowed.map((item) => ({
-      key: item.id,
-      label: item.title,
-      component: item.component,
-      restore: () => restoreTab(item.id),
-    })),
-  ]
-  return (
-    <ToolbarGroup label="최소화한 창" hidden={!items.length}>
-      {items.map((item) => {
-        const Icon = PANELS[item.component as PanelId]?.icon
-        return (
-          <ToolbarItem key={item.key}>
-            <ToolbarButton label={item.label} onClick={item.restore}>
-              {Icon && <Icon />}
-            </ToolbarButton>
-          </ToolbarItem>
-        )
-      })}
-    </ToolbarGroup>
-  )
+/** The window bar as dockview's header actions; the canvas has its own. */
+export function WindowTopBar(props: IDockviewHeaderActionsProps) {
+  if (props.panels.some((panel) => panel.id === CANVAS)) return null
+  return <WindowBar group={props.group} active={props.isGroupActive} />
 }

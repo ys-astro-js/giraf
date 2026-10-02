@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import { revealPanel } from "@/features/dock/store"
+import { toggleTray } from "@/features/dock/store"
 
 type Request = { id: string; revision: number }
 export type InputRequest = { taskId: string; role: string; sequence: number }
@@ -51,7 +51,7 @@ export const useLayout = create<LayoutState>()((set) => ({
     })),
   viewLog: (id) => {
     set((state) => ({ logRequest: next(state.logRequest, id) }))
-    revealPanel("history")
+    toggleTray(true)
   },
   clearLog: () => set({ logRequest: null }),
 }))

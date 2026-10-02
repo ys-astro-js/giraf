@@ -4,15 +4,11 @@ import { DiagnosticsButton } from "@/components/diagnostics-button"
 import { WorkflowSelector } from "@/components/workflow-selector"
 import { resolveDiagnosticNode } from "@/lib/diagnostics"
 import { useWorkbench } from "./context"
-import { toggleEdge, useDock } from "@/features/dock/store"
-import { WindowTray } from "@/features/dock/WindowControls"
-import { WindowSlot } from "@/features/dock/WindowToolbar"
-import { APP } from "@/features/dock/bars"
+import { toggleTray, useDock } from "@/features/dock/store"
 
 export function WorkbenchHeader() {
   const w = useWorkbench()
-  const edges = useDock((state) => state.edges)
-  const docked = useDock((state) => state.docked)
+  const trayOpen = useDock((state) => state.tray.open)
   return (
     <WorkbenchToolbar
       historyControls={
@@ -56,36 +52,8 @@ export function WorkbenchHeader() {
       }
       onRun={() => w.runWorkflow()}
       onCancel={w.cancelWorkflow}
-      windows={<WindowTray />}
-      windowLeading={
-        <>
-          <WindowSlot owner={APP} slot="pill" className="app-window-slot" />
-          <WindowSlot
-            owner={APP}
-            slot="leading"
-            className="app-window-slot window-toolbar-slot window-leading-slot"
-          />
-          <WindowSlot
-            owner={APP}
-            slot="title"
-            className="app-window-slot window-title-slot"
-          />
-        </>
-      }
-      windowTrailing={
-        <WindowSlot
-          owner={APP}
-          slot="top"
-          className="app-window-slot window-toolbar-slot"
-        />
-      }
-      docked={docked}
-      sidebarVisible={edges.left}
-      settingsVisible={edges.right}
-      trayOpen={edges.bottom}
-      onSidebar={() => toggleEdge("left")}
-      onSettings={() => toggleEdge("right")}
-      onTray={() => toggleEdge("bottom")}
+      trayOpen={trayOpen}
+      onTray={() => toggleTray()}
     />
   )
 }

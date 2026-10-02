@@ -209,8 +209,6 @@ export function morphBars(group: DockviewGroupPanel) {
   const record = recorded.get(group)
   recorded.delete(group)
   if (reducedMotion()) return
-  // A fullscreen window's controls live in the app's bar; they switch in place.
-  if ("fullscreen" in root.dataset) return
   const now = bars(group)
   const fresh = record && performance.now() - record.at < FRESH
   // The top bar is still on the page; the bottom bar only in the record.

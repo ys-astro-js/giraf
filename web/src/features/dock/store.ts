@@ -5,260 +5,171 @@ import type {
   IDockviewPanel,
 } from "dockview-react"
 import { PANELS, type PanelId } from "./panels"
-import { buildPreset, type PresetId } from "./presets"
 import { recordBars } from "./morph"
-import { animateLayout, quietly } from "./transition"
 import {
-  dragSeam,
-  EDGES,
-  emptySnaps,
-  readSnaps,
-  regionOf,
-  seams,
-  setHidden,
-  sidesBeside,
-  snap,
-  snapBoxes,
-  unsnap,
-  type Box,
-  type Edge,
-  type Region,
-  type Seam,
-  type Side,
-  type Snaps,
+  buildDefault,
+  CANVAS,
+  canvasGroup,
+  columnGroups,
+  columnWidth,
+  COLUMN,
+  dockPosition,
+  dockTarget,
+  fitColumn,
+  fixCanvas,
+  groupKind,
+  isDocked,
+  KINDS,
 } from "./layout"
 
 /*
- * The workbench is a desktop. Every window is a free window over it (a
- * dockview floating group); snapping one to an edge, or into the space the
- * edges leave, gives it a box from the snap model (layout.ts). Windows
- * never move on their own: a window leaving its place leaves desktop there.
- * Only snapping, a side's toggle and the workbench resizing lay the snapped
- * windows out again.
+ * The workbench: the workflow canvas, and a column on the right holding the
+ * node and viewer windows (see layout.ts). A window can float over the
+ * workbench and dock again. Below the workbench, outside the dock, sits the
+ * run tray. The column's width and the tray's height stay in pixels.
  */
-
-export { EDGES }
-export type { Edge, Region, Side }
 
 /** What a locked tab keeps showing instead of following the selection. */
 export type WindowParams = { locked?: string }
 
-/** A minimized window: hidden in place until the tray brings it back. */
-export type MinimizedWindow = { group: string; panels: string[] }
+type Box = { left: number; top: number; width: number; height: number }
 
-/** A built-in tab that was closed; it waits in the tray to come back. */
-export type StowedTab = {
-  id: string
-  component: string
-  title: string
-  params?: Record<string, unknown>
-}
+/** The run tray's height when nobody has set it, and its floor. */
+export const TRAY_HEIGHT = 240
+export const MIN_TRAY = 120
 
 type DockState = {
   api?: DockviewApi
-  snaps: Snaps
-  /** Sides whose windows are shown. */
-  edges: Record<Edge, boolean>
-  /** Sides holding windows, shown or not: only these get a toolbar toggle. */
-  docked: Record<Edge, boolean>
-  minimized: MinimizedWindow[]
-  stowed: StowedTab[]
-  /**
-   * The window filling the whole workbench (fullscreen), if any. It runs
-   * under the app's top bar and moves its own top bar controls into it.
-   */
+  /** The right column's width in pixels. */
+  column: number
+  /** The run tray below the workbench. */
+  tray: { open: boolean; height: number }
+  /** The window filling the workbench (a group id), if any. */
   maximized?: string
   /** Bumped on every structural change so window chrome re-reads it. */
   revision: number
 }
 
-const noEdges = () => ({ left: false, right: false, bottom: false })
-
 export const useDock = create<DockState>()(() => ({
-  snaps: emptySnaps(),
-  edges: noEdges(),
-  docked: noEdges(),
-  minimized: [],
-  stowed: [],
+  column: COLUMN,
+  tray: { open: false, height: TRAY_HEIGHT },
   revision: 0,
 }))
 
 const LAYOUT_KEY = "giraf-dock-layout"
-const LAYOUT_VERSION = 5
+const LAYOUT_VERSION = 6
 type SavedLayout = {
   version: number
   layout: unknown
-  snaps: unknown
-  minimized: MinimizedWindow[]
-  stowed: StowedTab[]
-  places?: Record<string, Place>
+  column: number
+  tray: DockState["tray"]
 }
 
 const api = () => useDock.getState().api
-const snaps = () => useDock.getState().snaps
 
-/** The workbench element every window lies within. */
-export const dockRoot = () => document.querySelector(".dock-root")
+/* Laying out */
 
-/** Whether a window is snapped (has a place in the snap model). */
-export const isSnapped = (group: DockviewGroupPanel) =>
-  !!regionOf(snaps(), group.id)
-
-/** The sides a snapped window can take another window beside it. */
-export const sidesOf = (group: DockviewGroupPanel) =>
-  sidesBeside(snaps(), group.id)
-
-/**
- * Floating windows are placed relative to dockview's overlay host, not the
- * workbench; every position is measured from here.
- */
-function floatHost() {
-  const element =
-    document.querySelector(".dv-floating-overlay-host") ??
-    document.querySelector(".dv-shell-middle-column") ??
-    dockRoot()
-  return element?.getBoundingClientRect() ?? new DOMRect()
-}
+/** The element floating windows are placed in. */
+const floatHost = () =>
+  document.querySelector(".dock-root .dv-floating-overlay-host") ??
+  document.querySelector(".dock-root")
 
 function floatingBox(group: DockviewGroupPanel) {
   return group.element.closest<HTMLElement>(".dv-resize-container")
 }
 
-/** The workbench's size, which the snap model lays windows out in. */
-function workbench() {
-  const rect = dockRoot()?.getBoundingClientRect()
-  return { width: rect?.width ?? 0, height: rect?.height ?? 0 }
-}
-
-/** A window's box in workbench coordinates. */
-function boxOf(group: DockviewGroupPanel): Box | undefined {
-  const rect = floatingBox(group)?.getBoundingClientRect()
-  const root = dockRoot()?.getBoundingClientRect()
-  if (!rect || !root) return
+/** A window's box, relative to where floating windows are placed. */
+function boxOf(group: DockviewGroupPanel): Box {
+  const rect = (floatingBox(group) ?? group.element).getBoundingClientRect()
+  const host = floatHost()?.getBoundingClientRect()
   return {
-    left: rect.left - root.left,
-    top: rect.top - root.top,
+    left: rect.left - (host?.left ?? 0),
+    top: rect.top - (host?.top ?? 0),
     width: rect.width,
     height: rect.height,
   }
 }
 
-/** Puts a window at a box given in workbench coordinates. */
+/** Puts a floating window at a box relative to the float host. */
 function place(group: DockviewGroupPanel, box: Box) {
   const element = floatingBox(group)
   if (!element) return
-  const host = floatHost()
-  const root = dockRoot()?.getBoundingClientRect() ?? host
-  element.style.left = `${root.left - host.left + box.left}px`
-  element.style.top = `${root.top - host.top + box.top}px`
+  element.style.left = `${box.left}px`
+  element.style.top = `${box.top}px`
   group.api.setSize({ width: box.width, height: box.height })
 }
 
-function minimizedIds() {
-  return new Set(useDock.getState().minimized.map((item) => item.group))
+/** The whole workbench, as a box for a floating window. */
+function wholeBox(dock: DockviewApi): Box {
+  return { left: 0, top: 0, width: dock.width, height: dock.height }
 }
 
 /**
- * The boxes snapped windows take. Every snapped window has the same border
- * on all four sides; a window that has a neighbor to its right or below
- * reaches one pixel into it, so the two borders lie on one line.
+ * Lays the dock out at the workbench's size; the column keeps its width
+ * and a maximized floating window keeps filling the workbench.
  */
-function tiles(model: Snaps, size = workbench()) {
-  const boxes = snapBoxes(model, size)
-  for (const [id, box] of boxes)
-    boxes.set(id, {
-      ...box,
-      width: box.width + (box.left + box.width < size.width - 0.5 ? 1 : 0),
-      height: box.height + (box.top + box.height < size.height - 0.5 ? 1 : 0),
-    })
-  return boxes
-}
-
-/**
- * Lays the snapped windows out by the model, and hides the windows of a
- * side its toggle hid. Minimized windows stay hidden.
- */
-function layOut() {
+export function layoutDock(width: number, height: number) {
   const dock = api()
-  if (!dock || useDock.getState().maximized) return
-  const model = snaps()
-  const boxes = tiles(model)
-  const minimized = minimizedIds()
-  for (const group of dock.groups) {
-    const element = floatingBox(group)
-    const region = regionOf(model, group.id)
-    if (!element) continue
-    if (region) element.dataset.snapped = region
-    else delete element.dataset.snapped
-    if (!region) continue
-    const box = boxes.get(group.id)
-    element.hidden = !box || minimized.has(group.id)
-    if (!box) continue
-    place(group, box)
-  }
+  if (!dock) return
+  dock.layout(width, height)
+  fitColumn(dock, useDock.getState().column)
+  const maximized = maximizedGroup()
+  if (maximized && !isDocked(maximized)) place(maximized, wholeBox(dock))
 }
 
-/** Changes the snap model and lays the windows out again, animated. */
-function arrange(change: (model: Snaps) => Snaps) {
-  animateLayout(api(), () => {
-    useDock.setState({ snaps: change(snaps()) })
-    layOut()
-    syncDock()
-  })
+/** While the column's divider is dragged, the column takes its new width. */
+let resizing = false
+export function startColumnResize() {
+  resizing = true
+}
+export function endColumnResize() {
+  if (!resizing) return
+  resizing = false
+  const dock = api()
+  const width = dock && !dock.hasMaximizedGroup() && columnWidth(dock)
+  if (width) useDock.setState({ column: width })
   saveLayout()
 }
 
-/** Every window keeps its header row on top. */
-function syncHeaders(dock: DockviewApi) {
-  for (const group of dock.groups) {
-    if (group.api.getHeaderPosition() !== "top")
-      group.api.setHeaderPosition("top")
-    group.model.header.hidden = false
-  }
+/** After dockview lays the grid out: keep the column's width, or take the
+ *  user's new one while they drag its divider. */
+function followLayout() {
+  const dock = api()
+  if (!dock || dock.hasMaximizedGroup()) return
+  const width = columnWidth(dock)
+  if (resizing && width) useDock.setState({ column: width })
+  else fitColumn(dock, useDock.getState().column)
 }
 
 /** Re-reads the layout facts the rest of the app shows. */
 export function syncDock() {
   const dock = api()
   if (!dock) return
-  syncHeaders(dock)
-  const groups = new Set(dock.groups.map((group) => group.id))
-  useDock.setState((state) => {
-    // Windows that closed or merged leave the model; nothing else moves.
-    let model = state.snaps
-    for (const region of ["left", "right", "bottom", "center"] as Region[])
-      for (const id of model.regions[region])
-        if (!groups.has(id)) model = unsnap(model, id)
-    const docked = Object.fromEntries(
-      EDGES.map((edge) => [edge, model.regions[edge].length > 0])
-    ) as Record<Edge, boolean>
-    return {
-      snaps: model,
-      docked,
-      edges: Object.fromEntries(
-        EDGES.map((edge) => [edge, docked[edge] && !model.hidden[edge]])
-      ) as Record<Edge, boolean>,
-      minimized: state.minimized.filter((item) => groups.has(item.group)),
-      maximized:
-        state.maximized && groups.has(state.maximized)
-          ? state.maximized
-          : undefined,
-      revision: state.revision + 1,
-    }
-  })
+  const docked = dock.groups.find((group) => group.api.isMaximized())
+  useDock.setState((state) => ({
+    maximized:
+      docked?.id ??
+      (state.maximized && dock.getGroup(state.maximized)
+        ? state.maximized
+        : undefined),
+    revision: state.revision + 1,
+  }))
   markWindows(dock)
 }
 
 /**
  * Marks layout facts on each window's element for its bars' styles:
- * `data-tabbed` while it holds several tabs (a tab bar, translucent top bar),
- * `data-fullscreen` while it fills the workbench.
+ * `data-tabbed` while it holds several tabs, `data-floating` while it
+ * floats, `data-maximized` while it fills the workbench.
  */
 function markWindows(dock: DockviewApi) {
   const maximized = useDock.getState().maximized
   for (const group of dock.groups) {
     mark(group.element, "tabbed", group.panels.length > 1)
-    mark(group.element, "fullscreen", group.id === maximized)
+    mark(group.element, "floating", !isDocked(group))
+    mark(group.element, "maximized", group.id === maximized)
+    const box = floatingBox(group)
+    if (box) mark(box, "maximized", group.id === maximized)
   }
 }
 
@@ -267,117 +178,52 @@ function mark(element: HTMLElement, name: string, on: boolean) {
   else delete element.dataset[name]
 }
 
-/** The workbench size the snapped windows were last laid out in. */
-let laidOut = { width: 0, height: 0 }
-
-/** Lays the snapped windows out again when the workbench resized. */
-export function followLayout() {
-  const size = workbench()
-  if (size.width === laidOut.width && size.height === laidOut.height) return
-  laidOut = size
-  layOut()
-  // The seams between snapped windows move with them.
-  useDock.setState((state) => ({ revision: state.revision + 1 }))
+/** Wires the dock's events once it is ready. */
+export function watchDock(dock: DockviewApi) {
+  let pending = 0
+  dock.onDidLayoutChange(() => {
+    followLayout()
+    syncDock()
+    window.clearTimeout(pending)
+    pending = window.setTimeout(saveLayout, 300)
+  })
+  for (const event of [
+    dock.onDidActiveGroupChange,
+    dock.onDidActivePanelChange,
+    dock.onDidAddPanel,
+    dock.onDidRemovePanel,
+    dock.onDidMovePanel,
+    dock.onDidAddGroup,
+    dock.onDidRemoveGroup,
+    dock.onDidMaximizedGroupChange,
+  ])
+    event(syncDock)
 }
 
-/** The seams between the snapped windows now, in workbench coordinates. */
-export const currentSeams = () =>
-  useDock.getState().maximized ? [] : seams(snaps(), workbench())
+/* Opening windows */
+
+type NewWindow = { id: string; component: string; title: string }
 
 /**
- * Moves a seam to a viewport point: the snapped windows on both sides of
- * it follow at once.
+ * Opens a window: as a tab beside `beside`, else in its kind's group (docked
+ * first, then floating), else as a new group in the column.
  */
-export function moveSeam(seam: Seam, x: number, y: number, axis: "x" | "y") {
-  const root = dockRoot()?.getBoundingClientRect()
-  if (!root) return
-  const at = axis === "x" ? x - root.left : y - root.top
-  useDock.setState((state) => ({
-    snaps: dragSeam(state.snaps, seam, at, workbench()),
-    revision: state.revision + 1,
-  }))
-  layOut()
-}
-
-/** Keeps the arrangement a seam drag left. */
-export function settleSeam() {
-  syncDock()
-  saveLayout()
-}
-
-/* Opening windows: a window opens where it was when it closed, else it
-   floats. No window has a place of its own by its role. */
-
-const FLOAT_SIZE = { width: 480, height: 360 }
-
-/** Where a window was when it closed: its snapped region, or its box. */
-type Place = { region?: Region; box?: Box }
-
-let places: Record<string, Place> = {}
-
-/** Remembers where a window is, as it closes. */
-function rememberPlace(panel: IDockviewPanel) {
-  const region = regionOf(snaps(), panel.group.id)
-  const box = region ? undefined : boxOf(panel.group)
-  places[panel.id] = { region, box }
-}
-
-/** A new free window: in the middle of the workbench, cascading. */
-function freshBox(): Box {
-  const size = workbench()
-  const step = 24 * ((api()?.groups.length ?? 0) % 6)
-  return {
-    left: (size.width - FLOAT_SIZE.width) / 2 + step,
-    top: (size.height - FLOAT_SIZE.height) / 3 + step,
-    ...FLOAT_SIZE,
-  }
-}
-
-type NewPanel = {
-  id: string
-  component: string
-  title: string
-  params?: Record<string, unknown>
-}
-
-/** Opens panels together as one free window at a box (workbench coords). */
-function openWindow(panels: NewPanel[], box: Box) {
+function openWindow(window: NewWindow, beside?: DockviewGroupPanel) {
   const dock = api()!
-  const host = floatHost()
-  const root = dockRoot()?.getBoundingClientRect() ?? host
-  const [first, ...rest] = panels
+  const kind = KINDS[window.component]
+  const floating = dock.groups.find(
+    (group) => !isDocked(group) && groupKind(group) === kind
+  )
+  const docked = columnGroups(dock).some((group) => groupKind(group) === kind)
+  const reference = beside ?? (docked ? undefined : floating)
   const panel = dock.addPanel({
-    ...first,
-    floating: {
-      position: {
-        left: root.left - host.left + box.left,
-        top: root.top - host.top + box.top,
-      },
-      width: box.width,
-      height: box.height,
-    },
+    ...window,
+    position: reference
+      ? { referenceGroup: reference }
+      : dockPosition(dock, kind),
   })
-  for (const item of rest)
-    dock.addPanel({ ...item, position: { referenceGroup: panel.group } })
-  panel.api.setActive()
-  return panel.group
-}
-
-/** Opens a window where it last was, or as a tab of the window it joins. */
-function addWindow(panel: NewPanel, beside?: DockviewGroupPanel) {
-  const dock = api()!
-  if (beside) {
-    restoreGroup(beside)
-    return dock.addPanel({ ...panel, position: { referenceGroup: beside } })
-  }
-  const where = places[panel.id] ?? {}
-  delete places[panel.id]
-  const group = openWindow([panel], where.box ?? freshBox())
-  if (where.region) {
-    useDock.setState({ snaps: snap(snaps(), group.id, where.region) })
-    layOut()
-  }
-  return group.panels[0]
+  fitColumn(dock, useDock.getState().column)
+  return panel
 }
 
 const isLocked = (panel: IDockviewPanel) =>
@@ -396,7 +242,7 @@ function follower(component: PanelId) {
   if (free) return free
   let n = 2
   while (dock.getPanel(`${component}-${n}`)) n++
-  return addWindow(
+  return openWindow(
     {
       id: same.length ? `${component}-${n}` : component,
       component,
@@ -407,47 +253,30 @@ function follower(component: PanelId) {
 }
 
 /**
- * Shows a tab wherever it is: brings back its window or the tab itself,
- * re-opens it or shows its side. Background reveals keep the focus.
+ * Shows a tab, opening it where its kind lives if it is closed. A window
+ * maximized elsewhere steps back so the tab can be seen; background
+ * reveals keep the focus and the arrangement.
  */
 export function revealPanel(id: PanelId, { activate = true } = {}) {
   const dock = api()
   if (!dock) return
-  if (useDock.getState().stowed.some((item) => item.id === id)) {
-    restoreTab(id)
-    return
+  const panel = PANELS[id].follows
+    ? follower(id)
+    : (dock.getPanel(id) ??
+      openWindow({ id, component: id, title: PANELS[id].title }))
+  if (activate) {
+    const maximized = maximizedGroup()
+    if (maximized && maximized !== panel.group) toggleMaximized(maximized)
+    if (panel.group.activePanel !== panel) recordBars(panel.group)
+    panel.api.setActive()
   }
-  animateLayout(dock, () => {
-    const panel = PANELS[id].follows
-      ? follower(id)
-      : (dock.getPanel(id) ??
-        addWindow({ id, component: id, title: PANELS[id].title }))
-    restoreGroup(panel.group)
-    const region = regionOf(snaps(), panel.group.id)
-    if (region && region !== "center" && snaps().hidden[region]) {
-      useDock.setState({ snaps: setHidden(snaps(), region, false) })
-      layOut()
-    }
-    if (activate && panel.group.activePanel !== panel) recordBars(panel.group)
-    if (activate) panel.api.setActive()
-    syncDock()
-  })
-  saveLayout()
+  syncDock()
 }
 
-/** Whether a window is in the layout rather than closed. */
+/** Whether a window is open. */
 export function useWindowShown(id: PanelId) {
   useDock((state) => state.revision)
   return !!useDock.getState().api?.getPanel(id)
-}
-
-/**
- * The toolbar's side toggles: hide or show the windows snapped along a
- * side; the snapped windows beside them take up the space meanwhile.
- */
-export function toggleEdge(edge: Edge) {
-  if (!snaps().regions[edge].length) return
-  arrange((model) => setHidden(model, edge, !model.hidden[edge]))
 }
 
 /* Tabs: lock and close act on one tab. */
@@ -484,282 +313,131 @@ export function registerCloseAction(panelId: string, action: () => void) {
   }
 }
 
-/**
- * Document-like tabs and the extra tabs a lock opened close for good;
- * built-in tabs wait in the tray, since nothing else brings them back.
- * Either way the windows around stay where they are.
- */
+/** Closes a tab; an emptied group leaves the column to the others. */
 export function closeTab(panel: IDockviewPanel) {
-  animateLayout(api(), () => {
-    closeActions.get(panel.id)?.()
-    rememberPlace(panel)
-    const component = panel.view.contentComponent
-    const disposable =
-      !!PANELS[component as PanelId]?.closable || panel.id !== component
-    if (!disposable)
-      useDock.setState((state) => ({
-        stowed: [
-          ...state.stowed,
-          {
-            id: panel.id,
-            component,
-            title: panel.title ?? panel.id,
-            params: panel.params,
-          },
-        ],
-      }))
-    panel.api.close()
-    syncDock()
-  })
+  if (panel.id === CANVAS) return
+  closeActions.get(panel.id)?.()
+  panel.api.close()
+  const dock = api()
+  if (dock) fitColumn(dock, useDock.getState().column)
+  syncDock()
   saveLayout()
 }
 
-export function restoreTab(id: string) {
-  const item = useDock.getState().stowed.find((entry) => entry.id === id)
-  if (!item || !api()) return
-  animateLayout(api(), () => {
-    useDock.setState((state) => ({
-      stowed: state.stowed.filter((entry) => entry !== item),
-    }))
-    addWindow(item).api.setActive()
-    syncDock()
-  })
-  saveLayout()
-}
-
-/* Windows: the window pill acts on the whole tab group. */
+/* Windows: the window pill acts on the whole group. */
 
 export function closeWindow(group: DockviewGroupPanel) {
-  animateLayout(api(), () => {
-    for (const panel of [...group.panels]) closeTab(panel)
-  })
+  if (useDock.getState().maximized === group.id) toggleMaximized(group)
+  for (const panel of [...group.panels]) closeTab(panel)
 }
 
-/** Hides a window in place; the tray brings it back where it was. */
-export function minimizeWindow(group: DockviewGroupPanel) {
-  animateLayout(api(), () => {
-    if (useDock.getState().maximized === group.id) toggleMaximized(group)
-    const box = floatingBox(group)
-    if (box) box.hidden = true
-    useDock.setState((state) => ({
-      minimized: [
-        ...state.minimized,
-        { group: group.id, panels: group.panels.map((panel) => panel.id) },
-      ],
-    }))
-    syncDock()
-  })
-  saveLayout()
+function maximizedGroup() {
+  const id = useDock.getState().maximized
+  return id ? (api()?.getGroup(id) as DockviewGroupPanel | undefined) : undefined
 }
 
-/** Shows a window that was minimized. */
-function restoreGroup(group: DockviewGroupPanel) {
-  if (!useDock.getState().minimized.some((m) => m.group === group.id)) return
-  useDock.setState((state) => ({
-    minimized: state.minimized.filter((m) => m.group !== group.id),
-  }))
-  const box = floatingBox(group)
-  if (box) box.hidden = false
-}
-
-export function restoreWindow(groupId: string) {
-  const group = api()?.getGroup(groupId) as DockviewGroupPanel | undefined
-  if (!group) return
-  animateLayout(api(), () => {
-    restoreGroup(group)
-    group.activePanel?.api.setActive()
-    syncDock()
-  })
-  saveLayout()
-}
-
-/** Where a free window was before it went fullscreen. */
-const beforeFullscreen = new Map<string, Box>()
+/** Where a floating window was before it filled the workbench. */
+const beforeMaximized = new Map<string, Box>()
 
 /**
- * Fills the whole workbench with a window, or puts it back: a free window
- * where it was, a snapped one in its place. Only the window's own button
- * does this.
+ * Fills the workbench with a window, under the app's toolbar and above the
+ * run tray, or puts it back. A docked window uses dockview's own maximize;
+ * a floating one grows over the workbench and returns to its box.
  */
 export function toggleMaximized(group: DockviewGroupPanel) {
-  animateLayout(api(), () => {
-    if (useDock.getState().maximized === group.id) {
-      useDock.setState({ maximized: undefined })
-      syncDock()
-      const box = beforeFullscreen.get(group.id)
-      beforeFullscreen.delete(group.id)
-      if (isSnapped(group)) layOut()
-      else if (box) place(group, box)
-    } else {
-      const box = boxOf(group)
-      if (box) beforeFullscreen.set(group.id, box)
-      // Fullscreen first: the workbench grows under the app's bar, and the
-      // window takes the workbench as it then is.
-      useDock.setState({ maximized: group.id })
-      syncDock()
-      place(group, { left: 0, top: 0, ...workbench() })
+  const dock = api()
+  if (!dock) return
+  const maximized = maximizedGroup()
+  if (maximized && maximized !== group) toggleMaximized(maximized)
+  if (useDock.getState().maximized === group.id) {
+    if (isDocked(group)) group.api.exitMaximized()
+    else {
+      const box = beforeMaximized.get(group.id)
+      beforeMaximized.delete(group.id)
+      if (box) place(group, box)
     }
-    group.activePanel?.api.setActive()
-  })
+    useDock.setState({ maximized: undefined })
+  } else {
+    if (isDocked(group)) group.api.maximize()
+    else {
+      beforeMaximized.set(group.id, boxOf(group))
+      place(group, wholeBox(dock))
+    }
+    useDock.setState({ maximized: group.id })
+  }
+  group.activePanel?.api.setActive()
+  fitColumn(dock, useDock.getState().column)
+  syncDock()
   saveLayout()
 }
 
-/* Moving: a window picked up floats under the pointer; released, it lands
-   where the pointer says (see drag.ts), or stays free there. */
+/** A floating window's size when it leaves the column. */
+const FLOAT = { width: 480, height: 400 }
 
-export type DropPosition = "center" | Side
-
-export type DropTarget =
-  /** Join another window as a tab. */
-  | { kind: "merge"; group: DockviewGroupPanel }
-  /** Snap into a region, at its end or beside a window there. */
-  | { kind: "snap"; region: Region; beside?: { id: string; side: Side } }
-
-/** The size a snapped window takes when it is picked up and floats. */
-export function floatingSize(rect: DOMRect) {
-  return {
-    width: Math.min(Math.max(rect.width, 320), 640),
-    height: Math.min(Math.max(rect.height, 240), 480),
-  }
-}
-
-/** Where the pointer holds a moving window, from its top-left corner. */
-export type Grip = {
-  window: DockviewGroupPanel
-  dx: number
-  dy: number
-  /** The snap model before the window was picked up, to put it back. */
-  before?: Snaps
-  /** Where the pointer picked it up, to put a free window back. */
-  from: { x: number; y: number }
-}
-
-/** Moves a free window's top-left corner to a viewport point, inside the workbench. */
-function moveTo(group: DockviewGroupPanel, left: number, top: number) {
-  const element = floatingBox(group)
-  const root = dockRoot()?.getBoundingClientRect()
-  if (!element || !root) return
-  const rect = element.getBoundingClientRect()
-  const host = floatHost()
-  const x = Math.max(root.left, Math.min(left, root.right - rect.width))
-  const y = Math.max(root.top, Math.min(top, root.bottom - rect.height))
-  element.style.left = `${x - host.left}px`
-  element.style.top = `${y - host.top}px`
+/** Lifts a docked window out of the column to float over the workbench. */
+export function detachWindow(group: DockviewGroupPanel) {
+  const dock = api()
+  if (!dock || !isDocked(group)) return
+  if (useDock.getState().maximized === group.id) toggleMaximized(group)
+  const box = boxOf(group)
+  const width = Math.min(Math.max(box.width, 320), FLOAT.width)
+  const height = Math.min(Math.max(box.height * 0.8, 240), FLOAT.height)
+  // It floats just to the left of where it sat, so it reads as lifted out.
+  const left = Math.max(0, Math.min(box.left - 48, dock.width - width))
+  const top = Math.max(0, Math.min(box.top + 48, dock.height - height))
+  dock.addFloatingGroup(group, { position: { left, top }, width, height })
+  fitColumn(dock, useDock.getState().column)
+  syncDock()
+  saveLayout()
 }
 
 /**
- * Picks up a window under the pointer. A snapped one leaves the model
- * (nothing else moves) and takes a free window's size, keeping the spot
- * the pointer grabbed.
+ * Docks a floating window again: as tabs of its kind's group in the column,
+ * or as a new group there, node windows above viewers.
  */
-export function liftWindow(
-  group: DockviewGroupPanel,
-  x: number,
-  y: number
-): Grip {
-  const rect = (floatingBox(group) ?? group.element).getBoundingClientRect()
-  const from = { x, y }
-  if (!isSnapped(group))
-    return { window: group, dx: x - rect.left, dy: y - rect.top, from }
+export function attachWindow(group: DockviewGroupPanel) {
+  const dock = api()
+  if (!dock || isDocked(group)) return
   if (useDock.getState().maximized === group.id) toggleMaximized(group)
-  const before = snaps()
-  const size = floatingSize(rect)
-  // The grabbed point keeps its share of the width as the window shrinks.
-  const dx = Math.min(
-    ((x - rect.left) / Math.max(rect.width, 1)) * size.width,
-    size.width - 16
-  )
-  const dy = Math.min(y - rect.top, 32)
-  quietly(() => {
-    useDock.setState({ snaps: unsnap(before, group.id) })
-    const element = floatingBox(group)
-    if (element) delete element.dataset.snapped
-    group.api.setSize(size)
-    moveTo(group, x - dx, y - dy)
-    syncDock()
-  })
-  return { window: group, dx, dy, before, from }
-}
-
-/** Pulls one tab out of its window into a free window of its own. */
-export function liftTab(panel: IDockviewPanel, x: number, y: number): Grip {
-  const size = floatingSize(panel.group.element.getBoundingClientRect())
-  const dx = 64
-  const dy = 20
-  const host = floatHost()
-  quietly(() => {
-    api()?.addFloatingGroup(panel, {
-      position: { left: x - dx - host.left, top: y - dy - host.top },
-      ...size,
-    })
-    panel.api.setActive()
-    syncDock()
-  })
-  return { window: panel.group, dx, dy, from: { x, y } }
-}
-
-/** Moves a picked-up window so the grabbed spot stays under the pointer. */
-export function moveWindow(grip: Grip, x: number, y: number) {
-  moveTo(grip.window, x - grip.dx, y - grip.dy)
-}
-
-/** The box a drop would give the moving window, in viewport pixels. */
-export function dropBox(
-  group: DockviewGroupPanel,
-  target: DropTarget
-): Box | undefined {
-  const root = dockRoot()?.getBoundingClientRect()
-  if (!root) return
-  if (target.kind === "merge") {
-    const box = boxOf(target.group)
-    return (
-      box && { ...box, left: box.left + root.left, top: box.top + root.top }
-    )
-  }
-  const model = snap(snaps(), group.id, target.region, target.beside)
-  const box = tiles(model).get(group.id)
-  return box && { ...box, left: box.left + root.left, top: box.top + root.top }
-}
-
-/** Lands a moved window: as a tab of another window, or snapped. */
-export function landWindow(group: DockviewGroupPanel, target: DropTarget) {
-  if (target.kind === "snap") {
-    arrange((model) => snap(model, group.id, target.region, target.beside))
-    return
-  }
-  animateLayout(api(), () => {
-    const panel = group.activePanel
-    group.api.moveTo({ group: target.group, position: "center" })
-    panel?.api.setActive()
-    syncDock()
-  })
+  const kind = groupKind(group)
+  if (!kind) return
+  const active = group.activePanel
+  const target = dockTarget(dock, kind)
+  if (!target) return
+  group.api.moveTo(target)
+  active?.api.setActive()
+  fitColumn(dock, useDock.getState().column)
+  syncDock()
   saveLayout()
 }
 
-/** Puts a picked-up window back where it was, as the drag is cancelled. */
-export function returnWindow(grip: Grip) {
-  const { before } = grip
-  if (before && regionOf(before, grip.window.id)) arrange(() => before)
-  else moveWindow(grip, grip.from.x, grip.from.y)
+/* The run tray */
+
+export function toggleTray(open = !useDock.getState().tray.open) {
+  useDock.setState((state) => ({ tray: { ...state.tray, open } }))
+  saveLayout()
+}
+
+export function resizeTray(height: number, save = false) {
+  useDock.setState((state) => ({
+    tray: { ...state.tray, height: Math.max(MIN_TRAY, Math.round(height)) },
+  }))
+  if (save) saveLayout()
 }
 
 /* Persistence */
 
-/**
- * Saves the layout, except while a window is fullscreen: a reload comes
- * back to the layout the user arranged, not to one window.
- */
+/** Saves the layout, except while a window is maximized. */
 export function saveLayout() {
   const dock = api()
   if (!dock || useDock.getState().maximized) return
   try {
+    const { column, tray } = useDock.getState()
     const saved: SavedLayout = {
       version: LAYOUT_VERSION,
       layout: dock.toJSON(),
-      snaps: snaps(),
-      minimized: useDock.getState().minimized,
-      stowed: useDock.getState().stowed,
-      places,
+      column,
+      tray,
     }
     localStorage.setItem(LAYOUT_KEY, JSON.stringify(saved))
   } catch {
@@ -767,87 +445,46 @@ export function saveLayout() {
   }
 }
 
-/** Restores the saved layout, or builds the default preset. */
+/**
+ * Restores the saved layout, or starts from the default one. Layouts saved
+ * by an older build are ignored.
+ */
 export function loadLayout(dock: DockviewApi) {
   useDock.setState({ api: dock })
-  quietly(() => restoreLayout(dock))
-}
-
-function restoreLayout(dock: DockviewApi) {
   try {
     const saved = JSON.parse(
       localStorage.getItem(LAYOUT_KEY) || "null"
     ) as SavedLayout | null
     if (saved?.version === LAYOUT_VERSION) {
       dock.fromJSON(saved.layout as Parameters<DockviewApi["fromJSON"]>[0])
-      places = saved.places ?? {}
-      useDock.setState({
-        snaps: readSnaps(saved.snaps),
-        stowed: saved.stowed.filter(
-          (item) => item.component in PANELS && !dock.getPanel(item.id)
-        ),
-        minimized: saved.minimized.filter((item) => dock.getGroup(item.group)),
-      })
-      for (const item of useDock.getState().minimized) {
-        const box = floatingBox(dock.getGroup(item.group) as DockviewGroupPanel)
-        if (box) box.hidden = true
+      if (canvasGroup(dock)) {
+        useDock.setState({ column: saved.column, tray: saved.tray })
+        fixCanvas(dock)
+        fitColumn(dock, saved.column)
+        syncDock()
+        return
       }
-      ensureWindows(dock)
-      syncDock()
-      laidOut = workbench()
-      layOut()
-      return
     }
   } catch {
-    // A layout from an older build falls back to the default below.
+    // A damaged layout falls back to the default below.
   }
-  applyPreset("default")
+  resetLayout()
 }
 
-/**
- * Every built-in tab stays reachable: one missing from both the layout and
- * the tray (an older or damaged layout) waits in the tray, to be opened
- * where the user wants it.
- */
-function ensureWindows(dock: DockviewApi) {
-  const stowed = useDock.getState().stowed
-  const missing = (Object.keys(PANELS) as PanelId[]).filter(
-    (id) =>
-      !PANELS[id].closable &&
-      !dock.panels.some((panel) => panel.view.contentComponent === id) &&
-      !stowed.some((item) => item.component === id)
-  )
-  useDock.setState({
-    stowed: [
-      ...stowed,
-      ...missing.map((id) => ({ id, component: id, title: PANELS[id].title })),
-    ],
-  })
-}
-
-export function applyPreset(preset: PresetId) {
-  quietly(() => buildLayout(preset))
-}
-
-function buildLayout(preset: PresetId) {
+/** The default arrangement: canvas, node window above the viewer. */
+export function resetLayout() {
   const dock = api()
   if (!dock) return
-  useDock.setState({
-    maximized: undefined,
-    minimized: [],
-    stowed: [],
-    snaps: emptySnaps(),
-  })
-  dock.clear()
-  places = {}
-  const open = (ids: PanelId[]) =>
-    openWindow(
-      ids.map((id) => ({ id, component: id, title: PANELS[id].title })),
-      freshBox()
-    ).id
-  useDock.setState({ snaps: buildPreset(preset, open, workbench()) })
+  useDock.setState({ maximized: undefined, column: COLUMN })
+  buildDefault(
+    dock,
+    (["workflow", "inspector", "viewer"] as PanelId[]).map((id) => ({
+      id,
+      component: id,
+      title: PANELS[id].title,
+    }))
+  )
+  fitColumn(dock, COLUMN)
   syncDock()
-  laidOut = workbench()
-  layOut()
   saveLayout()
 }

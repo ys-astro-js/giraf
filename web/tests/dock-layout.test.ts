@@ -1,132 +1,209 @@
-// Snapped windows tile like desktop systems: sides keep their pixel sizes,
-// the center takes the rest, and a preview asks for the same boxes.
-import { expect, test } from 'bun:test'
-import { dragSeam, emptySnaps, regionBoxes, seams, setHidden, snap, snapBoxes, unsnap } from '../src/features/dock/layout'
+import { GlobalRegistrator } from "@happy-dom/global-registrator"
+import { afterAll, beforeEach, expect, test } from "bun:test"
 
-const workbench = { width: 1440, height: 844 }
+// dockview builds real DOM; it runs on happy-dom here, laid out by hand.
+GlobalRegistrator.register()
+afterAll(() => GlobalRegistrator.unregister())
 
-test('snapping to the right keeps the window snapped on the left at its size', () => {
-  let snaps = snap(emptySnaps(), 'files', 'left')
-  snaps = snap(snaps, 'inspector', 'right')
-  const boxes = snapBoxes(snaps, workbench)
-  expect(boxes.get('files')).toEqual({ left: 0, top: 0, width: 256, height: 844 })
-  expect(boxes.get('inspector')).toEqual({ left: 1056, top: 0, width: 384, height: 844 })
+const { DockviewComponent } = await import("dockview-core")
+const {
+  buildDefault,
+  canDrop,
+  canvasGroup,
+  columnGroups,
+  COLUMN,
+  dockPosition,
+  fitColumn,
+  MIN_CANVAS,
+} = await import("../src/features/dock/layout")
+
+type Dock = InstanceType<typeof DockviewComponent>
+let dock: Dock
+
+const WINDOWS = ["workflow", "inspector", "viewer"].map((id) => ({
+  id,
+  component: id,
+  title: id,
+}))
+
+beforeEach(() => {
+  const element = document.createElement("div")
+  document.body.replaceChildren(element)
+  dock = new DockviewComponent(element, {
+    disableAutoResizing: true,
+    createComponent: () => ({
+      element: document.createElement("div"),
+      init() {},
+    }),
+  })
+  dock.layout(1200, 800)
+  buildDefault(dock.api, WINDOWS)
+  fitColumn(dock.api, COLUMN)
 })
 
-test('the top edge fills all the space the sides leave', () => {
-  let snaps = snap(emptySnaps(), 'files', 'left')
-  snaps = snap(snaps, 'inspector', 'right')
-  snaps = snap(snaps, 'history', 'bottom')
-  snaps = snap(snaps, 'workflow', 'center')
-  expect(snapBoxes(snaps, workbench).get('workflow')).toEqual({ left: 256, top: 0, width: 800, height: 604 })
+const column = () => columnGroups(dock.api)
+const canvas = () => canvasGroup(dock.api)!
+
+/** What the dock shell does when the workbench resizes. */
+function resize(width: number, height: number) {
+  dock.layout(width, height)
+  fitColumn(dock.api, COLUMN)
+}
+
+test("the default layout: canvas, node window above the viewer", () => {
+  expect(column().map((group) => group.activePanel?.id)).toEqual([
+    "inspector",
+    "viewer",
+  ])
+  expect(column()[0].width).toBe(COLUMN)
+  expect(canvas().width).toBe(1200 - COLUMN)
+  expect(canvas().header.hidden).toBe(true)
+  expect(canvas().locked).toBe("no-drop-target")
 })
 
-test('a window leaving takes nothing from the others', () => {
-  let snaps = snap(emptySnaps(), 'files', 'left')
-  snaps = snap(snaps, 'inspector', 'right')
-  snaps = snap(snaps, 'workflow', 'center')
-  const before = snapBoxes(snaps, workbench)
-  snaps = unsnap(snaps, 'files')
-  const after = snapBoxes(snaps, workbench)
-  expect(after.get('inspector')).toEqual(before.get('inspector')!)
-  expect(after.has('files')).toBe(false)
+test("the column keeps its pixels as the workbench resizes", () => {
+  for (const [width, height] of [
+    [1600, 800],
+    [900, 600],
+    [1400, 1000],
+    [1200, 800],
+  ]) {
+    resize(width, height)
+    expect(column()[0].width).toBe(COLUMN)
+    expect(canvas().width).toBe(width - COLUMN)
+  }
 })
 
-test('hiding a side gives its space to the windows beside it, and showing it returns it', () => {
-  let snaps = snap(emptySnaps(), 'files', 'left')
-  snaps = snap(snaps, 'workflow', 'center')
-  snaps = snap(snaps, 'inspector', 'right')
-  snaps = setHidden(snaps, 'left', true)
-  expect(snapBoxes(snaps, workbench).get('workflow')).toEqual({ left: 0, top: 0, width: 1056, height: 844 })
-  expect(snapBoxes(snaps, workbench).has('files')).toBe(false)
-  snaps = setHidden(snaps, 'left', false)
-  expect(snapBoxes(snaps, workbench).get('workflow')).toEqual({ left: 256, top: 0, width: 800, height: 844 })
+test("dockview alone would drift the column, which is why it is fitted", () => {
+  dock.layout(1600, 800)
+  expect(column()[0].width).not.toBe(COLUMN)
 })
 
-test('the workbench resizing changes only the center', () => {
-  let snaps = snap(emptySnaps(), 'files', 'left')
-  snaps = snap(snaps, 'workflow', 'center')
-  snaps = snap(snaps, 'inspector', 'right')
-  const small = snapBoxes(snaps, { width: 1000, height: 700 })
-  expect(small.get('files')!.width).toBe(256)
-  expect(small.get('inspector')!.width).toBe(384)
-  expect(small.get('workflow')!.width).toBe(360)
+test("the canvas keeps its minimum on a narrow workbench, and the column comes back", () => {
+  resize(600, 800)
+  expect(canvas().width).toBe(MIN_CANVAS)
+  resize(1200, 800)
+  expect(column()[0].width).toBe(COLUMN)
 })
 
-test('a window placed beside another takes half of its share', () => {
-  let snaps = snap(emptySnaps(), 'files', 'left')
-  snaps = snap(snaps, 'runs', 'left', { id: 'files', side: 'bottom' })
-  const boxes = snapBoxes(snaps, workbench)
-  expect(boxes.get('files')).toEqual({ left: 0, top: 0, width: 256, height: 422 })
-  expect(boxes.get('runs')).toEqual({ left: 0, top: 422, width: 256, height: 422 })
+test("an emptied group leaves; the other fills the column at the same width", () => {
+  dock.getGroupPanel("viewer")!.api.close()
+  expect(column()).toHaveLength(1)
+  expect(column()[0].width).toBe(COLUMN)
+  expect(column()[0].height).toBe(800)
 })
 
-test('splitting the center sets its axis by the side', () => {
-  let snaps = snap(emptySnaps(), 'workflow', 'center')
-  snaps = snap(snaps, 'viewer', 'center', { id: 'workflow', side: 'top' })
-  const boxes = snapBoxes(snaps, workbench)
-  expect(boxes.get('viewer')).toEqual({ left: 0, top: 0, width: 1440, height: 422 })
-  expect(boxes.get('workflow')).toEqual({ left: 0, top: 422, width: 1440, height: 422 })
+test("a closed kind reopens in its place: node windows above viewers", () => {
+  dock.getGroupPanel("inspector")!.api.close()
+  dock.addPanel({
+    id: "inspector",
+    component: "inspector",
+    title: "inspector",
+    position: dockPosition(dock.api, "inspector"),
+  })
+  fitColumn(dock.api, COLUMN)
+  expect(column().map((group) => group.activePanel?.id)).toEqual([
+    "inspector",
+    "viewer",
+  ])
+  expect(column()[0].width).toBe(COLUMN)
 })
 
-test('dragging a side seam sets the side size, and the center takes the rest', () => {
-  let snaps = snap(emptySnaps(), 'files', 'left')
-  snaps = snap(snaps, 'workflow', 'center')
-  const seam = seams(snaps, workbench).find((line) => line.seam.kind === 'side')!
-  expect(seam.at).toBe(256)
-  snaps = dragSeam(snaps, seam.seam, 320, workbench)
-  expect(snapBoxes(snaps, workbench).get('workflow')).toEqual({ left: 320, top: 0, width: 1120, height: 844 })
+test("with both closed, the canvas takes the workbench and the column returns at its width", () => {
+  dock.getGroupPanel("inspector")!.api.close()
+  dock.getGroupPanel("viewer")!.api.close()
+  expect(canvas().width).toBe(1200)
+  dock.addPanel({
+    id: "viewer",
+    component: "viewer",
+    title: "viewer",
+    position: dockPosition(dock.api, "viewer"),
+  })
+  fitColumn(dock.api, COLUMN)
+  expect(column()[0].width).toBe(COLUMN)
+  expect(canvas().width).toBe(1200 - COLUMN)
 })
 
-test('dragging the seam between two windows in a region moves only those two', () => {
-  let snaps = snap(emptySnaps(), 'files', 'left')
-  snaps = snap(snaps, 'runs', 'left', { id: 'files', side: 'bottom' })
-  snaps = snap(snaps, 'workflow', 'center')
-  const seam = seams(snaps, workbench).find((line) => line.seam.kind === 'split')!
-  expect(seam).toMatchObject({ axis: 'y', at: 422 })
-  snaps = dragSeam(snaps, seam.seam, 600, workbench)
-  const boxes = snapBoxes(snaps, workbench)
-  expect(boxes.get('files')!.height).toBe(600)
-  expect(boxes.get('runs')).toEqual({ left: 0, top: 600, width: 256, height: 244 })
-  expect(boxes.get('workflow')).toEqual({ left: 256, top: 0, width: 1184, height: 844 })
+test("another tab of a kind joins its kind's group", () => {
+  dock.addPanel({
+    id: "display",
+    component: "display",
+    title: "display",
+    position: dockPosition(dock.api, "viewer"),
+  })
+  expect(dock.getGroupPanel("display")!.group).toBe(
+    dock.getGroupPanel("viewer")!.group
+  )
 })
 
-test('a seam stops where the windows beside it reach their minimum', () => {
-  let snaps = snap(emptySnaps(), 'files', 'left')
-  snaps = snap(snaps, 'workflow', 'center')
-  const seam = seams(snaps, workbench)[0]
-  snaps = dragSeam(snaps, seam.seam, 1400, workbench)
-  expect(snapBoxes(snaps, workbench).get('workflow')!.width).toBe(240)
+test("maximizing fills the workbench; the column comes back at its width", () => {
+  const viewer = dock.getGroupPanel("viewer")!.group
+  viewer.api.maximize()
+  expect(viewer.width).toBe(1200)
+  resize(1400, 800)
+  viewer.api.exitMaximized()
+  fitColumn(dock.api, COLUMN)
+  expect(column()[0].width).toBe(COLUMN)
 })
 
-test('an empty side takes no room', () => {
-  const snaps = snap(emptySnaps(), 'workflow', 'center')
-  expect(regionBoxes(snaps, workbench).center).toEqual({ left: 0, top: 0, width: 1440, height: 844 })
+test("tabs gather only with their own kind", () => {
+  const inspector = dock.getGroupPanel("inspector")!
+  const viewer = dock.getGroupPanel("viewer")!
+  const drop = (
+    panel: typeof inspector,
+    on: "tab" | "header_space" | "content" | "edge",
+    position: "top" | "bottom" | "left" | "right" | "center",
+    target?: typeof viewer.group
+  ) => canDrop(dock.api, { on, position, target, source: { panel } })
+  // A node tab never joins the viewers, nor the canvas.
+  expect(drop(inspector, "tab", "center", viewer.group)).toBe(false)
+  expect(drop(inspector, "header_space", "center", viewer.group)).toBe(false)
+  expect(drop(inspector, "content", "center", viewer.group)).toBe(false)
+  expect(drop(inspector, "content", "center", canvas())).toBe(false)
+  expect(drop(inspector, "content", "right", canvas())).toBe(false)
+  // It may go above or below a group in the column, never beside it.
+  expect(drop(inspector, "content", "top", viewer.group)).toBe(true)
+  expect(drop(inspector, "content", "bottom", viewer.group)).toBe(true)
+  expect(drop(inspector, "content", "left", viewer.group)).toBe(false)
+  // The layout's edge only while the column is empty.
+  expect(drop(viewer, "edge", "right")).toBe(false)
+  // Its own kind takes it as a tab.
+  expect(drop(viewer, "tab", "center", viewer.group)).toBe(true)
+  const display = dock.addPanel({
+    id: "display",
+    component: "display",
+    title: "display",
+    floating: { position: { left: 40, top: 40 }, width: 300, height: 200 },
+  })
+  expect(drop(display, "tab", "center", viewer.group)).toBe(true)
+  expect(drop(display, "tab", "center", inspector.group)).toBe(false)
+  // The canvas itself never moves.
+  expect(
+    canDrop(dock.api, {
+      on: "content",
+      position: "top",
+      target: viewer.group,
+      source: { group: canvas() },
+    })
+  ).toBe(false)
 })
 
-test('a side whose windows left stays desktop: snapping elsewhere does not grow the center into it', () => {
-  let snaps = snap(emptySnaps(), 'files', 'left')
-  snaps = snap(snaps, 'workflow', 'center')
-  snaps = snap(snaps, 'inspector', 'right')
-  snaps = unsnap(snaps, 'files')
-  snaps = snap(snaps, 'runs', 'right', { id: 'inspector', side: 'bottom' })
-  expect(snapBoxes(snaps, workbench).get('workflow')).toEqual({ left: 256, top: 0, width: 800, height: 844 })
-})
-
-test('a window snapping to a side left empty takes its kept space', () => {
-  let snaps = snap(emptySnaps(), 'files', 'left')
-  snaps = snap(snaps, 'workflow', 'center')
-  snaps = unsnap(snaps, 'files')
-  snaps = snap(snaps, 'runs', 'left')
-  expect(snapBoxes(snaps, workbench).get('runs')).toEqual({ left: 0, top: 0, width: 256, height: 844 })
-  expect(snapBoxes(snaps, workbench).get('workflow')).toEqual({ left: 256, top: 0, width: 1184, height: 844 })
-})
-
-test('filling the center takes every space the sides left', () => {
-  let snaps = snap(emptySnaps(), 'files', 'left')
-  snaps = snap(snaps, 'workflow', 'center')
-  snaps = unsnap(snaps, 'files')
-  snaps = unsnap(snaps, 'workflow')
-  snaps = snap(snaps, 'viewer', 'center')
-  expect(snapBoxes(snaps, workbench).get('viewer')).toEqual({ left: 0, top: 0, width: 1440, height: 844 })
+test("a floating window docks back as a tab of its kind, or into the column", () => {
+  const display = dock.addPanel({
+    id: "display",
+    component: "display",
+    title: "display",
+    floating: { position: { left: 40, top: 40 }, width: 300, height: 200 },
+  })
+  expect(display.group.api.location.type).toBe("floating")
+  dock.getGroupPanel("viewer")!.api.close()
+  const target = dockPosition(dock.api, "viewer")
+  expect(target).toMatchObject({ direction: "below" })
+  display.group.api.moveTo({ group: column()[0], position: "bottom" })
+  fitColumn(dock.api, COLUMN)
+  expect(column().map((group) => group.activePanel?.id)).toEqual([
+    "inspector",
+    "display",
+  ])
+  expect(column()[0].width).toBe(COLUMN)
 })

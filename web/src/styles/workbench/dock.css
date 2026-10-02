@@ -16,11 +16,10 @@
   height: 100%;
 }
 
-/* Window bar metrics, app-wide: a fullscreen window's controls sit in the
-   app's top bar too. A header's one inset (edges and between rows); its
+/* Window bar metrics. A header's one inset (edges and between rows); its
    toolbar row holds full-size toolbar controls, its tab bar is a slimmer
    pill; the window pill rests a step below the tab bar. The title keeps a
-   stub of width before the toolbar gives way (WindowTopBar reads it). */
+   stub of width before the toolbar gives way (WindowBar reads it). */
 .giraf-app {
   --window-inset: 8px;
   --window-toolbar: 42px;
@@ -95,7 +94,7 @@
   color-scheme: dark;
 }
 
-/* Windows fill their group; library windows share the sidebar surface. */
+/* Windows fill their group. */
 .dock-window {
   position: relative;
   box-sizing: border-box;
@@ -107,18 +106,8 @@
   background: var(--background);
   --window-footer: 0px;
 }
-.dock-window[data-surface="sidebar"] {
-  background: var(--sidebar);
-  color: var(--sidebar-foreground);
-}
 .dock-window > * {
   flex: 1;
-  min-height: 0;
-}
-.library-window {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
   min-height: 0;
 }
 
@@ -132,17 +121,7 @@
   --window-bar: color-mix(in oklch, var(--background) 50%, transparent);
   --window-control-surface: color-mix(in oklch, var(--background) 75%, transparent);
   --window-blur: blur(20px) saturate(1.6);
-  /* Room above the bars for the app's top bar, when this window runs under
-     it (fullscreen, see below). */
-  --window-top: 0px;
-  --window-header: calc(
-    var(--window-top) + var(--window-inset) * 2 + var(--window-toolbar)
-  );
-}
-.dockview-theme-giraf .dv-groupview:has(.dock-window[data-surface="sidebar"]) {
-  --dv-tabs-and-actions-container-background-color: var(--sidebar);
-  --window-bar: color-mix(in oklch, var(--sidebar) 50%, transparent);
-  --window-control-surface: color-mix(in oklch, var(--sidebar) 75%, transparent);
+  --window-header: calc(var(--window-inset) * 2 + var(--window-toolbar));
 }
 .dockview-theme-giraf .dv-tabs-and-actions-container,
 .window-bottom-bar {
@@ -164,8 +143,7 @@
 }
 /* Over content, a clear top bar that carries a title blurs what runs
    beneath it, strongest at the window's edge and fading out toward the
-   content; controls alone float on the content. Fullscreen, the title sits
-   in the app's bar, which the band then covers. */
+   content; controls alone float on the content. */
 .window-bar-blur {
   display: none;
   position: absolute;
@@ -176,16 +154,10 @@
   .dv-groupview:not([data-tabbed]):has(.dock-window[data-canvas]):has(
     .window-title-slot .window-title:not([data-inactive])
   )
-  .window-bar-blur,
-.giraf-app:has(.workbench-toolbar .window-title:not([data-inactive]))
-  .dockview-theme-giraf
-  .dv-groupview[data-fullscreen]:not([data-tabbed]):has(
-    .dock-window[data-canvas]
-  )
   .window-bar-blur {
   display: block;
 }
-/* The header is the window's handle (see drag.ts). */
+/* The header floats over the window's content. */
 .dockview-theme-giraf .dv-groupview > .dv-tabs-and-actions-container {
   position: absolute;
   inset: 0 0 auto;
@@ -193,34 +165,27 @@
   flex-wrap: wrap;
   align-items: center;
   height: auto;
-  padding: calc(var(--window-top) + var(--window-inset)) var(--window-inset)
-    var(--window-inset);
+  padding: var(--window-inset);
   row-gap: var(--window-inset);
   border-bottom: 0;
   cursor: default;
 }
 .dockview-theme-giraf .dv-groupview[data-tabbed] {
   --window-header: calc(
-    var(--window-top) + var(--window-inset) * 3 + var(--window-toolbar) +
-      var(--window-tabs)
+    var(--window-inset) * 3 + var(--window-toolbar) + var(--window-tabs)
   );
 }
 .dockview-theme-giraf .dv-groupview > .dv-content-container {
   height: 100%;
 }
 /* Content clears the bars: most windows sit between them, a canvas runs
-   under both, and a list scrolls under them from a padded start. */
+   under both. */
 .dock-window:has(> .window-bottom-bar:not(:empty)) {
   --window-footer: calc(var(--window-inset) * 2 + var(--window-toolbar));
 }
-.dock-window:not([data-canvas], [data-scroll-under]) {
+.dock-window:not([data-canvas]) {
   padding-top: var(--window-header);
   padding-bottom: var(--window-footer);
-}
-.dock-window[data-scroll-under] [data-window-scroll] {
-  padding-top: var(--window-header);
-  padding-bottom: var(--window-footer);
-  scroll-padding-block: var(--window-header) var(--window-footer);
 }
 .dock-window[data-canvas] .react-flow__panel.top {
   margin-top: calc(var(--window-header) + var(--window-inset));
@@ -518,7 +483,7 @@
   color: var(--primary);
 }
 
-/* The window pill: the window's own close, minimize and maximize, always
+/* The window pill: the window's own controls, always
    there at the start as small quiet buttons. At rest the pill holds its
    small footprint; opened (hover, focus), it grows to toolbar size over the
    title next to it instead of pushing the bar along. */
@@ -571,57 +536,6 @@
   stroke-width: 2;
 }
 
-/* Fullscreen: while a window is maximized, the workbench runs up under the
-   app's top bar and that window's top bar grows to take it in. The app's
-   bar then draws no band of its own, so it reads exactly like the window's:
-   clear over rich content, translucent over text or several tabs. */
-.giraf-app:has(.dv-groupview[data-fullscreen]) {
-  position: relative;
-}
-.giraf-app:has(.dv-groupview[data-fullscreen]) .workbench-toolbar {
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 1;
-}
-/* The workbench becomes one layer beneath the app's bar, so no window in
-   it, however high it floats, can cover the bar (a maximized floating
-   window would otherwise hide the very controls that restore it). */
-.giraf-app:has(.dv-groupview[data-fullscreen]) .dock-body {
-  z-index: 0;
-}
-.giraf-app:has(.dv-groupview[data-fullscreen]) .workbench-toolbar::before {
-  border-bottom-color: transparent;
-  background: transparent;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-/* Its own top bar row moves into the app's bar; only a tab bar (several
-   tabs) stays, just below the app's bar. */
-.dockview-theme-giraf .dv-groupview[data-fullscreen] {
-  --window-top: var(--toolbar-height, 56px);
-  --window-header: var(--window-top);
-}
-.dockview-theme-giraf .dv-groupview[data-fullscreen][data-tabbed] {
-  --window-header: calc(
-    var(--window-top) + var(--window-inset) * 2 + var(--window-tabs)
-  );
-}
-.dockview-theme-giraf
-  .dv-groupview[data-fullscreen]
-  .dv-pre-actions-container {
-  display: none;
-}
-.dockview-theme-giraf
-  .dv-groupview[data-fullscreen]
-  > .dv-tabs-and-actions-container {
-  padding: var(--window-top) var(--window-inset) 0;
-}
-.dockview-theme-giraf
-  .dv-groupview[data-fullscreen][data-tabbed]
-  > .dv-tabs-and-actions-container {
-  padding: calc(var(--window-top) + var(--window-inset)) var(--window-inset)
-    var(--window-inset);
-}
 /* Floating windows: rounded, with generous resize edges and a floor on size. */
 .dockview-theme-giraf { --dv-floating-titlebar-height: 0px; }
 .dv-floating-titlebar { display: none; }
@@ -639,28 +553,7 @@
 .dv-resize-container .dv-resize-handle-topright { top: -6px; right: -6px; }
 .dv-resize-container .dv-resize-handle-bottomleft { bottom: -6px; left: -6px; }
 .dv-resize-container .dv-resize-handle-bottomright { bottom: -6px; right: -6px; }
-/* A minimized floating window is hidden in place. */
-.dv-resize-container[hidden] {
-  display: none !important;
-}
 
-/* Moving a window: the area it would dock into. */
-/* Above floating windows (dockview stacks them from 999), below only the
-   one being dragged, which is the topmost (1001). */
-.dock-drop-preview {
-  position: fixed;
-  z-index: 1000;
-  pointer-events: none;
-  border-radius: 12px;
-  background: color-mix(in oklch, var(--primary) 12%, transparent);
-  outline: 2px solid color-mix(in oklch, var(--primary) 60%, transparent);
-  outline-offset: -2px;
-  transition:
-    left 120ms var(--motion-ease),
-    top 120ms var(--motion-ease),
-    width 120ms var(--motion-ease),
-    height 120ms var(--motion-ease);
-}
 /* A window's bars are its handle, not text: pressing them never starts a
    selection (fields in them still take typing; Safari would block it). */
 .dockview-theme-giraf .dv-tabs-and-actions-container {
@@ -673,186 +566,29 @@
   -webkit-user-select: text;
   user-select: text;
 }
-/* While a window or a seam is dragged, nothing selects. */
-body[data-window-dragging],
-body[data-window-dragging] * {
-  -webkit-user-select: none;
-  user-select: none;
-}
-body[data-window-dragging] {
-  cursor: grabbing;
-}
-/* Over a docked window's top bar, a dragged window is offered the places
-   beside it (see dock/DropPicker.tsx): a toolbar capsule at the bar's
-   trailing end, in the toolbar row, covering that window's own controls
-   while the drag lasts. Pointer events pass through; drag.ts hit-tests. */
-.dock-drop-picker {
-  position: fixed;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  height: calc(var(--window-toolbar) + var(--window-inset) * 2);
-  padding-inline-end: var(--window-inset);
-  pointer-events: none;
-  animation: dock-picker-in var(--motion-quick) ease-out;
-}
-.dock-drop-picker > .toolbar-group {
-  background: var(--glass-background);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12), 0 1px 3px rgb(0 0 0 / 0.08);
-}
-.dock-drop-picker-button {
-  display: grid;
-  place-items: center;
-  width: calc(var(--window-toolbar) - 6px);
-  height: calc(var(--window-toolbar) - 6px);
-  border-radius: 999px;
-  color: var(--muted-foreground);
-  transition:
-    background-color var(--motion-quick) ease-out,
-    color var(--motion-quick) ease-out;
-}
-.dock-drop-picker-button svg {
-  width: 18px;
-  height: 18px;
-}
-.dock-drop-picker-button[aria-pressed="true"] {
-  background: var(--selection);
-  color: var(--selection-foreground);
-}
-@media (prefers-reduced-motion: reduce) {
-  .dock-drop-picker {
-    animation-name: none;
-  }
-}
-@keyframes dock-picker-in {
-  from {
-    opacity: 0;
-    filter: blur(4px);
-    transform: scale(0.96);
-  }
-}
-
-/* The desktop: the workbench itself, under every window (see store.ts). */
+/* The workbench beneath the canvas and column. */
 .dock-root {
-  background: color-mix(in oklch, var(--muted) 55%, var(--background));
-}
-
-/* A snapped window sits flush in its box like a pane: square, no shadow,
-   no size floor of its own (the snap model keeps the minimums), and the
-   same hairline border on all four sides as every other snapped window,
-   drawn over its contents; neighbors share one line (see tiles in
-   store.ts). Its resize edges facing the workbench's own edges do nothing,
-   so they are not offered. */
-.dv-resize-container[data-snapped] {
-  min-width: 0;
-  min-height: 0;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-.dv-resize-container[data-snapped] > .dv-grid-view {
-  border-radius: 0;
-}
-.dv-resize-container[data-snapped]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  border: 1px solid var(--border);
-  pointer-events: none;
-}
-/* Snapped windows lie under free ones, which float above them as on any
-   desktop, and under the seams between them (see SnapSeams.tsx); a
-   fullscreen window keeps dockview's own place on top. Their own resize
-   edges give way to the seams. */
-.dv-resize-container[data-snapped]:not(:has(.dv-groupview[data-fullscreen])) {
-  z-index: 900 !important;
-}
-.dv-resize-container[data-snapped] [class*="dv-resize-handle"] {
-  display: none;
-}
-.snap-seams {
-  position: absolute;
-  inset: 0;
-  z-index: 950;
-  pointer-events: none;
-}
-.snap-seam {
-  position: absolute;
-  pointer-events: auto;
-  touch-action: none;
-}
-.snap-seam[data-axis="x"] {
-  cursor: col-resize;
-}
-.snap-seam[data-axis="y"] {
-  cursor: row-resize;
-}
-/* The line the seam drags lights up under the pointer and while held. */
-.snap-seam::after {
-  content: "";
-  position: absolute;
-  background: var(--ring);
-  opacity: 0;
-  transition: opacity var(--motion-quick) ease-out;
-}
-.snap-seam[data-axis="x"]::after {
-  inset: 0 calc(50% - 1px);
-}
-.snap-seam[data-axis="y"]::after {
-  inset: calc(50% - 1px) 0;
-}
-.snap-seam:hover::after,
-.snap-seam:active::after {
-  opacity: 1;
-  transition-delay: 120ms;
-}
-.snap-seam:active::after {
-  transition-delay: 0s;
-}
-
-/* Layout changes (see dock/transition.ts): a moved window opens out from
-   its old box while its frame travels beneath it, the title riding where
-   the window's title sits. A window with no box in common waits unseen. */
-[data-layout-moving] {
-  opacity: 0;
-}
-/* The frames lie beneath the windows: the empty grid paints no background
-   over the desktop, and the workbench keeps the layer's negative z-index
-   inside it. */
-.dock-root {
-  isolation: isolate;
+  background: var(--background);
 }
 .dockview-theme-giraf .dv-grid-view {
   background: transparent;
 }
-.window-transition-layer {
+
+/* The canvas has no header: its bar (the tab's toolbar, no window pill)
+   floats over it like a window's top bar, letting the canvas take the
+   pointer wherever it shows no control. */
+.canvas-bar {
   position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-}
-.window-transition-frame {
-  position: absolute;
-  box-sizing: border-box;
-  overflow: hidden;
-  border: 1px solid var(--border);
-}
-.window-transition-title {
-  position: absolute;
-  inset: var(--window-inset) 16px auto
-    calc(var(--window-inset) * 2 + var(--window-pill-button) * 3 + 6px);
+  inset: 0 0 auto;
+  z-index: 2;
   display: flex;
   align-items: center;
-  height: var(--window-toolbar);
-  overflow: hidden;
-  color: var(--foreground);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  padding: var(--window-inset);
+  pointer-events: none;
 }
-
+.canvas-bar .window-toolbar :is(.toolbar-group, .window-overflow) {
+  pointer-events: auto;
+}
 
 /* Switching tabs (see dock/morph.ts): while the bars morph, the real
    capsules hold their final layout with no motion of their own and stay

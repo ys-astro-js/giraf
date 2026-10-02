@@ -13,8 +13,6 @@ import {
   CircleStop,
   Play,
   Square,
-  PanelLeft,
-  PanelRight,
   PanelBottom,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -23,7 +21,6 @@ import {
   ToolbarButton,
   ToolbarCluster,
   ToolbarGroup,
-  ToolbarItem,
   ToolbarMorph,
   ToolbarSpacer,
 } from "@/components/toolbar"
@@ -47,9 +44,6 @@ const COMPLETION_HOLD_MS = 3000
 
 type Props = {
   historyControls?: React.ReactNode
-  /** A fullscreen window's own controls: after the leading ones, before the trailing ones. */
-  windowLeading?: React.ReactNode
-  windowTrailing?: React.ReactNode
   diagnostics?: React.ReactNode
   workflowSelector?: React.ReactNode
   executionStatus?: ExecutionStatus
@@ -61,15 +55,7 @@ type Props = {
   runDisabled: boolean
   onRun: () => void
   onCancel: () => void
-  /** Minimized windows, beside the panel toggles. */
-  windows?: React.ReactNode
-  /** Which edges hold windows; the others have no toggle. */
-  docked?: { left: boolean; right: boolean; bottom: boolean }
-  sidebarVisible: boolean
-  settingsVisible: boolean
   trayOpen: boolean
-  onSidebar: () => void
-  onSettings: () => void
   onTray: () => void
 }
 
@@ -114,15 +100,6 @@ export function WorkbenchToolbar(props: Props) {
     <header className="workbench-toolbar" aria-label="도구 막대">
       <div className="toolbar-start">
         <ToolbarCluster className="toolbar-leading" edge="start">
-          <ToolbarGroup label="사이드바" hidden={props.docked?.left === false}>
-            <ToolbarButton
-              label={props.sidebarVisible ? "사이드바 닫기" : "사이드바 열기"}
-              onClick={props.onSidebar}
-            >
-              <PanelLeft />
-            </ToolbarButton>
-          </ToolbarGroup>
-          <ToolbarSpacer />
           <ToolbarGroup label="일괄 실행">
             <ToolbarMorph
               variant={props.workflowBusy ? "ghost" : "default"}
@@ -138,7 +115,6 @@ export function WorkbenchToolbar(props: Props) {
           <ToolbarSpacer />
           {props.historyControls}
         </ToolbarCluster>
-        {props.windowLeading}
       </div>
       <div className="toolbar-center">
         <div
@@ -287,34 +263,15 @@ export function WorkbenchToolbar(props: Props) {
         </div>
       </div>
       <div className="toolbar-end">
-        {props.windowTrailing}
         <ToolbarCluster className="toolbar-panels" edge="end">
-          {props.windows}
-          <ToolbarSpacer />
-          <ToolbarGroup
-            label="패널 표시"
-            hidden={
-              props.docked?.bottom === false && props.docked?.right === false
-            }
-          >
-            <ToolbarItem hidden={props.docked?.bottom === false}>
-              <ToolbarButton
-                label={props.trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
-                onClick={props.onTray}
-              >
-                <PanelBottom />
-              </ToolbarButton>
-            </ToolbarItem>
-            <ToolbarItem hidden={props.docked?.right === false}>
-              <ToolbarButton
-                label={
-                  props.settingsVisible ? "설정 패널 닫기" : "설정 패널 열기"
-                }
-                onClick={props.onSettings}
-              >
-                <PanelRight />
-              </ToolbarButton>
-            </ToolbarItem>
+          <ToolbarGroup label="패널 표시">
+            <ToolbarButton
+              label={props.trayOpen ? "실행 기록 닫기" : "실행 기록 열기"}
+              aria-pressed={props.trayOpen}
+              onClick={props.onTray}
+            >
+              <PanelBottom />
+            </ToolbarButton>
           </ToolbarGroup>
         </ToolbarCluster>
       </div>

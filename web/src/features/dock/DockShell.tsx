@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent,
+  type ReactNode,
+} from "react"
 import {
   DockviewReact,
   type DockviewApi,
@@ -9,18 +16,18 @@ import "dockview-react/dist/styles/dockview.css"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { PanelContext } from "./context"
 import { DockTab } from "./DockTab"
-import { LockControl, WindowTopBar } from "./WindowControls"
+import { LockControl, WindowBar, WindowTopBar } from "./WindowControls"
 import { WindowSlot } from "./WindowToolbar"
-import { headerPointerDown } from "./drag"
-import { DropPicker } from "./DropPicker"
-import { SnapSeams } from "./SnapSeams"
+import { recordBars } from "./morph"
 import { DisplayWatcher } from "@/features/viewer/DisplayPanel"
 import { PANELS, type PanelDefinition } from "./panels"
 import {
-  followLayout,
+  endColumnResize,
+  layoutDock,
   loadLayout,
-  saveLayout,
-  syncDock,
+  startColumnResize,
+  useDock,
+  watchDock,
   type WindowParams,
 } from "./store"
 import "@/styles/workbench/dock.css"
@@ -41,11 +48,21 @@ function frame(definition: PanelDefinition) {
     const content = (
       <div
         className="dock-window"
-        data-surface={definition.surface}
+        data-kind={definition.kind}
         data-canvas={canvas || undefined}
-        data-scroll-under={definition.scrollUnder}
       >
         <Content />
+        {/* The canvas has no header; its bar floats over it instead. */}
+        {panel && definition.kind === "canvas" && (
+          <div className="canvas-bar">
+            <WindowBar
+              group={panel.group}
+              owner={props.api.id}
+              active
+              controls={false}
+            />
+          </div>
+        )}
         <WindowSlot
           owner={props.api.id}
           slot="bottom"
@@ -65,26 +82,17 @@ function frame(definition: PanelDefinition) {
   }
 }
 
-function ready(api: DockviewApi) {
-  loadLayout(api)
-  let pending = 0
-  api.onDidLayoutChange(() => {
-    followLayout()
-    syncDock()
-    window.clearTimeout(pending)
-    pending = window.setTimeout(saveLayout, 300)
-  })
-  api.onDidActiveGroupChange(syncDock)
-  api.onDidActivePanelChange(syncDock)
-  api.onDidAddPanel(syncDock)
-  api.onDidRemovePanel(syncDock)
-  api.onDidMovePanel(syncDock)
-  api.onDidAddGroup(syncDock)
-  api.onDidRemoveGroup(syncDock)
-  api.onDidMaximizedGroupChange(syncDock)
+function ready(dock: DockviewApi, root: HTMLElement | null) {
+  useDock.setState({ api: dock })
+  if (root) dock.layout(root.clientWidth, root.clientHeight)
+  loadLayout(dock)
+  watchDock(dock)
 }
 
-/** The workbench: the app's toolbar above dockable windows. */
+/**
+ * The workbench below the app's toolbar: the workflow canvas, the column of
+ * node and viewer windows, and any floating windows over them.
+ */
 export function DockShell({ header }: { header: ReactNode }) {
   const components = useMemo(
     () =>
@@ -97,32 +105,40 @@ export function DockShell({ header }: { header: ReactNode }) {
     []
   )
   const rootRef = useRef<HTMLDivElement>(null)
-  // Header drags start before dockview's own handlers see the pointer.
-  useEffect(() => {
-    const element = rootRef.current
-    element?.addEventListener("pointerdown", headerPointerDown, true)
-    return () =>
-      element?.removeEventListener("pointerdown", headerPointerDown, true)
-  }, [])
-  // dockview lays itself out when the workbench resizes but reports no
-  // layout change; side windows take back their sizes once it has.
+  // dockview's own resizing lays the grid out in proportions; the dock is
+  // laid out here instead, so the column keeps its width.
   useEffect(() => {
     const element = rootRef.current
     if (!element) return
-    const observer = new ResizeObserver(() =>
-      requestAnimationFrame(followLayout)
+    const observer = new ResizeObserver(([entry]) =>
+      layoutDock(entry.contentRect.width, entry.contentRect.height)
     )
     observer.observe(element)
     return () => observer.disconnect()
   }, [])
+  function pointerDown(event: PointerEvent) {
+    const target = event.target as HTMLElement
+    // The column's divider: the column takes the width it is dragged to.
+    if (target.closest(".dv-sash")) {
+      startColumnResize()
+      window.addEventListener("pointerup", endColumnResize, { once: true })
+      return
+    }
+    // A tab about to be shown: its window's bars morph from the current ones.
+    const id = target.closest<HTMLElement>(".dock-tab")?.dataset.panelId
+    const panel = id ? useDock.getState().api?.getPanel(id) : undefined
+    if (panel && panel.group.activePanel !== panel) recordBars(panel.group)
+  }
   return (
     <SidebarProvider className="giraf-app" open>
       <DisplayWatcher />
-      <DropPicker />
-      <SnapSeams />
       {header}
       <div className="dock-body">
-        <div className="dock-root" ref={rootRef}>
+        <div
+          className="dock-root"
+          ref={rootRef}
+          onPointerDownCapture={pointerDown}
+        >
           <DockviewReact
             components={components}
             defaultTabComponent={DockTab}
@@ -131,10 +147,9 @@ export function DockShell({ header }: { header: ReactNode }) {
             theme={theme}
             dndStrategy="html5"
             disableTabsOverflowList
-            // Windows move by their header (see drag.ts), not dockview drags.
-            disableDnd
-            floatingGroupDragHandle="titlebar"
-            onReady={(event) => ready(event.api)}
+            disableAutoResizing
+            floatingGroupDragHandle="tabbar"
+            onReady={(event) => ready(event.api, rootRef.current)}
           />
         </div>
       </div>

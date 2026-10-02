@@ -1,4 +1,4 @@
-/* The shared toolbar spans the full workbench above both sidebars. */
+/* The app's toolbar spans the workbench. */
 .giraf-app { container-type: inline-size; }
 .workbench-toolbar {
   position: relative;
@@ -72,13 +72,8 @@
 .toolbar-status-transition > svg { color: var(--muted-foreground); }
 .toolbar-status-content[data-state="completed"] .toolbar-status-transition > svg { color: var(--primary); }
 .toolbar-status-content[data-state="failed"] .toolbar-status-transition > svg { color: var(--destructive); }
-/* Each end holds the app's controls and, while a window is fullscreen, that
-   window's own: its pill, leading controls and title after the app's leading
-   ones, its toolbar before the app's trailing ones. */
 .toolbar-start, .toolbar-end { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .toolbar-end { justify-self: end; }
-.app-window-slot { display: flex; align-items: center; }
-.app-window-slot:empty { display: none; }
 @container (max-width: 600px) {
   .workbench-toolbar { gap: 8px; padding-inline: 8px; }
 }
@@ -89,7 +84,3 @@
   .toolbar-status { grid-column: 1 / -1; grid-row: 2; padding-block: 0 8px; }
 }
 
-/* Window toggles that join the panel group arrive the way hidden ones leave. */
-@starting-style {
-  .toolbar-panels .toolbar-item[data-hidden="false"] { grid-template-columns: minmax(0, 0fr); opacity: 0; filter: blur(4px); }
-}
