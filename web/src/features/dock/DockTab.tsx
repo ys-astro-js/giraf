@@ -20,7 +20,7 @@ const own = (action: () => void) => ({
 })
 
 /**
- * A tab in a window's tab bar: its name and close. The tab's other
+ * A tab in a window's tab bar: close at its leading edge, then its name. The tab's other
  * controls sit in the window's toolbar row while it is shown.
  */
 export function DockTab({
@@ -42,16 +42,6 @@ export function DockTab({
   const panel = () => containerApi.getPanel(api.id)
   return (
     <span className="dock-tab" data-locked={locked} data-panel-id={api.id}>
-      <Tooltip>
-        <TooltipTrigger
-          render={<span className="dock-tab-title" />}
-          aria-label={title}
-        >
-          {Icon && <Icon aria-hidden="true" />}
-          <span className="dock-tab-label">{title}</span>
-        </TooltipTrigger>
-        <TooltipContent>{title}</TooltipContent>
-      </Tooltip>
       <button
         type="button"
         className="dock-tab-button dock-tab-close"
@@ -64,6 +54,16 @@ export function DockTab({
       >
         <X />
       </button>
+      <Tooltip>
+        <TooltipTrigger
+          render={<span className="dock-tab-title" />}
+          aria-label={title}
+        >
+          {Icon && <Icon aria-hidden="true" />}
+          <span className="dock-tab-label">{title}</span>
+        </TooltipTrigger>
+        <TooltipContent>{title}</TooltipContent>
+      </Tooltip>
     </span>
   )
 }
