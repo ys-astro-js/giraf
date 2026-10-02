@@ -35,12 +35,10 @@ import {
   Unplug,
   Terminal,
   Monitor,
-  X,
 } from "lucide-react"
 import { diagnostics } from "@/lib/diagnostics"
 import { revealPanel, useWindowShown } from "@/features/dock/store"
 import { WindowToolbar } from "@/features/dock/WindowToolbar"
-import { Button } from "@/components/ui/button"
 import { Blank } from "@/components/workbench-controls"
 import { SubflowEditor } from "@/components/subflow-editor"
 import { subflowColor } from "@/lib/subflow"
@@ -97,7 +95,6 @@ export function TaskMapView({
     [diagnosticEntries]
   )
   const {
-    setDropChoice,
     closeGroupEditor,
     setDragPreview,
     editingGroup,
@@ -128,10 +125,7 @@ export function TaskMapView({
     selectedEdges,
     edgeActionPosition,
     flow,
-    dropChoice,
     validateConnection,
-    drop,
-    finishDrop,
     dragPreview,
   } = useTaskMapInteraction({
     map,
@@ -155,7 +149,6 @@ export function TaskMapView({
       aria-label="워크플로우"
       onKeyDown={(e) => {
         if (e.key === "Escape") {
-          setDropChoice(null)
           closeGroupEditor()
           setDragPreview({})
         }
@@ -199,9 +192,6 @@ export function TaskMapView({
               choose,
               duplicate,
               onInput: selectingGroup ? undefined : onInput,
-              drop,
-              dropChoice,
-              finishDrop,
               selectingGroup,
               dragPreview,
               beginEdit: onEditStart,
@@ -293,7 +283,6 @@ export function TaskMapView({
                   choose(node.id)
               }}
               onPaneClick={() => {
-                setDropChoice(null)
                 setEdgeActionPosition(null)
                 setSelectedEdges([])
                 if (!selectingGroup)
@@ -484,24 +473,6 @@ export function TaskMapView({
               {!nodes.some((n) => !n.hidden) && (
                 <Panel position="top-center">
                   <Blank>검색 결과가 없습니다</Blank>
-                </Panel>
-              )}
-              {dropChoice && (
-                <Panel position="top-center">
-                  <div
-                    className="workflow-drop-choice glass-surface"
-                    role="status"
-                  >
-                    연결할 입력을 선택하세요
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="입력 연결 취소"
-                      onClick={() => setDropChoice(null)}
-                    >
-                      <X />
-                    </Button>
-                  </div>
                 </Panel>
               )}
             </ReactFlow>

@@ -62,7 +62,7 @@ export function AddTaskButton() {
   const search = useRef<HTMLInputElement>(null)
   const tasks = w.catalog?.tasks ?? []
   const found = query.trim() ? tasks.filter((task) => matches(task, query)) : []
-  const add = (task: Spec) => w.add(task.name, [])
+  const add = (task: Spec) => w.add(task.name)
 
   function branch(node: TaskPackage) {
     return (

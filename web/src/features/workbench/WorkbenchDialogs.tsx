@@ -34,7 +34,6 @@ export function WorkbenchDialogs() {
         error={w.error}
         catalog={w.catalog}
         map={w.map}
-        selectedFiles={w.selectedFiles}
         jobs={w.jobs}
         pick={w.pick}
         update={w.update}

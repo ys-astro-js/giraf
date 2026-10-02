@@ -212,14 +212,10 @@ export function useTaskMapInteraction({
   )
   const {
     validateConnection,
-    drop,
-    finishDrop,
-    setDropChoice,
     finishConnection,
     isValidConnection,
     reconnectingRef,
-    dropChoice,
-  } = useMapConnections({ map, catalog, rows, update, choose })
+  } = useMapConnections({ map, catalog, rows, update })
   // React Flow initiates deletion; domain callbacks preserve frozen results and undo.
   const onBeforeDelete = useCallback(
     async ({
@@ -297,10 +293,7 @@ export function useTaskMapInteraction({
 
   return {
     validateConnection,
-    drop,
-    finishDrop,
     dragPreview,
-    setDropChoice,
     closeGroupEditor,
     setDragPreview,
     editingGroup,
@@ -331,6 +324,5 @@ export function useTaskMapInteraction({
     selectedEdges,
     edgeActionPosition,
     flow,
-    dropChoice,
   }
 }

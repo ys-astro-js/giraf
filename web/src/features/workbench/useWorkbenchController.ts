@@ -79,8 +79,7 @@ export function useWorkbenchController() {
     [error, setError] = useState(""),
     [, setSaveState] = useState("저장됨"),
     [picker, setPicker] = useState<PickerRequest | null>(null),
-    [addOpen, setAddOpen] = useState(false),
-    [selectedFiles, setSelectedFiles] = useState<string[]>([])
+    [addOpen, setAddOpen] = useState(false)
   const [linking, setLinking] = useState<LinkDialog | null>(null)
   const [selectedJob, setSelectedJob] = useState("")
   useJobDiagnostics(jobs)
@@ -161,7 +160,6 @@ export function useWorkbenchController() {
       setMap,
       setSaveState,
       setLastExecution,
-      setSelectedFiles,
       setLayoutRevision,
       documentBusy,
       setDocumentBusy,
@@ -379,7 +377,6 @@ export function useWorkbenchController() {
     }>(`delete-${kind}`, { ids })
     const fileIds = new Set(removed.fileIds)
     const jobIds = new Set(removed.jobIds)
-    setSelectedFiles((previous) => previous.filter((id) => !fileIds.has(id)))
     setCache((previous) =>
       Object.fromEntries(
         Object.entries(previous).filter(([id]) => !fileIds.has(id))
@@ -436,10 +433,9 @@ export function useWorkbenchController() {
     task,
   })
   const { layoutBusy } = taskEditing
-  function add(name: string, ids: string[] = selectedFiles) {
+  function add(name: string, ids: string[] = []) {
     if (!taskEditing.add(name, ids)) return
     setAddOpen(false)
-    if (ids === selectedFiles) setSelectedFiles([])
     layout().setInspectorTab("input")
     revealPanel("inspector")
     setTaskError("")
@@ -499,8 +495,6 @@ export function useWorkbenchController() {
     changeDocument,
     exportDocument,
     folder,
-    selectedFiles,
-    setSelectedFiles,
     deleteLibrary,
     // Workflow editing
     editor,

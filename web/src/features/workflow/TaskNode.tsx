@@ -56,9 +56,6 @@ export const TaskNode = memo(function TaskNode({
     choose,
     duplicate,
     onInput,
-    drop,
-    dropChoice,
-    finishDrop,
     selectingGroup,
     currentIssues,
   } = useContext(WorkflowContext)!
@@ -115,8 +112,6 @@ export const TaskNode = memo(function TaskNode({
       data-dragging={dragging}
       data-connection-target={connectionTarget !== null}
       data-diagnostic={nodeIssue?.severity}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => drop(e, id)}
     >
       <header className="node-header">
         <button
@@ -220,8 +215,6 @@ export const TaskNode = memo(function TaskNode({
                     ? `파일 ${a.ids.length}개`
                     : "미지정")
             const enabled = roleActive(task, slot.role, catalog)
-            const pickable =
-              dropChoice?.target === id && dropChoice.roles.includes(slot.name)
             return (
               <div
                 className="node-input-row"
@@ -261,16 +254,13 @@ export const TaskNode = memo(function TaskNode({
                     render={<button />}
                     className="node-input nodrag nopan"
                     data-input-role={slot.name}
-                    data-connection-choice={!!pickable}
-                    aria-label={`${task.label} ${slot.role} ${slot.group ? groupLabel(slot.group) : ""}${pickable ? "에 연결" : " 설정"}`}
+                    aria-label={`${task.label} ${slot.role} ${slot.group ? groupLabel(slot.group) : ""} 설정`}
                     onClick={(e) => {
                       e.stopPropagation()
                       if (clickStart) {
                         if (enabled && isConnectable)
                           inputHandles.current.get(slot.name)?.click()
-                      } else if (pickable && dropChoice)
-                        finishDrop(id, dropChoice.source, slot.name)
-                      else {
+                      } else {
                         choose(id)
                         onInput?.(id, slot.name)
                       }

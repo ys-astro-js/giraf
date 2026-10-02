@@ -22,7 +22,6 @@ export function ConnectInputDialog({
   error,
   catalog,
   map,
-  selectedFiles,
   jobs,
   pick,
   update,
@@ -33,13 +32,12 @@ export function ConnectInputDialog({
   error: string
   catalog: Catalog | null
   map: TaskMap
-  selectedFiles: string[]
   jobs: Job[]
   pick: (slot: Slot, ids: string[], apply: (ids: string[]) => void) => void
   update: (fn: (m: TaskMap) => TaskMap, label?: string) => void
   setError: React.Dispatch<React.SetStateAction<string>>
 }) {
-  const sourceOptions = connectionSourceOptions(selectedFiles, map, jobs)
+  const sourceOptions = connectionSourceOptions(map, jobs)
   return (
     <Dialog
       open={!!linking}

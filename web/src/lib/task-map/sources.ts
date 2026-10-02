@@ -8,25 +8,10 @@ export type ConnectionSourceOption = {
   source: Source
 }
 export function connectionSourceOptions(
-  selectedFiles: string[],
   map: TaskMap,
   jobs: Job[]
 ): ConnectionSourceOption[] {
   return [
-    ...(selectedFiles.length
-      ? [
-          {
-            key: "selection",
-            label: "자료 목록 선택",
-            count: selectedFiles.length,
-            source: {
-              kind: "files",
-              ids: selectedFiles,
-              label: "선택한 자료",
-            } as Source,
-          },
-        ]
-      : []),
     ...map.tasks.map((t) => ({
       key: "pending:" + t.id,
       label: t.label + " 출력",

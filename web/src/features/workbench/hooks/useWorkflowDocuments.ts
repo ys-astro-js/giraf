@@ -34,7 +34,6 @@ export function useWorkflowDocuments({
   setMap,
   setSaveState,
   setLastExecution,
-  setSelectedFiles,
   setLayoutRevision,
   documentBusy,
   setDocumentBusy,
@@ -55,7 +54,6 @@ export function useWorkflowDocuments({
   setLastExecution: React.Dispatch<
     React.SetStateAction<ExecutionReference | undefined>
   >
-  setSelectedFiles: React.Dispatch<React.SetStateAction<string[]>>
   setLayoutRevision: React.Dispatch<React.SetStateAction<number>>
   documentBusy: boolean
   setDocumentBusy: React.Dispatch<React.SetStateAction<boolean>>
@@ -92,7 +90,6 @@ export function useWorkflowDocuments({
       value._document?.saved ? "저장됨" : "작업을 추가하면 자동 저장됩니다"
     )
     setLastExecution(undefined)
-    setSelectedFiles([])
     setLayoutRevision((revision) => revision + 1)
   }
   async function changeDocument(action: WorkflowAction) {
