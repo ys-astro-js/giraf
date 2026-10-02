@@ -80,7 +80,6 @@ export function useWorkbenchController() {
     [, setSaveState] = useState("저장됨"),
     [picker, setPicker] = useState<PickerRequest | null>(null),
     [addOpen, setAddOpen] = useState(false),
-    [query, setQuery] = useState(""),
     [selectedFiles, setSelectedFiles] = useState<string[]>([])
   const [linking, setLinking] = useState<LinkDialog | null>(null)
   const [selectedJob, setSelectedJob] = useState("")
@@ -462,9 +461,6 @@ export function useWorkbenchController() {
   function removeLink(id: string) {
     update((m) => disconnect(m, id), "연결 삭제")
   }
-  function template() {
-    if (taskEditing.template()) setAddOpen(false)
-  }
   async function autoLayout(straight = false) {
     try {
       if (await taskEditing.autoLayout(straight))
@@ -528,7 +524,6 @@ export function useWorkbenchController() {
     remove,
     duplicate,
     removeLink,
-    template,
     link,
     linking,
     setLinking,
@@ -537,8 +532,6 @@ export function useWorkbenchController() {
     setPicker,
     addOpen,
     setAddOpen,
-    query,
-    setQuery,
     setBackend,
     saveTaskDefaults,
     // Execution

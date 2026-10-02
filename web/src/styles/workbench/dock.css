@@ -508,7 +508,7 @@
 
 /* The window pill: the window's own controls, always
    there at the start as small quiet buttons. At rest the pill holds its
-   small footprint; opened (hover, focus), it grows to toolbar size over the
+   small footprint; under the pointer or keyboard focus, it grows to toolbar size over the
    title next to it instead of pushing the bar along. */
 .window-pill {
   position: relative;
@@ -548,12 +548,12 @@
 .window-pill[data-active="true"] .toolbar-button {
   color: color-mix(in oklch, var(--foreground) 80%, transparent);
 }
-.window-pill[data-open="true"] .toolbar-button {
+.window-pill:is(:hover, :has(:focus-visible)) .toolbar-button {
   width: calc(var(--window-toolbar) - 6px);
   height: calc(var(--window-toolbar) - 6px);
   color: var(--foreground);
 }
-.window-pill[data-open="true"] .toolbar-button svg {
+.window-pill:is(:hover, :has(:focus-visible)) .toolbar-button svg {
   width: 16px;
   height: 16px;
   stroke-width: 2;

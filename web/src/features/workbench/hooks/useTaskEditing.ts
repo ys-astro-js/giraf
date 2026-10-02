@@ -104,30 +104,6 @@ export function useTaskEditing({
     }, `${target.label} 설정 변경`)
   }
 
-  function template() {
-    if (!catalog) return false
-    let next = map
-    const names = ["zerocombine", "darkcombine", "flatcombine", "ccdproc"]
-    const tasks = names.map((n) =>
-      makeInstance(
-        catalog.tasks.find((s) => s.name === n)!,
-        catalog,
-        prefs
-      )
-    )
-    for (const t of tasks) next = addTask(next, t)
-    for (let i = 0; i < 3; i++)
-      next = connect(
-        next,
-        tasks[3].id,
-        ["zero", "dark", "flat"][i],
-        { kind: "pending", taskId: tasks[i].id },
-        false
-      )
-    update(() => next, "보정 워크플로우 추가")
-    return true
-  }
-
   const [layoutBusy, setLayoutBusy] = useState(false)
   async function autoLayout(straight = false) {
     if (layoutBusy || !catalog) return false
@@ -166,6 +142,5 @@ export function useTaskEditing({
     layoutBusy,
     remove,
     duplicate,
-    template,
   }
 }

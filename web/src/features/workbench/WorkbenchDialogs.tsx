@@ -1,5 +1,4 @@
 import { FilePicker } from "@/features/file-picker/FilePicker"
-import { AddTaskDialog } from "./dialogs/AddTask"
 import { WorkflowConfirmationDialog } from "./dialogs/WorkflowConfirmation"
 import { ConnectInputDialog } from "./dialogs/ConnectInput"
 import { TaskConfirmationDialog } from "./dialogs/TaskConfirmation"
@@ -23,15 +22,6 @@ export function WorkbenchDialogs() {
           onDelete={(ids) => w.deleteLibrary("files", ids)}
         />
       )}
-      <AddTaskDialog
-        addOpen={w.addOpen}
-        setAddOpen={w.setAddOpen}
-        query={w.query}
-        setQuery={w.setQuery}
-        catalog={w.catalog}
-        add={w.add}
-        template={w.template}
-      />
       <WorkflowConfirmationDialog
         workflow={w.workflow}
         cancelWorkflow={w.cancelWorkflow}

@@ -5,12 +5,17 @@ import { WorkflowSelector } from "@/components/workflow-selector"
 import { resolveDiagnosticNode } from "@/lib/diagnostics"
 import { useWorkbench } from "./context"
 import { toggleTray, useDock } from "@/features/dock/store"
+import { AddTaskButton } from "@/features/library/TaskPopover"
+import { FilesButton } from "@/features/library/FilesPopover"
+import { SettingsButton } from "@/features/library/SettingsPopover"
+import { ToolbarSpacer } from "@/components/toolbar"
 
 export function WorkbenchHeader() {
   const w = useWorkbench()
   const trayOpen = useDock((state) => state.tray.open)
   return (
     <WorkbenchToolbar
+      addTask={<AddTaskButton />}
       historyControls={
         <EditHistoryControls
           past={w.editHistory.past}
@@ -26,6 +31,13 @@ export function WorkbenchHeader() {
           resolveNode={(entry) => resolveDiagnosticNode(entry, w.map)}
           onNavigate={w.navigateToDiagnostic}
         />
+      }
+      trailing={
+        <>
+          <FilesButton />
+          <ToolbarSpacer />
+          <SettingsButton />
+        </>
       }
       workflowSelector={
         <WorkflowSelector

@@ -1,4 +1,4 @@
-import { FolderOpen, FileImage } from "lucide-react"
+import { FolderOpen, FileImage, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -10,44 +10,51 @@ import {
   TableCell,
 } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
-import { type Frame, type Slot } from "@/lib/workbench"
+import { type Frame } from "@/lib/workbench"
 import { Blank } from "@/components/workbench-controls"
-import type * as React from "react"
-type PickerRequest = {
-  slot: Slot
-  initial: string[]
-  apply: (ids: string[]) => void
-  folderOnly?: boolean
-  applyFolder?: (path: string) => void
+
+export type FileSelection = {
+  selected: Set<string>
+  multiple: boolean
+  onSelect: (id: string, checked: boolean, shift: boolean) => void
+  onAll: (checked: boolean) => void
 }
 
-export function PickerFileList({
+const fileIcon = (file: Frame) =>
+  ["text", "image-list"].includes(file.asset || "") ? FileText : FileImage
+
+/**
+ * A table of files: folders to go into, then files with their filter and
+ * exposure. Choosing a file's name acts on it (previews it in the input
+ * picker, opens it in a viewer from the toolbar); with `selection`, each
+ * row also has a checkbox.
+ */
+export function FileTable({
   busy,
-  request,
   list,
-  selection,
-  setSelection,
-  directories,
+  directories = [],
   navigate,
-  select,
-  setPreview,
-  query,
-  hasFilters,
-  tab,
+  details = true,
+  selection,
+  onActivate,
+  activateLabel,
+  empty,
 }: {
   busy: boolean
-  request: PickerRequest
   list: Frame[]
-  selection: Set<string>
-  setSelection: React.Dispatch<React.SetStateAction<Set<string>>>
-  directories: { name: string; path: string }[]
-  navigate: (path: string) => void
-  select: (id: string, checked: boolean, shift?: boolean) => void
-  setPreview: React.Dispatch<React.SetStateAction<Frame | null>>
-  query: string
-  hasFilters: boolean
-  tab: string
+  directories?: { name: string; path: string }[]
+  navigate?: (path: string) => void
+  /** Filter and exposure columns; off when only folders are listed. */
+  details?: boolean
+  selection?: FileSelection
+  onActivate: (file: Frame) => void
+  activateLabel: (file: Frame) => string
+  /** What an empty list says. */
+  empty: string
 }) {
+  const columns = (selection ? 1 : 0) + 1 + (details ? 2 : 0)
+  const all = list.length > 0 && list.every((r) => selection?.selected.has(r.id))
+  const some = list.some((r) => selection?.selected.has(r.id))
   return (
     <div className="picker-list" tabIndex={0} aria-label="파일 목록">
       {busy ? (
@@ -60,28 +67,15 @@ export function PickerFileList({
         <Table>
           <TableHeader>
             <TableRow>
-              {!request.folderOnly && (
+              {selection && (
                 <TableHead className="w-10">
-                  {request.slot.multiple ? (
+                  {selection.multiple ? (
                     <Checkbox
                       aria-label="표시된 파일 전체 선택"
-                      checked={
-                        list.length > 0 &&
-                        list.every((r) => selection.has(r.id))
-                      }
-                      indeterminate={
-                        list.some((r) => selection.has(r.id)) &&
-                        !list.every((r) => selection.has(r.id))
-                      }
+                      checked={all}
+                      indeterminate={some && !all}
                       disabled={!list.length}
-                      onCheckedChange={(checked) =>
-                        setSelection((s) => {
-                          const next = new Set(s)
-                          for (const r of list)
-                            checked ? next.add(r.id) : next.delete(r.id)
-                          return next
-                        })
-                      }
+                      onCheckedChange={(checked) => selection.onAll(checked)}
                     />
                   ) : (
                     <span className="sr-only">선택</span>
@@ -89,7 +83,7 @@ export function PickerFileList({
                 </TableHead>
               )}
               <TableHead>이름</TableHead>
-              {!request.folderOnly && (
+              {details && (
                 <>
                   <TableHead>필터</TableHead>
                   <TableHead>
@@ -105,65 +99,63 @@ export function PickerFileList({
           <TableBody>
             {directories.map((d) => (
               <TableRow key={d.path}>
-                <TableCell colSpan={request.folderOnly ? 1 : 4}>
-                  <Button variant="ghost" onClick={() => navigate(d.path)}>
+                <TableCell colSpan={columns}>
+                  <Button variant="ghost" onClick={() => navigate?.(d.path)}>
                     <FolderOpen data-icon="inline-start" />
                     <span className="picker-filename">{d.name}</span>
                   </Button>
                 </TableCell>
               </TableRow>
             ))}
-            {!request.folderOnly &&
-              list.map((r) => (
+            {list.map((r) => {
+              const Icon = fileIcon(r)
+              return (
                 <TableRow
                   key={r.id}
-                  data-state={selection.has(r.id) ? "selected" : undefined}
+                  data-state={
+                    selection?.selected.has(r.id) ? "selected" : undefined
+                  }
                 >
-                  <TableCell>
-                    <Checkbox
-                      aria-label={`${r.label} 선택`}
-                      checked={selection.has(r.id)}
-                      onCheckedChange={(checked, details) =>
-                        select(
-                          r.id,
-                          checked,
-                          Boolean((details.event as MouseEvent).shiftKey)
-                        )
-                      }
-                    />
-                  </TableCell>
+                  {selection && (
+                    <TableCell>
+                      <Checkbox
+                        aria-label={`${r.label} 선택`}
+                        checked={selection.selected.has(r.id)}
+                        onCheckedChange={(checked, event) =>
+                          selection.onSelect(
+                            r.id,
+                            checked,
+                            Boolean((event.event as MouseEvent).shiftKey)
+                          )
+                        }
+                      />
+                    </TableCell>
+                  )}
                   <TableCell>
                     <Button
                       variant="ghost"
-                      aria-label={`${r.label} 미리보기`}
-                      onClick={() => setPreview(r)}
+                      aria-label={activateLabel(r)}
+                      onClick={() => onActivate(r)}
                     >
-                      <FileImage data-icon="inline-start" />
+                      <Icon data-icon="inline-start" />
                       <span className="picker-filename" title={r.label}>
                         {r.label}
                       </span>
                     </Button>
                   </TableCell>
-                  <TableCell>{r.filter || "—"}</TableCell>
-                  <TableCell>{r.exposure ?? "—"}</TableCell>
+                  {details && (
+                    <>
+                      <TableCell>{r.filter || "—"}</TableCell>
+                      <TableCell>{r.exposure ?? "—"}</TableCell>
+                    </>
+                  )}
                 </TableRow>
-              ))}
+              )
+            })}
           </TableBody>
         </Table>
       )}
-      {!busy && !list.length && !directories.length && (
-        <Blank>
-          {query || hasFilters
-            ? query
-              ? "검색 결과 없음"
-              : "필터에 맞는 파일 없음"
-            : tab === "selection"
-              ? "선택한 파일 없음"
-              : tab === "results"
-                ? "실행 결과 없음"
-                : "빈 폴더"}
-        </Blank>
-      )}
+      {!busy && !list.length && !directories.length && <Blank>{empty}</Blank>}
     </div>
   )
 }

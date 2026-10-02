@@ -13,7 +13,7 @@ import {
   CircleStop,
   Play,
   Square,
-  PanelBottom,
+  History,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -43,8 +43,12 @@ const statusIcons = {
 const COMPLETION_HOLD_MS = 3000
 
 type Props = {
+  /** Adding a task, first in the leading section. */
+  addTask?: React.ReactNode
   historyControls?: React.ReactNode
   diagnostics?: React.ReactNode
+  /** The trailing section: files and settings. */
+  trailing?: React.ReactNode
   workflowSelector?: React.ReactNode
   executionStatus?: ExecutionStatus
   folder: string
@@ -100,6 +104,8 @@ export function WorkbenchToolbar(props: Props) {
     <header className="workbench-toolbar" aria-label="도구 막대">
       <div className="toolbar-start">
         <ToolbarCluster className="toolbar-leading" edge="start">
+          {props.addTask}
+          <ToolbarSpacer />
           <ToolbarGroup label="일괄 실행">
             <ToolbarMorph
               variant={props.workflowBusy ? "ghost" : "default"}
@@ -261,18 +267,21 @@ export function WorkbenchToolbar(props: Props) {
             {props.diagnostics}
           </div>
         </div>
-      </div>
-      <div className="toolbar-end">
-        <ToolbarCluster className="toolbar-panels" edge="end">
-          <ToolbarGroup label="패널 표시">
+        <ToolbarCluster className="toolbar-runs" edge="end">
+          <ToolbarGroup label="실행 기록">
             <ToolbarButton
               label={props.trayOpen ? "실행 기록 닫기" : "실행 기록 열기"}
               aria-pressed={props.trayOpen}
               onClick={props.onTray}
             >
-              <PanelBottom />
+              <History />
             </ToolbarButton>
           </ToolbarGroup>
+        </ToolbarCluster>
+      </div>
+      <div className="toolbar-end">
+        <ToolbarCluster className="toolbar-trailing" edge="end">
+          {props.trailing}
         </ToolbarCluster>
       </div>
     </header>

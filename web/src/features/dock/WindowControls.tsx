@@ -50,24 +50,11 @@ export function WindowPill({
   group: DockviewGroupPanel
   active: boolean
 }) {
-  const [open, setOpen] = useState(false)
   const maximized = useDock((state) => state.maximized === group.id)
   useDock((state) => state.revision)
   const docked = isDocked(group)
   return (
-    <span
-      className="window-pill"
-      data-active={active}
-      data-open={open}
-      onPointerEnter={() => setOpen(true)}
-      onPointerLeave={() => setOpen(false)}
-      onFocus={() => setOpen(true)}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node))
-          setOpen(false)
-      }}
-    >
-      <ToolbarCluster edge="start" className="window-pill-cluster">
+    <span className="window-pill" data-active={active}>      <ToolbarCluster edge="start" className="window-pill-cluster">
         <ToolbarGroup label="창 조작">
           <ToolbarButton label="창 닫기" onClick={() => closeWindow(group)}>
             <X />

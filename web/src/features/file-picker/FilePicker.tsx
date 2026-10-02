@@ -1,5 +1,5 @@
 import { useFilePicker } from "./useFilePicker"
-import { PickerFileList } from "./FileList"
+import { FileTable } from "./FileList"
 import { DeleteSelectionButton } from "@/components/delete-selection-button"
 import { FolderOpen, ArrowUp, Check, X } from "lucide-react"
 import {
@@ -233,19 +233,42 @@ export function FilePicker({
                 </div>
               </div>
             )}
-            <PickerFileList
+            <FileTable
               busy={busy}
-              request={request}
-              list={list}
-              selection={selection}
-              setSelection={setSelection}
+              list={request.folderOnly ? [] : list}
               directories={directories}
               navigate={navigate}
-              select={select}
-              setPreview={setPreview}
-              query={query}
-              hasFilters={hasFilters}
-              tab={tab}
+              details={!request.folderOnly}
+              selection={
+                request.folderOnly
+                  ? undefined
+                  : {
+                      selected: selection,
+                      multiple: !!request.slot.multiple,
+                      onSelect: select,
+                      onAll: (checked) =>
+                        setSelection((current) => {
+                          const next = new Set(current)
+                          for (const r of list)
+                            if (checked) next.add(r.id)
+                            else next.delete(r.id)
+                          return next
+                        }),
+                    }
+              }
+              onActivate={setPreview}
+              activateLabel={(file) => `${file.label} 미리보기`}
+              empty={
+                query || hasFilters
+                  ? query
+                    ? "검색 결과 없음"
+                    : "필터에 맞는 파일 없음"
+                  : tab === "selection"
+                    ? "선택한 파일 없음"
+                    : tab === "results"
+                      ? "실행 결과 없음"
+                      : "빈 폴더"
+              }
             />
           </div>
         </div>
