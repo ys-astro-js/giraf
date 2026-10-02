@@ -1,20 +1,3 @@
-.run-tray > [data-slot="tabs"] {
-  min-height: 0;
-  flex: 1;
-  overflow: hidden;
-}
-.tray-content {
-  min-height: 0;
-  flex: 1;
-  overflow: auto;
-  padding: 0 16px 12px;
-}
-.tray-content pre {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.tray-content td {
-}
 ::selection {
   background: var(--selection);
   color: var(--selection-foreground);
@@ -50,11 +33,9 @@ textarea {
   overflow: hidden;
 }
 
-.library, .main-workspace, .inspector-pane, .run-tray { width: 100%; height: 100%; min-height: 0; min-width: 0; }
-.library, .main-workspace, .run-tray { display: flex; flex-direction: column; }
+.main-workspace, .inspector-pane { width: 100%; height: 100%; min-height: 0; min-width: 0; }
+.main-workspace { display: flex; flex-direction: column; }
 .inspector-pane { overflow-y: auto; overscroll-behavior: contain; }
-.run-tray { overflow: hidden; }
-.library { position: relative; }
 
 
 
@@ -66,4 +47,4 @@ textarea {
 .task-inspector { height: 100%; min-height: 0; }
 .inspector-heading { position: relative; flex-shrink: 0; }
 .inspector-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.run-tray > [data-slot="tabs"] > div:first-child { flex-shrink: 0; }
+

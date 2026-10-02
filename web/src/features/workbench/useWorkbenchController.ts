@@ -359,7 +359,6 @@ export function useWorkbenchController() {
     if (entry.connectionId) layout().revealConnection(entry.connectionId)
   }
   function viewLog(id: string) {
-    setSelectedJob(id)
     layout().viewLog(id)
   }
   function setBackend(backend: string) {
@@ -538,6 +537,7 @@ export function useWorkbenchController() {
     jobs,
     currentJob,
     taskJob,
+    selectedJob,
     setSelectedJob,
     viewLog,
     workflow,

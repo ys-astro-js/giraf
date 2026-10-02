@@ -20,6 +20,7 @@ import { LockControl, WindowBar, WindowTopBar } from "./WindowControls"
 import { WindowSlot } from "./WindowToolbar"
 import { recordBars } from "./morph"
 import { DisplayWatcher } from "@/features/viewer/DisplayPanel"
+import { RunTray } from "@/features/runs/RunTray"
 import { PANELS, type PanelDefinition } from "./panels"
 import {
   endColumnResize,
@@ -152,6 +153,7 @@ export function DockShell({ header }: { header: ReactNode }) {
             onReady={(event) => ready(event.api, rootRef.current)}
           />
         </div>
+        <RunTray />
       </div>
     </SidebarProvider>
   )

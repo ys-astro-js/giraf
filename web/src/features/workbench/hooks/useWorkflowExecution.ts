@@ -82,6 +82,9 @@ export function useWorkflowExecution({
   const [workflowName, setWorkflowName] = useState("워크플로우")
 
   const publishedWorkflowJobs = useRef(new Map<string, Job>())
+  /** The run started here, and its step last shown in the run tray. */
+  const following = useRef<string>(undefined)
+  const followed = useRef<string>(undefined)
   useEffect(() => {
     if (!ready || !workflow) return
     if (workflowActive(workflow)) {
@@ -120,6 +123,12 @@ export function useWorkflowExecution({
           publishJob(job.manifest.instanceId, job, catalog ?? undefined)
       }
     }
+    // A run started here is followed in the run tray, step by step.
+    const step = workflow.currentJob?.id
+    if (step && following.current === workflow.id && followed.current !== step) {
+      followed.current = step
+      setSelectedJob(step)
+    }
     if (workflow.currentJob && workflow.state === "waiting") {
       setSelectedJob(workflow.currentJob.id)
       toggleTray(true)
@@ -157,6 +166,14 @@ export function useWorkflowExecution({
           : workflowRequest(map, catalog, workspace.folder),
       })
       setLastExecution({ kind: "workflow", id: w.id })
+      following.current = w.id
+      followed.current = undefined
+      const first = w.currentJob ?? w.jobs[0]
+      if (first) {
+        followed.current = first.id
+        setSelectedJob(first.id)
+      }
+      toggleTray(true)
     } catch (e) {
       setError((e as Error).message)
     } finally {

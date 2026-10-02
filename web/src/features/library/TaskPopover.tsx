@@ -17,7 +17,7 @@ import { taskPackageTree, type TaskPackage } from "@/lib/task-tree"
 import { taskDisplayName, type Spec } from "@/lib/workbench"
 import { useWorkbench } from "@/features/workbench/context"
 import { ListSkeleton, NoFiles, RefreshButton } from "./shared"
-import { useRefresh } from "./lists"
+import { useRefresh } from "./useRefresh"
 import "@/styles/library/popovers.css"
 
 const matches = (task: Spec, query: string) =>

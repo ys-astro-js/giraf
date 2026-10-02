@@ -19,7 +19,7 @@ import {
 import { useWorkbench } from "@/features/workbench/context"
 import { FileTable } from "@/features/file-picker/FileList"
 import { RefreshButton } from "./shared"
-import { useRefresh } from "./lists"
+import { useRefresh } from "./useRefresh"
 import "@/styles/library/popovers.css"
 
 type Source = "folder" | "products"
