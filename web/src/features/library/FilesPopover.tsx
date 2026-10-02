@@ -63,7 +63,7 @@ export function FilesButton() {
           <Images />
         </PopoverTrigger>
         <PopoverContent
-          align="end"
+          align="start"
           sideOffset={8}
           className="library-popover library-popover-wide"
           initialFocus={search}

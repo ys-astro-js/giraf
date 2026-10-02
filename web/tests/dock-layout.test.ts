@@ -15,6 +15,8 @@ const {
   dockPosition,
   fitColumn,
   MIN_CANVAS,
+  columnShown,
+  showColumn,
 } = await import("../src/features/dock/layout")
 
 type Dock = InstanceType<typeof DockviewComponent>
@@ -206,4 +208,20 @@ test("a floating window docks back as a tab of its kind, or into the column", ()
     "display",
   ])
   expect(column()[0].width).toBe(COLUMN)
+})
+
+test("the column hides, giving the canvas its space, and comes back at its width", () => {
+  showColumn(dock.api, false, COLUMN)
+  expect(columnShown(dock.api)).toBe(false)
+  expect(canvas().width).toBe(1200)
+  resize(1500, 800)
+  expect(canvas().width).toBe(1500)
+  showColumn(dock.api, true, COLUMN)
+  expect(columnShown(dock.api)).toBe(true)
+  expect(column()[0].width).toBe(COLUMN)
+  expect(canvas().width).toBe(1500 - COLUMN)
+  expect(column().map((group) => group.activePanel?.id)).toEqual([
+    "inspector",
+    "viewer",
+  ])
 })

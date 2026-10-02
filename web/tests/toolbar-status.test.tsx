@@ -23,6 +23,8 @@ const render = (executionStatus?: ExecutionStatus) =>
         onCancel={() => {}}
         trayOpen={false}
         onTray={() => {}}
+        columnOpen
+        onColumn={() => {}}
       />
     </SidebarProvider>
   )

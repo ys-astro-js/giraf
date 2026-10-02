@@ -12,6 +12,7 @@ import {
   CANVAS,
   canvasGroup,
   columnGroups,
+  columnShown,
   columnWidth,
   COLUMN,
   dockPosition,
@@ -21,6 +22,7 @@ import {
   groupKind,
   isDocked,
   KINDS,
+  showColumn,
   type DropPlace,
 } from "./layout"
 
@@ -44,6 +46,8 @@ type DockState = {
   api?: DockviewApi
   /** The right column's width in pixels. */
   column: number
+  /** Whether the right column shows (holds groups, not hidden). */
+  columnOpen: boolean
   /** The run tray below the workbench. */
   tray: { open: boolean; height: number }
   /** The window filling the workbench (a group id), if any. */
@@ -54,6 +58,7 @@ type DockState = {
 
 export const useDock = create<DockState>()(() => ({
   column: COLUMN,
+  columnOpen: true,
   tray: { open: false, height: TRAY_HEIGHT },
   revision: 0,
 }))
@@ -156,6 +161,7 @@ export function syncDock() {
     return {
       maximized:
         docked?.id ?? (floating && !isDocked(floating) ? floating.id : undefined),
+      columnOpen: columnShown(dock),
       revision: state.revision + 1,
     }
   })
@@ -235,6 +241,28 @@ export function watchDock(dock: DockviewApi) {
 
 /* Opening windows */
 
+/** Shows the column if it is hidden, as a window opens or docks into it. */
+function openColumn(dock: DockviewApi) {
+  if (!columnShown(dock) && columnGroups(dock).length)
+    showColumn(dock, true, useDock.getState().column)
+}
+
+/**
+ * The toolbar's right panel toggle: hides or shows the column; with
+ * nothing in it, opens the node window there.
+ */
+export function toggleColumn() {
+  const dock = api()
+  if (!dock) return
+  const maximized = maximizedGroup()
+  if (maximized && isDocked(maximized)) toggleMaximized(maximized)
+  if (columnShown(dock)) showColumn(dock, false, useDock.getState().column)
+  else if (columnGroups(dock).length) openColumn(dock)
+  else revealPanel("inspector")
+  syncDock()
+  saveLayout()
+}
+
 type NewWindow = { id: string; component: string; title: string }
 
 /**
@@ -249,6 +277,7 @@ function openWindow(window: NewWindow, beside?: DockviewGroupPanel) {
   )
   const docked = columnGroups(dock).some((group) => groupKind(group) === kind)
   const reference = beside ?? (docked ? undefined : floating)
+  openColumn(dock)
   const panel = dock.addPanel({
     ...window,
     position: reference
@@ -298,6 +327,7 @@ export function revealPanel(id: PanelId, { activate = true } = {}) {
     : (dock.getPanel(id) ??
       openWindow({ id, component: id, title: PANELS[id].title }))
   if (activate) {
+    if (isDocked(panel.group)) openColumn(dock)
     const maximized = maximizedGroup()
     if (maximized && maximized !== panel.group) toggleMaximized(maximized)
     if (panel.group.activePanel !== panel) recordBars(panel.group)
@@ -440,6 +470,7 @@ export function attachWindow(group: DockviewGroupPanel) {
   const kind = groupKind(group)
   if (!kind) return
   const active = group.activePanel
+  openColumn(dock)
   const target = dockTarget(dock, kind)
   if (!target) return
   group.api.moveTo(target)

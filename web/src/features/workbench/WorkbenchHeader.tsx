@@ -4,18 +4,23 @@ import { DiagnosticsButton } from "@/components/diagnostics-button"
 import { WorkflowSelector } from "@/components/workflow-selector"
 import { resolveDiagnosticNode } from "@/lib/diagnostics"
 import { useWorkbench } from "./context"
-import { toggleTray, useDock } from "@/features/dock/store"
+import { toggleColumn, toggleTray, useDock } from "@/features/dock/store"
 import { AddTaskButton } from "@/features/library/TaskPopover"
 import { FilesButton } from "@/features/library/FilesPopover"
 import { SettingsButton } from "@/features/library/SettingsPopover"
-import { ToolbarSpacer } from "@/components/toolbar"
 
 export function WorkbenchHeader() {
   const w = useWorkbench()
   const trayOpen = useDock((state) => state.tray.open)
+  const columnOpen = useDock((state) => state.columnOpen)
   return (
     <WorkbenchToolbar
-      addTask={<AddTaskButton />}
+      leading={
+        <>
+          <AddTaskButton />
+          <FilesButton />
+        </>
+      }
       historyControls={
         <EditHistoryControls
           past={w.editHistory.past}
@@ -32,13 +37,7 @@ export function WorkbenchHeader() {
           onNavigate={w.navigateToDiagnostic}
         />
       }
-      trailing={
-        <>
-          <FilesButton />
-          <ToolbarSpacer />
-          <SettingsButton />
-        </>
-      }
+      trailing={<SettingsButton />}
       workflowSelector={
         <WorkflowSelector
           document={w.prefs._document}
@@ -66,6 +65,8 @@ export function WorkbenchHeader() {
       onCancel={w.cancelWorkflow}
       trayOpen={trayOpen}
       onTray={() => toggleTray()}
+      columnOpen={columnOpen}
+      onColumn={toggleColumn}
     />
   )
 }

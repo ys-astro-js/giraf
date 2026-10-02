@@ -3,10 +3,8 @@
 .toolbar-status-content:is([data-state="running"], [data-state="waiting"]) { column-gap: 8px; }
 .toolbar-status-transition > button { min-width: 0; flex-shrink: 1; }
 
-/* Keep diagnostic counts beside status, outside its live announcement region;
-   the run history toggle follows them. */
+/* Keep diagnostic counts beside status, outside its live announcement region. */
 .toolbar-center { display: flex; align-items: center; gap: 0; min-width: 0; }
-.toolbar-center > .toolbar-runs { margin-inline-start: 8px; }
 .toolbar-center .toolbar-status { flex: 1; }
 .diagnostics-count { min-width: 1ch; }
 /* Only this small intrinsic-width region reflows, keeping all neighboring controls aligned. */

@@ -6,7 +6,7 @@ giraf의 목적은 워크플로우 구성이고, 창 배치가 사용자의 일�
 
 ## 구조
 ```
-앱 툴바: leading [+ 작업 추가][실행][되돌리기] · center [폴더›워크플로우/실행 상태][경고·오류][실행 기록] · trailing [파일 열기] [설정]
+앱 툴바: [추가|파일] [실행] [undo|redo] <fl> [상태 바] [경고|오류] <fl> [설정] [하단 패널|오른쪽 패널]
 dockview 격자: 워크플로우 캔버스(고정) | 오른쪽 열(노드 설정 그룹 위, 뷰어 그룹 아래) + 떠 있는 창
 하단 실행 기록 패널(dockview 밖): 실행 목록 | 선택한 작업의 로그·산출물·실행 설정
 ```
@@ -18,7 +18,8 @@ dockview 격자: 워크플로우 캔버스(고정) | 오른쪽 열(노드 설정
     `tests/dock-layout.test.ts`가 happy-dom 위의 실제 dockview 격자로 검사한다.
   - `store.ts`: 상태(열 너비 px, 하단 패널 열림·높이 px, 최대화한 그룹)와 동작. 열기(`revealPanel`, 선택을
     따라가는 탭은 `follower`), 잠금(`toggleLock`, `registerLockTarget`), 닫기, 최대화, 분리/붙이기
-    (`detachWindow`/`attachWindow`), 하단 패널(`toggleTray`, `resizeTray`), 저장/불러오기(`LAYOUT_VERSION` 6,
+    (`detachWindow`/`attachWindow`), 오른쪽 열 숨기기(`toggleColumn`, dockview `setVisible`; 창을 열거나 붙이면
+    다시 보임), 하단 패널(`toggleTray`, `resizeTray`), 저장/불러오기(`LAYOUT_VERSION` 6,
     옛 저장값은 무시하고 기본 배치).
   - `DockShell.tsx`: dockview를 `disableAutoResizing`으로 띄우고 ResizeObserver에서 `layoutDock`을 부른다.
     열 분할선을 누르면 `startColumnResize`, 놓으면 그 너비를 저장. 캔버스는 머리글이 숨겨져 있어 탭 막대

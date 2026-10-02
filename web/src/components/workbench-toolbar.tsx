@@ -13,7 +13,8 @@ import {
   CircleStop,
   Play,
   Square,
-  History,
+  PanelBottom,
+  PanelRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -43,11 +44,11 @@ const statusIcons = {
 const COMPLETION_HOLD_MS = 3000
 
 type Props = {
-  /** Adding a task, first in the leading section. */
-  addTask?: React.ReactNode
+  /** First in the leading section: adding a task, opening a file. */
+  leading?: React.ReactNode
   historyControls?: React.ReactNode
   diagnostics?: React.ReactNode
-  /** The trailing section: files and settings. */
+  /** The trailing section's own controls, before the panel toggles. */
   trailing?: React.ReactNode
   workflowSelector?: React.ReactNode
   executionStatus?: ExecutionStatus
@@ -61,6 +62,8 @@ type Props = {
   onCancel: () => void
   trayOpen: boolean
   onTray: () => void
+  columnOpen: boolean
+  onColumn: () => void
 }
 
 export function WorkbenchToolbar(props: Props) {
@@ -104,7 +107,7 @@ export function WorkbenchToolbar(props: Props) {
     <header className="workbench-toolbar" aria-label="도구 막대">
       <div className="toolbar-start">
         <ToolbarCluster className="toolbar-leading" edge="start">
-          {props.addTask}
+          {props.leading}
           <ToolbarSpacer />
           <ToolbarGroup label="일괄 실행">
             <ToolbarMorph
@@ -267,21 +270,27 @@ export function WorkbenchToolbar(props: Props) {
             {props.diagnostics}
           </div>
         </div>
-        <ToolbarCluster className="toolbar-runs" edge="end">
-          <ToolbarGroup label="실행 기록">
-            <ToolbarButton
-              label={props.trayOpen ? "실행 기록 닫기" : "실행 기록 열기"}
-              aria-pressed={props.trayOpen}
-              onClick={props.onTray}
-            >
-              <History />
-            </ToolbarButton>
-          </ToolbarGroup>
-        </ToolbarCluster>
       </div>
       <div className="toolbar-end">
         <ToolbarCluster className="toolbar-trailing" edge="end">
           {props.trailing}
+          <ToolbarSpacer />
+          <ToolbarGroup label="패널">
+            <ToolbarButton
+              label={props.trayOpen ? "하단 패널 닫기" : "하단 패널 열기"}
+              aria-pressed={props.trayOpen}
+              onClick={props.onTray}
+            >
+              <PanelBottom />
+            </ToolbarButton>
+            <ToolbarButton
+              label={props.columnOpen ? "오른쪽 패널 닫기" : "오른쪽 패널 열기"}
+              aria-pressed={props.columnOpen}
+              onClick={props.onColumn}
+            >
+              <PanelRight />
+            </ToolbarButton>
+          </ToolbarGroup>
         </ToolbarCluster>
       </div>
     </header>

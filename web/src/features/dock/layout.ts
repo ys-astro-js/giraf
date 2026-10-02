@@ -68,10 +68,25 @@ export function columnGroups(dock: DockviewApi) {
     )
 }
 
-/** Any group in the column: they all share its width. */
+/** A shown group in the column: they all share its width. */
 const inColumn = (dock: DockviewApi) => {
   const canvas = canvasGroup(dock)
-  return dock.groups.find((group) => group !== canvas && isDocked(group))
+  return dock.groups.find(
+    (group) => group !== canvas && isDocked(group) && group.api.isVisible
+  )
+}
+
+/** Whether the column shows: it holds groups and they are not hidden. */
+export const columnShown = (dock: DockviewApi) => !!inColumn(dock)
+
+/**
+ * Hides or shows the column; the canvas takes its space meanwhile, and it
+ * comes back at its width.
+ */
+export function showColumn(dock: DockviewApi, shown: boolean, width: number) {
+  for (const group of columnGroups(dock))
+    if (group.api.isVisible !== shown) group.api.setVisible(shown)
+  if (shown) fitColumn(dock, width)
 }
 
 /** The column width that fits a workbench `total` pixels wide. */
