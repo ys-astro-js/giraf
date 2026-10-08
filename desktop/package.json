@@ -51,7 +51,8 @@
       "hardenedRuntime": true,
       "entitlements": "entitlements.mac.plist",
       "entitlementsInherit": "entitlements.mac.plist",
-      "notarize": true
+      "notarize": true,
+      "icon": "assets/GIRAF.icon"
     },
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "win": {
@@ -68,7 +69,8 @@
           "from": "build/wsl",
           "to": "wsl"
         }
-      ]
+      ],
+      "icon": "assets/icon.png"
     },
     "nsis": {
       "oneClick": false,
@@ -93,7 +95,8 @@
           "from": "build/backend",
           "to": "backend"
         }
-      ]
+      ],
+      "icon": "assets/icon.png"
     },
     "publish": [
       {
