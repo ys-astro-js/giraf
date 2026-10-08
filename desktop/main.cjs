@@ -9,7 +9,8 @@ const path = require("node:path")
 const WINDOWS = process.platform === "win32"
 
 // Runs and app state live here (GIRAF_DATA); the bundle itself is read-only.
-// On Windows the backend runs in WSL and keeps them in the WSL home (~/GIRAF).
+// On Windows the backend runs in WSL; start.sh puts them in the same Windows
+// folder, seen from WSL as /mnt/c/Users/<name>/Documents/GIRAF.
 const DATA = process.env.GIRAF_DATA || path.join(os.homedir(), "Documents", "GIRAF")
 const LOG = WINDOWS ? path.join(app.getPath("userData"), "giraf.log") : path.join(DATA, "giraf.log")
 
@@ -127,7 +128,7 @@ function launchWsl(port, log) {
     } catch {}
     backend?.kill()
   }
-  return spawn("wsl.exe", ["-e", "sh", `${runtime}/start.sh`, String(port)], {
+  return spawn("wsl.exe", ["-e", "sh", `${runtime}/start.sh`, String(port), os.homedir()], {
     stdio: ["ignore", log, log],
     windowsHide: true,
   })

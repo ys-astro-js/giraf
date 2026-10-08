@@ -6,6 +6,7 @@ from functools import lru_cache, partial
 from pathlib import Path
 import hashlib
 import json
+import os
 import threading
 import subprocess
 import sys
@@ -27,7 +28,7 @@ from .workflow_preferences import document_action, initial_preferences
 from .image_rendering import image_info, image_png, image_pixel
 from .display import display_number, start_display, stop_display
 from .workflow_documents import WorkflowDocuments
-from .jobs import ROOT, DATA, RUNS, start, status, atomic_json
+from .jobs import ROOT, DATA, HOME, RUNS, start, status, atomic_json
 from .model import Settings, inspect_file, scan, validate
 from .combine import validate_combination
 from .task_catalog import catalog
@@ -384,7 +385,7 @@ async def browse_endpoint(request: Request):
     count = sum(p.is_file() and p.suffix.lower() in ('.fits', '.fit', '.fts') for p in path.iterdir())
     extensions=('.fits','.fit','.fts','.pl','.txt','.dat','.list','.log','.gki','.bin')
     entries=await run_in_threadpool(lambda:[register(p) for p in sorted(path.iterdir()) if p.is_file() and p.suffix.lower() in extensions])
-    roots=[('작업 폴더',DATA),('홈',Path.home()),('다운로드',Path.home()/'Downloads'),('문서',Path.home()/'Documents')]
+    roots=[('작업 폴더',DATA),('홈',HOME),('다운로드',HOME/'Downloads'),('문서',HOME/'Documents')]
     return JSONResponse(dict(path=str(path), parent=str(path.parent),
         breadcrumbs=[dict(name=p.name or '/',path=str(p)) for p in [*reversed(path.parents),path]],
         shortcuts=[dict(name=n,path=str(p)) for n,p in roots if p.is_dir()],
@@ -503,17 +504,25 @@ async def reveal_endpoint(request: Request):
     path = get_file(payload['id'])
     if not path.is_file():
         raise ValueError('파일을 찾을 수 없습니다. 파일 목록을 새로 불러와 주세요.')
-    if sys.platform == 'darwin':
-        command = ['open', '-R', str(path)]
-    elif sys.platform == 'win32':
-        command = ['explorer', '/select,', str(path)]
-    else:
-        command = ['xdg-open', str(path.parent)]
+    await run_in_threadpool(reveal, path)
+    return JSONResponse({'ok': True})
+
+
+def reveal(path):
     try:
-        await run_in_threadpool(subprocess.run, command, check=True, capture_output=True, timeout=10)
+        if sys.platform == 'darwin':
+            command = ['open', '-R', str(path)]
+        elif sys.platform == 'win32':
+            command = ['explorer', '/select,', str(path)]
+        elif os.environ.get('WSL_DISTRO_NAME'):
+            windows_path = subprocess.run(['wslpath', '-w', str(path)], check=True, capture_output=True, text=True).stdout.strip()
+            command = ['explorer.exe', '/select,' + windows_path]
+        else:
+            command = ['xdg-open', str(path.parent)]
+        # explorer exits with 1 even when it opens the window.
+        subprocess.run(command, check='explorer' not in command[0], capture_output=True, timeout=10)
     except (OSError, subprocess.SubprocessError) as exc:
         raise ValueError('파일 위치를 열지 못했습니다. 파일 관리자를 확인한 뒤 다시 시도해 주세요.') from exc
-    return JSONResponse({'ok': True})
 
 
 async def download_endpoint(request: Request):

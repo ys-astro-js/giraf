@@ -71,7 +71,7 @@ bun run dist
 
 `desktop/dist/`에 현재 OS용 설치 파일(macOS `.dmg`, Linux `.AppImage`)이 생깁니다. `main`에 push할 때마다 GitHub Actions가 세 OS용을 모두 빌드해 [Releases](https://github.com/ys-astro-js/giraf/releases)에 올립니다. 앱의 실행 기록과 상태는 `~/Documents/GIRAF`에 저장됩니다(로그: `giraf.log`). 서명하지 않은 앱이므로 다른 Mac에서는 처음 열 때 우클릭 → 열기가 필요합니다.
 
-Windows 앱(`.exe`)은 WSL 안의 IRAF를 씁니다. WSL과 Linux 배포판, 그 안의 IRAF가 필요하며, 앱에 담긴 Linux 백엔드를 처음 실행할 때 WSL의 `~/.giraf/runtime`에 풀어 실행합니다. 실행 기록과 상태는 WSL의 `~/GIRAF`에 저장됩니다. Windows 설치 파일은 Linux에서 준비한 백엔드를 담기 때문에 GitHub Actions에서만 만듭니다.
+Windows 앱(`.exe`)은 WSL 안의 IRAF를 씁니다. WSL과 Linux 배포판, 그 안의 IRAF가 필요하며, 앱에 담긴 Linux 백엔드를 처음 실행할 때 WSL의 `~/.giraf/runtime`에 풀어 실행합니다. 파일 바로가기와 실행 기록·상태(`문서\GIRAF`)는 Windows 사용자 폴더(WSL에서 `/mnt/c/Users/<이름>`)를 씁니다. Windows 설치 파일은 Linux에서 준비한 백엔드를 담기 때문에 GitHub Actions에서만 만듭니다.
 
 ## 사용 방법
 
