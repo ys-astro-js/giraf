@@ -9,11 +9,11 @@ const catalog: Catalog = {version:'1',tasks:[spec],ccdproc:{parameters:[],inputs
 const prefs: Preferences = {drafts:{},backend:'cl',mapping:{},instrument:[],packageValues:{}}
 const products = [{id:'b',label:'FlatB.fits',asset:'image'},{id:'v',label:'FlatV.fits',asset:'image'},{id:'log',label:'log',asset:'text',role:'$log'}] as Frame[]
 function fixture() { const map = {...emptyMap(),tasks:['a','b'].map(id=>makeInstance(spec,catalog,prefs,id))}; map.tasks[0].outputPorts=[{id:'blue',name:'B',files:['*B.fits']},{id:'all',name:'',files:['*']}]; return map }
-test('custom ports preserve node body height and expose stable port handles',()=>{
+test('custom ports add output rows and expose stable port handles',()=>{
  const map=fixture(),g=nodeGeometry(map,map.tasks[0],catalog)
  const plain=nodeGeometry(map,{...map.tasks[0],outputPorts:[]},catalog)
- expect(g.height).toBe(plain.height)
- expect(g.outputs.at(-1)!.y).toBe(g.height-24)
+ expect(g.height).toBe(plain.height+64)
+ expect(g.outputs.at(-1)!.y).toBe(g.height-21)
  expect(g.outputs.every(p=>p.x===g.width)).toBe(true)
  expect(g.outputs[0].y).toBeGreaterThan(g.outputY)
  expect(customPortHandle('$default')).toBe('output')

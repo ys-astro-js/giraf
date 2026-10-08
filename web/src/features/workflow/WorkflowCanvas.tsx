@@ -15,7 +15,7 @@ import {
 } from "@/components/toolbar"
 import { SearchField } from "@/components/search-field"
 import { WorkflowEdge } from "@/components/workflow-edge"
-import { useMemo, useSyncExternalStore } from "react"
+import { useCallback, useMemo, useSyncExternalStore } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { displayQueryOptions } from "@/lib/display"
 import {
@@ -35,7 +35,19 @@ import {
   Unplug,
   Terminal,
   Monitor,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  UnfoldVertical,
 } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { useNodeView } from "./node-view"
 import { diagnostics } from "@/lib/diagnostics"
 import { revealPanel, useWindowShown } from "@/features/dock/store"
 import { WindowToolbar } from "@/features/dock/WindowToolbar"
@@ -82,7 +94,23 @@ export function TaskMapView({
   onRunSubflow,
   workflowBusy,
   runDisabled,
+  open,
 }: TaskMapViewProps) {
+  const autoCollapse = useNodeView((state) => state.autoCollapse)
+  const setAutoCollapse = useNodeView((state) => state.setAutoCollapse)
+  const setCollapsed = useCallback(
+    (ids: string[], collapsed: boolean) =>
+      update(
+        (m) => ({
+          ...m,
+          tasks: m.tasks.map((t) =>
+            ids.includes(t.id) ? { ...t, collapsed: collapsed || undefined } : t
+          ),
+        }),
+        collapsed ? "노드 접기" : "노드 펼치기"
+      ),
+    [update]
+  )
   const displayOpen = useWindowShown("display")
   const hasDisplay = !!useQuery(displayQueryOptions).data?.frames.length
   const diagnosticEntries = useSyncExternalStore(
@@ -191,6 +219,8 @@ export function TaskMapView({
               rows,
               choose,
               duplicate,
+              open,
+              setCollapsed,
               onInput: selectingGroup ? undefined : onInput,
               selectingGroup,
               dragPreview,
@@ -392,6 +422,66 @@ export function TaskMapView({
                       <BroomSparkles />
                     )}
                   </ToolbarButton>
+                </ToolbarGroup>
+                <ToolbarSpacer />
+                <ToolbarGroup label="노드 보기">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={<ToolbarButton label="노드 보기" />}
+                    >
+                      <ChevronsDownUp />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() =>
+                          setCollapsed(
+                            map.tasks.map((t) => t.id),
+                            false
+                          )
+                        }
+                      >
+                        <ChevronsUpDown />
+                        모두 펼치기
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          setCollapsed(
+                            map.tasks.map((t) => t.id),
+                            true
+                          )
+                        }
+                      >
+                        <ChevronsDownUp />
+                        모두 접기
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={!map.view.selected}
+                        onClick={() =>
+                          update(
+                            (m) => ({
+                              ...m,
+                              tasks: m.tasks.map((t) => ({
+                                ...t,
+                                collapsed:
+                                  t.id === m.view.selected ? undefined : true,
+                              })),
+                            }),
+                            "선택한 노드만 펼치기"
+                          )
+                        }
+                      >
+                        <UnfoldVertical />
+                        선택한 노드만 펼치기
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuCheckboxItem
+                        checked={autoCollapse}
+                        onCheckedChange={setAutoCollapse}
+                      >
+                        축소하면 자동으로 접기
+                      </DropdownMenuCheckboxItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </ToolbarGroup>
                 <ToolbarSpacer />
                 <ToolbarGroup label="그룹">

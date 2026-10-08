@@ -440,7 +440,7 @@ async def image_endpoint(request: Request):
         # Display frames are already rendered by IRAF; stretch does not apply.
         png = await run_in_threadpool(start_display().png, frame)
         return Response(png, media_type='image/png', headers={'Cache-Control': 'no-store'})
-    png = await run_in_threadpool(image_png, get_file(q['id']), q.get('low'), q.get('high'), q.get('stretch', 'asinh'))
+    png = await run_in_threadpool(image_png, get_file(q['id']), q.get('low'), q.get('high'), q.get('stretch', 'asinh'), q.get('size'))
     return Response(png, media_type='image/png')
 
 

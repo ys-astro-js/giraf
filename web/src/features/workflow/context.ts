@@ -6,7 +6,7 @@ import { connectionFeedback } from "@/lib/workflow-flow"
 import type { TaskMapViewProps } from "./types"
 type NodeContext = Pick<
   TaskMapViewProps,
-  "map" | "catalog" | "rows" | "onInput" | "duplicate"
+  "map" | "catalog" | "rows" | "onInput" | "duplicate" | "open"
 > & {
   validateConnection: (
     connection: FlowConnection
@@ -21,5 +21,6 @@ type NodeContext = Pick<
   runGroup?: (id: string) => void
   groupRunDisabled?: boolean
   choose: (id: string) => void
+  setCollapsed: (ids: string[], collapsed: boolean) => void
 }
 export const WorkflowContext = createContext<NodeContext | null>(null)

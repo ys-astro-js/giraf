@@ -127,8 +127,18 @@ export function connectionChoices(
     )
   return roles
 }
-export const NODE_WIDTH = 280
-export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:Frame[] = []) {
+export const NODE_WIDTH = 264
+export const COLLAPSED_WIDTH = 184
+export const COLLAPSED_HEIGHT = 40
+/** Vertical metrics shared by the node markup, handles, ELK ports and fitting. */
+export const NODE_METRICS = { header: 52, row: 32, sectionStart: 5, sectionEnd: 4, preview: 77 }
+/** The latest completed run's images, newest first; the node previews a few. */
+export function nodePreviewIds(map: TaskMap, id: string) {
+  const run = map.runs.filter((r) => r.instanceId === id).at(-1)
+  if (!run || run.state !== "completed") return []
+  return run.products.filter((p) => p.role !== "$log" && (p.asset || "image") === "image").map((p) => p.id)
+}
+export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:Frame[] = [], collapsed = !!t.collapsed) {
   const spec = catalog.tasks.find((s) => s.name === t.task)
   const roles = (spec ? inputPorts(map,t,catalog,rows) : []).filter(
     (s) => !s.group && (
@@ -139,23 +149,52 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
       t.preprocess.inputs[s.role]?.length)
   )
   const outputs = [...outputPorts(map,t,catalog,rows).filter(slot => !slot.group).map(slot=>({...slot,name:t.outputPorts?.find(p=>customPortHandle(p.id)===slot.handleId)?.name ?? slot.name})), ...(t.outputPorts || []).filter(p=>!p.id.startsWith('$')).map(port=>({name:port.name,kind:"",default:"",handleId:customPortHandle(port.id),outputRole:port.outputRole,group:undefined,customId:port.id}))]
-  const bodyHeight=48*Math.max(roles.length,1)
-  const height=Math.max(128+bodyHeight,104+outputs.length*36)
-  const outputY=height-24-outputs.length*36
+  // A save-files node (node schema) ends the flow: it has no primary output.
+  const primary = spec?.run !== "save-files"
+  const base = { primaryOutputRole: primaryOutputRole(spec, t), roles, primary, collapsed }
+  if (collapsed) {
+    const middle = COLLAPSED_HEIGHT / 2
+    return {
+      ...base,
+      preview: false,
+      width: COLLAPSED_WIDTH,
+      outputX: COLLAPSED_WIDTH,
+      height: COLLAPSED_HEIGHT,
+      occupiedHeight: COLLAPSED_HEIGHT,
+      outputY: middle,
+      outputs: outputs.map((slot) => ({ ...slot, x: COLLAPSED_WIDTH, y: middle })),
+      // Every role shares the capsule's single visible port.
+      inputY: (role: string) => {
+        void role
+        return middle
+      },
+    }
+  }
+  const m = NODE_METRICS
+  // The 1px node border precedes the header.
+  const inputsTop = 1 + m.header + m.sectionStart
+  const inputsEnd = inputsTop + m.row * Math.max(roles.length, 1) + m.sectionEnd
+  const outputRows = (primary ? 1 : 0) + outputs.length
+  const outputsTop = inputsEnd + m.sectionStart
+  const outputsEnd = outputRows ? outputsTop + m.row * outputRows + m.sectionEnd : inputsEnd
+  const preview = nodePreviewIds(map, t.id).length > 0
+  const height = outputsEnd + (preview ? m.preview : 0) + 1
+  const outputY = outputsTop + m.row / 2
+  const first = primary ? 1 : 0
   return {
-    primaryOutputRole:primaryOutputRole(spec,t),
-    roles,
-    bodyHeight,
-    width:NODE_WIDTH,
-    outputX:NODE_WIDTH,
+    ...base,
+    preview,
+    width: NODE_WIDTH,
+    outputX: NODE_WIDTH,
     height,
-    occupiedHeight:height,
+    occupiedHeight: height,
     outputY,
-    outputs:outputs.map((slot,index)=>({...slot,x:NODE_WIDTH,y:outputY+(index+1)*36})),
-    inputY:(role:string)=>96+48*Math.max(0,roles.findIndex(slot=>slot.name===role)),
+    outputs: outputs.map((slot, index) => ({ ...slot, x: NODE_WIDTH, y: outputY + (index + first) * m.row })),
+    inputY: (role: string) => inputsTop + m.row / 2 + m.row * Math.max(0, roles.findIndex((slot) => slot.name === role)),
   }
 }
-export function nodeLayout(map: TaskMap, catalog: Catalog, rows:Frame[] = []) {
+/** `collapseAll` draws every node collapsed (a zoomed-out canvas) without changing the map. */
+export function nodeLayout(map: TaskMap, catalog: Catalog, rows:Frame[] = [], collapseAll = false) {
   const base = layoutMap({
       ...map,
       tasks: map.tasks.map((t) => ({ ...t, position: undefined })),
@@ -168,7 +207,7 @@ export function nodeLayout(map: TaskMap, catalog: Catalog, rows:Frame[] = []) {
   })[] = []
   return map.tasks.map((t) => {
     const level = base.find((p) => p.id === t.id)!,
-      g = nodeGeometry(map, t, catalog, rows),
+      g = nodeGeometry(map, t, catalog, rows, collapseAll || !!t.collapsed),
       y = bottoms.get(level.x) || 32
     bottoms.set(level.x, y + g.occupiedHeight + 40)
     const node = {

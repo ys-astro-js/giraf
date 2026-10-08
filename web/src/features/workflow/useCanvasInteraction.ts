@@ -1,4 +1,5 @@
 import { useMapConnections } from "./useConnections"
+import { AUTO_COLLAPSE_ZOOM, useNodeView } from "./node-view"
 import { useSubflowInteraction } from "./useSubflows"
 import type { TaskMap } from "@/lib/task-map"
 import type { Catalog, Frame } from "@/lib/workbench"
@@ -79,10 +80,13 @@ export function useTaskMapInteraction({
   const [nodeUI, setNodeUI] = useState<
     Record<string, Pick<TaskFlowNode, "measured" | "dragging">>
   >({})
+  const autoCollapse = useNodeView((state) => state.autoCollapse)
+  // Decided when a zoom ends, so nodes do not flicker during the gesture.
+  const collapseAll = autoCollapse && map.view.zoom < AUTO_COLLAPSE_ZOOM
   const previousCount = useRef(map.tasks.length)
   const nodes = useMemo(
     () =>
-      flowNodes(map, catalog, search, rows).map((node) => ({
+      flowNodes(map, catalog, search, rows, collapseAll).map((node) => ({
         ...node,
         ...nodeUI[node.id],
         ...(selectingGroup
@@ -107,6 +111,7 @@ export function useTaskMapInteraction({
       catalog,
       search,
       rows,
+      collapseAll,
       nodeUI,
       selectingGroup,
       groupSelection,
@@ -180,7 +185,7 @@ export function useTaskMapInteraction({
         setNodeUI((current) => {
           const changed = applyNodeChanges(
             changes,
-            flowNodes(map, catalog, "", rows).map((node) => ({
+            flowNodes(map, catalog, "", rows, collapseAll).map((node) => ({
               ...node,
               ...current[node.id],
             }))
@@ -208,7 +213,7 @@ export function useTaskMapInteraction({
             : "노드 이동"
         )
     },
-    [update, catalog, map, rows, selectingGroup, setGroupSelection]
+    [update, catalog, map, rows, collapseAll, selectingGroup, setGroupSelection]
   )
   const {
     validateConnection,

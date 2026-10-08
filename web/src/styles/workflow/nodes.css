@@ -120,8 +120,6 @@
 .group-task-count { display:inline-flex; align-items:center; gap:4px; }
 .group-task-count > svg { width:14px; height:14px; flex-shrink:0; }
 
-.node-output-row { position:relative; display:flex; align-items:center; gap:12px; height:36px; padding:4px 24px 4px 16px; min-width:0; border-top:1px solid var(--border); }
-.node-output-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
 .generic-output-field { min-width:0; gap:8px; }
 .generic-output-field [data-slot="field-description"], .cursor-input [data-slot="field-description"] { overflow-wrap:anywhere; }
 .cursor-input { min-width:0; }

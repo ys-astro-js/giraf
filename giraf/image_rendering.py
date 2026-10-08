@@ -39,7 +39,7 @@ def image_info(path):
                 header=header, histogram=hist.tolist(), bins=bins.tolist())
 
 
-def image_png(path, low=None, high=None, stretch='asinh'):
+def image_png(path, low=None, high=None, stretch='asinh', size=None):
     a, _ = data_for(path)
     # Keep every detector pixel so the viewer's 1:1 mode is actually native.
     small = a
@@ -52,6 +52,9 @@ def image_png(path, low=None, high=None, stretch='asinh'):
         v = np.arcsinh(v * 10) / np.arcsinh(10)
     v = np.nan_to_num(v, nan=0)
     image = Image.fromarray((v * 255).astype('uint8'))
+    if size is not None:
+        # Node previews ask for a small copy; the viewer always gets every pixel.
+        image.thumbnail((int(size), int(size)))
     out = io.BytesIO()
     image.save(out, format='PNG')
     return out.getvalue()

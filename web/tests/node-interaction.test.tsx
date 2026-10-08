@@ -229,7 +229,7 @@ test("role ports have separate anchors and output remains below inputs", () => {
   )
   expect(g.inputY("zero")).toBeGreaterThan(g.inputY("images"))
   expect(g.outputY).toBeGreaterThan(g.inputY("zero"))
-  expect(g.height-24).toBe(g.outputY)
+  expect(g.height-21).toBe(g.outputY)
 })
 test("layout accounts for variable heights and preserves manual positions", () => {
   const m = fixture()
@@ -260,10 +260,13 @@ test("fit includes complete cards at narrow sizes", () => {
 test("compact node geometry keeps each wire at its input row center", () => {
  const m=fixture(); m.tasks[1].draft.parameters.zerocor="yes";
  const g=nodeGeometry(m,m.tasks[1],catalog);
- expect(g.inputY("images")).toBe(96);
- expect(g.inputY("zero")).toBe(144);
- expect(g.height).toBe(224);
- expect(g.outputY).toBe(200);
+ expect(g.inputY("images")).toBe(74);
+ expect(g.inputY("zero")).toBe(106);
+ expect(g.height).toBe(168);
+ expect(g.outputY).toBe(147);
+ const folded=nodeGeometry(m,{...m.tasks[1],collapsed:true},catalog);
+ expect(folded).toMatchObject({width:184,height:40,outputY:20});
+ expect(folded.inputY("zero")).toBe(20);
  expect(g.outputs).toHaveLength(0);
 });
 

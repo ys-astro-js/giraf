@@ -90,41 +90,70 @@ div:has(> [data-slot="tooltip-content"] .connection-port-feedback) { pointer-eve
 }
 .workflow-node {
   position: relative;
+  box-sizing: border-box;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--background);
   cursor: default;
 }
-.workflow-node:hover,
-.workflow-node[data-selected="true"] { border-color: var(--foreground); outline: 1px solid var(--foreground); }
+/* Selection is a ring outside the node, so it never hides a state border. */
+.workflow-node:hover { border-color: color-mix(in oklch, var(--foreground) 45%, var(--border)); }
+.workflow-node[data-selected="true"] { outline: 2px solid var(--foreground); outline-offset: 2px; }
 .workflow-node[data-diagnostic="error"] { border-color: var(--destructive); }
 .workflow-node[data-diagnostic="warning"] { border-color: var(--warning); }
-.workflow-node[data-connection-target="true"] { border-color: var(--primary); outline: 2px solid var(--primary); outline-offset: -1px; }
+.workflow-node[data-connection-target="true"] { border-color: var(--primary); outline: 2px solid var(--primary); outline-offset: 2px; }
 .node-input-row[data-connection-target="true"] .node-input { background: var(--accent); color: var(--accent-foreground); }
 .workflow-node[data-dragging="true"] { z-index: 2; }
-.node-header { height: 62px; padding: 12px 16px 8px; position: relative; }
-.node-heading { display:flex; align-items:flex-start; gap:8px; width:100%; padding-right:24px; text-align:left; cursor:grab; touch-action:none; user-select:none; }
-.node-heading:active {cursor:grabbing;}
-.node-heading>svg {width:16px;height:16px;margin-top:4px;flex-shrink:0;color:var(--muted-foreground);}
-.node-title {display:flex;flex-direction:column;gap:2px;min-width:0;}
-.node-title strong {font-size:14px;line-height:20px;font-weight:600;}
-.node-title>span {font-size:12px;line-height:18px;color:var(--muted-foreground);}
-.node-title strong,.node-title>span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.node-state {display:block;margin:0;font-size:12px;line-height:16px;color:var(--muted-foreground);}
-.node-state[data-failed="true"], .node-state[data-severity="error"] {color:var(--destructive);}
-.node-state[data-severity="warning"] {color:var(--warning);}
-.node-duplicate {position:absolute;right:4px;top:8px;opacity:0;}
-.workflow-node:hover .node-duplicate,.workflow-node:focus-within .node-duplicate,.workflow-node[data-selected="true"] .node-duplicate {opacity:1;}
-.node-inputs {padding:8px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
-.node-input-row {height:48px;}
-.node-input {display:flex;flex-direction:column;justify-content:center;gap:2px;width:100%;height:48px;padding:4px 16px;text-align:left;}
-.node-input-label {display:block;max-width:100%;font-size:12px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.node-input-label>span {color:var(--muted-foreground);font-size:11px;}
-.node-input-source {max-width:100%;font-size:13px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted-foreground);}
-.node-input:not(:disabled):hover {background:var(--muted);}
-.node-input:disabled {opacity:.5;cursor:not-allowed;}
-.node-input-row[data-inactive="true"] .node-input-source {text-decoration:line-through;}
-.node-no-input {height:48px;padding:12px 16px;color:var(--muted-foreground);}
-.node-footer {display:flex;align-items:center;justify-content:flex-start;gap:8px;height:46px;padding:8px 24px 8px 16px;}
-.node-output-summary {display:inline-flex;align-items:center;gap:4px;margin-left:auto;text-align:right;font-size:12px;color:var(--muted-foreground);white-space:nowrap;}
-.node-output-summary > svg {width:14px;height:14px;flex-shrink:0;}
+
+.node-header { display:flex; align-items:flex-start; gap:4px; height:52px; padding:10px 8px 0 12px; }
+.node-heading { display:flex; align-items:flex-start; gap:8px; flex:1; min-width:0; text-align:left; cursor:grab; touch-action:none; user-select:none; }
+.node-heading:active { cursor:grabbing; }
+.node-state { display:inline-flex; flex-shrink:0; margin-top:2px; color:var(--muted-foreground); }
+.node-state > svg { width:16px; height:16px; }
+.node-state[data-failed="true"], .node-state[data-severity="error"] { color:var(--destructive); }
+.node-state[data-severity="warning"] { color:var(--warning); }
+.node-title { display:flex; flex-direction:column; min-width:0; }
+.node-title strong { font-size:14px; line-height:20px; font-weight:600; }
+.node-title > span { font-size:12px; line-height:16px; color:var(--muted-foreground); }
+.node-title strong, .node-title > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.node-actions { display:flex; flex-shrink:0; }
+.node-actions [data-slot="button"] { color:var(--muted-foreground); }
+.node-duplicate { opacity:0; }
+.workflow-node:hover .node-duplicate, .workflow-node:focus-within .node-duplicate, .workflow-node[data-selected="true"] .node-duplicate { opacity:1; }
+
+.node-section { padding:4px 0; border-top:1px solid var(--border); }
+.node-input-row, .node-output-row { position:relative; height:32px; }
+.node-input { display:flex; align-items:center; gap:8px; width:100%; height:32px; padding:0 12px 0 16px; text-align:left; }
+.node-input-label { flex:0 0 52px; font-size:12px; line-height:16px; color:var(--muted-foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.node-input-source { flex:1; min-width:0; font-size:13px; line-height:18px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
+.node-input-row[data-expression="true"] .node-input-source { font-family:var(--font-mono, ui-monospace, monospace); font-size:12px; }
+.node-input-row[data-empty="true"] .node-input-source { color:var(--muted-foreground); }
+.workflow-node[data-diagnostic="warning"] .node-input-row[data-empty="true"] .node-input-source { color:var(--warning); }
+.node-input-flag { flex-shrink:0; font-size:11px; color:var(--muted-foreground); }
+.node-input:not(:disabled):hover { background:var(--muted); }
+.node-input:disabled { opacity:.5; cursor:not-allowed; }
+.node-input-row[data-inactive="true"] .node-input-source { text-decoration:line-through; color:var(--muted-foreground); }
+.node-no-input { height:32px; padding:0 16px; display:flex; align-items:center; font-size:13px; color:var(--muted-foreground); }
+.node-output-row { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:0 24px 0 12px; }
+.node-output-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; line-height:18px; font-weight:500; }
+.node-output-name[data-unnamed="true"] { font-weight:400; color:var(--muted-foreground); }
+.node-output-count { flex-shrink:0; font-size:12px; line-height:16px; color:var(--muted-foreground); font-variant-numeric:tabular-nums; }
+.node-output-count:empty { display:none; }
+.node-preview { display:flex; align-items:center; gap:6px; height:77px; box-sizing:border-box; padding:8px 12px; }
+.node-thumb { width:52px; height:52px; flex-shrink:0; overflow:hidden; border-radius:6px; background:var(--muted); }
+.node-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.node-thumb:focus-visible { outline:2px solid var(--ring); outline-offset:2px; }
+.node-preview-more { margin-left:4px; font-size:12px; color:var(--muted-foreground); white-space:nowrap; }
+
+/* Collapsed: one capsule with a single visible port on each side. */
+.workflow-node[data-collapsed="true"] { height:40px; border-radius:20px; }
+.node-pill { align-items:center; width:100%; height:38px; padding:0 16px 0 14px; border-radius:19px; }
+.node-pill .node-state { margin-top:0; }
+.node-pill strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; line-height:18px; font-weight:600; }
+.node-pill-count { margin-left:auto; flex-shrink:0; font-size:12px; line-height:16px; color:var(--muted-foreground); font-variant-numeric:tabular-nums; }
+.workflow-node[data-running="true"] .node-pill strong { color:var(--primary); }
+.map-viewport .react-flow__handle[data-stacked="true"] { opacity:0; pointer-events:none; }
+.map-viewport .workflow-output-handle[data-named="true"] { width:12px; height:12px; }
+
+/* Labels name the role on edges into collapsed nodes. */
+.workflow-edge-label { position:absolute; pointer-events:none; height:20px; padding:0 8px; display:flex; align-items:center; border-radius:10px; font-size:11px; line-height:14px; color:var(--muted-foreground); background:var(--glass-background); border:1px solid var(--glass-border); -webkit-backdrop-filter:var(--glass-filter); backdrop-filter:var(--glass-filter); white-space:nowrap; z-index:1; }

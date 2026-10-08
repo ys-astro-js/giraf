@@ -40,9 +40,11 @@ export function flowNodes(
   map: TaskMap,
   catalog: Catalog,
   search = "",
-  rows:Frame[] = []
+  rows:Frame[] = [],
+  collapseAll = false
 ): WorkflowNode[] {
-  const layout = nodeLayout(map, catalog,rows)
+  // Handles come from the drawn geometry; React Flow resets measured ports from them.
+  const layout = nodeLayout(map, catalog, rows, collapseAll)
   const tasks: TaskFlowNode[] = map.tasks.map((task, i) => {
     const parent = map.subflows?.find((g) => g.id === task.subflowId)
     const absolute = task.position ?? { x: layout[i].x, y: layout[i].y }
@@ -75,7 +77,8 @@ export function flowNodes(
 
       initialWidth: geometry.width,
       initialHeight: geometry.height,
-      style: { width: geometry.width, opacity: matches(task, search) ? 1 : 0.3 },
+      // The node sizes to its markup: collapsed, expanded or opened by a connection.
+      style: { opacity: matches(task, search) ? 1 : 0.3 },
       handles: [
         {
           id: "output",
@@ -152,8 +155,12 @@ export function flowEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
         id: connection.id,
         zIndex: 1,
         type: map.view.edgeStyle === "smoothstep" ? "smoothstep" : "default",
-        data: route && route.source === source.id && route.target === target.id && route.sourceHandle === sourceHandle && route.targetHandle === connection.role
-          ? { points: route.points } : undefined,
+        data: {
+          ...(route && route.source === source.id && route.target === target.id && route.sourceHandle === sourceHandle && route.targetHandle === connection.role
+            ? { points: route.points } : {}),
+          // A collapsed target hides its input rows; the edge names the role instead.
+          role: connection.role,
+        },
         source: source.id,
         target: target.id,
         sourceHandle,
