@@ -7,12 +7,15 @@ import { usePanel } from "@/features/dock/context"
 import { registerCloseAction, revealPanel } from "@/features/dock/store"
 import { WindowTitle, WindowToolbar } from "@/features/dock/WindowToolbar"
 import { ImageViewer } from "./ImageViewer"
+import { CursorSession } from "./CursorSession"
+import { useCursorSession, waitingCursor } from "@/lib/cursor-session"
 import {
   displayQueryOptions,
   displayRow,
   type DisplayState,
 } from "@/lib/display"
-import { api } from "@/lib/workbench"
+import { api, type Job } from "@/lib/workbench"
+import { useLayout } from "@/features/workbench/layout-store"
 
 /**
  * IRAF's image display: the frames that display, tvmark and other tasks
@@ -48,6 +51,8 @@ export function DisplayPanel() {
     [panel, queryClient]
   )
 
+  const session = useCursorSession((state) => state.job)
+  if (session) return <CursorSession key={session.id} job={session} />
   if (!frames.length)
     return (
       <div className="viewer-window">
@@ -94,6 +99,26 @@ export function DisplayPanel() {
       </div>
     </div>
   )
+}
+
+/**
+ * Hosts a waiting run's cursor loop in the display window, as IRAF hosts
+ * imcur on its image display, and brings the window forward for it.
+ */
+export function CursorSessionWatcher({ job }: { job: Job | undefined }) {
+  const waiting = waitingCursor(job) ? job : undefined
+  useEffect(() => {
+    useCursorSession.setState({ job: waiting ?? null })
+  }, [waiting])
+  const id = waiting?.id
+  // The task's output answers what each key did; it stays in the run log.
+  useEffect(() => {
+    if (!id) return
+    revealPanel("display")
+    useLayout.getState().viewLog(id)
+  }, [id])
+  useEffect(() => () => useCursorSession.setState({ job: null }), [])
+  return null
 }
 
 /** Opens the display window when IRAF first draws into it. */

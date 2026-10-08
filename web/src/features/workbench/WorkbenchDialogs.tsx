@@ -3,6 +3,8 @@ import { WorkflowConfirmationDialog } from "./dialogs/WorkflowConfirmation"
 import { ConnectInputDialog } from "./dialogs/ConnectInput"
 import { TaskConfirmationDialog } from "./dialogs/TaskConfirmation"
 import { TaskInteractionDialog } from "./dialogs/TaskInteraction"
+import { CursorSessionWatcher } from "@/features/viewer/DisplayPanel"
+import { waitingCursor } from "@/lib/cursor-session"
 import { DaoeditViewer } from "@/features/viewer/DaoeditViewer"
 import { useWorkbench } from "./context"
 
@@ -55,8 +57,16 @@ export function WorkbenchDialogs() {
           onStart={w.start}
         />
       )}
+      <CursorSessionWatcher
+        job={
+          waitingCursor(currentJob)
+            ? currentJob
+            : w.jobs.find((job) => waitingCursor(job))
+        }
+      />
       {currentJob?.state === "waiting" &&
-        currentJob.interaction?.state === "waiting" && (
+        currentJob.interaction?.state === "waiting" &&
+        !waitingCursor(currentJob) && (
           <TaskInteractionDialog
             currentJob={currentJob}
             key={currentJob.interaction.id}

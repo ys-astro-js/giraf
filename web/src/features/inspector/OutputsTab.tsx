@@ -106,7 +106,10 @@ export function InspectorOutputs({
           id={`${id}-help`}
         />
         {["each", "edit"].includes(output.mode || "") && (
-          <FieldDescription>입력별 파일명 접두사</FieldDescription>
+          <FieldDescription>
+            {"{name}"} 자리에 입력 파일명이 들어갑니다. 뒤에 확장자를 쓰면
+            그대로 쓰고, {"{name}"}이 없으면 접두사로 붙습니다.
+          </FieldDescription>
         )}
       </Field>
     )

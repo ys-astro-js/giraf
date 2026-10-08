@@ -238,16 +238,20 @@ export function useImageViewport({
     }
     setPixelSelection({ id: frame.id, x, y })
   }
-  function pick(clientX: number, clientY: number) {
-    if (!info || !frame || !canvas.current) return
+  /** The image pixel under a pointer, in IRAF coordinates. */
+  function positionAt(clientX: number, clientY: number) {
+    if (!info || !frame || !canvas.current) return null
     const r = canvas.current.getBoundingClientRect(),
       p = placement.current
-    const point = imagePosition(
+    return imagePosition(
       { x: clientX - r.left, y: clientY - r.top },
       { x: p.x, y: p.y, width: p.w, height: p.h },
       info,
       selectionMode
     )
+  }
+  function pick(clientX: number, clientY: number) {
+    const point = positionAt(clientX, clientY)
     if (point) inspect(point.x, point.y, true)
   }
 
@@ -313,6 +317,7 @@ export function useImageViewport({
     cursorGuidesRef,
     image,
     pick,
+    positionAt,
     range,
     applyRange,
     resetRange,

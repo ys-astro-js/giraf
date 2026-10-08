@@ -94,11 +94,16 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
     sets = {s['name']: {**checked_values(s['parameters'], without_fixed(
                 supplied_sets.get(s['name'], {}), s.get('fixed', {}), s['name'] + '.', schema_warnings)), **s.get('fixed', {})}
             for s in spec['parameterSets']}
+    # The task's own cursor loop runs through IRAF's text cursor mode; parameter
+    # sets and verify/update queries still have no interactive adapter.
+    interactive = params.get('interactive') == 'yes'
     for values in [params, *sets.values()]:
-        # Interactive display/cursor integration needs a dedicated adapter.
-        for key in ('interactive', 'verify', 'update'):
+        for key in ('verify', 'update') if values is params else ('interactive', 'verify', 'update'):
             if values.get(key) == 'yes' and spec.get('fixed', {}).get(key) != 'no':
                 raise ValueError(f'{key}: 범용 실행에서는 no를 선택해 주세요.')
+    if interactive and backend != 'cl':
+        backend = 'cl'
+        schema_warnings.append('interactive: 대화형 실행은 IRAF CL에서 진행합니다.')
     cursor_commands = payload.get('cursorCommands', {})
     cursor_roles = {s['name'] for s in spec['inputs'] if s.get('valueType') == 'cursor'}
     if not isinstance(cursor_commands, dict) or set(cursor_commands) - cursor_roles:
@@ -141,6 +146,10 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
              inputLists=list(input_lists.values()), workingDirectory=directory, filePolicy=dict(mode='copy', backup=True), instanceId=payload.get('instanceId'),
              settings=dict(task=spec['name'], backend=backend, **params))
     if input_lists: m['inputSelections']=deepcopy(supplied_inputs)
+    if interactive:
+        from ..cursor_keys import cursor_keys
+        image = next((inputs[slot['name']][0] for slot in spec['inputs'] if slot['kind'] == 'image' and inputs.get(slot['name'])), None)
+        m.update(interactive=True, cursorKeys=cursor_keys(spec), cursorImage=image)
     active_each = any(slot['mode'] == 'each' and outputs.get(slot['name']) for slot in spec['outputs'])
     if active_each and spec['inputs']:
         count = len(inputs.get(spec['inputs'][0]['name'], []))

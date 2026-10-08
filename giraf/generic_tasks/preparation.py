@@ -4,6 +4,7 @@ import shutil
 
 from ..image_lists import check_input_lists
 from ..jobs import atomic_json
+from ..products import IMAGE_SUFFIXES
 from ..task_discovery import file_hash
 from ..task_schema import file_extension
 
@@ -24,7 +25,10 @@ def stage_inputs(job, manifest):
             raise ValueError(f'{label}: 입력 파일이 없습니다.')
         if file_hash(path) != row['sha256']:
             raise ValueError(f'{label}: 입력 파일이 검증 이후 변경되었습니다.')
-        alias = f'input/s{index:05d}' + path.suffix
+        suffix = path.suffix
+        if row.get('asset') == 'image' and suffix.lower() not in IMAGE_SUFFIXES:
+            suffix = '.fits'  # IRAF cannot open a FITS image named e.g. `M67b.psf.1`
+        alias = f'input/s{index:05d}' + suffix
         if not (job / alias).exists():
             shutil.copy2(path, job / alias)
         aliases[row['id']] = alias + row.get('section', '')

@@ -55,7 +55,7 @@ class GenericTaskRun:
             for suffix in ('cl', 'py'): shutil.copy2(self.job / ('commands.' + suffix), self.job / f'commands-{index:03d}.{suffix}')
             command = [binary, '-f', str(self.job / 'commands.cl')] if backend == 'cl' else [sys.executable, str(self.job / 'commands.py')]
             with (self.job / 'task.log').open('ab') as log:
-                start = log.tell(); code = run_process(command, self.job, log, interactive=False, backend=backend)
+                start = log.tell(); code = run_process(command, self.job, log, interactive=bool(self.m.get('interactive')), backend=backend)
             text = read_log_since(self.job / 'task.log', start)
             captured = '\n'.join((self.job / p['file']).read_text(errors='replace') for p in expected if p['role'] == '$stdout' and (self.job / p['file']).exists())
             text += '\n' + captured

@@ -15,7 +15,7 @@ from copy import deepcopy
 from .jobs import ROOT, RUNS, atomic_json
 from .task_inputs import resolve_task_inputs
 from .task_catalog import TASKS, parameters, CALIBRATIONS
-from .products import product_name
+from .products import each_output_name, product_name
 from .request_schema import TaskRequest
 
 def digest(path):
@@ -163,8 +163,8 @@ def preview_task(manifest, *, paths=False):
     if not output or manifest['parameters'].get('noproc')=='yes':
         return [dict(inputs=[rows[i].get('label',rows[i]['name']) for i in ids],output=manifest['task']+'-results.txt')]
     if output['mode'] in ('each','edit'):
-        result=[dict(inputs=[rows[i].get('label',rows[i]['name'])], output=name+rows[i].get('label',rows[i]['name'])) for i in ids]
-        if len(ids)==1 and not name.endswith('/') and (Path(name).suffix or '/' in name):
+        result=[dict(inputs=[rows[i].get('label',rows[i]['name'])], output=each_output_name(name,l.removesuffix(x),x)) for i in ids for l in [rows[i].get('label',rows[i]['name'])] for x in [Path(l).suffix]]
+        if len(ids)==1 and '{name}' not in name and not name.endswith('/') and (Path(name).suffix or '/' in name):
             result[0]['output']=name
     elif manifest['parameters'].get('subsets')=='yes':
         from astropy.io import fits

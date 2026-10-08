@@ -69,7 +69,7 @@ export function useWorkflowDocuments({
     queueSave()
     await autosave.flush()
   }
-  function applyDocument(value: Preferences) {
+  function applyDocument(value: Preferences, runs: Job[] = jobs) {
     if (!catalog) return
     autosave.reset()
     const next = {
@@ -78,7 +78,7 @@ export function useWorkflowDocuments({
       drafts: value.drafts || {},
       packageValues: { ...defaults(catalog.ccdred), ...value.packageValues },
     }
-    const nextMap = reconcileRuns(migrateMap(next, catalog), jobs)
+    const nextMap = reconcileRuns(migrateMap(next, catalog), runs)
     diagnosticController.current?.change(
       next._document?.path || "현재 문서",
       workflowDiagnosticRequest(nextMap, catalog, workspace.folder),

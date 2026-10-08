@@ -30,6 +30,11 @@ test('output planning handles many-to-one, per-image duplicates and subsets',()=
   const rows=[{id:'a',label:'one.fits',filter:'B'},{id:'b',label:'one.fits',filter:'V'},{id:'c',label:'three.fits',filter:'B'}]
   expect(plannedOutputs(combine,makeDraft(combine,{inputs:{input:rows.map(r=>r.id)}}),rows).map(p=>p.output)).toEqual(['Zero.fits'])
   expect(plannedOutputs(proc,makeDraft(proc,{inputs:{images:['a','b']}}),rows).map(p=>p.output)).toEqual(['pone.fits','pone.fits'])
+  expect(plannedOutputs(proc,makeDraft(proc,{inputs:{images:['a','c']},output:{name:'{name}_bs'}}),rows).map(p=>p.output)).toEqual(['one_bs.fits','three_bs.fits'])
+  const generic={...proc,adapter:'generic',outputs:[{name:'output',kind:'image',mode:'each',default:'p'}]}
+  expect(plannedOutputs(generic,{...makeDraft(proc,{inputs:{images:['a','c']}}),outputs:{output:'r_{name}_bs'}},rows).map(p=>p.output)).toEqual(['r_one_bs.fits','r_three_bs.fits'])
+  const phot={...generic,outputs:[{name:'output',kind:'text',mode:'each',default:''}]}
+  expect(plannedOutputs(phot,{...makeDraft(proc,{inputs:{images:['a','c']}}),outputs:{output:'{name}.mag.1'}},rows).map(p=>p.output)).toEqual(['one.mag.1','three.mag.1'])
   expect(plannedOutputs(proc,makeDraft(proc,{inputs:{images:['a']},output:{name:'nested/한글 결과'}}),rows).map(p=>p.output)).toEqual(['한글 결과.fits'])
   expect(plannedOutputs(combine,makeDraft(combine,{inputs:{input:['a']},output:{name:'결과.fit'}}),rows).map(p=>p.output)).toEqual(['결과.fit'])
   expect(plannedOutputs(combine,makeDraft(combine,{parameters:{subsets:'yes'},inputs:{input:rows.map(r=>r.id)}}),rows).map(p=>p.output)).toEqual(['ZeroB.fits','ZeroV.fits'])

@@ -12,6 +12,10 @@ def cl_literal(value, typ='s'):
 def write_scripts(job, manifest, calls, only=None):
     spec = manifest['definition']
     lines = ['set uparm = ' + cl_literal(str(job / 'uparm') + '/'), 'set imtype = "fits"', 'set clobber = "no"']
+    if manifest.get('interactive'):
+        # IRAF's text cursor mode prompts on the terminal for each cursor read;
+        # the CL session answers those prompts. Plots are kept as GKI metacode.
+        lines += ['set stdimcur = "text"', 'set stdgcur = "text"']
     py = ['from pyraf import iraf', f'iraf.set(uparm={str(job / "uparm") + "/"!r}, imtype="fits", clobber="no")']
     boot = spec.get('bootstrap')
     if boot:
@@ -39,6 +43,7 @@ def write_scripts(job, manifest, calls, only=None):
         for name, value in params.items(): lines.append(f'{spec["qualified"]}.{name} = {cl_literal(value, types.get(name, "s"))}')
         stdout = next((p['file'] for p in expected if p['role'] == '$stdout'), None)
         redirect = (', > ' + cl_literal(stdout)) if stdout else ''
+        if manifest.get('interactive'): redirect += ', >G "interactive.gki"'
         lines += [f'lpar {spec["qualified"]} > "parameters-{index:03d}.txt"', f'{spec["qualified"]} (mode="h"{redirect})']
         kwargs = ', '.join(f'{key!r}: {"iraf.INDEF" if value == "INDEF" else repr(value)}' for key, value in params.items())
         py_stdout = (', Stdout=' + repr(stdout)) if stdout else ''

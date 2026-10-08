@@ -18,7 +18,7 @@ class JobQueryTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.job = self.root / 'run'
         self.job.mkdir()
-        (self.job / 'manifest.json').write_text(json.dumps({'rows': [], 'settings': {}}))
+        (self.job / 'manifest.json').write_text(json.dumps({'rows': [], 'settings': {}, 'workspace_folder': server.workspace['folder']}))
         (self.job / 'status.json').write_text(json.dumps({'state': 'completed'}))
         self.runs = patch.object(server, 'RUNS', self.root)
         self.runs.start()
@@ -123,3 +123,13 @@ class JobQueryTests(unittest.TestCase):
         self.assertEqual((code, [job['id'] for job in jobs]), (200, ['run']))
         for query in ['id=missing', 'id=../outside']:
             self.assertEqual(asyncio.run(request('GET', 'job', query=query))[0], 400)
+
+    def test_job_list_keeps_to_the_workspace_folder(self):
+        other = self.root / 'other'
+        other.mkdir()
+        (other / 'manifest.json').write_text(json.dumps({'rows': [], 'settings': {}, 'workspace_folder': str(self.root / 'elsewhere')}))
+        (other / 'status.json').write_text(json.dumps({'state': 'completed'}))
+        code, jobs = asyncio.run(request('GET', 'jobs'))
+        self.assertEqual((code, [job['id'] for job in jobs]), (200, ['run']))
+        # A run stays reachable by id; only the list is scoped.
+        self.assertEqual(asyncio.run(request('GET', 'job', query='id=other'))[0], 200)

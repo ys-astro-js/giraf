@@ -1,4 +1,10 @@
-import { useEffect, useState, type PointerEvent } from "react"
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type PointerEvent,
+} from "react"
 import {
   ChevronRight,
   CircleAlert,
@@ -187,6 +193,14 @@ function RunDetail({
   const w = useWorkbench()
   const [detail, setDetail] = useState<Detail>("log")
   const active = ACTIVE.includes(job.state)
+  // A running log follows its end like a terminal, until scrolled up.
+  const content = useRef<HTMLDivElement>(null)
+  const following = useRef(true)
+  useLayoutEffect(() => {
+    const element = content.current
+    if (element && active && following.current)
+      element.scrollTop = element.scrollHeight
+  }, [job.log, active, detail])
   const removable =
     execution && !execution.jobs.some((item) => ACTIVE.includes(item.state))
   return (
@@ -233,6 +247,12 @@ function RunDetail({
       </header>
       <div
         key={`${job.id}:${detail}`}
+        ref={content}
+        onScroll={(e) => {
+          const element = e.currentTarget
+          following.current =
+            element.scrollHeight - element.scrollTop - element.clientHeight < 24
+        }}
         className="run-detail-content"
         tabIndex={0}
         aria-label={

@@ -72,7 +72,9 @@ export function TaskInteractionDialog({
                   placeholder={
                     currentJob.interaction.kind === "cursor"
                       ? "0 0 1 : order 2"
-                      : "yes"
+                      : currentJob.interaction.kind === "key"
+                        ? undefined
+                        : "yes"
                   }
                   onChange={(e) => setResponse(e.target.value)}
                 />
@@ -109,7 +111,11 @@ export function TaskInteractionDialog({
             </Button>
           )}
           <Button
-            disabled={!response && currentJob.interaction.kind !== "editor"}
+            // A single-key question takes an empty answer as Return.
+            disabled={
+              !response &&
+              !["editor", "key"].includes(currentJob.interaction.kind)
+            }
             onClick={() =>
               api("task-respond", {
                 id: currentJob.id,

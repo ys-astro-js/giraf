@@ -33,6 +33,18 @@ for line in sys.stdin:
         with open('cursor.fifo') as fifo:
             emit('CURSOR=' + fifo.readline())
             emit('CURSOR=' + fifo.readline())
+    elif command == 'textcursor':
+        # IRAF's text cursor mode, then a raw single-key query.
+        emit('Star 1 near\nImage cursor: [x y wcs] key [cmd]: ')
+        emit('IMCUR=' + sys.stdin.readline())
+        emit('Graphics cursor: [x y wcs] key [cmd]: ')
+        emit('GCUR=' + sys.stdin.readline())
+        import termios, tty
+        saved = termios.tcgetattr(0)
+        tty.setcbreak(0)
+        emit('\x1b[7m[Hit return to continue, q to quit]\x1b[m')
+        emit('KEY=' + os.read(0, 1).decode() + '\n')
+        termios.tcsetattr(0, termios.TCSADRAIN, saved)
     elif command == 'bulk':
         emit('x' * (8 * 1024 * 1024) + '\n별 끝\n')
     elif command == 'wait':
@@ -97,6 +109,23 @@ class CLTerminalTests(unittest.TestCase):
         self.assertIn('CURSOR=12 34 1 a', (self.job / 'task.log').read_text())
         self.assertIn('CURSOR=12 34 1 q', (self.job / 'task.log').read_text())
         self.assertIn('COMMAND=next', (self.job / 'task.log').read_text())
+        self.assert_reaped()
+
+    def test_text_cursor_prompts_and_single_key_query(self):
+        asked = []
+        def answer(job, kind, prompt):
+            asked.append((kind, prompt))
+            return {'imcur': '12.5 34 1 a', 'gcur': '0 0 1 d', 'key': 'q'}[kind]
+        with patch.object(task_session, 'ask', side_effect=answer):
+            self.assertEqual(self.run_peer(['textcursor', 'next', 'logout']), 0)
+        self.assertEqual([kind for kind, _ in asked], ['imcur', 'gcur', 'key'])
+        # The task's output is the context, without the script or answer echoes.
+        self.assertEqual(asked[0][1], 'Star 1 near')
+        self.assertEqual(asked[1][1], 'IMCUR=12.5 34 1 a')
+        self.assertEqual(asked[2][1], 'GCUR=0 0 1 d\n[Hit return to continue, q to quit]')
+        log = (self.job / 'task.log').read_text()
+        for expected in ('IMCUR=12.5 34 1 a', 'GCUR=0 0 1 d', 'KEY=q', 'COMMAND=next'):
+            self.assertIn(expected, log)
         self.assert_reaped()
 
     def test_large_output_is_logged_with_bounded_memory(self):

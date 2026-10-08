@@ -125,6 +125,45 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(json.loads((job / 'status.json').read_text())['state'], 'failed')
 
 
+    def test_interactive_runs_in_text_cursor_mode_with_iraf_key_help(self):
+        from giraf.generic_tasks import validate_generic
+        from giraf.generic_tasks.scripts import write_scripts
+        (self.pkg / 'sample.par').write_text('interactive,b,h,no,,,Interactive?\nmode,s,h,ql\n')
+        keys = self.pkg / 'sample'
+        keys.mkdir()
+        (keys / 'pick.key').write_text('\tKeystroke Commands\n\n?\tPrint help\na\tAdd star nearest cursor\n\n\tColon Commands\n\n:a [n]\tAdd star n\n')
+        (keys / 'show.key').write_text('\tInteractive Graphics Keystroke Commands\n\na\tAccept star and proceed\nd    \tReject star\n')
+        spec = self.discover(descriptors=[self.descriptor])['tasks']['demo.sample']
+        m = validate_generic(spec, {'task': spec['name'], 'backend': 'pyraf', 'parameters': {'interactive': 'yes'}}, lambda key: None)
+        self.assertEqual(m['backend'], 'cl')
+        self.assertTrue(m['interactive'])
+        groups = {g['cursor']: g for g in m['cursorKeys']}
+        self.assertEqual([k['key'] for k in groups['image']['keys']], ['?', 'a'])
+        self.assertEqual(groups['image']['colon'], [{'command': ':a [n]', 'description': 'Add star n'}])
+        self.assertEqual([k['key'] for k in groups['graphics']['keys']], ['a', 'd'])
+        job = self.root / 'job'; job.mkdir()
+        write_scripts(job, m, [({}, [])])
+        script = (job / 'commands.cl').read_text()
+        self.assertIn('set stdimcur = "text"', script)
+        self.assertIn('>G "interactive.gki"', script)
+
+
+class EachOutputNameTests(unittest.TestCase):
+    def test_name_placeholder_or_prefix(self):
+        from giraf.products import each_output_name
+        self.assertEqual(each_output_name('{name}_bs', 'obj1', '.fits'), 'obj1_bs.fits')
+        self.assertEqual(each_output_name('r_{name}', 'obj1', '.fits'), 'r_obj1.fits')
+        self.assertEqual(each_output_name('p', 'obj1', '.fits'), 'pobj1.fits')
+        self.assertEqual(each_output_name('{name}.mag.1', 'NGC2420b', '.txt'), 'NGC2420b.mag.1')
+        self.assertEqual(each_output_name('{name}_v2.fit', 'obj1', '.fits'), 'obj1_v2.fit')
+
+    def test_image_product_named_like_daophot_psf_gets_fits_extension(self):
+        from giraf.products import product_name
+        self.assertEqual(product_name('M67b.psf.1', 'image'), 'M67b.psf.1.fits')
+        self.assertEqual(product_name('M67b.fit', 'image'), 'M67b.fit')
+        self.assertEqual(product_name('M67b.mag.1', 'text'), 'M67b.mag.1')
+
+
 @unittest.skipUnless(installed_root(), 'IRAF installation required')
 class GenericIRAFTests(unittest.TestCase):
     def setUp(self):

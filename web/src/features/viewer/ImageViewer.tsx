@@ -32,6 +32,7 @@ export type { ViewerViewport, ViewerMarker } from "./types"
 export function ImageViewer({
   frame,
   onPick,
+  onHover,
   onChoose,
   sharedRange,
   embedded = false,
@@ -52,6 +53,8 @@ export function ImageViewer({
 }: {
   frame?: Frame
   onPick?: (x: number, y: number) => void
+  /** The pixel under the pointer, like IRAF's image cursor; null when it leaves. */
+  onHover?: (point: { x: number; y: number } | null) => void
   onChoose?: () => void
   sharedRange?: [number, number]
   embedded?: boolean
@@ -91,6 +94,7 @@ export function ImageViewer({
     cursorGuidesRef,
     image,
     pick,
+    positionAt,
     range,
     applyRange,
     resetRange,
@@ -264,6 +268,7 @@ export function ImageViewer({
                 guides.style.setProperty("--cursor-x", `${x}px`)
                 guides.style.setProperty("--cursor-y", `${y}px`)
               }
+              onHover?.(positionAt(e.clientX, e.clientY))
               if (dragRef.current)
                 setPan({
                   x: dragRef.current.startX + e.clientX - dragRef.current.x,
@@ -283,6 +288,7 @@ export function ImageViewer({
               e.currentTarget.releasePointerCapture(e.pointerId)
             }}
             onPointerLeave={() => {
+              onHover?.(null)
               if (cursorGuidesRef.current) cursorGuidesRef.current.hidden = true
             }}
             onPointerCancel={() => {

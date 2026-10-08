@@ -308,12 +308,18 @@ export function useWorkbenchController() {
           await api("folder", { path })
           moved = true
           await refresh()
-          applyDocument(await api<Preferences>("task-preferences"))
+          // Runs belong to their folder; reconcile the new document against them.
+          const runs = await api<Job[]>("jobs")
+          setJobs(runs)
+          setSelectedJob("")
+          remember(runs.flatMap((job) => job.products))
+          applyDocument(await api<Preferences>("task-preferences"), runs)
         } catch (e) {
           if (moved) {
             try {
               await api("folder", { path: previousFolder })
               await refresh()
+              setJobs(await api<Job[]>("jobs"))
             } catch {
               setReady(false)
               setLoadError(true)

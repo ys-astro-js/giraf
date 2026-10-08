@@ -14,7 +14,8 @@ export type Draft = { calibration?:import("./calibration").CalibrationOptions; t
 export type WorkflowDocument = {path: string; name: string; saved?: boolean}
 export type Preferences = { _document?:WorkflowDocument; parameterSets?:Record<string,Record<string,Values>>; drafts:Record<string,Draft>; backend:string; mapping:Values; instrument:string[]; packageValues:Values; taskMap?:import('./task-map').TaskMap }
 export type Workspace = { folder:string; files:Frame[]; sets:{name:string;ids:string[];folder:string}[] }
-export type Manifest = { workflowId?:string; workflowStep?:number; textInputs?:Record<string,string>; alignmentBinding?:AlignmentBinding; inputSelections?:Record<string,string[]>; cursorCommands?:Record<string,string>; outputs?:Record<string,string>; parameterSets?:Record<string,Values>; task:string; backend:string; parameters:Values; inputs:Record<string,string[]>; output:{name:string}; ccdproc:Values; ccdred:Values; mapping:Values; section:string; exam:Draft['exam']; rows:Frame[] }
+export type CursorKeyGroup = { cursor:'image'|'graphics'; files:string[]; keys:{key:string;description:string}[]; colon:{command:string;description:string}[] }
+export type Manifest = { interactive?:boolean; cursorKeys?:CursorKeyGroup[]; cursorImage?:string|null; workflowId?:string; workflowStep?:number; textInputs?:Record<string,string>; alignmentBinding?:AlignmentBinding; inputSelections?:Record<string,string[]>; cursorCommands?:Record<string,string>; outputs?:Record<string,string>; parameterSets?:Record<string,Values>; task:string; backend:string; parameters:Values; inputs:Record<string,string[]>; output:{name:string}; ccdproc:Values; ccdred:Values; mapping:Values; section:string; exam:Draft['exam']; rows:Frame[] }
 export type Job = {createdAt?:number;execution?:{id:string;step:number}|null;id:string;name:string;task?:string;backend?:string;state:string;message:string;count:number;progress:number;products:Frame[];manifest?:Manifest & {instanceId?:string};log?:string;commands?:string;operation?:string;outcomes?:{source:string;label:string;state:string;message:string}[];headerDiff?:{source:string;key:string;before:string|null;after:string|null}[];effective?:unknown;interaction?:{id:string;kind:string;prompt:string;state:string;wcs?:number[][];initial?:string}}
 export const defaults=(params:Param[]):Values=>Object.fromEntries(params.map(p=>[p.name,p.default]))
 export function makeDraft(spec:Spec | undefined, saved?:Partial<Draft>):Draft {
@@ -43,6 +44,13 @@ function outputExtension(name:string) {
   const base=outputBasename(name), index=base.lastIndexOf('.')
   return index>0&&index<base.length-1?base.slice(index):''
 }
+// `{name}` marks where the source stem goes; without it the value is a prefix.
+// A dot after the last `{name}` spells the extension, e.g. `{name}.mag.1`.
+function eachOutputName(template:string,stem:string,ext:string) {
+  if(!template.includes('{name}'))return template+stem+ext
+  const explicit=template.slice(template.lastIndexOf('{name}')+6).includes('.')
+  return template.replaceAll('{name}',stem)+(explicit?'':ext)
+}
 function productName(name:string,kind:string) {
   const base=outputBasename(name)
   return base&&kind==='image'&&!outputExtension(base)?base+'.fits':base
@@ -58,7 +66,7 @@ export function plannedOutputs(task:Spec,draft:Draft,rows:Frame[],_mapping:Value
         const row=rows.find(r=>r.id===id),source=outputBasename(row?.label||row?.name||id),ext=outputExtension(source)
         const stem=ext?source.slice(0,-ext.length):source
         const suffix=slot.kind==='image'?(ext||'.fits'):({mask:'.pl',text:'.txt',metacode:'.gki',binary:'.bin','image-list':'.list'}[slot.kind]||'')
-        return {input:row?.label||id,output:productName(value+stem+suffix,slot.kind)}
+        return {input:row?.label||id,output:productName(eachOutputName(value,stem,suffix),slot.kind)}
       }):[{input:task.taskName||task.name,output:productName(value,slot.kind)}]
     })
     return outputs.length?outputs:[{input:task.taskName||task.name,output:(task.taskName||task.name)+'-results.txt'}]
@@ -72,7 +80,8 @@ export function plannedOutputs(task:Spec,draft:Draft,rows:Frame[],_mapping:Value
   if(name.includes(','))return name.split(',').map((n,i)=>({input:selected[i]?.label||task.name,output:productName(n.trim(),task.kind)}))
   if(['each','edit'].includes(task.output.mode)){
     return selected.map(row=>{
-      const output=name.endsWith('/')?name+row.label:selected.length===1&&(outputExtension(name)||name.includes('/'))?name:name+row.label
+      const ext=outputExtension(row.label),templated=eachOutputName(name,ext?row.label.slice(0,-ext.length):row.label,ext)
+      const output=!name.includes('{name}')&&selected.length===1&&!name.endsWith('/')&&(outputExtension(name)||name.includes('/'))?name:templated
       return {input:row.label,output:productName(output,task.kind)}
     })
   }

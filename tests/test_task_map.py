@@ -157,9 +157,10 @@ class TaskMapTests(unittest.TestCase):
                         q=json.loads(f.read_text())
                         response=job/'responses'/f"{q['id']}.json"
                         if q.get('state')=='waiting' and not response.exists():
-                            seen_graphics|=q['kind']=='cursor'
+                            cursor=q['kind'] in ('cursor','gcur')
+                            seen_graphics|=cursor
                             response.parent.mkdir(exist_ok=True)
-                            atomic_json(response,{'value':'0 0 1 q' if q['kind']=='cursor' else 'yes'})
+                            atomic_json(response,{'value':'0 0 1 q' if cursor else 'yes'})
                             answers+=1
                     time.sleep(.05)
                 self.assertIsNotNone(proc.poll(),'interactive process did not finish')

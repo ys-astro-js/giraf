@@ -68,16 +68,21 @@ export function ViewerPopover({
   icon: Icon,
   disabled,
   className,
+  open,
+  onOpenChange,
   children,
 }: {
   label: string
   icon: LucideIcon
   disabled?: boolean
   className?: string
+  /** Controlled when a shortcut also opens it. */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   children: ReactNode
 }) {
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={onOpenChange}>
       {/* Always in a toolbar group, so it is that toolbar's button. */}
       <PopoverTrigger
         render={<ToolbarButton label={label} />}

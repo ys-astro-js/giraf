@@ -83,6 +83,13 @@ def register(path, label=None, job=None, asset=None, *, inspected=None):
     return edited
 
 
+def in_workspace(manifest):
+    """Keep each folder's work together; older runs are placed by their inputs."""
+    if manifest.get('workspace_folder'):
+        return manifest['workspace_folder'] == workspace['folder']
+    return any(str(Path(r['path']).parent) == workspace['folder'] or str(r['path']).startswith(str(RUNS)) for r in manifest.get('rows', []))
+
+
 def files():
     rows = []
     try:
@@ -95,12 +102,7 @@ def files():
     for j in sorted(RUNS.glob('*/products.json'), reverse=True):
         if status(j.parent)['state'] not in ('completed','partial','skipped'):
             continue
-        manifest = json.loads((j.parent / 'manifest.json').read_text())
-        # Keep each folder's work together.
-        if manifest.get('workspace_folder') and manifest['workspace_folder'] != workspace['folder']:
-            continue
-        source = manifest.get('rows', [])
-        if not manifest.get('workspace_folder') and not any(str(Path(r['path']).parent) == workspace['folder'] or str(r['path']).startswith(str(RUNS)) for r in source):
+        if not in_workspace(json.loads((j.parent / 'manifest.json').read_text())):
             continue
         for p in json.loads(j.read_text()):
             rows.append(register(j.parent / p['file'], p['label'], j.parent.name, p.get('asset')))
@@ -344,7 +346,7 @@ async def task_respond_endpoint(request: Request, *, action):
         if interaction['state']!='waiting' or payload.get('requestId')!=interaction['id']:raise ValueError('이전 입력 요청입니다. 현재 세션을 다시 확인해 주세요.')
         value=str(payload.get('value',''))
         if len(value)>200000 or '\x00' in value or (interaction['kind']!='editor' and any(c in value for c in '\n\r')):raise ValueError('응답 형식과 길이를 확인해 주세요.')
-        if interaction['kind']=='cursor':
+        if interaction['kind'] in ('cursor','imcur','gcur'):
             import re
             if not re.fullmatch(r'[-+\d.eE]+\s+[-+\d.eE]+\s+\d+\s+\S(?:\s+.*)?',value):raise ValueError('커서는 x y wcs key [명령] 형식입니다.')
         with lock:
@@ -477,7 +479,8 @@ def log_tail(path: Path, characters: int) -> str:
 
 # Starlette runs synchronous endpoints in its threadpool, including JSON encoding.
 def jobs_endpoint(request: Request):
-    return JSONResponse([job_info(p.parent) for p in sorted(RUNS.glob('*/manifest.json'), reverse=True)])
+    return JSONResponse([job_info(p.parent) for p in sorted(RUNS.glob('*/manifest.json'), reverse=True)
+                         if in_workspace(json.loads(p.read_text()))])
 
 
 def job_endpoint(request: Request):

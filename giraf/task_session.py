@@ -1,7 +1,9 @@
 """Durable, request-ID based text/cursor IPC for running IRAF processes."""
+from collections import deque
 import json
 import os
 from pathlib import Path
+import re
 import select
 import signal
 import subprocess
@@ -84,6 +86,11 @@ def run_process(command,job,log,interactive=False,backend='cl'):
         process.stdout.close()
 
 
+def terminal_text(data):
+    """Terminal output without the escape sequences IRAF uses for highlighting."""
+    return re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', data.decode(errors='replace'))
+
+
 def read_log_since(path, offset):
     """Read this invocation's output without loading earlier invocations."""
     with Path(path).open('rb') as stream:
@@ -120,13 +127,21 @@ def run_cl_terminal(command,job,log,env):
     child.delaybeforesend = None
     # Consume ordinary output as well as prompts so expect's unmatched buffer
     # cannot grow with the log. Keep incomplete short lines for split prompts.
+    # Cursor prompts also end with ':' so they precede the generic question.
+    names = ['prompt', 'cursor', 'key', 'question', 'line', 'chunk', 'eof', 'timeout']
     patterns = child.compile_pattern_list([
-        rb'(?:^|[\r\n])(?:cl|ecl|images|imutil|tv|noao|imred|ccdred)>[^\S\r\n]*$',
+        rb'(?:^|[\r\n])(?!ccdinstrument>)[a-z][a-z0-9_]*>[^\S\r\n]*$',
+        # IRAF's text cursor mode (stdimcur/stdgcur = "text") and its
+        # single-key queries such as "[Hit return to continue, q to quit]".
+        rb'^[^\r\n]*(Image|Graphics) cursor(?: input|: \[x y wcs\] key \[cmd\]):[^\S\r\n]*$',
+        rb'^[^\r\n]*\[[^\]\r\n]{3,200}\](?:\x1b\[[0-9;]*[A-Za-z]|[^\S\r\n])*$',
         rb'^[^\r\n]*(?:[:?]|ccdinstrument>|\((?:yes|no)\))[^\S\r\n]*$',
         rb'^[^\r\n]*[\r\n]+',
         rb'^[^\r\n]{4096}',
         pexpect.EOF, pexpect.TIMEOUT,
     ])
+    recent = deque(maxlen=12)
+    echo = None
     index = 0
     cursor = None
     deadline = time.monotonic() + CL_TIMEOUT_SECONDS
@@ -139,23 +154,44 @@ def run_cl_terminal(command,job,log,env):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise TimeoutError('IRAF 실행 제한 시간 30분을 초과했습니다.')
-            event = child.expect_list(patterns, timeout=min(.05, remaining))
-            if event == 0:
+            event = names[child.expect_list(patterns, timeout=min(.05, remaining))]
+            if event == 'prompt':
                 if cursor is not None:
                     os.close(cursor)
                     cursor = None
+                # Cursor prompts show the task's own output, not the script.
+                recent.clear()
                 if index < len(commands):
+                    echo = commands[index].strip()
                     child.sendline(commands[index].encode())
                     index += 1
-            elif event == 1:
+            elif event == 'question':
                 prompt = child.after.decode(errors='replace')[-2000:]
                 value = ask(job, 'text', prompt)
+                recent.clear()
+                echo = value.strip()
                 child.sendline(value.encode())
-            elif event == 4:
+            elif event == 'line':
+                line = terminal_text(child.after).strip()
+                if line and line != echo:
+                    recent.append(line)
+                echo = None
+            elif event == 'cursor':
+                kind = 'imcur' if child.match.group(1) == b'Image' else 'gcur'
+                value = ask(job, kind, '\n'.join(recent))
+                recent.clear()
+                echo = value.strip()  # The terminal echoes the answer back.
+                child.sendline(value.encode())
+            elif event == 'key':
+                value = ask(job, 'key', '\n'.join([*recent, terminal_text(child.after).strip()]))
+                recent.clear()
+                # A single-key query reads the raw key; an empty answer is return.
+                child.send(value.encode() if value else b'\r')
+            elif event == 'eof':
                 child.close()
                 finished = True
                 return child.exitstatus if child.exitstatus is not None else -child.signalstatus
-            elif event == 5:
+            elif event == 'timeout':
                 # A reader opening IRAF's native cursor FIFO is its request.
                 # Keep the writer open between replies: closing it sends EOF
                 # to tasks that read more than one cursor record.
