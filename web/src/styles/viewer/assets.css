@@ -68,3 +68,79 @@
 /* In a window's top bar, the file's own actions follow the image tools,
    which the image viewer mounts (and remounts) after them. */
 .viewer-file-tools > .toolbar-slot { order: 1; }
+/* An interactive run's plot over the display window's image, picture-in-
+   picture: it rests above the bottom bar's corner, moves within the window,
+   and grows to the space between the bars. */
+.cursor-pip {
+  position: absolute;
+  right: var(--window-inset);
+  bottom: calc(var(--window-footer) + var(--window-inset));
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: min(360px, calc(100% - var(--window-inset) * 2));
+  max-width: calc(100% - var(--window-inset) * 2);
+  max-height: calc(100% - var(--window-header) - var(--window-footer) - var(--window-inset));
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: var(--background);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+.cursor-pip[hidden] { display: none; }
+.cursor-pip:active { cursor: grabbing; }
+.cursor-pip[data-grown] {
+  inset: var(--window-header) var(--window-inset)
+    calc(var(--window-footer) + var(--window-inset));
+  width: auto;
+  aspect-ratio: auto;
+  cursor: default;
+}
+.cursor-pip-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 6px 0 10px;
+}
+.cursor-pip .asset-plot { min-width: 0; width: 100%; }
+/* It rests in the bottom-right corner, so it resizes from the other edges. */
+.cursor-pip-resize { position: absolute; z-index: 1; }
+.cursor-pip-resize[data-resize="top"] { inset: 0 0 auto 0; height: 6px; cursor: ns-resize; }
+.cursor-pip-resize[data-resize="left"] { inset: 0 auto 0 0; width: 6px; cursor: ew-resize; }
+.cursor-pip-resize[data-resize="corner"] { top: 0; left: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+/* Where the colon command field opens: centered, a step above the
+   display window's bottom bar. */
+.cursor-command-anchor {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--window-footer) + var(--window-inset) * 2);
+  width: 0;
+  height: 0;
+}
+/* IRAF's answer to the last key, where its status line would be: the same
+   spot the colon command field opens. */
+.cursor-status {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--window-footer) + var(--window-inset) * 2);
+  z-index: 1;
+  translate: -50% 0;
+  max-width: calc(100% - var(--window-inset) * 4);
+  padding: 8px 14px;
+  border-radius: 19px;
+  font: 12px/1.5 var(--font-mono, ui-monospace, monospace);
+  white-space: pre-line;
+  pointer-events: none;
+  animation: cursor-status 5s ease-out forwards;
+}
+@keyframes cursor-status {
+  0% { opacity: 0; }
+  4%, 85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cursor-status { animation: none; }
+}

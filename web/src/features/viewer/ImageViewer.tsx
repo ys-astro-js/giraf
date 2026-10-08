@@ -200,7 +200,6 @@ export function ImageViewer({
             tabIndex={0}
             aria-label={onPick ? "별 위치 선택" : "영상 픽셀 조사"}
             aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Enter"
-            title="방향키로 픽셀 이동. Shift와 함께 누르면 10픽셀 이동. Enter로 선택."
             className="size-full cursor-crosshair touch-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
             onKeyDown={(e) => {
               if (!info) return
@@ -212,6 +211,8 @@ export function ImageViewer({
                 e.preventDefault()
                 const p = stepPixel(cross, e.key, info, e.shiftKey ? 10 : 1)
                 inspect(p.x, p.y)
+                // The arrow keys move the image cursor as the pointer does.
+                onHover?.(p)
                 const fit = Math.min(
                     size.width / info.width,
                     size.height / info.height
@@ -312,7 +313,8 @@ export function ImageViewer({
         {imageOverlay}
         {windowBars ? (
           <>
-            <WindowToolbar>{analysisTools}</WindowToolbar>
+            {/* Alone in its bar, a hidden group would keep its place. */}
+            {analysis && <WindowToolbar>{analysisTools}</WindowToolbar>}
             <WindowToolbar placement="bottom">
               {navigationTools && coordinateTools}
               <ToolbarSpacer flexible />

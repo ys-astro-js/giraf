@@ -16,7 +16,7 @@ import type {
  */
 
 /** What a window shows; tabs gather only with tabs of their own kind. */
-export type Kind = "canvas" | "inspector" | "viewer"
+export type Kind = "canvas" | "inspector" | "viewer" | "graphics"
 
 /** The kind of each window component. */
 export const KINDS: Record<string, Kind> = {
@@ -24,6 +24,7 @@ export const KINDS: Record<string, Kind> = {
   inspector: "inspector",
   viewer: "viewer",
   display: "viewer",
+  graphics: "graphics",
 }
 
 /** The canvas window's id: one, fixed, never a tab or a drop target. */
@@ -48,8 +49,7 @@ export const isDocked = (group: DockviewGroupPanel) =>
   group.api.location.type === "grid"
 
 type GridNode =
-  | { type: "leaf"; data: { id: string } }
-  | { type: "branch"; data: GridNode[] }
+  { type: "leaf"; data: { id: string } } | { type: "branch"; data: GridNode[] }
 
 /** Group ids in the grid's reading order: left to right, top to bottom. */
 function gridOrder(node: GridNode): string[] {

@@ -563,6 +563,9 @@
 /* Floating windows: rounded, with generous resize edges and a floor on size. */
 .dockview-theme-giraf { --dv-floating-titlebar-height: 0px; }
 .dv-floating-titlebar { display: none; }
+/* Floating windows stay under menus and popovers (z-50). dockview redefines
+   the variable from itself on these elements, which voids it to 999. */
+.dock-root :is(.dv-resize-container, .dv-render-overlay) { --dv-overlay-z-index: 40; }
 .dv-resize-container { min-width: 280px; min-height: 180px; border-radius: 12px; }
 .dv-resize-container > .dv-grid-view { border-radius: 12px; overflow: hidden; }
 .dv-resize-container .dv-resize-handle-top, .dv-resize-container .dv-resize-handle-bottom { height: 10px; left: 10px; width: calc(100% - 20px); }

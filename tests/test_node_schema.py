@@ -150,6 +150,24 @@ class NodeSchemaTests(unittest.TestCase):
             with self.subTest(data=data):
                 self.assertFalse(self.node(data)['runnable'])
 
+    def test_cursor_component_names_the_task_keys(self):
+        cursor = {'type': 'cursor',
+                  'image': {'click': 'a', 'count': '사용한 별 {n}개',
+                            'actions': [{'key': 'f', 'label': 'PSF 계산', 'icon': 'sigma'}],
+                            'finish': {'label': '저장 후 종료', 'icon': 'save', 'keys': ['w', 'q']}},
+                  'graphics': {'title': 'PSF', 'accept': {'key': 'a', 'label': '사용', 'icon': 'check'},
+                               'reject': {'key': 'd', 'label': '버리기', 'icon': 'trash'}}}
+        self.write(self.user, {'components': [cursor]})
+        s = self.spec()
+        self.assertTrue(s['runnable'], s['reason'])
+        self.assertEqual(s['cursor'], {k: v for k, v in cursor.items() if k != 'type'})
+        for bad in ({'image': {'click': 'ab'}}, {'image': {'actions': [{'key': 'f'}]}},
+                    {'image': {'finish': {'label': '끝', 'keys': []}}}, {'graphics': {'accept': {'key': 'a', 'label': '사용', 'icon': 'rocket'}}},
+                    {'menu': {}}):
+            with self.subTest(bad=bad):
+                self.write(self.user, {'components': [{'type': 'cursor', **bad}]})
+                self.assertFalse(self.spec()['runnable'])
+
     def test_files_without_a_known_task_are_reported(self):
         (self.user / 'broken.json').write_text('{')
         (self.user / 'other.json').write_text(json.dumps({'version': 2, 'task': 'demo.absent'}))
