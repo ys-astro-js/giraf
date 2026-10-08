@@ -1,0 +1,26 @@
+/* The main screen covers the workbench, which stays mounted underneath. */
+.home-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.home-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 64px 24px 48px;
+}
+
+.home-column {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
+}

@@ -1,4 +1,5 @@
 import { useId } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Settings2 } from "lucide-react"
 import {
   Popover,
@@ -12,6 +13,8 @@ import { Choice } from "@/components/workbench-controls"
 import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
 import { useTheme } from "@/components/theme-provider"
 import { useWorkbench } from "@/features/workbench/context"
+import { apiQueryOptions } from "@/lib/queries"
+import { api, type Home } from "@/lib/workbench"
 
 const THEMES = [
   { value: "system", label: "시스템 설정" },
@@ -19,11 +22,26 @@ const THEMES = [
   { value: "dark", label: "어둡게" },
 ]
 
-/** App preferences, in one place: the theme and the execution engine. */
+const STARTUP = [
+  { value: "home", label: "메인 화면 표시" },
+  { value: "resume", label: "마지막 작업 이어서" },
+]
+
+/** App preferences, in one place: the theme, the execution engine and the startup screen. */
 export function SettingsButton() {
   const id = useId()
   const { theme, setTheme } = useTheme()
   const w = useWorkbench()
+  const queryClient = useQueryClient()
+  const home = apiQueryOptions<Home>("home")
+  const startup = useQuery(home).data?.startup
+  async function setStartup(value: string) {
+    try {
+      queryClient.setQueryData(home.queryKey, await api<Home>("home", { startup: value }))
+    } catch (e) {
+      w.setError((e as Error).message)
+    }
+  }
   return (
     <ToolbarGroup label="설정">
       <Popover>
@@ -56,6 +74,16 @@ export function SettingsButton() {
                   { value: "pyraf", label: "PyRAF" },
                 ]}
                 onChange={w.setBackend}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor={`${id}-startup`}>앱을 열 때</FieldLabel>
+              <Choice
+                id={`${id}-startup`}
+                label="앱을 열 때"
+                value={startup || "home"}
+                options={STARTUP}
+                onChange={(value) => void setStartup(value)}
               />
             </Field>
           </FieldGroup>

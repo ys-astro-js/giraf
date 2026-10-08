@@ -13,4 +13,5 @@
 @import "./styles/workbench/toolbar.css";
 @import "./styles/shared/details.css";
 @import "./styles/workbench/status.css";
+@import "./styles/workbench/home.css";
 @import "./styles/viewer/preview.css";

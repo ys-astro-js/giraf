@@ -5,11 +5,14 @@ import contextlib
 from functools import lru_cache, partial
 from pathlib import Path
 import hashlib
+import importlib.util
 import json
 import os
+import shutil
 import threading
 import subprocess
 import sys
+import time
 
 from astropy.io import fits
 from send2trash import send2trash
@@ -40,10 +43,20 @@ STATE = DATA / '.workspace.json'
 registry: dict[str, dict] = {}
 lock = threading.Lock()
 workspace = json.loads(STATE.read_text()) if STATE.exists() else {'folder': str(DATA), 'sets': [], 'overrides': {}}
+# Folders used before recent folders were recorded start the list with the last one.
+if STATE.exists() and 'recent' not in workspace:
+    workspace['recent'] = [{'path': workspace['folder'], 'opened': STATE.stat().st_mtime}]
+STARTUP = ('home', 'resume')
 
 
 def save():
     atomic_json(STATE, workspace)
+
+
+def touch_folder(folder):
+    """Move the folder to the front of the main screen's recent list."""
+    rest = [row for row in workspace.get('recent', []) if row['path'] != folder]
+    workspace['recent'] = [{'path': folder, 'opened': time.time()}, *rest][:12]
 
 
 @lru_cache(maxsize=512)
@@ -275,6 +288,7 @@ def task_preferences_response(payload, method, action):
                 refs[id] = {k: row.get(k) for k in ('path', 'label', 'job', 'asset')}
             if not current or current['_document']['path'] == payload['_document']['path']:
                 selected[workspace['folder']] = payload
+            touch_folder(workspace['folder'])
             save()
             data = payload
         else:
@@ -376,6 +390,35 @@ async def workspace_endpoint(request: Request):
     return JSONResponse(dict(folder=workspace['folder'], sets=workspace['sets'], files=rows))
 
 
+def home_state():
+    with lock:
+        recent = list(workspace.get('recent', []))
+        selected = workspace.get('workflow_documents', {})
+        startup = workspace.get('startup', 'home')
+        names = {row['path']: ((selected.get(row['path']) or {}).get('_document') or {}).get('name') for row in recent}
+    rows = []
+    for row in recent:
+        path = Path(row['path'])
+        if not path.is_dir():
+            continue
+        parent = str(path.parent)
+        if path.parent.is_relative_to(HOME):
+            parent = str(Path('~') / path.parent.relative_to(HOME))
+        rows.append(dict(path=str(path), name=path.name or str(path), parent=parent, opened=row['opened'], workflow=names[row['path']]))
+    engines = dict(cl=bool(shutil.which('irafcl') or shutil.which('cl')), pyraf=importlib.util.find_spec('pyraf') is not None)
+    return dict(startup=startup, recent=rows, engines=engines)
+
+
+async def home_endpoint(request: Request):
+    if request.method == 'POST':
+        payload = await request_payload(request)
+        if payload.get('startup') not in STARTUP:
+            raise ValueError('시작 화면 설정을 확인해 주세요.')
+        with lock:
+            workspace['startup'] = payload['startup']; save()
+    return JSONResponse(await run_in_threadpool(home_state))
+
+
 async def browse_endpoint(request: Request):
     q = request.query_params
     path = Path(q.get('path', workspace['folder'])).expanduser().resolve()
@@ -398,7 +441,7 @@ async def folder_endpoint(request: Request):
     folder = str(Path(payload['path']).expanduser().resolve())
     await run_in_threadpool(scan, folder)
     with lock:
-        workspace['folder'] = folder; save()
+        workspace['folder'] = folder; touch_folder(folder); save()
     return JSONResponse({'ok': True})
 
 
@@ -574,6 +617,7 @@ api_routes = [
     Route('/text', text_endpoint, methods=['GET'], name='text'),
     Route('/plot', plot_endpoint, methods=['GET'], name='plot'),
     Route('/workspace', workspace_endpoint, methods=['GET'], name='workspace'),
+    Route('/home', home_endpoint, methods=['GET', 'POST'], name='home'),
     Route('/browse', browse_endpoint, methods=['GET'], name='browse'),
     Route('/folder', folder_endpoint, methods=['POST'], name='folder'),
     Route('/delete-files', partial(delete_files_endpoint, action='delete-files'), methods=['POST'], name='delete-files'),

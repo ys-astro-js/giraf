@@ -1,8 +1,12 @@
 import asyncio
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+import numpy as np
+from astropy.io import fits
 
 from giraf import server
 from tests.test_workspace import request
@@ -41,6 +45,28 @@ class ApiRouteTests(unittest.TestCase):
                 self.assertFalse(Path(draft['_document']['path']).exists())
                 code, _ = asyncio.run(request('POST', 'task-preferences', ['bad']))
                 self.assertEqual(code, 400)
+
+    def test_home_lists_recent_folders_and_keeps_the_startup_setting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first, second = root / 'M51', root / 'NGC2420'
+            for folder in (first, second):
+                folder.mkdir()
+                fits.writeto(folder / 'object.fits', np.zeros((2, 2)))
+            state = {'folder': str(first), 'sets': [], 'overrides': {}}
+            with patch.object(server, 'workspace', state), patch.object(server, 'STATE', root / 'state.json'):
+                code, data = asyncio.run(request('GET', 'home'))
+                self.assertEqual((code, data['startup'], data['recent']), (200, 'home', []))
+                self.assertEqual(set(data['engines']), {'cl', 'pyraf'})
+                for folder in (first, second, first):
+                    self.assertEqual(asyncio.run(request('POST', 'folder', {'path': str(folder)}))[0], 200)
+                rows = asyncio.run(request('GET', 'home'))[1]['recent']
+                self.assertEqual([row['name'] for row in rows], ['M51', 'NGC2420'])
+                shutil.rmtree(second)
+                self.assertEqual([row['name'] for row in asyncio.run(request('GET', 'home'))[1]['recent']], ['M51'])
+                self.assertEqual(asyncio.run(request('POST', 'home', {'startup': 'resume'}))[1]['startup'], 'resume')
+                self.assertEqual(asyncio.run(request('POST', 'home', {'startup': 'other'}))[0], 400)
+                self.assertEqual(state['startup'], 'resume')
 
     def test_origin_guard_still_blocks_mutation(self):
         with patch.object(server.workflow_manager, 'cancel') as cancel:

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { syncPassOutputs } from "@/lib/output-ports"
-import { useQueryClient } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useStore } from "zustand"
 import { createEditorStore } from "@/lib/edit-history"
 import {
@@ -14,6 +14,7 @@ import {
   type Preferences,
   type Workspace,
   type Frame,
+  type Home,
   api,
   type Job,
   type Slot,
@@ -83,6 +84,18 @@ export function useWorkbenchController() {
     [addOpen, setAddOpen] = useState(false)
   const [linking, setLinking] = useState<LinkDialog | null>(null)
   const [selectedJob, setSelectedJob] = useState("")
+  // Undecided until the startup setting arrives, so neither screen flashes first.
+  const [homeChoice, setHome] = useState<boolean>()
+  // Read once: changing the setting later must not move the user between screens.
+  const homeQuery = useQuery({
+    ...apiQueryOptions<Home>("home"),
+    queryKey: ["startup"],
+    staleTime: Infinity,
+  })
+  const startup = homeQuery.data?.startup
+  const home =
+    homeChoice ??
+    (startup ? startup === "home" : homeQuery.isError ? false : undefined)
   useJobDiagnostics(jobs)
   const [lastExecution, setLastExecution] = useState<ExecutionReference>()
   const {
@@ -293,6 +306,44 @@ export function useWorkbenchController() {
   function pick(slot: Slot, ids: string[], apply: (ids: string[]) => void) {
     setPicker({ slot, initial: ids, apply })
   }
+  /** Switches the workspace folder and leaves the main screen on success. */
+  async function openFolder(path: string) {
+    if (path === workspace.folder) {
+      setHome(false)
+      return
+    }
+    const previousFolder = workspace.folder
+    let moved = false
+    setDocumentBusy(true)
+    try {
+      editor.endEdit()
+      await autosave.flush()
+      await api("folder", { path })
+      moved = true
+      await refresh()
+      // Runs belong to their folder; reconcile the new document against them.
+      const runs = await api<Job[]>("jobs")
+      setJobs(runs)
+      setSelectedJob("")
+      remember(runs.flatMap((job) => job.products))
+      applyDocument(await api<Preferences>("task-preferences"), runs)
+      setHome(false)
+    } catch (e) {
+      if (moved) {
+        try {
+          await api("folder", { path: previousFolder })
+          await refresh()
+          setJobs(await api<Job[]>("jobs"))
+        } catch {
+          setReady(false)
+          setLoadError(true)
+        }
+      }
+      setError((e as Error).message)
+    } finally {
+      setDocumentBusy(false)
+    }
+  }
   function folder() {
     setPicker({
       slot: {
@@ -304,38 +355,7 @@ export function useWorkbenchController() {
       initial: [],
       apply: () => {},
       folderOnly: true,
-      applyFolder: async (path) => {
-        const previousFolder = workspace.folder
-        let moved = false
-        setDocumentBusy(true)
-        try {
-          editor.endEdit()
-          await autosave.flush()
-          await api("folder", { path })
-          moved = true
-          await refresh()
-          // Runs belong to their folder; reconcile the new document against them.
-          const runs = await api<Job[]>("jobs")
-          setJobs(runs)
-          setSelectedJob("")
-          remember(runs.flatMap((job) => job.products))
-          applyDocument(await api<Preferences>("task-preferences"), runs)
-        } catch (e) {
-          if (moved) {
-            try {
-              await api("folder", { path: previousFolder })
-              await refresh()
-              setJobs(await api<Job[]>("jobs"))
-            } catch {
-              setReady(false)
-              setLoadError(true)
-            }
-          }
-          setError((e as Error).message)
-        } finally {
-          setDocumentBusy(false)
-        }
-      },
+      applyFolder: openFolder,
     })
   }
   function retryLoad() {
@@ -507,6 +527,9 @@ export function useWorkbenchController() {
     changeDocument,
     exportDocument,
     folder,
+    openFolder,
+    home,
+    setHome,
     deleteLibrary,
     // Workflow editing
     editor,
