@@ -1,3 +1,4 @@
+import { installDesktopShell } from "@/lib/desktop-shell"
 import { installRuntimeDiagnostics } from "@/lib/diagnostics"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
@@ -9,9 +10,7 @@ import "./index.css"
 import App from "./App.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
 
-// The desktop app (Electron) draws the window controls inside the toolbar.
-if (navigator.userAgent.includes("Electron"))
-  document.documentElement.dataset.shell = "desktop"
+installDesktopShell(document.documentElement)
 
 const detachDiagnostics = installRuntimeDiagnostics(window)
 const queryClient = createQueryClient()

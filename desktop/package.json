@@ -17,6 +17,7 @@
     "productName": "GIRAF",
     "files": [
       "main.cjs",
+      "preload.cjs",
       "package.json"
     ],
     "directories": {

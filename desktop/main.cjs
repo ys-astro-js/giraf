@@ -1,5 +1,5 @@
 // GIRAF desktop shell: starts the bundled Python backend and shows it in a window.
-const { app, BrowserWindow, dialog, shell } = require("electron")
+const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron")
 const { spawn, execFileSync } = require("node:child_process")
 const fs = require("node:fs")
 const net = require("node:net")
@@ -7,6 +7,9 @@ const os = require("node:os")
 const path = require("node:path")
 
 const WINDOWS = process.platform === "win32"
+const MAC = process.platform === "darwin"
+// Matches the web toolbar (--toolbar-height), less its bottom border.
+const TITLE_BAR_HEIGHT = 55
 
 // Runs and app state live here (GIRAF_DATA); the bundle itself is read-only.
 // On Windows the backend runs in WSL; start.sh puts them in the same Windows
@@ -157,11 +160,19 @@ function createWindow(url) {
     minWidth: 960,
     minHeight: 600,
     title: "GIRAF",
-    // The web toolbar doubles as the title bar (see web toolbar.css).
+    // The web toolbar doubles as the title bar (see web toolbar.css): traffic
+    // lights on its left on macOS, the window controls overlay on its right
+    // elsewhere (hidden alone would leave Windows and Linux with no buttons).
     titleBarStyle: "hidden",
-    trafficLightPosition: { x: 21, y: 22 },
+    ...(MAC
+      ? { trafficLightPosition: { x: 21, y: 22 } }
+      : { titleBarOverlay: { height: TITLE_BAR_HEIGHT } }),
     show: false,
-    webPreferences: { contextIsolation: true, sandbox: true },
+    webPreferences: {
+      contextIsolation: true,
+      sandbox: true,
+      preload: path.join(__dirname, "preload.cjs"),
+    },
   })
   win.once("ready-to-show", () => win.show())
   // Links leaving the local server open in the user's browser.
@@ -184,6 +195,17 @@ function createWindow(url) {
   win.on("leave-full-screen", () => fullscreen(false))
   win.loadURL(url)
   return win
+}
+
+// The page reports its theme colors so the overlay controls match the toolbar.
+if (!MAC) {
+  ipcMain.on("title-bar-colors", (event, color, symbolColor) => {
+    BrowserWindow.fromWebContents(event.sender)?.setTitleBarOverlay({
+      color,
+      symbolColor,
+      height: TITLE_BAR_HEIGHT,
+    })
+  })
 }
 
 /**
