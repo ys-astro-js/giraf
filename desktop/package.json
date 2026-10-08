@@ -1,0 +1,82 @@
+{
+  "name": "giraf-desktop",
+  "productName": "GIRAF",
+  "version": "0.1.0",
+  "description": "Local IRAF workflow workbench",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "stage": "node scripts/stage.mjs",
+    "dist": "node scripts/stage.mjs && electron-builder --publish never",
+    "pack": "node scripts/stage.mjs && electron-builder --dir --publish never"
+  },
+  "build": {
+    "appId": "io.github.ys-astro-js.giraf",
+    "productName": "GIRAF",
+    "files": [
+      "main.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/python",
+        "to": "python"
+      },
+      {
+        "from": "build/backend",
+        "to": "backend"
+      }
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.education",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "identity": null
+    },
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "category": "Science",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "trustedDependencies": [
+    "electron"
+  ],
+  "author": "Jeongho Shin",
+  "homepage": "https://github.com/ys-astro-js/giraf"
+}

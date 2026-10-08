@@ -8,10 +8,11 @@ import json
 import re
 from pathlib import Path
 
+from .jobs import DATA
 from .task_discovery.packages import IDENT, file_hash, env_paths
 
 BUNDLED = Path(__file__).resolve().parent / 'schemas'
-USER = Path(__file__).resolve().parents[1] / 'user-schemas'
+USER = DATA / 'user-schemas'
 KINDS = ('image', 'text', 'mask', 'metacode', 'binary')
 TOP = {'version', 'task', 'title', 'description', 'inputs', 'outputs', 'parameters', 'groups', 'components'}
 PORT_FIELDS = {

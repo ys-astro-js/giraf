@@ -9,7 +9,7 @@ dependencies = [
     "pillow>=12.3.0",
     "pexpect>=4.9,<5",
     "pydantic>=2.12,<3",
-    "pyraf>=2.2.4",
+    "pyraf>=2.2.4; sys_platform != 'win32'",
     "giraf-pyraf-compat; sys_platform == 'darwin'",
     "starlette>=1.6.0",
     "uvicorn>=0.52.4",

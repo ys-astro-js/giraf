@@ -72,6 +72,12 @@
 .toolbar-status-transition > svg { color: var(--muted-foreground); }
 .toolbar-status-content[data-state="completed"] .toolbar-status-transition > svg { color: var(--primary); }
 .toolbar-status-content[data-state="failed"] .toolbar-status-transition > svg { color: var(--destructive); }
+/* Desktop app: the toolbar is the title bar. It drags the window and leaves
+   room for the traffic lights (placed by desktop/main.cjs), except in full screen. */
+:root[data-shell="desktop"] .workbench-toolbar { -webkit-app-region: drag; }
+:root[data-shell="desktop"]:not([data-fullscreen]) .workbench-toolbar { padding-left: var(--traffic-lights-inset, 90px); }
+:root[data-shell="desktop"] .workbench-toolbar :is(.toolbar-group, .toolbar-status, button, input, a) { -webkit-app-region: no-drag; }
+
 .toolbar-start, .toolbar-end { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .toolbar-end { justify-self: end; }
 @container (max-width: 600px) {

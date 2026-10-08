@@ -9,6 +9,10 @@ import "./index.css"
 import App from "./App.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
 
+// The desktop app (Electron) draws the window controls inside the toolbar.
+if (navigator.userAgent.includes("Electron"))
+  document.documentElement.dataset.shell = "desktop"
+
 const detachDiagnostics = installRuntimeDiagnostics(window)
 const queryClient = createQueryClient()
 if (import.meta.hot) import.meta.hot.dispose(detachDiagnostics)

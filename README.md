@@ -59,6 +59,18 @@ uv run main.py
 
 종료하려면 실행한 터미널에서 **Ctrl+C**를 누릅니다. 다음부터는 GIRAF 폴더에서 `uv run main.py`만 실행하면 됩니다.
 
+### macOS 앱으로 빌드
+
+Python 런타임과 의존성, 웹 화면을 담은 독립 실행형 앱(Electron)을 만듭니다. IRAF는 앱에 포함되지 않으며, 로그인 셸의 환경(`iraf`, `PATH`)을 그대로 씁니다.
+
+```sh
+cd desktop
+bun install
+bun run dist
+```
+
+`desktop/dist/`에 현재 OS용 설치 파일(macOS `.dmg`, Windows `.exe`, Linux `.AppImage`)이 생깁니다. `main`에 push할 때마다 GitHub Actions가 세 OS용을 모두 빌드해 [Releases](https://github.com/ys-astro-js/giraf/releases)에 올립니다. 앱의 실행 기록과 상태는 `~/Documents/GIRAF`에 저장됩니다(로그: `giraf.log`). 서명하지 않은 앱이므로 다른 Mac에서는 처음 열 때 우클릭 → 열기가 필요합니다.
+
 ## 사용 방법
 
 1. 왼쪽 작업 목록에서 원하는 IRAF 작업을 추가한 뒤 워크플로우 화면에서 선택합니다. 이 작업 각각을 **노드**라 합니다.

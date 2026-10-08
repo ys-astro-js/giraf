@@ -10,7 +10,9 @@ import uuid
 from .model import Settings, selected, validate
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNS = ROOT / 'runs'
+# Runs and app state. The desktop app keeps them outside its read-only bundle.
+DATA = Path(os.environ.get('GIRAF_DATA') or ROOT).expanduser()
+RUNS = DATA / 'runs'
 
 
 def atomic_json(path, value):

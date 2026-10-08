@@ -5,7 +5,7 @@ import json
 import math
 from pathlib import Path
 
-from ..jobs import ROOT
+from ..jobs import DATA
 from ..task_discovery import file_hash
 from ..task_capabilities import parameter_number
 from ..products import product_name
@@ -74,7 +74,7 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
     if backend not in ('cl', 'pyraf'): raise ValueError('CL 또는 PyRAF를 선택해 주세요.')
     if payload.get('filePolicy', {}).get('mode', 'copy') != 'copy':
         raise ValueError('범용 작업은 사본에서 실행합니다. 파일 처리를 사본으로 선택해 주세요.')
-    directory = str(Path(payload.get('workingDirectory') or ROOT).expanduser().resolve())
+    directory = str(Path(payload.get('workingDirectory') or DATA).expanduser().resolve())
     # Retired empty controls may now be managed output destinations.
     output_roles = {s['name'] for s in spec['outputs']}
     schema_warnings = []

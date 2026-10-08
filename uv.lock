@@ -92,7 +92,7 @@ dependencies = [
     { name = "pexpect" },
     { name = "pillow" },
     { name = "pydantic" },
-    { name = "pyraf" },
+    { name = "pyraf", marker = "sys_platform != 'win32'" },
     { name = "send2trash" },
     { name = "starlette" },
     { name = "uvicorn" },
@@ -105,7 +105,7 @@ requires-dist = [
     { name = "pexpect", specifier = ">=4.9,<5" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "pydantic", specifier = ">=2.12,<3" },
-    { name = "pyraf", specifier = ">=2.2.4" },
+    { name = "pyraf", marker = "sys_platform != 'win32'", specifier = ">=2.2.4" },
     { name = "send2trash", specifier = ">=1.8.3" },
     { name = "starlette", specifier = ">=1.6.0" },
     { name = "uvicorn", specifier = ">=0.52.4" },
@@ -3303,8 +3303,8 @@ name = "pyraf"
 version = "2.2.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "configobj" },
-    { name = "numpy" },
+    { name = "configobj", marker = "sys_platform != 'win32'" },
+    { name = "numpy", marker = "sys_platform != 'win32'" },
     { name = "pyobjc", marker = "sys_platform == 'darwin'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/27/09/2551fa4d219b4ae8109794206875473b508251d8cfd196afcd44c012f87d/pyraf-2.2.4.tar.gz", hash = "sha256:ab21aef833e677d985b6f9aae158d8ef137050c0e91bf0650936cfa9b1579751", size = 605361, upload-time = "2026-03-14T08:46:12.379Z" }

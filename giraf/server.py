@@ -27,7 +27,7 @@ from .workflow_preferences import document_action, initial_preferences
 from .image_rendering import image_info, image_png, image_pixel
 from .display import display_number, start_display, stop_display
 from .workflow_documents import WorkflowDocuments
-from .jobs import ROOT, RUNS, start, status, atomic_json
+from .jobs import ROOT, DATA, RUNS, start, status, atomic_json
 from .model import Settings, inspect_file, scan, validate
 from .combine import validate_combination
 from .task_catalog import catalog
@@ -35,10 +35,10 @@ from .task_jobs import validate_task, preview_task, start_task, authorize_file_p
 from .workflow_diagnostics import workflow_diagnostics
 from .request_schema import WorkflowRequest
 
-STATE = ROOT / '.workspace.json'
+STATE = DATA / '.workspace.json'
 registry: dict[str, dict] = {}
 lock = threading.Lock()
-workspace = json.loads(STATE.read_text()) if STATE.exists() else {'folder': str(ROOT), 'sets': [], 'overrides': {}}
+workspace = json.loads(STATE.read_text()) if STATE.exists() else {'folder': str(DATA), 'sets': [], 'overrides': {}}
 
 
 def save():
@@ -227,7 +227,7 @@ def workflow_cancel_job(id):
 
 
 from .workflow import WorkflowManager
-workflow_manager = WorkflowManager(ROOT / '.workflow', workflow_prepare,
+workflow_manager = WorkflowManager(DATA / '.workflow', workflow_prepare,
     lambda manifest: job_info(start_task(manifest, manifest.get('workingDirectory', workspace['folder']))),
     lambda id: job_info(RUNS / id), workflow_cancel_job)
 
@@ -384,7 +384,7 @@ async def browse_endpoint(request: Request):
     count = sum(p.is_file() and p.suffix.lower() in ('.fits', '.fit', '.fts') for p in path.iterdir())
     extensions=('.fits','.fit','.fts','.pl','.txt','.dat','.list','.log','.gki','.bin')
     entries=await run_in_threadpool(lambda:[register(p) for p in sorted(path.iterdir()) if p.is_file() and p.suffix.lower() in extensions])
-    roots=[('작업 폴더',ROOT),('홈',Path.home()),('다운로드',Path.home()/'Downloads'),('문서',Path.home()/'Documents')]
+    roots=[('작업 폴더',DATA),('홈',Path.home()),('다운로드',Path.home()/'Downloads'),('문서',Path.home()/'Documents')]
     return JSONResponse(dict(path=str(path), parent=str(path.parent),
         breadcrumbs=[dict(name=p.name or '/',path=str(p)) for p in [*reversed(path.parents),path]],
         shortcuts=[dict(name=n,path=str(p)) for n,p in roots if p.is_dir()],

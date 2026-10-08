@@ -47,3 +47,6 @@ coverage/
 .idea/
 .vscode/
 .agents/
+
+# Desktop app staging
+/desktop/build/
