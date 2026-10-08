@@ -3,6 +3,7 @@ import type { TaskMapViewProps } from "./types"
 import { WorkflowContext } from "./context"
 import { TaskNode } from "./TaskNode"
 import { GroupNode } from "./GroupNode"
+import { CompoundNode } from "./CompoundNode"
 import {
   WorkflowToolButton,
   WorkflowZoomControls,
@@ -54,13 +55,13 @@ import { WindowToolbar } from "@/features/dock/WindowToolbar"
 import { Blank } from "@/components/workbench-controls"
 import { Button } from "@/components/ui/button"
 import { SubflowEditor } from "@/components/subflow-editor"
-import { subflowColor } from "@/lib/subflow"
+import { setSubflowCollapsed, subflowColor } from "@/lib/subflow"
 import { WorkflowClickConnection } from "@/components/workflow-click-connection"
-import { type SubflowNode, type WorkflowNode } from "@/lib/workflow-flow"
+import { type WorkflowNode } from "@/lib/workflow-flow"
 
 const workflowEdgeTypes = { default: WorkflowEdge, smoothstep: WorkflowEdge }
 
-const nodeTypes = { task: TaskNode, subflow: GroupNode }
+const nodeTypes = { task: TaskNode, subflow: GroupNode, compound: CompoundNode }
 const fitOptions = { padding: 0.2, maxZoom: 1 }
 const ariaLabelConfig = {
   "controls.zoomIn.ariaLabel": "확대",
@@ -126,6 +127,14 @@ export function TaskMapView({
           ),
         }),
         open ? "출력 묶음 펼치기" : "출력 묶음 접기"
+      ),
+    [update]
+  )
+  const setGroupCollapsed = useCallback(
+    (id: string, collapsed: boolean) =>
+      update(
+        (m) => setSubflowCollapsed(m, id, collapsed),
+        collapsed ? "그룹 접기" : "그룹 펼치기"
       ),
     [update]
   )
@@ -263,6 +272,7 @@ export function TaskMapView({
               open,
               setCollapsed,
               setPortOpen,
+              setGroupCollapsed,
               onInput: selectingGroup ? undefined : onInput,
               selectingGroup,
               dragPreview,
@@ -397,14 +407,14 @@ export function TaskMapView({
               ariaLabelConfig={ariaLabelConfig}
             >
               <Background gap={24} size={1} />
-              <MiniMap
+              <MiniMap<WorkflowNode>
                 style={{ width: 120, height: 80 }}
                 pannable
                 zoomable
                 ariaLabel="워크플로우 미니맵"
                 nodeColor={(node) =>
-                  node.type === "subflow"
-                    ? subflowColor((node as SubflowNode).data.group.color)
+                  node.type === "subflow" || node.type === "compound"
+                    ? subflowColor(node.data.group.color)
                     : "var(--foreground)"
                 }
                 nodeStrokeColor="var(--border)"

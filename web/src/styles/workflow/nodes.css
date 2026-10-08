@@ -51,6 +51,16 @@
   --primary-hover: color-mix(in oklch, var(--group-color), var(--foreground) 12%);
   --ring: var(--group-color);
 }
+/* A collapsed group keeps the task node's card in its group color. */
+.workflow-node.compound-node { background: color-mix(in srgb, var(--group-color) 7%, var(--background)); }
+/* State borders (running, diagnostics) still win. */
+.workflow-node.compound-node:not([data-diagnostic], [data-running="true"]) {
+  border-color: color-mix(in srgb, var(--group-color) 55%, var(--border));
+}
+.workflow-node.compound-node:not([data-diagnostic], [data-running="true"]):hover { border-color: var(--group-color); }
+/* Status sits beside the name; the count keeps the heading's auto margin. */
+.subflow-heading > .node-state { margin:0; }
+.compound-node .node-section { border-top-color: color-mix(in srgb, var(--group-color) 30%, var(--border)); }
 .subflow-resize { background:transparent !important; border:none !important; width:20px !important; height:20px !important; }
 .subflow-resize svg { width:14px; height:14px; color:var(--muted-foreground); transform:rotate(90deg); }
 .subflow-editor { position:absolute; top:56px; right:12px; z-index:20; width:min(340px, calc(100% - 24px)); max-height:calc(100% - 68px); overflow:auto; padding:16px; border:1px solid var(--border); border-radius:12px; background:var(--background); display:flex; flex-direction:column; gap:12px; }

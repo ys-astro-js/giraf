@@ -19,6 +19,7 @@ import {
 import type { Catalog, Frame, Spec } from "./workbench"
 import { subflowColor } from "./subflow"
 import { isSourceNode } from "./file-nodes"
+import { compoundEdges, compoundPorts, memberConnection } from "./compound"
 
 export type TaskFlowNode = Node<
   {
@@ -33,7 +34,11 @@ export type SubflowNode = Node<
   { group: Subflow; count: number; minWidth: number; minHeight: number },
   "subflow"
 >
-export type WorkflowNode = TaskFlowNode | SubflowNode
+export type CompoundNode = Node<
+  { group: Subflow; members: string[] } & ReturnType<typeof compoundPorts>,
+  "compound"
+>
+export type WorkflowNode = TaskFlowNode | SubflowNode | CompoundNode
 const matches = (task: Instance, search: string) =>
   `${task.task} ${task.label}`.toLowerCase().includes(search.toLowerCase())
 
@@ -75,7 +80,7 @@ export function flowNodes(
           }
         : absolute,
       parentId: parent?.id,
-
+      hidden: !!parent?.collapsed,
       initialWidth: geometry.width,
       initialHeight: geometry.height,
       // The node sizes to its markup: collapsed, expanded or opened by a connection.
@@ -102,8 +107,29 @@ export function flowNodes(
       ariaLabel: `${task.label} 작업`,
     }
   })
-  const groups: SubflowNode[] = (map.subflows ?? []).map((group) => {
+  const edges = map.subflows?.some((g) => g.collapsed) ? taskEdges(map, catalog) : []
+  const groups: (SubflowNode | CompoundNode)[] = (map.subflows ?? []).map((group) => {
     const children = tasks.filter((t) => t.parentId === group.id)
+    if (group.collapsed) {
+      const ports = compoundPorts(map, group, edges)
+      return {
+        id: group.id,
+        type: "compound",
+        zIndex: 2,
+        data: { group, members: children.map((t) => t.id), ...ports },
+        position: group.position,
+        initialWidth: ports.width,
+        initialHeight: ports.height,
+        style: { opacity: children.some((t) => matches(t.data.task, search)) ? 1 : 0.3 },
+        handles: [
+          ...ports.inputs.map((row) => ({ id: row.handleId, type: "target" as const, position: Position.Left, x: 0, y: row.y })),
+          ...ports.outputs.map((row) => ({ id: row.handleId, type: "source" as const, position: Position.Right, x: ports.width, y: row.y })),
+        ],
+        dragHandle: ".subflow-heading",
+        deletable: false,
+        ariaLabel: `${group.name} 그룹`,
+      }
+    }
     const minWidth = Math.max(
       360,
       ...children.map((t) => t.position.x + (t.initialWidth ?? 248) + 24)
@@ -142,6 +168,10 @@ export function outputHandle(source: Source, spec: Spec | undefined, task?: Inst
   return source.outputRole && (spec?.outputs?.length || 0)>1 ? "output:" + source.outputRole : "output"
 }
 export function flowEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
+  return compoundEdges(map, taskEdges(map, catalog, search))
+}
+/** Edges between task nodes, ignoring collapsed groups. */
+export function taskEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
   return map.connections.flatMap((connection) => {
     const sourceId =
       connection.source.kind !== "files" ? connection.source.taskId : undefined
@@ -203,9 +233,10 @@ export function connectFlow(
   map: TaskMap,
   catalog: Catalog,
   rows: Frame[],
-  connection: FlowConnection,
+  drawn: FlowConnection,
   replacingId?: string
 ): TaskMap {
+  const connection = memberConnection(map, drawn)
   const sourceTask=map.tasks.find(t=>t.id===connection.source)
   // `<bundle>~<value>` picks one member of a partitioned port.
   const member=parseMemberHandle(connection.sourceHandle)

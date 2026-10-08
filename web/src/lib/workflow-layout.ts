@@ -1,6 +1,7 @@
 import type { ElkNode, LayoutOptions } from "elkjs/lib/elk-api"
 import { nodeGeometry } from "./node-interaction"
-import { flowEdges } from "./workflow-flow"
+import { flowEdges, taskEdges } from "./workflow-flow"
+import { compoundPorts } from "./compound"
 import type { TaskMap } from "@/lib/task-map"
 import type { Catalog, Frame } from "./workbench"
 
@@ -30,7 +31,8 @@ export async function autoLayoutMap(
 ): Promise<TaskMap> {
   if (!map.tasks.length && !map.subflows?.length) return map
   const { default: ELK } = await import("elkjs/lib/elk.bundled.js")
-  const groups = new Map<string, ElkNode>((map.subflows ?? []).map(group => [group.id, {
+  const collapsed = new Map((map.subflows ?? []).filter(group => group.collapsed).map(group => [group.id, group]))
+  const groups = new Map<string, ElkNode>((map.subflows ?? []).filter(group => !group.collapsed).map(group => [group.id, {
     id: groupId(group.id),
     layoutOptions: options,
     children: [],
@@ -39,7 +41,29 @@ export async function autoLayoutMap(
   }]))
   const nodes = new Map<string, ElkNode>()
   const children: ElkNode[] = [...groups.values()]
+  // A collapsed group is one node with the compound's ports; its members keep their places.
+  const plain = collapsed.size ? taskEdges(map, catalog) : []
+  for (const group of collapsed.values()) {
+    const ports = compoundPorts(map, group, plain)
+    const node: ElkNode = {
+      id: groupId(group.id), width: ports.width, height: ports.height,
+      layoutOptions: { "elk.portConstraints": "FIXED_POS" },
+      ports: [
+        ...ports.inputs.map(row => ({
+          id: portId(group.id, "in", row.handleId), x: 0, y: row.y,
+          width: 0, height: 0, layoutOptions: { "elk.port.side": "WEST" },
+        })),
+        ...ports.outputs.map(row => ({
+          id: portId(group.id, "out", row.handleId), x: ports.width, y: row.y,
+          width: 0, height: 0, layoutOptions: { "elk.port.side": "EAST" },
+        })),
+      ],
+    }
+    nodes.set(group.id, node)
+    children.push(node)
+  }
   for (const task of map.tasks) {
+    if (task.subflowId && collapsed.has(task.subflowId)) continue
     const geometry = nodeGeometry(map, task, catalog, rows)
     const node: ElkNode = {
       id: taskId(task.id), width: geometry.width, height: geometry.height,
@@ -74,7 +98,7 @@ export async function autoLayoutMap(
     return routedPort.id
   }
   const elk = new ELK()
-  const edges = flowEdges(map, catalog)
+  const edges = flowEdges(map, catalog).filter(edge => !edge.hidden)
   const graph = await elk.layout({
     id: "root", layoutOptions: options, children,
     edges: edges.map(edge => ({
@@ -92,7 +116,18 @@ export async function autoLayoutMap(
     }
   }
   collect(graph)
-  const edgeRoutes: NonNullable<TaskMap["edgeRoutes"]> = {}
+  const shift = (id: string) => {
+    const group = collapsed.get(id), node = placed.get(groupId(id))
+    return group && node ? { x: node.x! - group.position.x, y: node.y! - group.position.y } : { x: 0, y: 0 }
+  }
+  // Routes inside a collapsed group move with it.
+  const edgeRoutes: NonNullable<TaskMap["edgeRoutes"]> = Object.fromEntries(
+    Object.entries(map.edgeRoutes ?? {}).flatMap(([id, route]) => {
+      const group = map.tasks.find(task => task.id === route.target)?.subflowId
+      if (!group || !collapsed.has(group) || map.tasks.find(task => task.id === route.source)?.subflowId !== group) return []
+      const d = shift(group)
+      return [[id, { ...route, points: route.points.map(p => ({ x: p.x + d.x, y: p.y + d.y })) }]]
+    }))
   const originals = new Map(edges.map(edge => [JSON.stringify(["edge", edge.id]), edge]))
   function collectRoutes(parent: ElkNode, x = 0, y = 0) {
     for (const edge of parent.edges ?? []) {
@@ -116,12 +151,18 @@ export async function autoLayoutMap(
     ...map,
     edgeRoutes,
     tasks: map.tasks.map(task => {
+      if (task.subflowId && collapsed.has(task.subflowId)) {
+        const d = shift(task.subflowId), position = task.position ?? { x: 0, y: 0 }
+        return { ...task, position: { x: position.x + d.x, y: position.y + d.y } }
+      }
       const node = placed.get(taskId(task.id))!
       return { ...task, position: { x: node.x!, y: node.y! } }
     }),
     ...(map.subflows ? { subflows: map.subflows.map(group => {
       const node = placed.get(groupId(group.id))!
-      return { ...group, position: { x: node.x!, y: node.y! }, width: node.width!, height: node.height! }
+      return group.collapsed
+        ? { ...group, position: { x: node.x!, y: node.y! } }
+        : { ...group, position: { x: node.x!, y: node.y! }, width: node.width!, height: node.height! }
     }) } : {}),
   }
 }

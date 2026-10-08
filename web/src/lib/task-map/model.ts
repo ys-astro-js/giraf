@@ -78,6 +78,8 @@ export type Subflow = {
   position: { x: number; y: number }
   width: number
   height: number
+  /** Drawn as one compound node whose ports are the boundary connections. */
+  collapsed?: boolean
 }
 
 export type TaskMap = {

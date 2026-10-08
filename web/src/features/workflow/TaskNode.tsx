@@ -12,19 +12,11 @@ import {
 } from "@xyflow/react"
 import {
   ArrowRight,
-  Ban,
-  Check,
   ChevronDown,
   ChevronRight,
   ChevronsDownUp,
-  CircleDashed,
-  CircleHelp,
-  CircleX,
-  Clock3,
   Copy,
   File,
-  LoaderCircle,
-  TriangleAlert,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -47,6 +39,7 @@ import type { Source } from "@/lib/task-map"
 
 import { WorkflowContext } from "./context"
 import { Handle } from "./Handle"
+import { StatusIcon } from "./StatusIcon"
 
 const count = (source: Source) =>
   source.kind === "result" ? `${source.ids.length}개` : ""
@@ -58,19 +51,6 @@ function ValueChip({ value }: { value: string }) {
       {valueLabel(value)}
     </span>
   )
-}
-
-function StatusIcon({ severity, state }: { severity?: string; state?: string }) {
-  if (severity === "error") return <CircleX aria-hidden="true" />
-  if (severity) return <TriangleAlert aria-hidden="true" />
-  if (state === "running" || state === "queued")
-    return <LoaderCircle className="node-running-icon" aria-hidden="true" />
-  if (state === "completed") return <Check aria-hidden="true" />
-  if (state === "waiting") return <Clock3 aria-hidden="true" />
-  if (state === "failed") return <CircleX aria-hidden="true" />
-  if (state === "cancelled") return <Ban aria-hidden="true" />
-  if (state) return <CircleHelp aria-hidden="true" />
-  return <CircleDashed aria-hidden="true" />
 }
 
 const activate = (e: React.KeyboardEvent<HTMLElement>) => {

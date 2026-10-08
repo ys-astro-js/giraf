@@ -6,7 +6,7 @@ import {
   type Node,
   type Edge,
 } from "@xyflow/react"
-import { flowEdges } from "./workflow-flow"
+import { taskEdges } from "./workflow-flow"
 import { subflowColor } from "./subflow"
 import { customPortHandle } from "./output-ports"
 import type { TaskMap } from "@/lib/task-map"
@@ -66,7 +66,7 @@ export function dependencyGraph(
       },
     }
   })
-  const edges: Edge[] = flowEdges(map, catalog).map((edge) => {
+  const edges: Edge[] = taskEdges(map, catalog).map((edge) => {
     const source = nodes.find((node) => node.id === edge.source)!
     const custom = source.data.outputs.some(
       (port) => port.id === edge.sourceHandle

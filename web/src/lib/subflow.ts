@@ -142,6 +142,15 @@ export function updateSubflow(
     ),
   }
 }
+export function setSubflowCollapsed(map: TaskMap, id: string, collapsed: boolean): TaskMap {
+  const hidden = collapsed && map.tasks.some((t) => t.id === map.view.selected && t.subflowId === id)
+  return {
+    ...map,
+    subflows: map.subflows?.map((g) => (g.id === id ? { ...g, collapsed: collapsed || undefined } : g)),
+    // A hidden member cannot stay selected.
+    view: hidden ? { ...map.view, selected: "" } : map.view,
+  }
+}
 export function subflowDropTarget(
   groups: Subflow[],
   rect: { x: number; y: number; width: number; height: number }

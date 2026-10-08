@@ -1,6 +1,6 @@
 import { memo, useContext, type CSSProperties } from "react"
 import { NodeResizeControl, type NodeProps } from "@xyflow/react"
-import { Play, GripVertical, Pencil, Maximize2, Terminal } from "lucide-react"
+import { Play, GripVertical, Pencil, Maximize2, Terminal, ChevronsDownUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { subflowColor } from "@/lib/subflow"
 import { type SubflowNode } from "@/lib/workflow-flow"
@@ -16,6 +16,7 @@ export const GroupNode = memo(function GroupNode({
     dragPreview,
     beginEdit,
     endEdit,
+    setGroupCollapsed,
   } = useContext(WorkflowContext)!
   return (
     <section
@@ -48,6 +49,16 @@ export const GroupNode = memo(function GroupNode({
           <Terminal aria-hidden="true" />
           <span>{data.count}</span>
         </span>
+        <Button
+          className="nodrag nopan"
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`${data.group.name} 접기`}
+          title="접기"
+          onClick={() => setGroupCollapsed(data.group.id, true)}
+        >
+          <ChevronsDownUp />
+        </Button>
         <Button
           className="nodrag nopan subflow-run-button"
           variant="default"

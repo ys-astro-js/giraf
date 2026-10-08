@@ -114,6 +114,7 @@ class Subflow(DocumentModel):
     width: float
     height: float
     color: Literal['teal', 'blue', 'violet', 'amber', 'rose', 'slate'] | None = None
+    collapsed: bool = False
 
 
 class MapRun(DocumentModel):
