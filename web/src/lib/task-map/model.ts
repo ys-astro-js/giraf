@@ -16,6 +16,8 @@ export type Source = {
   files?: string[]
   group?: CalibrationGroup
   port?: string
+  /** One member of a partitioned port: the files whose header keyword has this value. */
+  partition?: { keyword: string; value: string }
 } & (
   | { kind: "files"; ids: string[]; label: string }
   | {

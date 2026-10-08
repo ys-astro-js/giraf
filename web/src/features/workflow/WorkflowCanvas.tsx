@@ -114,6 +114,21 @@ export function TaskMapView({
       ),
     [update]
   )
+  const setPortOpen = useCallback(
+    (nodeId: string, portId: string, open: boolean) =>
+      update(
+        (m) => ({
+          ...m,
+          tasks: m.tasks.map((t) =>
+            t.id === nodeId
+              ? { ...t, outputPorts: t.outputPorts?.map((p) => (p.id === portId ? { ...p, open: open || undefined } : p)) }
+              : t
+          ),
+        }),
+        open ? "출력 묶음 펼치기" : "출력 묶음 접기"
+      ),
+    [update]
+  )
   const displayOpen = useWindowShown("display")
   const hasDisplay = !!useQuery(displayQueryOptions).data?.frames.length
   const diagnosticEntries = useSyncExternalStore(
@@ -247,6 +262,7 @@ export function TaskMapView({
               duplicate,
               open,
               setCollapsed,
+              setPortOpen,
               onInput: selectingGroup ? undefined : onInput,
               selectingGroup,
               dragPreview,

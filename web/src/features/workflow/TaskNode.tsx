@@ -2,7 +2,7 @@ import { customOutput, customPortHandle } from "@/lib/output-ports"
 import { groupLabel } from "@/lib/calibration-ports"
 import { ccdTasks, calibrationLabels } from "@/lib/calibration"
 import { acceptsSource, taskDisplayName } from "@/lib/workbench"
-import { memo, useContext, useEffect, useRef, useState } from "react"
+import { Fragment, memo, useContext, useEffect, useRef, useState } from "react"
 import {
   Position,
   useConnection,
@@ -14,6 +14,8 @@ import {
   ArrowRight,
   Ban,
   Check,
+  ChevronDown,
+  ChevronRight,
   ChevronsDownUp,
   CircleDashed,
   CircleHelp,
@@ -48,6 +50,15 @@ import { Handle } from "./Handle"
 
 const count = (source: Source) =>
   source.kind === "result" ? `${source.ids.length}개` : ""
+const valueLabel = (value: string) => value || "값 없음"
+/** Filter letters carry their color; any other header value is neutral. */
+function ValueChip({ value }: { value: string }) {
+  return (
+    <span className="partition-chip" data-filter={value || undefined}>
+      {valueLabel(value)}
+    </span>
+  )
+}
 
 function StatusIcon({ severity, state }: { severity?: string; state?: string }) {
   if (severity === "error") return <CircleX aria-hidden="true" />
@@ -86,6 +97,7 @@ export const TaskNode = memo(function TaskNode({
     onInput,
     open,
     setCollapsed,
+    setPortOpen,
     currentIssues,
   } = useContext(WorkflowContext)!
   const { task, geometry } = data
@@ -167,6 +179,7 @@ export const TaskNode = memo(function TaskNode({
     String(geometry.preview),
     ...geometry.roles.map((s) => s.name),
     ...geometry.outputs.map((s) => s.handleId + ":" + s.name),
+    ...geometry.members.map((s) => s.handleId + ":" + s.y),
   ].join("|")
   useEffect(() => {
     updateNodeInternals(id)
@@ -253,6 +266,108 @@ export const TaskNode = memo(function TaskNode({
     </Handle>
   )
 
+  const portFor = (handleId: string) =>
+    task.outputPorts?.find((p) => customPortHandle(p.id) === handleId)
+  const memberHandleElement = (
+    member: (typeof geometry.members)[number],
+    stacked = false
+  ) => {
+    const port = portFor(member.base)
+    const result = port ? customOutput(map, id, port, undefined, member.value) : output
+    return (
+      <Handle
+        key={member.handleId}
+        type="source"
+        position={Position.Right}
+        id={member.handleId}
+        role="button"
+        tabIndex={isConnectable && !stacked ? 0 : -1}
+        isConnectable={isConnectable}
+        className="workflow-output-handle workflow-member-handle"
+        data-filter={member.value || undefined}
+        data-stacked={stacked || undefined}
+        data-connected={isOutputConnected(member.handleId)}
+        aria-label={`${task.label} ${valueLabel(member.value)} 출력 연결`}
+        title={`${valueLabel(member.value)} ${result.kind === "result" ? result.ids.length + "개" : "출력 대기"}`}
+        onKeyDown={activate}
+      >
+        {!stacked && <span>{valueLabel(member.value)}</span>}
+      </Handle>
+    )
+  }
+  const outputRow = (
+    handleId: string,
+    name: string,
+    result: Source,
+    fallback: string
+  ) => {
+    const bundle = geometry.bundles[handleId]
+    const port = portFor(handleId)
+    if (!bundle || !port)
+      return (
+        <div className="node-output-row" key={handleId}>
+          <span className="node-output-name" data-unnamed={!name}>
+            {name || fallback}
+          </span>
+          <span className="node-output-count">{count(result)}</span>
+          {outputHandleElement(handleId, name, result)}
+        </div>
+      )
+    const label = name || fallback
+    const members = geometry.members.filter((m) => m.base === handleId)
+    return (
+      <Fragment key={handleId}>
+        <div className="node-output-row" data-bundle="true">
+          <button
+            className="node-bundle-toggle nodrag nopan"
+            aria-label={`${label} ${bundle.open ? "접기" : "펼치기"}`}
+            aria-expanded={bundle.open}
+            onClick={(e) => {
+              e.stopPropagation()
+              setPortOpen(id, port.id, !bundle.open)
+            }}
+          >
+            {bundle.open ? <ChevronDown /> : <ChevronRight />}
+          </button>
+          <span className="node-output-name" data-unnamed={!name}>
+            {label}
+          </span>
+          <span className="node-output-keyword">{bundle.keyword}</span>
+          <span className="node-output-chips">
+            {bundle.values.map((value) => (
+              <ValueChip key={value} value={value} />
+            ))}
+          </span>
+          <Handle
+            type="source"
+            position={Position.Right}
+            id={handleId}
+            role="button"
+            tabIndex={isConnectable ? 0 : -1}
+            isConnectable={isConnectable}
+            className="workflow-output-handle workflow-bundle-handle"
+            data-connected={isOutputConnected(handleId)}
+            aria-label={`${task.label} ${label} 묶음 출력 연결`}
+            title={`${label} ${bundle.keyword} ${bundle.values.length}개 묶음`}
+            onKeyDown={activate}
+          >
+            <span>{bundle.values.length}</span>
+          </Handle>
+          {!bundle.open && members.map((m) => memberHandleElement(m, true))}
+        </div>
+        {bundle.open &&
+          members.map((m) => (
+            <div className="node-member-row" key={m.handleId}>
+              <span className="node-output-count">
+                {count(customOutput(map, id, port, undefined, m.value))}
+              </span>
+              {memberHandleElement(m)}
+            </div>
+          ))}
+      </Fragment>
+    )
+  }
+
   const preview = geometry.preview ? nodePreviewIds(map, id) : []
   const frames = map.runs.flatMap((r) => r.products)
 
@@ -303,6 +418,7 @@ export const TaskNode = memo(function TaskNode({
               geometry.primary || i > 0
             )
           )}
+          {geometry.members.map((m) => memberHandleElement(m, true))}
         </>
       ) : (
         <>
@@ -357,6 +473,12 @@ export const TaskNode = memo(function TaskNode({
                     c.target === id &&
                     c.role === slot.role &&
                     (c.source.kind !== "files" || c.source.ids.length > 0)
+                )
+                // A link from one member of a bundle names its value.
+                const members = links.flatMap((c) =>
+                  c.source.kind !== "files" && c.source.partition
+                    ? [c.source.partition.value]
+                    : []
                 )
                 const summary =
                   (task.draft.textInputs?.[slot.name]?.trim()
@@ -440,8 +562,14 @@ export const TaskNode = memo(function TaskNode({
                             aria-hidden="true"
                           />
                         )}
-                        <span className="node-input-source" title={summary}>
+                        <span
+                          className="node-input-source"
+                          title={[summary, ...members.map(valueLabel)].join(" ")}
+                        >
                           {pending ? `${summary} 출력 대기` : summary}
+                          {members.map((value, i) => (
+                            <ValueChip key={i} value={value} />
+                          ))}
                         </span>
                         {!enabled && (
                           <span className="node-input-flag">비활성</span>
@@ -461,24 +589,11 @@ export const TaskNode = memo(function TaskNode({
           </div>
           {(geometry.primary || outputSlots.length > 0) && (
             <div className="node-section node-outputs">
-              {geometry.primary && (
-                <div className="node-output-row">
-                  <span className="node-output-name" data-unnamed={!primaryName}>
-                    {primaryName || "결과"}
-                  </span>
-                  <span className="node-output-count">{count(output)}</span>
-                  {outputHandleElement("output", primaryName, output)}
-                </div>
+              {geometry.primary &&
+                outputRow("output", primaryName, output, "결과")}
+              {outputSlots.map(({ slot, result, name }) =>
+                outputRow(slot.handleId, name, result, "이름 없는 포트")
               )}
-              {outputSlots.map(({ slot, result, name }) => (
-                <div className="node-output-row" key={slot.handleId}>
-                  <span className="node-output-name" data-unnamed={!name}>
-                    {name || "이름 없는 포트"}
-                  </span>
-                  <span className="node-output-count">{count(result)}</span>
-                  {outputHandleElement(slot.handleId, name, result)}
-                </div>
-              ))}
             </div>
           )}
           {preview.length > 0 && (

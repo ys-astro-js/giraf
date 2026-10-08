@@ -133,6 +133,7 @@ export function InspectorOutputs({
           task={task}
           map={map}
           spec={spec}
+          rows={rows}
           edit={edit}
         />
       )}

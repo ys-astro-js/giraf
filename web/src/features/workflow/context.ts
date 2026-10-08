@@ -22,5 +22,6 @@ type NodeContext = Pick<
   groupRunDisabled?: boolean
   choose: (id: string) => void
   setCollapsed: (ids: string[], collapsed: boolean) => void
+  setPortOpen: (nodeId: string, portId: string, open: boolean) => void
 }
 export const WorkflowContext = createContext<NodeContext | null>(null)

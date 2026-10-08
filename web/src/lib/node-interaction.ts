@@ -1,4 +1,4 @@
-import {customPortHandle,customOutput} from "./output-ports"
+import {customPortHandle,customOutput,memberHandle,portMembers} from "./output-ports"
 import {inputPorts,outputPorts,primaryOutputRole,matchesGroup,portHandle,type CalibrationGroup} from "./calibration-ports"
 import {
   connectionRoles,
@@ -131,7 +131,7 @@ export const NODE_WIDTH = 264
 export const COLLAPSED_WIDTH = 184
 export const COLLAPSED_HEIGHT = 40
 /** Vertical metrics shared by the node markup, handles, ELK ports and fitting. */
-export const NODE_METRICS = { header: 52, row: 32, sectionStart: 5, sectionEnd: 4, preview: 77 }
+export const NODE_METRICS = { header: 52, row: 32, member: 28, sectionStart: 5, sectionEnd: 4, preview: 77 }
 /** The latest completed run's images, newest first; the node previews a few. */
 export function nodePreviewIds(map: TaskMap, id: string) {
   const run = map.runs.filter((r) => r.instanceId === id).at(-1)
@@ -151,7 +151,16 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
   const outputs = [...outputPorts(map,t,catalog,rows).filter(slot => !slot.group).map(slot=>({...slot,name:t.outputPorts?.find(p=>customPortHandle(p.id)===slot.handleId)?.name ?? slot.name})), ...(t.outputPorts || []).filter(p=>!p.id.startsWith('$')).map(port=>({name:port.name,kind:"",default:"",handleId:customPortHandle(port.id),outputRole:port.outputRole,group:undefined,customId:port.id}))]
   // A save-files node (node schema) ends the flow: it has no primary output.
   const primary = spec?.run !== "save-files"
-  const base = { primaryOutputRole: primaryOutputRole(spec, t), roles, primary, collapsed }
+  // A partitioned port is a bundle; its members are `~value` handles listed under it when open.
+  const bundle = (handleId: string) => {
+    const port = t.outputPorts?.find(p => customPortHandle(p.id) === handleId)
+    return port?.partition ? { keyword: port.partition.keyword, values: portMembers(map, t, port, rows), open: !!port.open } : undefined
+  }
+  const bundles = Object.fromEntries([...(primary ? ["output"] : []), ...outputs.map(slot => slot.handleId)]
+    .flatMap(handleId => { const b = bundle(handleId); return b ? [[handleId, b]] : [] })) as Record<string, { keyword: string; values: string[]; open: boolean }>
+  const base = { primaryOutputRole: primaryOutputRole(spec, t), roles, primary, collapsed, bundles }
+  const members = (handleId: string, y: (index: number) => number) =>
+    (bundles[handleId]?.values ?? []).map((value, index) => ({ handleId: memberHandle(handleId, value), base: handleId, value, y: y(index) }))
   if (collapsed) {
     const middle = COLLAPSED_HEIGHT / 2
     return {
@@ -163,6 +172,7 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
       occupiedHeight: COLLAPSED_HEIGHT,
       outputY: middle,
       outputs: outputs.map((slot) => ({ ...slot, x: COLLAPSED_WIDTH, y: middle })),
+      members: Object.keys(bundles).flatMap(handleId => members(handleId, () => middle)).map(m => ({ ...m, x: COLLAPSED_WIDTH })),
       // Every role shares the capsule's single visible port.
       inputY: (role: string) => {
         void role
@@ -174,13 +184,20 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
   // The 1px node border precedes the header.
   const inputsTop = 1 + m.header + m.sectionStart
   const inputsEnd = inputsTop + m.row * Math.max(roles.length, 1) + m.sectionEnd
-  const outputRows = (primary ? 1 : 0) + outputs.length
+  const outputRows = [...(primary ? ["output"] : []), ...outputs.map(slot => slot.handleId)]
   const outputsTop = inputsEnd + m.sectionStart
-  const outputsEnd = outputRows ? outputsTop + m.row * outputRows + m.sectionEnd : inputsEnd
+  // Each row's top; an open bundle's member rows follow it.
+  const tops: Record<string, number> = {}
+  let bottom = outputsTop
+  for (const handleId of outputRows) {
+    tops[handleId] = bottom
+    bottom += m.row + (bundles[handleId]?.open ? bundles[handleId].values.length * m.member : 0)
+  }
+  const outputsEnd = outputRows.length ? bottom + m.sectionEnd : inputsEnd
   const preview = nodePreviewIds(map, t.id).length > 0
   const height = outputsEnd + (preview ? m.preview : 0) + 1
   const outputY = outputsTop + m.row / 2
-  const first = primary ? 1 : 0
+  const rowY = (handleId: string) => tops[handleId] + m.row / 2
   return {
     ...base,
     preview,
@@ -189,7 +206,10 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
     height,
     occupiedHeight: height,
     outputY,
-    outputs: outputs.map((slot, index) => ({ ...slot, x: NODE_WIDTH, y: outputY + (index + first) * m.row })),
+    outputs: outputs.map((slot) => ({ ...slot, x: NODE_WIDTH, y: rowY(slot.handleId) })),
+    // A closed bundle stacks its members on the bundle handle so their edges stay attached.
+    members: Object.keys(bundles).flatMap(handleId => members(handleId, index => bundles[handleId].open
+      ? tops[handleId] + m.row + m.member * index + m.member / 2 : rowY(handleId))).map(member => ({ ...member, x: NODE_WIDTH })),
     inputY: (role: string) => inputsTop + m.row / 2 + m.row * Math.max(0, roles.findIndex((slot) => slot.name === role)),
   }
 }

@@ -1,4 +1,4 @@
-import {customOutput, customPortHandle} from "./output-ports"
+import {customOutput, customPortHandle, memberHandle, parseMemberHandle} from "./output-ports"
 import {parsePort,sourceForGroup,targetGroupFor,matchesGroup,groupEqual,inputPorts,primaryOutputRole} from "./calibration-ports"
 import {
   applyNodeChanges,
@@ -88,7 +88,7 @@ export function flowNodes(
           x: geometry.outputX,
           y: geometry.outputY,
         },
-        ...geometry.outputs.filter(slot=>slot.handleId!=="output").map((slot)=>({id:slot.handleId,type:"source" as const,position:Position.Right,x:slot.x,y:slot.y})),
+        ...[...geometry.outputs.filter(slot=>slot.handleId!=="output"),...geometry.members].map((slot)=>({id:slot.handleId,type:"source" as const,position:Position.Right,x:slot.x,y:slot.y})),
         ...geometry.roles.map((role) => ({
           id: role.name,
           type: "target" as const,
@@ -131,7 +131,9 @@ export function flowNodes(
   })
   return [...groups, ...tasks]
 }
-export function outputHandle(source: Source, spec: Spec | undefined, task?: Instance) {
+export function outputHandle(source: Source, spec: Spec | undefined, task?: Instance): string {
+  if (source.kind !== "files" && source.partition)
+    return memberHandle(outputHandle({ ...source, partition: undefined }, spec, task), source.partition.value)
   if (source.kind === "files") return "output"
   const primary = primaryOutputRole(spec, task)
   if (primary && source.outputRole === primary && (!source.port || source.port === "output:" + primary)) return "output"
@@ -205,8 +207,11 @@ export function connectFlow(
   replacingId?: string
 ): TaskMap {
   const sourceTask=map.tasks.find(t=>t.id===connection.source)
-  const customPort=sourceTask?.outputPorts?.find(p=>customPortHandle(p.id)===connection.sourceHandle)
-  const sourcePort=parsePort(connection.sourceHandle,"output")
+  // `<bundle>~<value>` picks one member of a partitioned port.
+  const member=parseMemberHandle(connection.sourceHandle)
+  const memberPort=member&&sourceTask?.outputPorts?.find(p=>p.partition&&customPortHandle(p.id)===member.base)
+  const customPort=memberPort||sourceTask?.outputPorts?.find(p=>customPortHandle(p.id)===connection.sourceHandle)
+  const sourcePort=memberPort?undefined:parsePort(connection.sourceHandle,"output")
   if (!(customPort || sourcePort || connection.sourceHandle === "output" || connection.sourceHandle?.startsWith("output:")) || !connection.targetHandle)
     throw Error("출력과 입력 포트를 선택해 주세요.")
   const base = replacingId
@@ -225,7 +230,7 @@ export function connectFlow(
     outputHandle(prior.source,catalog.tasks.find(s=>s.name===sourceTask?.task),sourceTask) === connection.sourceHandle &&
     prior.source.outputRole === outputRole && JSON.stringify(prior.source.group) === JSON.stringify(sourcePort?.group)
       ? prior.source
-      : customPort ? customOutput(base,connection.source,customPort) : nodeOutput(base, connection.source, outputRole,sourcePort?.group)
+      : customPort ? customOutput(base,connection.source,customPort,undefined,memberPort?member!.value:undefined) : nodeOutput(base, connection.source, outputRole,sourcePort?.group)
   return connectInputPort(base,catalog,rows,connection.target,connection.targetHandle,source,true)
 }
 /** Replace just one partition, retaining the other inputs and their provenance. */

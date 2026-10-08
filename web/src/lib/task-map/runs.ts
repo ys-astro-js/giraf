@@ -1,4 +1,4 @@
-import { matchesFiles } from "@/lib/output-ports"
+import { matchesFiles, partitionValue } from "@/lib/output-ports"
 import { matchesGroup } from "@/lib/calibration-ports"
 import { acceptsAsset } from "@/lib/workbench"
 import { type Catalog, type Job } from "@/lib/workbench"
@@ -233,11 +233,13 @@ export function resolvedSource(
 ): Source {
   if (source.kind !== "pending") return source
   // A pass output carries its input files as they are now, without a run.
+  const { partition } = source
   const passed = source.outputRole
-    ? map.tasks.find((t) => t.id === source.taskId)?.passed?.[source.outputRole]
+    ? map.tasks.find((t) => t.id === source.taskId)?.passed?.[
+        source.outputRole + (partition ? "~" + partition.value : "")]
     : undefined
   // A port's file filter matches labels the run publishes, so it waits for that run.
-  if (passed && !source.files)
+  if (passed && (!source.files || source.files.every((f) => f === "*")))
     return passed.length ? { ...source, kind: "result", runId: "", ids: passed } : source
   const run = map.runs.filter((r) => r.instanceId === source.taskId).at(-1)
   if (!run || run.state !== "completed") return source
@@ -247,6 +249,7 @@ export function resolvedSource(
       matchesFiles(p, source.files) &&
       (!source.outputRole || p.role === source.outputRole) &&
       (!source.group || matchesGroup(p, source.group)) &&
+      (!partition || partitionValue(p, partition.keyword) === partition.value) &&
       (!kind || acceptsAsset(kind, p.asset))
   )
   return products.length

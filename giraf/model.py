@@ -9,6 +9,8 @@ import re
 from astropy.io import fits
 
 KINDS = ['bias', 'dark', 'flat', 'science', 'exclude']
+HEADER_KEYS = ('FILTER', 'SUBSET', 'FILTERS', 'EXPTIME', 'EXPOSURE', 'DARKTIME', 'IMAGETYP', 'OBSTYPE',
+               'CCDTYPE', 'OBJECT', 'DATE-OBS', 'NCOMBINE')
 PROCESSED = ('CCDPROC', 'ZEROCOR', 'DARKCOR', 'FLATCOR', 'OVERSCAN', 'TRIM', 'NCOMBINE')
 
 
@@ -57,10 +59,23 @@ def filter_value(header, key='FILTER'):
     return ''
 
 
+def header_values(header) -> dict[str, str]:
+    """Partition keys as display strings; absent or blank keywords are omitted."""
+    values = {}
+    for key in HEADER_KEYS:
+        value = header.get(key)
+        if value is None or isinstance(value, fits.card.Undefined):
+            continue
+        text = value.strip() if isinstance(value, str) else str(value)
+        if text:
+            values[key] = text
+    return values
+
+
 def inspect_file(path: Path) -> dict:
     row = dict(use=False, name=path.name, path=str(path.resolve()), kind='exclude',
                filter='', exposure=0.0, shape='', binning='', temperature=None,
-               instrument='', readout='', origin='', note='', processed=False, error='')
+               instrument='', readout='', origin='', note='', processed=False, error='', headers={})
     try:
         with fits.open(path, memmap=False) as hdus:
             h = hdus[0].header
@@ -76,6 +91,7 @@ def inspect_file(path: Path) -> dict:
                        readout=str(h.get('READOUTM', '')).strip(),
                        origin=f"{h.get('XORGSUBF', '?')},{h.get('YORGSUBF', '?')}",
                        exposure=number(h.get('EXPTIME', h.get('EXPOSURE')), -1.0))
+            row['headers'] = header_values(h)
             row['calibrationMetadata'] = dict(filter=filter_value(h), exposure=number(h.get('EXPTIME'), -1.0))
             typ = str(h.get('IMAGETYP', h.get('OBSTYPE', ''))).lower()
             name = path.stem.lower()

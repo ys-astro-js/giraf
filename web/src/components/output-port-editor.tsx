@@ -15,6 +15,7 @@ import { Choice } from "./workbench-controls"
 import {
   matchesFiles,
   editableOutputPorts,
+  portFileIds,
   type CustomOutputPort,
 } from "@/lib/output-ports"
 import type { Instance, TaskMap } from "@/lib/task-map"
@@ -25,14 +26,24 @@ export function OutputPortEditor({
   task,
   map,
   spec,
+  rows = [],
   edit,
 }: {
   task: Instance
   map: TaskMap
   spec: Spec
+  rows?: Frame[]
   edit: (fn: (task: Instance) => Instance) => void
 }) {
   const ports = editableOutputPorts(task, spec, map)
+  const frames = new Map([...rows, ...map.runs.flatMap((r) => r.products)].map((f) => [f.id, f]))
+  // Keywords the port's files actually carry; before any file is known, the instrument mapping.
+  const keywords = (port: CustomOutputPort) => {
+    const found = portFileIds(map, task, port).flatMap((id) => Object.keys(frames.get(id)?.headers ?? {}))
+    const fallback = [task.mapping.subset, task.mapping.exptime, task.mapping.imagetyp, "OBJECT"]
+      .map((v) => String(v ?? "").trim())
+    return [...new Set([...(found.length ? found : fallback), port.partition?.keyword ?? ""])].filter(Boolean)
+  }
   const [open, setOpen] = useState<string[]>([])
   const run = map.runs.filter((r) => r.instanceId === task.id).at(-1)
   const products =
@@ -113,6 +124,25 @@ export function OutputPortEditor({
                       onChange={(e) =>
                         change({ ...port, name: e.target.value })
                       }
+                    />
+                  </Field>
+                  <Field>
+                    <FieldLabel htmlFor={`port-partition-${port.id}`}>
+                      나누기 기준
+                    </FieldLabel>
+                    <Choice
+                      id={`port-partition-${port.id}`}
+                      label="나누기 기준"
+                      value={port.partition?.keyword ?? "$none"}
+                      options={[
+                        { value: "$none", label: "나누지 않음" },
+                        ...keywords(port).map((k) => ({ value: k, label: k })),
+                      ]}
+                      onChange={(value) => {
+                        const { partition: _, ...rest } = port
+                        void _
+                        change(value === "$none" ? rest : { ...rest, partition: { keyword: value } })
+                      }}
                     />
                   </Field>
                   <OutputFileSelector

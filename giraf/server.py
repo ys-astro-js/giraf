@@ -32,7 +32,7 @@ from .image_rendering import image_info, image_png, image_pixel
 from .display import display_number, start_display, stop_display
 from .workflow_documents import WorkflowDocuments
 from .jobs import ROOT, DATA, HOME, RUNS, start, status, atomic_json
-from .model import Settings, inspect_file, listing, scan, validate
+from .model import HEADER_KEYS, Settings, inspect_file, listing, scan, validate
 from .combine import validate_combination
 from .task_catalog import catalog
 from .task_jobs import validate_task, preview_task, start_task, authorize_file_plan
@@ -72,7 +72,8 @@ def inventory_metadata(path):
     except OSError:
         # Missing/unreadable files retain inspect_file's actionable error row.
         return inspect_file(path)
-    version = (stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_dev, stat.st_ino)
+    # HEADER_KEYS is part of the key so a changed keyword set re-reads headers.
+    version = (HEADER_KEYS, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_size, stat.st_dev, stat.st_ino)
     return deepcopy(_inventory_metadata(path, version))
 
 

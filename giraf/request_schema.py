@@ -67,6 +67,11 @@ class WorkflowNode(RequestModel):
     payload: TaskRequest
 
 
+class WorkflowPartition(RequestModel):
+    keyword: str
+    value: str
+
+
 class WorkflowLink(RequestModel):
     source: str
     target: str
@@ -76,6 +81,7 @@ class WorkflowLink(RequestModel):
     sourceFiles: list[str] | None = None
     sourceGroup: dict[str, ParameterValue | None] | None = None
     sourceRole: str | None = None
+    sourcePartition: WorkflowPartition | None = None
 
 
 class WorkflowRequest(RequestModel):

@@ -149,6 +149,7 @@ export function workflowRequest(
           ? { sourceFiles: c.source.files }
           : {}),
         ...(c.source.group ? { sourceGroup: c.source.group } : {}),
+        ...(c.source.partition ? { sourcePartition: c.source.partition } : {}),
         ...(c.source.outputRole ? { sourceRole: c.source.outputRole } : {}),
         target: c.target,
         role: c.role,

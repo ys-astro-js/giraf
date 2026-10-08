@@ -16,6 +16,17 @@ def matches_files(product, patterns):
     return any(re.fullmatch(''.join('.*' if c == '*' else '.' if c == '?' else re.escape(c) for c in pattern), product.get('label', ''), flags=re.DOTALL) for pattern in patterns)
 
 
+def matches_partition(product, partition):
+    if not partition:
+        return True
+    headers = product.get('headers')
+    if headers is None and product.get('path') and Path(product['path']).is_file():
+        from astropy.io import fits
+        from .model import header_values
+        headers = header_values(fits.getheader(product['path']))
+    return str((headers or {}).get(partition['keyword'], '')).strip() == partition['value']
+
+
 ACTIVE = {'running', 'waiting', 'confirmation', 'cancelling'}
 
 
@@ -63,7 +74,7 @@ def execute_workflow(graph, run, cancelled, report):
                 if link['target'] != id:
                     continue
                 job = completed[link['source']]
-                products = [p['id'] for p in job.get('products', []) if matches_files(p, link.get('sourceFiles')) and accepts_asset(link['kind'], p.get('asset', 'image')) and p.get('role') != '$log' and (not link.get('sourceGroup') or matches_group(p, link['sourceGroup'])) and (not link.get('sourceRole') or p.get('role') == link['sourceRole'])]
+                products = [p['id'] for p in job.get('products', []) if matches_files(p, link.get('sourceFiles')) and accepts_asset(link['kind'], p.get('asset', 'image')) and p.get('role') != '$log' and (not link.get('sourceGroup') or matches_group(p, link['sourceGroup'])) and (not link.get('sourceRole') or p.get('role') == link['sourceRole']) and matches_partition(p, link.get('sourcePartition'))]
                 if not products:
                     raise ValueError(f"{nodes[link['source']]['label']}에서 {node['label']}에 전달할 결과가 생성되지 않았습니다.")
                 bindings.setdefault(link['role'], []).extend(products)

@@ -53,7 +53,7 @@ export async function autoLayoutMap(
           id: portId(task.id, "in", role.role), x: 0, y: geometry.inputY(role.name),
           width: 0, height: 0, layoutOptions: { "elk.port.side": "WEST" },
         })),
-        ...geometry.outputs.filter(port => port.handleId !== "output").map(port => ({
+        ...[...geometry.outputs.filter(port => port.handleId !== "output"), ...geometry.members].map(port => ({
           id: portId(task.id, "out", port.handleId), x: port.x, y: port.y,
           width: 0, height: 0, layoutOptions: { "elk.port.side": "EAST" },
         })),
