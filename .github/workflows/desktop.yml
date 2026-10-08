@@ -37,6 +37,9 @@ jobs:
         with:
           node-version: 22
 
+      # pyraf ships only as source and builds its X11 helper on Linux.
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev
       - run: bun install --frozen-lockfile
       - run: node scripts/stage.mjs
       - run: bunx electron-builder ${{ matrix.platform }} --publish never
