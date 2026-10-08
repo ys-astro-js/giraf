@@ -50,7 +50,7 @@ export function WorkbenchHeader() {
       folder={w.workspace.folder}
       ready={!w.locked && !!w.catalog}
       loading={!w.ready && !w.loadError}
-      onFolder={w.folder}
+      onHome={() => w.setHome(true)}
       executionStatus={w.executionStatus}
       workflowBusy={w.workflowBusy}
       runDisabled={

@@ -52,6 +52,7 @@ import { diagnostics } from "@/lib/diagnostics"
 import { revealPanel, useWindowShown } from "@/features/dock/store"
 import { WindowToolbar } from "@/features/dock/WindowToolbar"
 import { Blank } from "@/components/workbench-controls"
+import { Button } from "@/components/ui/button"
 import { SubflowEditor } from "@/components/subflow-editor"
 import { subflowColor } from "@/lib/subflow"
 import { WorkflowClickConnection } from "@/components/workflow-click-connection"
@@ -95,6 +96,7 @@ export function TaskMapView({
   workflowBusy,
   runDisabled,
   open,
+  add,
 }: TaskMapViewProps) {
   const autoCollapse = useNodeView((state) => state.autoCollapse)
   const setAutoCollapse = useNodeView((state) => state.setAutoCollapse)
@@ -202,7 +204,15 @@ export function TaskMapView({
         />
       )}
       {!map.tasks.length ? (
-        <Blank>사이드바에서 작업을 추가하세요</Blank>
+        <Blank
+          action={
+            <Button variant="outline" onClick={add}>
+              작업 추가
+            </Button>
+          }
+        >
+          실행할 작업이 없습니다
+        </Blank>
       ) : (
         <div
           className="map-viewport"

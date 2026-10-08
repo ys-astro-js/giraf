@@ -55,7 +55,8 @@ type Props = {
   folder: string
   ready: boolean
   loading: boolean
-  onFolder: () => void
+  /** Returns to the main screen. */
+  onHome: () => void
   workflowBusy: boolean
   runDisabled: boolean
   onRun: () => void
@@ -175,9 +176,9 @@ export function WorkbenchToolbar(props: Props) {
                               disabled={!props.ready}
                             />
                           }
-                          onClick={props.onFolder}
+                          onClick={props.onHome}
                           disabled={!props.ready}
-                          aria-label="폴더 열기"
+                          aria-label="메인 화면"
                         >
                           <FolderOpen
                             data-icon="inline-start"
@@ -191,9 +192,7 @@ export function WorkbenchToolbar(props: Props) {
                             </span>
                           }
                         </TooltipTrigger>
-                        <TooltipContent className="max-w-80 break-all">
-                          {props.folder || "폴더 열기"}
-                        </TooltipContent>
+                        <TooltipContent>메인 화면</TooltipContent>
                       </Tooltip>
                     )}
                     <ChevronRight

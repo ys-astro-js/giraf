@@ -18,8 +18,11 @@
         {
           "blend-mode" : "normal",
           "fill" : "automatic",
+          "glass" : true,
+          "hidden" : false,
           "image-name" : "GIRAF.png",
           "name" : "GIRAF",
+          "opacity" : 1,
           "position" : {
             "scale" : 1.1,
             "translation-in-points" : [
