@@ -186,53 +186,27 @@ function createWindow(url) {
   return win
 }
 
-const RELEASES = "https://github.com/ys-astro-js/giraf/releases"
-
-const newer = (a, b) => {
-  const [x, y] = [a, b].map((v) => v.replace(/^v/, "").split(".").map(Number))
-  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0)
-  return false
-}
-
 /**
- * Windows and Linux update in place from the latest GitHub release. The Mac
- * app is unsigned, which macOS does not let update itself, so it points to
- * the release page instead.
+ * Update in place from the latest GitHub release (desktop/package.json
+ * build.publish): download in the background, install on restart or quit.
  */
-async function checkForUpdates() {
+function checkForUpdates() {
   if (!app.isPackaged) return
-  try {
-    if (process.platform === "darwin") {
-      const response = await fetch("https://api.github.com/repos/ys-astro-js/giraf/releases/latest")
-      const release = await response.json()
-      if (!newer(release.tag_name || "", app.getVersion())) return
-      const { response: choice } = await dialog.showMessageBox({
-        type: "info",
-        buttons: ["다운로드", "나중에"],
-        defaultId: 0,
-        cancelId: 1,
-        message: `GIRAF ${release.tag_name.replace(/^v/, "")}이 나왔습니다.`,
-        detail: `지금 버전은 ${app.getVersion()}입니다.`,
-      })
-      if (choice === 0) shell.openExternal(release.html_url || RELEASES)
-      return
-    }
-    const { autoUpdater } = require("electron-updater")
-    autoUpdater.on("update-downloaded", async ({ version }) => {
-      const { response } = await dialog.showMessageBox({
-        type: "info",
-        buttons: ["지금 재시작", "나중에"],
-        defaultId: 0,
-        cancelId: 1,
-        message: `GIRAF ${version}을 설치할 준비가 되었습니다.`,
-        detail: "나중에를 고르면 앱을 끝낼 때 설치합니다.",
-      })
-      if (response === 0) autoUpdater.quitAndInstall()
+  const { autoUpdater } = require("electron-updater")
+  // Offline, no release yet or an unsigned Mac build: try again next launch.
+  autoUpdater.on("error", () => {})
+  autoUpdater.on("update-downloaded", async ({ version }) => {
+    const { response } = await dialog.showMessageBox({
+      type: "info",
+      buttons: ["지금 재시작", "나중에"],
+      defaultId: 0,
+      cancelId: 1,
+      message: `GIRAF ${version}을 설치할 준비가 되었습니다.`,
+      detail: "나중에를 고르면 앱을 끝낼 때 설치합니다.",
     })
-    await autoUpdater.checkForUpdates()
-  } catch {
-    // Offline or no release yet: try again on the next launch.
-  }
+    if (response === 0) autoUpdater.quitAndInstall()
+  })
+  autoUpdater.checkForUpdates().catch(() => {})
 }
 
 app.whenReady().then(async () => {

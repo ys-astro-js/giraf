@@ -42,12 +42,26 @@ jobs:
       # Each release has a higher version, so installed apps see it as an update.
       - run: npm pkg set version=0.1.${{ github.run_number }}
       - run: node scripts/stage.mjs
-      - run: bunx electron-builder ${{ matrix.platform }} --publish never
+      # macOS signs and notarizes with the Developer ID secrets; without them
+      # the app is built unsigned and cannot update itself.
+      - name: Package
+        shell: bash
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-      # Installed Linux apps update from latest-linux.yml.
-      - if: runner.os == 'Linux'
-        run: test -f dist/latest-linux.yml
+          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CERTIFICATE || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CERTIFICATE_PASSWORD || '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          args="${{ matrix.platform }}"
+          if [ "$RUNNER_OS" = macOS ] && [ -z "$CSC_LINK" ]; then
+            echo "::warning::MAC_CERTIFICATE secret is not set; building an unsigned Mac app."
+            args="$args -c.mac.identity=null -c.mac.notarize=false"
+          fi
+          bunx electron-builder $args --publish never
+      # Installed apps update from latest-mac.yml / latest-linux.yml.
+      - run: test -f dist/latest-mac.yml || test -f dist/latest-linux.yml
 
       - uses: actions/upload-artifact@v4
         with:
@@ -55,6 +69,7 @@ jobs:
           if-no-files-found: error
           path: |
             desktop/dist/*.dmg
+            desktop/dist/*.zip
             desktop/dist/*.AppImage
             desktop/dist/latest*.yml
             desktop/dist/*.blockmap
@@ -113,9 +128,9 @@ jobs:
           MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           short="${GITHUB_SHA::7}"
-          # Installed Windows and Linux apps update from latest*.yml in the
-          # latest release (see desktop/package.json build.publish).
-          test -f dist/latest.yml && test -f dist/latest-linux.yml
+          # Installed apps update from latest*.yml in the latest release
+          # (see desktop/package.json build.publish).
+          test -f dist/latest.yml && test -f dist/latest-mac.yml && test -f dist/latest-linux.yml
           gh release create "v0.1.${GITHUB_RUN_NUMBER}" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \

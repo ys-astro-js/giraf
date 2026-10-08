@@ -54,4 +54,7 @@ run("bunx", ["vite", "build", "--outDir", path.join(BUILD, "backend", "web", "di
 for (const unused of [requirements, path.join(python, "include"), path.join(python, "share"),
   path.join(stdlib, "test"), path.join(stdlib, "idlelib", "idle_test")])
   fs.rmSync(unused, { recursive: true, force: true })
+// Static libraries only serve building extensions, and notarization rejects them.
+for (const file of fs.readdirSync(python, { recursive: true }))
+  if (file.endsWith(".a")) fs.rmSync(path.join(python, file))
 console.log(`Staged backend in ${BUILD}`)

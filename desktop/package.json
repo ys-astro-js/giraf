@@ -8,8 +8,8 @@
   "scripts": {
     "start": "electron .",
     "stage": "node scripts/stage.mjs",
-    "dist": "node scripts/stage.mjs && electron-builder --publish never",
-    "pack": "node scripts/stage.mjs && electron-builder --dir --publish never",
+    "dist": "node scripts/stage.mjs && electron-builder --publish never -c.mac.identity=null -c.mac.notarize=false",
+    "pack": "node scripts/stage.mjs && electron-builder --dir --publish never -c.mac.identity=null -c.mac.notarize=false",
     "wsl-archive": "tar -czf build/giraf-linux.tar.gz -C build python backend -C ../wsl start.sh"
   },
   "build": {
@@ -30,9 +30,14 @@
           "arch": [
             "arm64"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
         }
       ],
-      "identity": null,
       "extraResources": [
         {
           "from": "build/python",
@@ -42,7 +47,11 @@
           "from": "build/backend",
           "to": "backend"
         }
-      ]
+      ],
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "notarize": true
     },
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "win": {
