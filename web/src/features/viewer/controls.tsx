@@ -1,4 +1,4 @@
-import { useState, type ReactNode, type ComponentProps } from "react"
+import { useState, type ReactNode, type ComponentProps, type RefObject } from "react"
 import { FolderOpen, LoaderCircle, type LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -70,12 +70,18 @@ export function ViewerPopover({
   className,
   open,
   onOpenChange,
+  heading = true,
+  anchor,
   children,
 }: {
   label: string
   icon: LucideIcon
   disabled?: boolean
   className?: string
+  /** Off for a lone field, whose button already says what it is for. */
+  heading?: boolean
+  /** Opens above this element instead of below the button. */
+  anchor?: RefObject<HTMLElement | null>
   /** Controlled when a shortcut also opens it. */
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -91,16 +97,20 @@ export function ViewerPopover({
         <Icon />
       </PopoverTrigger>
       <PopoverContent
-        align="end"
+        anchor={anchor}
+        side={anchor ? "top" : "bottom"}
+        align={anchor ? "center" : "end"}
         sideOffset={8}
         className={cn(
           "max-h-(--available-height) max-w-[calc(100vw-2rem)] overflow-y-auto",
           className
         )}
       >
-        <PopoverHeader>
-          <PopoverTitle>{label}</PopoverTitle>
-        </PopoverHeader>
+        {heading && (
+          <PopoverHeader>
+            <PopoverTitle>{label}</PopoverTitle>
+          </PopoverHeader>
+        )}
         {children}
       </PopoverContent>
     </Popover>

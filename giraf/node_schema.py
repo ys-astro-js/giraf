@@ -36,13 +36,16 @@ PARAMETER_FIELDS = {'label', 'default', 'fixed'}
 # `task` components extend an IRAF task; `run` and `flow` components are what a
 # GIRAF node does: run as a job, or steer the workflow runner.
 COMPONENT_CLASSES = {
-    'image-cursor': 'task', 'value-output': 'task', 'value-input': 'task',
+    'cursor': 'task', 'image-cursor': 'task', 'value-output': 'task', 'value-input': 'task',
     'ccd-preprocess': 'task', 'calibration-groups': 'task',
     'pass-files': 'run', 'save-files': 'run',
     'loop': 'flow', 'branch': 'flow',
 }
 RUN_COMPONENTS = ('pass-files', 'save-files')
 PLANNED_COMPONENTS = ('image-cursor', 'value-output', 'value-input', 'ccd-preprocess', 'calibration-groups', 'loop', 'branch')
+COMPONENTS = ('cursor',)
+# Toolbar symbols a cursor action may use (HIG: symbols over text).
+CURSOR_ICONS = ('check', 'trash', 'sigma', 'save', 'plus', 'minus', 'refresh', 'list', 'eye', 'x')
 KEY = re.compile(rf'^(?:{IDENT}\.)?{IDENT}$')
 
 
@@ -138,12 +141,58 @@ def format_errors(data):
             kind_class = COMPONENT_CLASSES.get(kind)
             if kind_class and (kind_class == 'task') == node:
                 errors.append(f'components: {kind}은 {"IRAF 작업" if kind_class == "task" else "GIRAF 노드(giraf.)"}에만 쓸 수 있습니다.')
+            elif kind == 'cursor':
+                errors += cursor_errors(item)
             elif kind in RUN_COMPONENTS:
                 if set(item) != {'type'}:
                     errors.append(f'components.{kind}: type 외의 필드는 없습니다.')
             else:
                 planned = ' (예정된 구성 요소)' if kind in PLANNED_COMPONENTS else ''
                 errors.append(f'components: {kind or "type 없음"}은 아직 지원하지 않습니다{planned}.')
+        if sum(isinstance(i, dict) and i.get('type') == 'cursor' for i in components) > 1:
+            errors.append('components: cursor는 하나만 둘 수 있습니다.')
+    return errors
+
+
+def cursor_errors(item):
+    """The `cursor` component: names for an interactive task's cursor keys.
+
+    It labels the keys a task already reads in IRAF's cursor mode, so people
+    can follow its loop without knowing them; it never adds behavior.
+      image:    click (key sent where the image is clicked), count
+                ("{n}" = accepted marks), actions [{key, label, icon}],
+                finish {label, icon, keys: answers sent to the next requests}
+      graphics: title, accept {key, label, icon}, reject {key, label, icon}
+    Buttons are symbols (CURSOR_ICONS); the label is their tooltip.
+    """
+    errors = []
+    is_key = lambda v: isinstance(v, str) and len(v) == 1 and not v.isspace()
+    is_text = lambda v: isinstance(v, str) and v.strip() != ''
+    action = lambda v: (isinstance(v, dict) and {'key', 'label'} <= set(v) <= {'key', 'label', 'icon'} and is_key(v['key'])
+                        and is_text(v['label']) and v.get('icon', 'check') in CURSOR_ICONS)
+    shape = {'image': {'click', 'count', 'actions', 'finish'}, 'graphics': {'title', 'accept', 'reject'}}
+    if set(item) - {'type', *shape}:
+        errors.append('components.cursor: image와 graphics만 쓸 수 있습니다.')
+    for side, fields in shape.items():
+        part = item.get(side, {})
+        if not isinstance(part, dict) or set(part) - fields:
+            errors.append(f'components.cursor.{side}: {", ".join(sorted(fields))}만 쓸 수 있습니다.')
+            continue
+        for field in ('count', 'title'):
+            if field in part and not is_text(part[field]):
+                errors.append(f'components.cursor.{side}.{field}: 문자열이어야 합니다.')
+        if 'click' in part and not is_key(part['click']):
+            errors.append(f'components.cursor.{side}.click: 키 한 글자여야 합니다.')
+        for field in ('accept', 'reject'):
+            if field in part and not action(part[field]):
+                errors.append(f'components.cursor.{side}.{field}: {{key, label}}이어야 합니다.')
+        if 'actions' in part and not (isinstance(part['actions'], list) and all(map(action, part['actions']))):
+            errors.append(f'components.cursor.{side}.actions: {{key, label}}의 목록이어야 합니다.')
+        finish = part.get('finish')
+        if finish is not None and not (isinstance(finish, dict) and {'label', 'keys'} <= set(finish) <= {'label', 'keys', 'icon'}
+                                       and finish.get('icon', 'check') in CURSOR_ICONS and is_text(finish['label'])
+                                       and isinstance(finish['keys'], list) and finish['keys'] and all(map(is_key, finish['keys']))):
+            errors.append(f'components.cursor.{side}.finish: {{label, keys}}이어야 합니다.')
     return errors
 
 
@@ -157,7 +206,7 @@ def merge_layers(profile, parameters, sets, layers):
     pars = {p['name']: p for p in parameters}
     set_pars = {s['name']: {p['name'] for p in s['parameters']} for s in sets}
     ports = {d: {s['name']: dict(s) for s in profile[d]} for d in ('inputs', 'outputs')}
-    presentation = dict(parameters={}, groups=None)
+    presentation = dict(parameters={}, groups=None, components=None)
     fixed = dict(profile.get('fixed', {}))
     warn = lambda message: issues.append(dict(severity='warning', message=message))
     for layer in layers:
@@ -204,6 +253,9 @@ def merge_layers(profile, parameters, sets, layers):
         if 'groups' in patch:
             presentation['groups'] = patch['groups']
             provenance['groups'] = name
+        if 'components' in patch:
+            presentation['components'] = patch['components']
+            provenance['components'] = name
     order = {name: i for i, name in enumerate(pars)}
     merged = {d: sorted(ports[d].values(), key=lambda s: order.get(s['name'], len(order))) for d in ports}
     return dict(merged, fixed=fixed), presentation, issues, provenance
@@ -255,6 +307,9 @@ def apply_presentation(spec, presentation, issues, provenance, layers):
                 warn(f'groups.{group["label"]}: {key}는 설정 탭에 표시할 수 없는 파라미터입니다.')
             groups.append(dict(label=group['label'], parameters=[k for k in group['parameters'] if k in visible]))
         spec['groups'] = groups
+    cursor = next((c for c in presentation.get('components') or [] if c.get('type') == 'cursor'), None)
+    if cursor:
+        spec['cursor'] = {k: v for k, v in cursor.items() if k != 'type'}
     spec['schemaLayers'] = [dict(layer=l['layer'], source=l['source']) for l in layers]
     spec['schemaProvenance'] = provenance
     spec['schemaIssues'] = issues

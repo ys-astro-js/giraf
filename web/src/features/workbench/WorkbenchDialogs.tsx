@@ -4,7 +4,11 @@ import { ConnectInputDialog } from "./dialogs/ConnectInput"
 import { TaskConfirmationDialog } from "./dialogs/TaskConfirmation"
 import { TaskInteractionDialog } from "./dialogs/TaskInteraction"
 import { CursorSessionWatcher } from "@/features/viewer/DisplayPanel"
-import { waitingCursor } from "@/lib/cursor-session"
+import {
+  interactiveRun,
+  useCursorSession,
+  waitingCursor,
+} from "@/lib/cursor-session"
 import { DaoeditViewer } from "@/features/viewer/DaoeditViewer"
 import { useWorkbench } from "./context"
 
@@ -12,6 +16,12 @@ import { useWorkbench } from "./context"
 export function WorkbenchDialogs() {
   const w = useWorkbench()
   const { currentJob } = w
+  // A finishing sequence answers the task's last questions itself; a
+  // question it has answered stays shown until the run moves on, so it
+  // counts as answered too.
+  const session = useCursorSession((state) => state.job)
+  const sequence = useCursorSession((state) => state.queue.length > 0)
+  const answered = useCursorSession((state) => state.answered)
   return (
     <>
       {w.picker && (
@@ -57,16 +67,17 @@ export function WorkbenchDialogs() {
           onStart={w.start}
         />
       )}
+      {/* Only the run the user is looking at (its node or the run log). */}
       <CursorSessionWatcher
-        job={
-          waitingCursor(currentJob)
-            ? currentJob
-            : w.jobs.find((job) => waitingCursor(job))
-        }
+        job={interactiveRun(currentJob) ? currentJob : undefined}
       />
       {currentJob?.state === "waiting" &&
         currentJob.interaction?.state === "waiting" &&
-        !waitingCursor(currentJob) && (
+        !waitingCursor(currentJob) &&
+        !(
+          session?.id === currentJob.id &&
+          (sequence || answered === currentJob.interaction.id)
+        ) && (
           <TaskInteractionDialog
             currentJob={currentJob}
             key={currentJob.interaction.id}

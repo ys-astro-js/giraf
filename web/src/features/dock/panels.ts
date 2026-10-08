@@ -1,12 +1,21 @@
 import type { ComponentType } from "react"
-import { Image, Monitor, PanelRight, Workflow, type LucideIcon } from "lucide-react"
+import {
+  ChartSpline,
+  Image,
+  Monitor,
+  PanelRight,
+  Workflow,
+  type LucideIcon,
+} from "lucide-react"
 import { WorkflowPanel } from "@/features/panels/WorkflowPanel"
 import { InspectorPanel } from "@/features/panels/InspectorPanel"
 import { ViewerPanel } from "@/features/viewer/ViewerPanel"
 import { DisplayPanel } from "@/features/viewer/DisplayPanel"
+import { GraphicsPanel } from "@/features/viewer/CursorSession"
 import { KINDS, type Kind } from "./layout"
 
-export type PanelId = "workflow" | "inspector" | "viewer" | "display"
+export type PanelId =
+  "workflow" | "inspector" | "viewer" | "display" | "graphics"
 
 export type PanelDefinition = {
   title: string
@@ -53,5 +62,11 @@ export const PANELS: Record<PanelId, PanelDefinition> = {
     component: DisplayPanel,
     kind: KINDS.display,
     canvas: true,
+  },
+  graphics: {
+    title: "IRAF 그래픽",
+    icon: ChartSpline,
+    component: GraphicsPanel,
+    kind: KINDS.graphics,
   },
 }

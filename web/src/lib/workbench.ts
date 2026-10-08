@@ -1,5 +1,6 @@
 import { collectResponseDiagnostics, diagnostics, requestDiagnosticScope } from "./diagnostics"
 import {headerFrame} from "./calibration"
+import type { CursorComponent } from "./cursor-session"
 export type Values = Record<string, string | number | boolean | null>
 export type Param = { label?:string; mode?:string; required?:boolean; indirect?:string; name:string; type:string; default:string | number | boolean | null; choices:string[]; prompt:string; min:unknown; max:unknown }
 export type InputSource = 'files'|'expression'|'node'|'text'|'cursor'
@@ -19,7 +20,7 @@ export type Home = { startup:'home'|'resume'; recent:RecentFolder[]; engines:{ c
 export type Preferences = { _document?:WorkflowDocument; parameterSets?:Record<string,Record<string,Values>>; drafts:Record<string,Draft>; backend:string; mapping:Values; instrument:string[]; packageValues:Values; taskMap?:import('./task-map').TaskMap }
 export type Workspace = { folder:string; files:Frame[]; sets:{name:string;ids:string[];folder:string}[] }
 export type CursorKeyGroup = { cursor:'image'|'graphics'; files:string[]; keys:{key:string;description:string}[]; colon:{command:string;description:string}[] }
-export type Manifest = { interactive?:boolean; cursorKeys?:CursorKeyGroup[]; cursorImage?:string|null; workflowId?:string; workflowStep?:number; textInputs?:Record<string,string>; alignmentBinding?:AlignmentBinding; inputSelections?:Record<string,string[]>; cursorCommands?:Record<string,string>; outputs?:Record<string,string>; parameterSets?:Record<string,Values>; task:string; backend:string; parameters:Values; inputs:Record<string,string[]>; output:{name:string}; ccdproc:Values; ccdred:Values; mapping:Values; section:string; exam:Draft['exam']; rows:Frame[] }
+export type Manifest = { interactive?:boolean; cursorKeys?:CursorKeyGroup[]; cursorImage?:string|null; cursor?:CursorComponent|null; workflowId?:string; workflowStep?:number; textInputs?:Record<string,string>; alignmentBinding?:AlignmentBinding; inputSelections?:Record<string,string[]>; cursorCommands?:Record<string,string>; outputs?:Record<string,string>; parameterSets?:Record<string,Values>; task:string; backend:string; parameters:Values; inputs:Record<string,string[]>; output:{name:string}; ccdproc:Values; ccdred:Values; mapping:Values; section:string; exam:Draft['exam']; rows:Frame[] }
 export type Job = {createdAt?:number;execution?:{id:string;step:number}|null;id:string;name:string;task?:string;backend?:string;state:string;message:string;count:number;progress:number;products:Frame[];manifest?:Manifest & {instanceId?:string};log?:string;commands?:string;operation?:string;outcomes?:{source:string;label:string;state:string;message:string}[];headerDiff?:{source:string;key:string;before:string|null;after:string|null}[];effective?:unknown;interaction?:{id:string;kind:string;prompt:string;state:string;wcs?:number[][];initial?:string}}
 export const defaults=(params:Param[]):Values=>Object.fromEntries(params.map(p=>[p.name,p.default]))
 export function makeDraft(spec:Spec | undefined, saved?:Partial<Draft>):Draft {

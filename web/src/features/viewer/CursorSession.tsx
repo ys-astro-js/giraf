@@ -1,9 +1,22 @@
 import { useEffect, useRef, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Keyboard, SquareTerminal } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+import {
+  Check,
+  Ellipsis,
+  Eye,
+  List,
+  Maximize2,
+  Minimize2,
+  Minus,
+  PictureInPicture2,
+  Plus,
+  RefreshCw,
+  Save,
+  Sigma,
+  SquareTerminal,
+  Trash2,
+  X,
+} from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,216 +24,502 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
-import { toast } from "@/components/ui/toast"
+import { Input } from "@/components/ui/input"
+import {
+  ToolbarButton,
+  ToolbarCluster,
+  ToolbarGroup,
+} from "@/components/toolbar"
+import {
+  closePanel,
+  floatPanel,
+  useWindowShown,
+} from "@/features/dock/store"
 import { WindowTitle, WindowToolbar } from "@/features/dock/WindowToolbar"
 import { ImageViewer } from "./ImageViewer"
 import { ViewerPopover } from "./controls"
-import { cursorRecord, respond, waitingCursor } from "@/lib/cursor-session"
-import { type Job } from "@/lib/workbench"
+import {
+  finish,
+  moveCursor,
+  openCommand,
+  pressKey,
+  useCursorSession,
+  waitingCursor,
+  type CursorIcon,
+  type Point,
+} from "@/lib/cursor-session"
 import { displayQueryOptions, displayRow, frameToImage } from "@/lib/display"
+import type { Job } from "@/lib/workbench"
 
-type Point = { x: number; y: number }
+/** The node schema's cursor icons (giraf/node_schema.py CURSOR_ICONS). */
+const ICONS = {
+  check: Check,
+  trash: Trash2,
+  sigma: Sigma,
+  save: Save,
+  plus: Plus,
+  minus: Minus,
+  refresh: RefreshCw,
+  list: List,
+  eye: Eye,
+  x: X,
+} satisfies Record<CursorIcon, unknown>
+function CursorSymbol({ icon }: { icon?: CursorIcon }) {
+  const Icon = ICONS[icon ?? "check"]
+  return <Icon />
+}
+
+/** The request the run waits on, and whether it was already answered. */
+function useRequest(job: Job | null | undefined) {
+  const answered = useCursorSession((state) => state.answered)
+  const interaction = waitingCursor(job ?? undefined)
+  return { interaction, busy: !interaction || answered === interaction.id }
+}
 
 /**
- * A running task's cursor loop in the IRAF display window, like typing into
- * ds9 or a graphics terminal: the image cursor reads the key pressed over a
- * star, the graphics cursor the key pressed over the task's plot. The keys
- * come from the task's own IRAF key help; its output stays in the run log.
+ * Every key the task's own IRAF help lists for one cursor, for people who
+ * know IRAF. Keys can also be typed directly.
  */
-export function CursorSession({ job }: { job: Job }) {
-  const interaction = waitingCursor(job)!
-  const graphics = interaction.kind === "gcur"
-  const manifest = job.manifest!
-  // The image cursor reads the display, as in IRAF: the frame the user
-  // displayed, in its image's coordinates. Without one, the task's image.
+function CursorMoreMenu({
+  job,
+  cursor,
+  disabled,
+}: {
+  job: Job
+  cursor: "image" | "graphics"
+  disabled: boolean
+}) {
+  const group = job.manifest?.cursorKeys?.find((g) => g.cursor === cursor)
+  if (!group?.keys.length) return null
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<ToolbarButton label="IRAF 키" />}>
+        <Ellipsis />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="max-h-(--available-height)">
+        <DropdownMenuGroup>
+          {group.keys.map((k) => (
+            <DropdownMenuItem
+              key={k.key}
+              disabled={disabled}
+              onClick={() => pressKey(job, k.key)}
+            >
+              {k.description}
+              <kbd className="ml-auto pl-4 font-mono text-muted-foreground">
+                {k.key}
+              </kbd>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** IRAF's colon commands (`:psfrad 4`), for whichever cursor is reading. */
+function CommandField({
+  job,
+  disabled,
+  anchor,
+}: {
+  job: Job
+  disabled: boolean
+  anchor: React.RefObject<HTMLElement | null>
+}) {
+  const open = useCursorSession((state) => state.command)
+  const [text, setText] = useState("")
+  const kind = waitingCursor(job)?.kind === "gcur" ? "graphics" : "image"
+  const colon = job.manifest?.cursorKeys?.find((g) => g.cursor === kind)?.colon
+  const list = `colon-${job.id}`
+  return (
+    <ViewerPopover
+      label="IRAF 명령 (:)"
+      icon={SquareTerminal}
+      disabled={disabled}
+      open={open && !disabled}
+      onOpenChange={openCommand}
+      heading={false}
+      anchor={anchor}
+      className="w-64 p-1.5"
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          const command = text.trim().replace(/^:/, "")
+          if (!command) return
+          pressKey(job, ":", undefined, command)
+          setText("")
+          openCommand(false)
+        }}
+      >
+        <Input
+          aria-label="IRAF 명령"
+          list={colon?.length ? list : undefined}
+          value={text}
+          spellCheck={false}
+          autoComplete="off"
+          className="font-mono"
+          onChange={(e) => setText(e.target.value)}
+        />
+        {!!colon?.length && (
+          <datalist id={list}>
+            {colon.map((c) => (
+              <option key={c.command} value={c.command}>
+                {c.description}
+              </option>
+            ))}
+          </datalist>
+        )}
+      </form>
+    </ViewerPopover>
+  )
+}
+
+/** Reject and accept for the plot IRAF asks about, on the plot itself. */
+function GraphicsActions({ job }: { job: Job }) {
+  const { interaction, busy } = useRequest(job)
+  const reading = interaction?.kind === "gcur"
+  const graphics = job.manifest?.cursor?.graphics
+  return (
+    <>
+      <ToolbarGroup label="IRAF 그래픽 커서" hidden={!reading}>
+        <CursorMoreMenu job={job} cursor="graphics" disabled={busy} />
+        {graphics?.reject && (
+          <ToolbarButton
+            label={`${graphics.reject.label} (${graphics.reject.key})`}
+            disabled={busy}
+            onClick={() => pressKey(job, graphics.reject!.key)}
+          >
+            <CursorSymbol icon={graphics.reject.icon ?? "trash"} />
+          </ToolbarButton>
+        )}
+      </ToolbarGroup>
+      {graphics?.accept && (
+        <ToolbarGroup label={graphics.accept.label} hidden={!reading}>
+          <ToolbarButton
+            prominent
+            label={`${graphics.accept.label} (${graphics.accept.key})`}
+            disabled={busy}
+            onClick={() => pressKey(job, graphics.accept!.key)}
+          >
+            <CursorSymbol icon={graphics.accept.icon} />
+          </ToolbarButton>
+        </ToolbarGroup>
+      )}
+    </>
+  )
+}
+
+function GraphicsPlot({ job, plotted }: { job: Job; plotted: string }) {
+  const title = job.manifest?.cursor?.graphics?.title ?? "IRAF 그래픽"
+  return (
+    <img
+      className="asset-plot"
+      src={`/api/task-graphics?id=${encodeURIComponent(job.id)}&request=${plotted}`}
+      alt={title}
+      draggable={false}
+    />
+  )
+}
+
+/**
+ * The task's plot as a picture-in-picture over the image it came from: it
+ * moves anywhere in the window, grows to fill it, or goes out as a window
+ * of its own (IRAF's graphics window).
+ */
+function GraphicsPip({
+  job,
+  plotted,
+  hidden,
+  onClose,
+}: {
+  job: Job
+  plotted: string
+  hidden: boolean
+  onClose: () => void
+}) {
+  const [grown, setGrown] = useState(false)
+  const [offset, setOffset] = useState<Point>({ x: 0, y: 0 })
+  const [size, setSize] = useState<{ width: number; height: number }>()
+  // Moving, or resizing from the edges away from its resting corner.
+  const drag = useRef<{
+    x: number
+    y: number
+    from: Point
+    room: DOMRect
+    edge?: { left: boolean; top: boolean; width: number; height: number }
+  }>(null)
+  const box = useRef<HTMLDivElement>(null)
+  const clamp = (v: number, min: number, max: number) =>
+    Math.min(Math.max(v, min), Math.max(min, max))
+  return (
+    <div
+      ref={box}
+      className="cursor-pip"
+      hidden={hidden}
+      data-grown={grown || undefined}
+      style={
+        grown
+          ? undefined
+          : {
+              translate: `${offset.x}px ${offset.y}px`,
+              ...(size && { ...size, aspectRatio: "auto" }),
+            }
+      }
+      onPointerDown={(e) => {
+        const target = e.target as HTMLElement
+        if (grown || target.closest("button")) return
+        const self = box.current!.getBoundingClientRect()
+        const area = box.current!.parentElement!.getBoundingClientRect()
+        const handle = target.dataset.resize
+        drag.current = {
+          x: e.clientX,
+          y: e.clientY,
+          from: offset,
+          // How far it may travel from where it rests, staying in the window.
+          room: new DOMRect(
+            area.left - self.left + offset.x,
+            area.top - self.top + offset.y,
+            area.width - self.width,
+            area.height - self.height
+          ),
+          edge: handle
+            ? {
+                left: handle !== "top",
+                top: handle !== "left",
+                // Up to the window's edges from its fixed corner.
+                width: self.right - area.left,
+                height: self.bottom - area.top,
+              }
+            : undefined,
+        }
+        e.currentTarget.setPointerCapture(e.pointerId)
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current
+        if (!d) return
+        const dx = e.clientX - d.x
+        const dy = e.clientY - d.y
+        if (d.edge) {
+          const self = box.current!.getBoundingClientRect()
+          const start = { width: self.width, height: self.height }
+          d.x = e.clientX
+          d.y = e.clientY
+          setSize({
+            width: d.edge.left
+              ? clamp(start.width - dx, 240, d.edge.width)
+              : start.width,
+            height: d.edge.top
+              ? clamp(start.height - dy, 180, d.edge.height)
+              : start.height,
+          })
+          return
+        }
+        setOffset({
+          x: clamp(d.from.x + dx, d.room.x, d.room.x + d.room.width),
+          y: clamp(d.from.y + dy, d.room.y, d.room.y + d.room.height),
+        })
+      }}
+      onPointerUp={() => (drag.current = null)}
+      onPointerCancel={() => (drag.current = null)}
+    >
+      {!grown && (
+        <>
+          <span className="cursor-pip-resize" data-resize="top" />
+          <span className="cursor-pip-resize" data-resize="left" />
+          <span className="cursor-pip-resize" data-resize="corner" />
+        </>
+      )}
+      <div className="cursor-pip-bar">
+        <span className="window-pill" data-active>
+          <ToolbarCluster edge="start" className="window-pill-cluster">
+            <ToolbarGroup label="그래픽 조작">
+              <ToolbarButton label="닫기" onClick={onClose}>
+                <X />
+              </ToolbarButton>
+              <ToolbarButton
+                label={grown ? "작게" : "크게"}
+                onClick={() => setGrown(!grown)}
+              >
+                {grown ? <Minimize2 /> : <Maximize2 />}
+              </ToolbarButton>
+              <ToolbarButton label="분리" onClick={() => floatPanel("graphics")}>
+                <PictureInPicture2 />
+              </ToolbarButton>
+            </ToolbarGroup>
+          </ToolbarCluster>
+        </span>
+        <ToolbarCluster edge="end" size="sm">
+          <GraphicsActions job={job} />
+        </ToolbarCluster>
+      </div>
+      <GraphicsPlot job={job} plotted={plotted} />
+    </div>
+  )
+}
+
+/**
+ * What IRAF printed in answer to the last key (a star it could not find, a
+ * star it added), shown for a moment where IRAF's own status line would
+ * be. The output before the first request is the task starting up.
+ */
+function useReply(interaction: Job["interaction"] | undefined) {
+  const [reply, setReply] = useState<{ id: string; text: string }>()
+  const first = useRef<string>(undefined)
+  const id = interaction?.id
+  const text = interaction?.prompt?.trim()
+  useEffect(() => {
+    if (!id) return
+    first.current ??= id
+    if (id === first.current || !text) return setReply(undefined)
+    setReply({ id, text })
+    const timer = setTimeout(() => setReply(undefined), 5000)
+    return () => clearTimeout(timer)
+  }, [id, text])
+  return reply
+}
+
+/**
+ * The image cursor of an interactive run, in the IRAF display: the frame
+ * the user displayed (or the task's image), the marks the task accepted,
+ * the task's named steps, and its plot in the corner while it has one.
+ * Clicking a star sends the schema's click key there; keys typed anywhere
+ * go to IRAF at the image cursor (cursorKeydown).
+ */
+export function CursorImage({ job }: { job: Job }) {
+  const cursor = job.manifest?.cursor
+  const { interaction, busy } = useRequest(job)
+  const reading = interaction?.kind === "imcur"
+  const asking = interaction?.kind === "gcur" && !busy
+  const commandAnchor = useRef<HTMLDivElement>(null)
+  const used = useCursorSession((state) => state.used)
+  const pending = useCursorSession((state) => state.pending)
+  const plotted = useCursorSession((state) => state.plotted)
+  const [closed, setClosed] = useState("")
+  const outside = useWindowShown("graphics")
   const { data: display } = useQuery(displayQueryOptions)
   const shown =
     display?.frames.find((f) => f.frame === display.current) ??
     display?.frames[0]
   const frame = shown
     ? displayRow(shown)
-    : manifest.rows.find((row) => row.id === manifest.cursorImage)
-  const toImage = (p: Point) => (shown ? frameToImage(shown, p.x, p.y) : p)
-  const group = manifest.cursorKeys?.find(
-    (g) => g.cursor === (graphics ? "graphics" : "image")
-  )
-  const rootRef = useRef<HTMLDivElement>(null)
-  const hover = useRef<Point | null>(null)
-  const [mark, setMark] = useState<Point>()
-  const [colonOpen, setColonOpen] = useState(false)
-  const [command, setCommand] = useState("")
-  // One answer per request; the next request arrives with a new id.
-  const [sent, setSent] = useState("")
-  const busy = sent === interaction.id
+    : job.manifest?.rows.find((row) => row.id === job.manifest?.cursorImage)
 
-  // Keys go where IRAF reads them, as in its own cursor windows: focus
-  // follows each request unless the user is busy elsewhere.
-  useEffect(() => {
-    const active = document.activeElement
-    if (!active || active === document.body) rootRef.current?.focus()
-  }, [interaction.id])
-
-  function press(key: string, colon = "") {
-    if (busy) return
-    // The graphics cursor's plot coordinates are not mapped yet.
-    const at = graphics ? undefined : (hover.current ?? mark)
-    if (at) setMark(at)
-    setSent(interaction.id)
-    respond(
-      job,
-      cursorRecord(key, at && (toImage(at) ?? undefined), colon)
-    ).catch((error: Error) => {
-      setSent("")
-      toast.add({ title: error.message, type: "error" })
-    })
+  function place(view: Point) {
+    const image = shown ? frameToImage(shown, view.x, view.y) : view
+    return { view, image: image ?? undefined }
   }
-
+  const image = cursor?.image
+  const subtitle = !interaction
+    ? "IRAF 처리 중"
+    : used.length && image?.count
+      ? image.count.replace("{n}", String(used.length))
+      : undefined
+  const reply = useReply(interaction)
+  const commandOpen = useCursorSession((state) => state.command)
+  const markers = [
+    ...used.map((p, i) => ({ ...p, label: String(i + 1) })),
+    ...(pending ? [{ ...pending, label: String(used.length + 1) }] : []),
+  ]
   return (
-    <div
-      ref={rootRef}
-      tabIndex={-1}
-      className="viewer-window outline-none"
-      aria-busy={busy}
-      onPointerEnter={() => {
-        const active = document.activeElement
-        if (!active?.closest("input, textarea, [role=menu], [role=dialog]"))
-          rootRef.current?.focus({ preventScroll: true })
-      }}
-      onKeyDown={(e) => {
-        const target = e.target as HTMLElement
-        if (target.closest("input, textarea, [role=menu]")) return
-        if (e.metaKey || e.ctrlKey || e.altKey) return
-        if (e.key.length !== 1 || e.key === " ") return
-        e.preventDefault()
-        // Colon commands take arguments, as in IRAF's cursor mode.
-        if (e.key === ":") setColonOpen(true)
-        else press(e.key)
-      }}
-    >
+    <div className="viewer-window relative" aria-busy={busy}>
       <WindowTitle
-        title={graphics ? "IRAF 그래픽" : frame?.label}
-        subtitle={
-          busy
-            ? `${job.name} · IRAF 처리 중`
-            : `${job.name} · ${graphics ? "그래픽" : "영상"} 커서 입력 대기`
-        }
+        title={frame?.label}
+        subtitle={subtitle}
         tooltip={frame?.label}
       />
       <WindowToolbar>
         <ToolbarGroup label="IRAF 커서">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<ToolbarButton label="커서 키" />}
-              disabled={!group?.keys.length}
+          <CursorMoreMenu job={job} cursor="image" disabled={!reading || busy} />
+          <CommandField job={job} disabled={busy} anchor={commandAnchor} />
+          {image?.actions?.map((a) => (
+            <ToolbarButton
+              key={a.key}
+              label={`${a.label} (${a.key})`}
+              disabled={!reading || busy}
+              onClick={() => pressKey(job, a.key)}
             >
-              <Keyboard />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="max-h-(--available-height)"
-            >
-              <DropdownMenuGroup>
-                {group?.keys.map((k) => (
-                  <DropdownMenuItem
-                    key={k.key}
-                    disabled={busy}
-                    onClick={() => press(k.key)}
-                  >
-                    {k.description}
-                    <kbd className="ml-auto pl-4 font-mono text-muted-foreground">
-                      {k.key}
-                    </kbd>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <ViewerPopover
-            label="콜론 명령"
-            icon={SquareTerminal}
-            open={colonOpen}
-            onOpenChange={setColonOpen}
-          >
-            <form
-              className="flex flex-col gap-4"
-              onSubmit={(e) => {
-                e.preventDefault()
-                const text = command.trim().replace(/^:/, "")
-                if (!text) return
-                press(":", text)
-                setCommand("")
-                setColonOpen(false)
-                rootRef.current?.focus()
-              }}
-            >
-              <Field>
-                <FieldLabel htmlFor={`colon-${job.id}`}>명령</FieldLabel>
-                <Input
-                  id={`colon-${job.id}`}
-                  list={`colon-${job.id}-list`}
-                  value={command}
-                  placeholder={group?.colon[0]?.command}
-                  spellCheck={false}
-                  autoComplete="off"
-                  className="font-mono"
-                  onChange={(e) => setCommand(e.target.value)}
-                />
-                <datalist id={`colon-${job.id}-list`}>
-                  {group?.colon.map((c) => (
-                    <option key={c.command} value={c.command}>
-                      {c.description}
-                    </option>
-                  ))}
-                </datalist>
-                <FieldDescription>
-                  키보드에서 <kbd>:</kbd>를 눌러도 열립니다.
-                </FieldDescription>
-              </Field>
-              <Button
-                className="self-end"
-                variant="outline"
-                size="sm"
-                type="submit"
-                disabled={busy}
-              >
-                보내기
-              </Button>
-            </form>
-          </ViewerPopover>
+              <CursorSymbol icon={a.icon} />
+            </ToolbarButton>
+          ))}
         </ToolbarGroup>
+        {image?.finish && (
+          <ToolbarGroup label={image.finish.label}>
+            <ToolbarButton
+              prominent
+              label={image.finish.label}
+              disabled={!reading || busy}
+              onClick={() => finish(job, image.finish!.keys)}
+            >
+              <CursorSymbol icon={image.finish.icon} />
+            </ToolbarButton>
+          </ToolbarGroup>
+        )}
       </WindowToolbar>
-      {graphics ? (
-        // The display window runs content under its bars; a plot sits between.
-        <div
-          className="asset-content"
-          style={{
-            paddingTop: "var(--window-header)",
-            paddingBottom: "var(--window-footer)",
+      <div className="viewer-grid">
+        <ImageViewer
+          key={frame?.id}
+          frame={frame}
+          embedded
+          windowBars
+          analysis={false}
+          revision={shown?.version}
+          selectionMode
+          onPick={(x, y) => {
+            const at = place({ x, y })
+            moveCursor(at)
+            if (reading && image?.click) pressKey(job, image.click, at)
           }}
-        >
-          <img
-            className="asset-plot"
-            src={`/api/task-graphics?id=${encodeURIComponent(job.id)}&request=${interaction.id}`}
-            alt={`${job.name} 그래픽`}
-          />
-        </div>
-      ) : (
-        <div className="viewer-grid">
-          <ImageViewer
-            key={frame?.id}
-            frame={frame}
-            embedded
-            windowBars
-            analysis={false}
-            revision={shown?.version}
-            selectionMode
-            onPick={(x, y) => setMark({ x, y })}
-            onHover={(point) => (hover.current = point)}
-            markers={mark ? [{ ...mark, label: "" }] : []}
-          />
-        </div>
+          // The cursor stays where the pointer or arrow keys left it.
+          onHover={(point) => point && moveCursor(place(point))}
+          markers={markers}
+          selectedMarker={pending ? String(used.length + 1) : undefined}
+        />
+      </div>
+      <div ref={commandAnchor} className="cursor-command-anchor" />
+      {reply && !commandOpen && (
+        <output key={reply.id} className="cursor-status glass-surface">
+          {reply.text}
+        </output>
       )}
+      {/* Up only while IRAF asks about its plot; it keeps its place and
+          size for the next one. */}
+      {plotted && !outside && (
+        <GraphicsPip
+          job={job}
+          plotted={plotted}
+          hidden={!asking || plotted === closed}
+          onClose={() => setClosed(plotted)}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * The task's plot as a window of its own, once taken out of the display
+ * window's picture-in-picture; closing it puts the plot back there.
+ */
+export function GraphicsPanel() {
+  const job = useCursorSession((state) => state.job)
+  const plotted = useCursorSession((state) => state.plotted)
+  // A window restored without its run has nothing to show; it closes once
+  // the dock has finished restoring.
+  useEffect(() => {
+    if (job) return
+    const timer = setTimeout(() => closePanel("graphics"))
+    return () => clearTimeout(timer)
+  }, [job])
+  if (!job || !plotted) return <div className="viewer-window" />
+  return (
+    <div className="viewer-window">
+      <WindowTitle title={job.manifest?.cursor?.graphics?.title ?? "IRAF 그래픽"} />
+      <WindowToolbar>
+        <GraphicsActions job={job} />
+      </WindowToolbar>
+      <div className="asset-content">
+        <GraphicsPlot job={job} plotted={plotted} />
+      </div>
     </div>
   )
 }

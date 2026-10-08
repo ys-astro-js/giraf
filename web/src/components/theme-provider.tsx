@@ -141,7 +141,8 @@ export function ThemeProvider({
 
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat) {
+      // Taken by something else, such as an IRAF cursor session.
+      if (event.repeat || event.defaultPrevented) {
         return
       }
 

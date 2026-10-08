@@ -33,7 +33,6 @@ export function TaskInteractionDialog({
       >
         <DialogHeader>
           <DialogTitle>{currentJob.name}</DialogTitle>
-          <p className="text-muted-foreground">사용자 입력 대기</p>
         </DialogHeader>
         <pre className="break-all whitespace-pre-wrap">
           {currentJob.interaction.prompt}

@@ -158,7 +158,7 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
     if interactive:
         from ..cursor_keys import cursor_keys
         image = next((inputs[slot['name']][0] for slot in spec['inputs'] if slot['kind'] == 'image' and inputs.get(slot['name'])), None)
-        m.update(interactive=True, cursorKeys=cursor_keys(spec), cursorImage=image)
+        m.update(interactive=True, cursorKeys=cursor_keys(spec), cursorImage=image, cursor=spec.get('cursor'))
     active_each = any(slot['mode'] == 'each' and outputs.get(slot['name']) for slot in spec['outputs'])
     if active_each and spec['inputs']:
         count = len(inputs.get(spec['inputs'][0]['name'], []))

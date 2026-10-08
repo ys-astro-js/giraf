@@ -105,6 +105,7 @@ pset 파라미터는 `datapars.fwhmpsf`처럼 pset 이름을 앞에 붙입니다
 
 | 종류 | 분류 | 상태 | 용도 |
 | --- | --- | --- | --- |
+| `cursor` | 작업 확장 | 지원 | 대화형 실행(`interactive=yes`)의 커서 키에 이름과 아이콘을 붙임. 동작은 추가하지 않음 |
 | `image-cursor` | 작업 확장 | 예정 | 영상을 클릭해 커서 명령으로 측정 (daoedit) |
 | `value-output`, `value-input` | 작업 확장 | 예정 | 측정값을 연결선으로 다른 노드의 파라미터에 전달 |
 | `ccd-preprocess`, `calibration-groups` | 작업 확장 | 예정 | ccdred 계열 전처리와 보정 그룹 포트 |
@@ -143,6 +144,19 @@ GIRAF 노드는 작업 추가 목록에서 IRAF 패키지 위에 타일로 표�
   "components": [{ "type": "pass-files" }]
 }
 ```
+
+`cursor`는 작업이 IRAF 커서 모드에서 이미 읽는 키를 처음 쓰는 사람도 따라갈 수 있게 이름 붙입니다. 하나만 둘 수 있습니다. 예: `giraf/schemas/daophot-psf.json`.
+
+| 필드 | 설명 |
+| --- | --- |
+| `image.click` | 영상을 클릭하면 그 위치로 보내는 키. 이 키 뒤에 그래픽 커서가 오면 그 별을 검토 중으로 표시 |
+| `image.count` | 영상 창 부제목. `{n}`은 사용한 표시 수 |
+| `image.actions` | `{key, label, icon}` 목록. 디스플레이 창 툴바의 아이콘 버튼 |
+| `image.finish` | `{label, icon, keys}`. 강조 버튼. `keys`를 다음 요청마다 하나씩 보냄(예: `w`, `q`, 마지막 질문의 `q`) |
+| `graphics.title` | 그래픽 플롯 제목 |
+| `graphics.accept`, `graphics.reject` | `{key, label, icon}`. 사용(강조)·버리기 버튼. 사용하면 검토 중 표시를 확정 |
+
+`icon`은 `check`, `trash`, `sigma`, `save`, `plus`, `minus`, `refresh`, `list`, `eye`, `x` 중 하나입니다. 툴바는 아이콘 버튼이며 `label`은 툴팁입니다.
 
 ### 전용 어댑터 작업
 

@@ -160,7 +160,8 @@ export function syncDock() {
       : undefined
     return {
       maximized:
-        docked?.id ?? (floating && !isDocked(floating) ? floating.id : undefined),
+        docked?.id ??
+        (floating && !isDocked(floating) ? floating.id : undefined),
       columnOpen: columnShown(dock),
       revision: state.revision + 1,
     }
@@ -387,6 +388,41 @@ export function closeTab(panel: IDockviewPanel) {
   saveLayout()
 }
 
+/** Closes a window by id if it is open, e.g. one a session opened. */
+export function closePanel(id: PanelId) {
+  const panel = api()?.getPanel(id)
+  if (panel) closeTab(panel)
+}
+
+/**
+ * Opens a window floating over the workbench, e.g. a picture-in-picture
+ * taken out. It never passes through the column, so a maximized window
+ * stays as it is.
+ */
+export function floatPanel(id: PanelId) {
+  const dock = api()
+  if (!dock) return
+  const open = dock.getPanel(id)
+  if (open) return open.api.setActive()
+  const width = Math.min(FLOAT.width, dock.width)
+  const height = Math.min(FLOAT.height, dock.height)
+  dock.addPanel({
+    id,
+    component: id,
+    title: PANELS[id].title,
+    floating: {
+      position: {
+        left: Math.max(0, dock.width - width - 48),
+        top: Math.max(0, Math.min(48, dock.height - height)),
+      },
+      width,
+      height,
+    },
+  })
+  syncDock()
+  saveLayout()
+}
+
 /* Windows: the window pill acts on the whole group. */
 
 export function closeWindow(group: DockviewGroupPanel) {
@@ -396,7 +432,9 @@ export function closeWindow(group: DockviewGroupPanel) {
 
 function maximizedGroup() {
   const id = useDock.getState().maximized
-  return id ? (api()?.getGroup(id) as DockviewGroupPanel | undefined) : undefined
+  return id
+    ? (api()?.getGroup(id) as DockviewGroupPanel | undefined)
+    : undefined
 }
 
 const isMaximized = (group: DockviewGroupPanel) =>

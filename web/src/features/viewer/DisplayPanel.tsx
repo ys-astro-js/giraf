@@ -4,11 +4,21 @@ import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
 import { Blank } from "@/components/workbench-controls"
 import { toast } from "@/components/ui/toast"
 import { usePanel } from "@/features/dock/context"
-import { registerCloseAction, revealPanel } from "@/features/dock/store"
+import {
+  closePanel,
+  registerCloseAction,
+  revealPanel,
+} from "@/features/dock/store"
 import { WindowTitle, WindowToolbar } from "@/features/dock/WindowToolbar"
 import { ImageViewer } from "./ImageViewer"
-import { CursorSession } from "./CursorSession"
-import { useCursorSession, waitingCursor } from "@/lib/cursor-session"
+import { CursorImage } from "./CursorSession"
+import {
+  advance,
+  cursorKeydown,
+  interactiveRun,
+  startSession,
+  useCursorSession,
+} from "@/lib/cursor-session"
 import {
   displayQueryOptions,
   displayRow,
@@ -52,7 +62,7 @@ export function DisplayPanel() {
   )
 
   const session = useCursorSession((state) => state.job)
-  if (session) return <CursorSession key={session.id} job={session} />
+  if (session) return <CursorImage key={session.id} job={session} />
   if (!frames.length)
     return (
       <div className="viewer-window">
@@ -102,22 +112,30 @@ export function DisplayPanel() {
 }
 
 /**
- * Hosts a waiting run's cursor loop in the display window, as IRAF hosts
- * imcur on its image display, and brings the window forward for it.
+ * Hosts an interactive run's cursor loop while it runs, as IRAF hosts imcur
+ * on its image display: the display window reads the image cursor and
+ * shows what the task plots, keys typed anywhere go to IRAF, and the run
+ * log shows what each key did.
  */
 export function CursorSessionWatcher({ job }: { job: Job | undefined }) {
-  const waiting = waitingCursor(job) ? job : undefined
+  const run = interactiveRun(job) ? job! : null
   useEffect(() => {
-    useCursorSession.setState({ job: waiting ?? null })
-  }, [waiting])
-  const id = waiting?.id
-  // The task's output answers what each key did; it stays in the run log.
+    startSession(run)
+    if (run) advance(run)
+  }, [run])
+  const id = run?.id
   useEffect(() => {
     if (!id) return
     revealPanel("display")
     useLayout.getState().viewLog(id)
+    // Before the app's own shortcuts (capture), so a key IRAF takes stays IRAF's.
+    window.addEventListener("keydown", cursorKeydown, true)
+    return () => {
+      window.removeEventListener("keydown", cursorKeydown, true)
+      closePanel("graphics")
+    }
   }, [id])
-  useEffect(() => () => useCursorSession.setState({ job: null }), [])
+  useEffect(() => () => startSession(null), [])
   return null
 }
 

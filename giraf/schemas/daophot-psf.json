@@ -1,0 +1,42 @@
+{
+  "version": 2,
+  "task": "noao.digiphot.daophot.psf",
+  "components": [
+    {
+      "type": "cursor",
+      "image": {
+        "click": "a",
+        "count": "사용한 별 {n}개",
+        "actions": [
+          {
+            "key": "f",
+            "label": "PSF 계산",
+            "icon": "sigma"
+          }
+        ],
+        "finish": {
+          "label": "저장 후 종료",
+          "icon": "save",
+          "keys": [
+            "w",
+            "q",
+            "q"
+          ]
+        }
+      },
+      "graphics": {
+        "title": "PSF",
+        "accept": {
+          "key": "a",
+          "label": "사용",
+          "icon": "check"
+        },
+        "reject": {
+          "key": "d",
+          "label": "버리기",
+          "icon": "trash"
+        }
+      }
+    }
+  ]
+}
