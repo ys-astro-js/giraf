@@ -6,6 +6,7 @@ import json
 from .model import inspect_file
 from .task_catalog import TASKS, CALIBRATIONS
 from .task_jobs import validate_task, values
+from .image_lists import accepts_asset
 
 
 def connection_components(connections):
@@ -151,7 +152,7 @@ def diagnose_connections(by_id, connections, add):
             kinds = [s['kind'] for s in outputs if not output_role or s['name'] == output_role]
             if not kinds and not output_role and parent_spec and parent_spec.get('adapter') != 'generic':
                 kinds = [parent_spec.get('kind', 'image')]
-            if not kinds or not any(k == slot['kind'] or k == 'image-list' and slot['kind'] in ('image', 'text') for k in kinds):
+            if not kinds or not any(accepts_asset(slot['kind'], k) for k in kinds):
                 add('error', '출력과 입력의 자료형 또는 출력 역할이 맞지 않습니다.', target_id, edge_id)
                 continue
             if source.get('kind') == 'pending' and not target['payload'].get('expressions', {}).get(slot['name']):

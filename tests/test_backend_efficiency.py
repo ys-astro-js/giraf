@@ -218,7 +218,7 @@ class TaskRequestShapeTests(unittest.TestCase):
 
     def test_valid_task_defaults_and_iraf_values_keep_their_contract(self):
         from giraf.task_jobs import validate_task
-        payload = {'task': 'workflow.image_list', 'inputs': {}, 'outputs': {'output': 'images.list'}}
+        payload = {'task': 'workflow.file_input', 'inputs': {}}
         # Required-file checks must still happen after structural validation.
         with self.assertRaisesRegex(ValueError, '입력 파일'):
             validate_task(payload, lambda _: None)

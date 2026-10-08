@@ -10,7 +10,7 @@ from .task_expressions import resolve_expression, inspect_expression, split_imag
 
 
 def accepts_asset(kind, asset):
-    return kind == asset or asset == 'image-list' and kind in ('image', 'text')
+    return kind in ('any', asset) or asset == 'image-list' and kind in ('image', 'text')
 
 
 def check_input_lists(manifest):
@@ -95,40 +95,3 @@ def expand_image_selection(slot, ids, resolve, directory, *, inspection=False):
     if not slot.get('multiple', True) and len(rows) > 1:
         raise ValueError(f'{slot.get("name", "input")}: 목록을 펼친 뒤 영상 한 개가 필요하지만 {len(rows)}개입니다.')
     return rows, list(sources.values())
-
-
-def image_list_spec():
-    return dict(name='workflow.image_list', taskName='image_list', title='image_list',
-                package='workflow', description='Create an image list', adapter='generic', executor='image-list',
-                inputs=[dict(name='input', label='Input images', kind='image', multiple=True, required=True)],
-                outputs=[dict(name='output', label='Output image list', kind='image-list', mode='single', default='images.list')],
-                output=None, kind='image-list', parameters=[], allParameters=[], parameterSets=[],
-                fixed={}, schemaFiles={}, schemaFingerprint='image-list-v1', runnable=True)
-
-
-def execute_image_list(runner):
-    from .jobs import atomic_json
-    from .products import publish_product
-    from .task_session import Cancelled
-    check_input_lists(runner.m)
-    rows = {r['id']: r for r in runner.m['rows']}
-    entries = []
-    for id in runner.m['inputs']['input']:
-        if (runner.job / 'cancel').exists():
-            raise Cancelled('사용자가 중단했습니다.')
-        row = rows[id]
-        path = Path(row['path']).resolve()
-        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != row['sha256']:
-            raise ValueError(f'{row.get("label") or path.name}: 검증 이후 입력 파일이 변경되었거나 없어졌습니다.')
-        value = str(path) + row.get('section', '')
-        entries.append(json.dumps(value, ensure_ascii=False) if any(c.isspace() for c in value) else value)
-    folder = runner.job / 'output'
-    folder.mkdir(exist_ok=True)
-    path = folder / 'images.list'
-    path.write_text('\n'.join(entries) + '\n')
-    atomic_json(runner.job / 'sources.json', list(rows.values()))
-    (runner.job / 'task.log').write_text(f'Created image list with {len(entries)} entries.\n')
-    products = [dict(file='output/images.list', label=runner.m['outputs']['output'], asset='image-list', role='output'),
-                dict(file='task.log', label='image_list-results.txt', asset='text', role='$log')]
-    atomic_json(runner.job / 'products.json', [publish_product(runner.job, p, i) for i, p in enumerate(products)])
-    runner.state('image_list 완료', 1, 'completed')

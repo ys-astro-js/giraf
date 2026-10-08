@@ -105,8 +105,13 @@ export function InspectorFileSource({
         >
           <TabsList className="w-full">
             <TabsTrigger value="files">파일</TabsTrigger>
-            {!port && <TabsTrigger value="expression">표현식</TabsTrigger>}
-            <TabsTrigger value="node">노드 출력</TabsTrigger>
+            {/* A file source takes chosen files only, not other nodes or typed names. */}
+            {!port && s.connectable !== false && (
+              <TabsTrigger value="expression">표현식</TabsTrigger>
+            )}
+            {s.connectable !== false && (
+              <TabsTrigger value="node">노드 출력</TabsTrigger>
+            )}
           </TabsList>
           <TabsContent value="files">
             <Button

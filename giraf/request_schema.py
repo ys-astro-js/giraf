@@ -27,6 +27,11 @@ class Examination(RequestModel):
     parameters: dict[str, dict[str, ParameterValue]] = Field(default_factory=dict)
 
 
+class Destination(RequestModel):
+    path: str = ''
+    conflict: Literal['number', 'overwrite'] = 'number'
+
+
 class AlignmentBinding(RequestModel):
     reference: list[str] = Field(default_factory=list)
     input: list[str] = Field(default_factory=list)
@@ -49,6 +54,7 @@ class TaskRequest(RequestModel):
     cursorCommands: dict[str, str] = Field(default_factory=dict)
     textInputs: dict[str, str] = Field(default_factory=dict)
     alignmentBinding: AlignmentBinding | None = None
+    destination: Destination | None = None
     filePolicy: FilePolicy = Field(default_factory=FilePolicy)
     workingDirectory: str | None = None
     instanceId: str | None = None

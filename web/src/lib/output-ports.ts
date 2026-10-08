@@ -1,6 +1,7 @@
 import { activeOutputSlots, primaryOutputRole, matchesGroup, type CalibrationGroup } from "./calibration-ports"
 import { acceptsAsset, type Catalog, type Frame, type Spec } from "./workbench"
 import type { Source, TaskMap } from "@/lib/task-map"
+import { assigned } from "@/lib/task-map/inputs"
 
 export type CustomOutputPort = {
   id: string
@@ -20,9 +21,9 @@ export function editableOutputPorts(
   map?: TaskMap
 ): CustomOutputPort[] {
   const base: CustomOutputPort[] = [
-    { id: "$default", name: "", files: ["*"], outputRole: primaryOutputRole(spec) },
+    { id: "$default", name: "", files: ["*"], outputRole: primaryOutputRole(spec, task) },
     ...((spec.outputs?.length || 0) > 1
-      ? activeOutputSlots(task,spec,map).filter(s=>s.name!==primaryOutputRole(spec)).map((s) => ({
+      ? activeOutputSlots(task,spec,map).filter(s=>s.name!==primaryOutputRole(spec,task)).map((s) => ({
           id: "$role:" + s.name,
           name: s.name,
           files: ["*"],
@@ -176,4 +177,30 @@ export function removeOutputPort(
         )
     ),
   }
+}
+
+/**
+ * A pass-through output is in use when its input holds files of its kind, so a
+ * file source shows one port per kind it actually carries. Unknown files keep
+ * the current state until their details load.
+ */
+export function syncPassOutputs(map: TaskMap, catalog: Catalog | null, rows: Frame[]): TaskMap {
+  if (!catalog) return map
+  const all = new Map([...rows, ...map.runs.flatMap((r) => r.products)].map((r) => [r.id, r]))
+  let changed = false
+  const tasks = map.tasks.map((task) => {
+    const spec = catalog.tasks.find((s) => s.name === task.task)
+    const pass = spec?.outputs?.filter((slot) => slot.mode === "pass" && slot.source) || []
+    if (!pass.length) return task
+    const outputs = { ...task.draft.outputs }
+    for (const slot of pass) {
+      const frames = assigned(map, task, slot.source!).ids.map((id) => all.get(id))
+      if (frames.some((frame) => !frame)) continue
+      outputs[slot.name] = frames.some((frame) => (frame!.asset || "image") === slot.kind) ? "*" : ""
+    }
+    if (pass.every((slot) => (outputs[slot.name] || "") === (task.draft.outputs?.[slot.name] || ""))) return task
+    changed = true
+    return { ...task, draft: { ...task.draft, outputs } }
+  })
+  return changed ? { ...map, tasks } : map
 }

@@ -23,8 +23,10 @@ export function useFilePicker({
   remember: (rows: Frame[]) => void
   rows: Frame[]
 }) {
-  const [location, setLocation] = useState(workspace.folder)
-  const [path, setPath] = useState(workspace.folder),
+  const [location, setLocation] = useState(
+    request.startPath || workspace.folder
+  )
+  const [path, setPath] = useState(request.startPath || workspace.folder),
     [data, setData] = useState<Browse | null>(null),
     [busy, setBusy] = useState(true),
     [error, setError] = useState("")

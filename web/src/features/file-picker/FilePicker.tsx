@@ -25,6 +25,9 @@ export type PickerRequest = {
   apply: (ids: string[]) => void
   folderOnly?: boolean
   applyFolder?: (path: string) => void
+  /** Folder to open first; the working folder by default. */
+  startPath?: string
+  folderAction?: string
 }
 export function FilePicker({
   request,
@@ -291,7 +294,7 @@ export function FilePicker({
           >
             <Check data-icon="inline-start" />
             {request.folderOnly ? (
-              "이 폴더 열기"
+              request.folderAction || "이 폴더 열기"
             ) : (
               <>{`${selection.size}개 선택`}</>
             )}

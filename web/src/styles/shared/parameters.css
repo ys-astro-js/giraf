@@ -27,7 +27,7 @@
 .input-slot, .generic-output-field { gap: 8px; }
 
 
-.map-viewport .workflow-named-port { width:auto; max-width:104px; min-width:36px; padding:0 8px; border-radius:6px; font-size:12px; font-weight:600; }
+.map-viewport .workflow-named-port { width:max-content; max-width:104px; min-width:36px; padding:0 8px; border-radius:6px; font-size:12px; font-weight:600; }
 .workflow-named-port > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
 .output-port-file-list { display:flex; flex-direction:column; gap:12px; max-height:200px; overflow:auto; padding:4px; }
 

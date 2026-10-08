@@ -84,3 +84,30 @@
 .library-branch {
   padding-inline-start: 12px;
 }
+
+/* GIRAF's own nodes sit above IRAF's packages, divided from them. */
+.library-nodes {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.library-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 6px;
+}
+.library-tile {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  background: var(--muted);
+}
+.library-tile .library-option-text {
+  width: 100%;
+}
+.library-tile:hover {
+  background: color-mix(in oklch, var(--muted) 70%, var(--foreground) 6%);
+}

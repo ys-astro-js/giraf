@@ -13,7 +13,7 @@ import numpy as np
 from astropy.io import fits
 
 from giraf.generic_tasks import GenericTaskRun, preview_generic, validate_generic
-from giraf.image_lists import image_list_spec
+from giraf.file_nodes import file_input_spec, file_save_spec
 from giraf.jobs import atomic_json
 from giraf.task_jobs import preview_task, validate_task, authorize_file_plan
 from giraf.task_worker import TaskRun
@@ -40,8 +40,9 @@ class ProductStorageTests(unittest.TestCase):
             fits.writeto(path, np.ones((8, 8), dtype='float32'))
             self.rows[key] = dict(id=key, path=str(path), name=path.name,
                                   label='한글 영상.fit', asset='image')
-        self.spec = dict(image_list_spec(), name='demo.sample', taskName='sample',
+        self.spec = dict(file_input_spec(), name='demo.sample', taskName='sample',
                          executor=None, qualified='demo.sample', package='demo',
+                         inputs=[dict(name='input', label='Input images', kind='image', multiple=True, required=True)],
                          outputs=[dict(name='output', kind='image', mode='single', default='결과 영상')])
 
     def job(self, manifest):
@@ -165,13 +166,39 @@ class ProductStorageTests(unittest.TestCase):
             outcomes = json.loads((job / 'outcomes.json').read_text())
             self.assertEqual([o['state'] for o in outcomes], ['failed', 'processed'])
 
-    def test_image_list_and_log_preserve_content(self):
-        m = validate_generic(image_list_spec(), dict(inputs={'input': ['a']}, outputs={'output': '영상 목록.list'}), self.rows.__getitem__)
+    def test_file_input_passes_each_kind_and_keeps_lists_resolvable(self):
+        sub = self.root / 'sub'; sub.mkdir()
+        listing = sub / 'set.list'; listing.write_text('../a.fit\n')
+        self.rows['l'] = dict(id='l', path=str(listing), name=listing.name, label='set.list', asset='image-list')
+        m = validate_generic(file_input_spec(), dict(inputs={'files': ['a', 'l']}, outputs={'image': '*', 'image-list': '*'}),
+                             self.rows.__getitem__)
+        self.assertEqual(m['outputs']['image'], '*')
+        self.assertEqual(m['outputs']['text'], '')
         job = self.job(m); GenericTaskRun(job).execute()
         products = json.loads((job / 'products.json').read_text()); assert_products(self, job, products)
-        self.assertEqual(products[0]['label'], '영상 목록.list')
-        self.assertEqual((job / products[0]['file']).read_bytes(), (job / 'output/images.list').read_bytes())
-        self.assertEqual(products[-1]['role'], '$log')
+        self.assertEqual([(p['role'], p['label']) for p in products],
+                         [('image', '한글 영상.fit'), ('image-list', 'set.list'), ('$log', '파일 입력-results.txt')])
+        self.assertEqual((job / products[0]['file']).read_bytes(), Path(self.rows['a']['path']).read_bytes())
+        self.assertEqual((job / products[1]['file']).read_text().strip(), str(sub / '../a.fit'))
+
+    def test_file_save_numbers_or_overwrites_existing_names(self):
+        out = self.root / '저장'; out.mkdir()
+        self.rows['b']['label'] = 'm67.mag.1'
+        (out / 'm67.mag.1').write_text('old')
+        def save(conflict, path):
+            m = validate_generic(file_save_spec(), dict(inputs={'files': ['b']}, workingDirectory=str(self.root),
+                                 destination=dict(path=path, conflict=conflict)), self.rows.__getitem__)
+            self.assertEqual(preview_generic(m)[0]['output'], str(out / ('m67_1.mag.1' if conflict == 'number' else 'm67.mag.1')))
+            job = self.job(m); GenericTaskRun(job).execute()
+            self.assertEqual(json.loads((job / 'status.json').read_text())['state'], 'completed')
+            return json.loads((job / 'saved.json').read_text())
+        self.assertEqual(save('number', '저장')[0]['path'], str(out / 'm67_1.mag.1'))
+        self.assertEqual((out / 'm67.mag.1').read_text(), 'old')
+        self.assertEqual(save('overwrite', str(out))[0]['path'], str(out / 'm67.mag.1'))
+        self.assertEqual((out / 'm67.mag.1').read_bytes(), Path(self.rows['b']['path']).read_bytes())
+        with self.assertRaisesRegex(ValueError, '저장 위치'):
+            validate_generic(file_save_spec(), dict(inputs={'files': ['b']}, workingDirectory=str(self.root),
+                             destination=dict(path='없는 폴더')), self.rows.__getitem__)
 
     def test_legacy_paths_prefix_lists_and_direct_backup(self):
         from giraf.task_catalog import TASKS, definition
@@ -220,7 +247,7 @@ class ProductStorageTests(unittest.TestCase):
         resolve = lambda id: row
         payloads = [dict(task='images.imutil.imcopy', inputs={'input': [row['id']]}),
                     dict(task='ccdhedit', inputs={'images': [row['id']]}, parameters={'parameter': 'OBSERVER', 'value': 'test'}),
-                    dict(task='workflow.image_list', inputs={'input': [row['id']]})]
+                    dict(task='workflow.file_input', inputs={'files': [row['id']]})]
         manifests = [validate_task(p, resolve) for p in payloads]
         path.unlink()
         for payload, manifest in zip(payloads, manifests):

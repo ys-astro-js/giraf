@@ -2,15 +2,16 @@ import { collectResponseDiagnostics, diagnostics, requestDiagnosticScope } from 
 import {headerFrame} from "./calibration"
 export type Values = Record<string, string | number | boolean | null>
 export type Param = { label?:string; mode?:string; required?:boolean; indirect?:string; name:string; type:string; default:string | number | boolean | null; choices:string[]; prompt:string; min:unknown; max:unknown }
-export type Slot = { valueType?:string; cursorType?:string; representation?:string; name:string; label:string; multiple:boolean; required?:boolean; kind:string }
-export type OutputSlot = { eachWhen?:string; optional?:boolean; name:string; kind:string; default:string; mode?:string; label?:string }
+export type Slot = { connectable?:boolean; valueType?:string; cursorType?:string; representation?:string; name:string; label:string; multiple:boolean; required?:boolean; kind:string }
+export type OutputSlot = { source?:string; eachWhen?:string; optional?:boolean; name:string; kind:string; default:string; mode?:string; label?:string }
 export type ParameterSet = { name:string; task:string; parameters:Param[]; fixed?:Values }
 export type SchemaIssue = { severity:'warning'|'error'; message:string }
-export type Spec = { fixed?:Values; groups?:{label:string;parameters:string[]}[]; schemaProvenance?:Record<string,string>; schemaIssues?:SchemaIssue[]; executor?:'image-list'; taskName?:string; adapter?:'generic'; runnable?:boolean; reason?:string; description?:string; outputs?:OutputSlot[]; parameterSets?:ParameterSet[]; name:string; title:string; package:string; parameters:Param[]; inputs:Slot[]; output:{ name:string; mode:string; default:string } | null; kind:string; preprocess?:boolean }
+export type Spec = { destination?:boolean; fixed?:Values; groups?:{label:string;parameters:string[]}[]; schemaProvenance?:Record<string,string>; schemaIssues?:SchemaIssue[]; executor?:'file-input'|'file-save'; taskName?:string; adapter?:'generic'; runnable?:boolean; reason?:string; description?:string; outputs?:OutputSlot[]; parameterSets?:ParameterSet[]; name:string; title:string; package:string; parameters:Param[]; inputs:Slot[]; output:{ name:string; mode:string; default:string } | null; kind:string; preprocess?:boolean }
 export type Catalog = { version:string; tasks:Spec[]; ccdproc:{parameters:Param[];inputs:Slot[]}; ccdred:Param[]; exam:Record<string,Param[]>; capabilities?:{version:string;schemaFingerprint:string;fallback:string[];limits:Record<string,string>} }
 export type Frame = { calibrationMetadata?:{filter:string;exposure:number}; role?:string; id:string; label:string; path?:string; name?:string; asset?:string; filter?:string; exposure?:number; shape?:string; width?:number; height?:number; detected_kind?:string; group?:string; job?:string; error?:string; history?:Record<string,string>;source?:string;viewer_supported?:boolean }
 export type AlignmentBinding = {reference:string[];input:string[]}
-export type Draft = { calibration?:import("./calibration").CalibrationOptions; textInputs?:Record<string,string>; alignmentBinding?:AlignmentBinding; cursorCommands?:Record<string,string>; outputs?:Record<string,string>; parameters:Values; inputs:Record<string,string[]>; output:{name:string}; section:string; exam:{x:number|null;y:number|null;key:string;parameters:Record<string,Values>} }
+export type Destination = { path:string; conflict:'number'|'overwrite' }
+export type Draft = { destination?:Destination; calibration?:import("./calibration").CalibrationOptions; textInputs?:Record<string,string>; alignmentBinding?:AlignmentBinding; cursorCommands?:Record<string,string>; outputs?:Record<string,string>; parameters:Values; inputs:Record<string,string[]>; output:{name:string}; section:string; exam:{x:number|null;y:number|null;key:string;parameters:Record<string,Values>} }
 export type WorkflowDocument = {path: string; name: string; saved?: boolean}
 export type Preferences = { _document?:WorkflowDocument; parameterSets?:Record<string,Record<string,Values>>; drafts:Record<string,Draft>; backend:string; mapping:Values; instrument:string[]; packageValues:Values; taskMap?:import('./task-map').TaskMap }
 export type Workspace = { folder:string; files:Frame[]; sets:{name:string;ids:string[];folder:string}[] }
@@ -27,7 +28,7 @@ export function makeDraft(spec:Spec | undefined, saved?:Partial<Draft>):Draft {
   if (spec?.adapter === 'generic' && !saved?.outputs && saved?.output?.name && spec.outputs?.length === 1) {
     outputs[spec.outputs[0].name] = saved.output.name
   }
-  return {calibration:undefined,textInputs:{...saved?.textInputs},alignmentBinding:saved?.alignmentBinding,cursorCommands:{...saved?.cursorCommands},outputs,parameters,inputs:{...saved?.inputs},output:{name:spec?.output?.default||'',...saved?.output},section:saved?.section||'',exam:{x:null,y:null,key:'r',parameters:{},...saved?.exam}}
+  return {calibration:undefined,destination:saved?.destination,textInputs:{...saved?.textInputs},alignmentBinding:saved?.alignmentBinding,cursorCommands:{...saved?.cursorCommands},outputs,parameters,inputs:{...saved?.inputs},output:{name:spec?.output?.default||'',...saved?.output},section:saved?.section||'',exam:{x:null,y:null,key:'r',parameters:{},...saved?.exam}}
 }
 export function buildPayload(task:Spec,drafts:Record<string,Draft>,catalog:Catalog,prefs:Omit<Preferences,'drafts'>){
   const d=makeDraft(task,drafts[task.name]),proc=makeDraft(catalog.tasks.find(t=>t.name==='ccdproc')!,drafts.ccdproc)
@@ -56,6 +57,8 @@ function productName(name:string,kind:string) {
   return base&&kind==='image'&&!outputExtension(base)?base+'.fits':base
 }
 export function plannedOutputs(task:Spec,draft:Draft,rows:Frame[],_mapping:Values={}):{input:string;output:string}[]{
+  // File nodes pass or save the files themselves; no new names to preview.
+  if(task.executor)return []
   if(task.adapter==='generic'){
     const ids=draft.inputs[task.inputs[0]?.name]||[]
     const outputs=(task.outputs||[]).flatMap(slot=>{
@@ -120,5 +123,5 @@ export function taskDisplayName(identity: string): string {
 }
 
 export function acceptsAsset(kind: string, asset: string | undefined): boolean {
-  return kind === asset || asset === 'image-list' && (kind === 'image' || kind === 'text')
+  return kind === "any" || kind === asset || asset === 'image-list' && (kind === 'image' || kind === 'text')
 }

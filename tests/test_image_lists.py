@@ -41,7 +41,9 @@ class ImageListTests(unittest.TestCase):
         self.assertEqual(len(m['inputLists']),2)
         self.assertEqual(m['inputSelections']['input'],['first','second'])
         self.assertEqual(m['inputLists'][0]['sha256'],lists[0]['sha256'])
-        generic=dict(TASKS['workflow.image_list'],name='extension.any_task',executor=None)
+        generic=dict(TASKS['workflow.file_input'],name='extension.any_task',executor=None,
+                     inputs=[dict(name='input',label='Input',kind='image',multiple=True,required=True)],
+                     outputs=[dict(name='output',kind='image-list',mode='single',default='images.list')])
         g=validate_generic(generic,dict(inputs={'input':['first','second']},outputs={'output':'new.list'}),self.rows.__getitem__)
         self.assertEqual(len(g['inputs']['input']),4)
         with self.assertRaises(ValueError):
@@ -72,9 +74,8 @@ class ImageListTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'변경'):
             TaskRun(job).prepare()
     def test_list_nodes_feed_multiple_lists_to_an_image_node_and_execute(self):
-        creator=TASKS['workflow.image_list']
-        self.assertEqual(creator['outputs'][0]['kind'],'image-list')
-        self.assertEqual(creator['executor'],'image-list')
+        source=TASKS['workflow.file_input']
+        self.assertEqual(source['executor'],'file-input')
         seen=[]
         def run(node,payload):
             payload.update(workingDirectory=str(self.root),backend='cl')
@@ -91,10 +92,10 @@ class ImageListTests(unittest.TestCase):
             seen.append((m,products))
             return dict(id=node['id'],state='completed',products=products)
         graph=dict(nodes=[
-            dict(id='list1',label='list1',payload=dict(task='workflow.image_list',inputs={'input':['a','b']},outputs={'output':'Bias1.list'})),
-            dict(id='list2',label='list2',payload=dict(task='workflow.image_list',inputs={'input':['c','d']},outputs={'output':'Bias2.list'})),
+            dict(id='list1',label='list1',payload=dict(task='workflow.file_input',inputs={'files':['first']},outputs={'image-list':'*'})),
+            dict(id='list2',label='list2',payload=dict(task='workflow.file_input',inputs={'files':['second']},outputs={'image-list':'*'})),
             dict(id='combine',label='combine',payload=self.payload(['a']))],
-            links=[dict(source=n,target='combine',role='input',kind='image',multiple=True) for n in ('list1','list2')])
+            links=[dict(source=n,target='combine',role='input',kind='image',multiple=True,sourceRole='image-list') for n in ('list1','list2')])
         original=json.loads(json.dumps(graph))
         state=execute_workflow(graph,run,lambda:False,lambda s:None)
         self.assertEqual(state['state'],'completed',state['message'])

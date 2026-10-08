@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { syncPassOutputs } from "@/lib/output-ports"
 import { useQueryClient } from "@tanstack/react-query"
 import { useStore } from "zustand"
 import { createEditorStore } from "@/lib/edit-history"
@@ -134,9 +135,14 @@ export function useWorkbenchController() {
     remember,
     setReady,
   })
+  const passContext = useRef({ catalog, cache })
+  passContext.current = { catalog, cache }
   const update = useCallback(
     (fn: (m: TaskMap) => TaskMap, label?: string) => {
-      if (editor.update(fn, label)) queueSave()
+      const { catalog, cache } = passContext.current
+      const next = (m: TaskMap) =>
+        syncPassOutputs(fn(m), catalog, Object.values(cache))
+      if (editor.update(next, label)) queueSave()
     },
     [editor, queueSave]
   )

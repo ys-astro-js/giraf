@@ -102,7 +102,7 @@ export function connectionChoices(
   }
   const inputs = connectionRoles(spec, catalog)
   if (targetRole) {
-    const slot = inputs.find(s => s.name === targetRole)
+    const slot = inputs.find(s => s.name === targetRole && s.connectable !== false)
     if (!slot) throw Error("입력 포트를 찾을 수 없습니다.")
     if (!roleActive(t, slot.name, catalog))
       throw Error(`${slot.name} 입력이 비활성 상태입니다. 설정에서 켜 주세요.`)
@@ -116,6 +116,7 @@ export function connectionChoices(
   }
   const roles = inputs.filter(
     (s) =>
+      s.connectable !== false &&
       roleActive(t, s.name, catalog) &&
       (source.kind === "pending" ? kinds.some(k => acceptsAsset(s.kind, k)) : kinds.every((k) => acceptsAsset(s.kind, k))) &&
       (s.multiple || count === 1)
@@ -142,7 +143,7 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
   const height=Math.max(128+bodyHeight,104+outputs.length*36)
   const outputY=height-24-outputs.length*36
   return {
-    primaryOutputRole:primaryOutputRole(spec),
+    primaryOutputRole:primaryOutputRole(spec,t),
     roles,
     bodyHeight,
     width:NODE_WIDTH,

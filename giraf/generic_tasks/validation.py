@@ -133,6 +133,10 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
     outputs = {}
     for slot in spec['outputs']:
         name = str(provided_outputs.get(slot['name'], slot['default']))
+        if slot.get('mode') == 'pass':
+            # A pass-through output carries its input files; it has no name to check.
+            outputs[slot['name']] = '*' if name else ''
+            continue
         if slot.get('optional') and not name:
             outputs[slot['name']] = ''
             continue
@@ -146,6 +150,9 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
              inputLists=list(input_lists.values()), workingDirectory=directory, filePolicy=dict(mode='copy', backup=True), instanceId=payload.get('instanceId'),
              settings=dict(task=spec['name'], backend=backend, **params))
     if input_lists: m['inputSelections']=deepcopy(supplied_inputs)
+    if spec.get('destination'):
+        from ..file_nodes import checked_destination
+        m['destination'] = checked_destination(payload.get('destination'), directory)
     if interactive:
         from ..cursor_keys import cursor_keys
         image = next((inputs[slot['name']][0] for slot in spec['inputs'] if slot['kind'] == 'image' and inputs.get(slot['name'])), None)
@@ -162,6 +169,10 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
         return m
     m['filePlan'] = dict(mode='copy', destructive=False, backup=True, targets=[dict(path=r['path'], sha256=r['sha256'], role='input') for r in sources.values()],
                          output=', '.join(labels), description='선언된 입력 사본과 독립된 파라미터로 실행합니다.', collision='기존 결과를 덮어쓰지 않습니다.')
+    if m.get('destination'):
+        overwrite = m['destination']['conflict'] == 'overwrite'
+        m['filePlan'].update(description=f"{m['destination']['folder']}에 파일을 저장합니다.",
+                             collision='같은 이름의 파일을 덮어씁니다.' if overwrite else '같은 이름이 있으면 번호를 붙여 저장합니다.')
     m['filePlan']['token'] = hashlib.sha256(json.dumps(m, sort_keys=True).encode()).hexdigest()
     return m
 

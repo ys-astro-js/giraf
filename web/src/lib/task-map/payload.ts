@@ -88,6 +88,7 @@ function taskPayload(t: Instance, inputs: Record<string, string[]>) {
     alignmentBinding: t.draft.alignmentBinding
       ? clone(t.draft.alignmentBinding)
       : undefined,
+    destination: t.draft.destination ? clone(t.draft.destination) : undefined,
     parameterSets: clone(t.parameterSets || {}),
     instanceId: t.id,
     backend: t.backend,

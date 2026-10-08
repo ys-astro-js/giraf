@@ -1,5 +1,12 @@
 import { useRef, useState } from "react"
-import { ChevronRight, Folder, Plus, Terminal } from "lucide-react"
+import {
+  ChevronRight,
+  FileInput,
+  Folder,
+  FolderDown,
+  Plus,
+  Terminal,
+} from "lucide-react"
 import {
   Collapsible,
   CollapsibleContent,
@@ -25,6 +32,17 @@ const matches = (task: Spec, query: string) =>
     .toLowerCase()
     .includes(query.trim().toLowerCase())
 
+/** GIRAF's own nodes (file input, file save, …) stand apart from IRAF tasks. */
+const isWorkflowNode = (task: Spec) => !!task.executor
+const NodeIcon = ({ task }: { task: Spec }) =>
+  task.executor === "file-input" ? (
+    <FileInput aria-hidden="true" />
+  ) : task.executor === "file-save" ? (
+    <FolderDown aria-hidden="true" />
+  ) : (
+    <Terminal aria-hidden="true" />
+  )
+
 /** One task to add: its name and what it does. */
 function TaskOption({ task, onAdd }: { task: Spec; onAdd: () => void }) {
   const name = task.taskName || taskDisplayName(task.name)
@@ -36,14 +54,35 @@ function TaskOption({ task, onAdd }: { task: Spec; onAdd: () => void }) {
       aria-label={`${name} 추가`}
       onClick={onAdd}
     >
-      <Terminal aria-hidden="true" />
+      <NodeIcon task={task} />
       <span className="library-option-text">
         <span className="library-option-name">{name}</span>
         <span className="library-option-detail">
           {task.runnable === false
             ? `실행 미지원 · ${task.package}`
-            : task.title || task.package}
+            : (isWorkflowNode(task) && task.description) ||
+              task.title ||
+              task.package}
         </span>
+      </span>
+    </button>
+  )
+}
+
+/** A workflow node as a tile above the package tree. */
+function NodeTile({ task, onAdd }: { task: Spec; onAdd: () => void }) {
+  return (
+    <button
+      type="button"
+      className="library-option library-tile"
+      aria-label={`${task.title} 추가`}
+      title={task.description}
+      onClick={onAdd}
+    >
+      <NodeIcon task={task} />
+      <span className="library-option-text">
+        <span className="library-option-name">{task.title}</span>
+        <span className="library-option-detail">{task.description}</span>
       </span>
     </button>
   )
@@ -61,7 +100,15 @@ export function AddTaskButton() {
   const { refreshing, refresh } = useRefresh(w.refreshCatalog, w.setError)
   const search = useRef<HTMLInputElement>(null)
   const tasks = w.catalog?.tasks ?? []
-  const found = query.trim() ? tasks.filter((task) => matches(task, query)) : []
+  const nodes = tasks.filter(isWorkflowNode)
+  const irafTasks = tasks.filter((task) => !isWorkflowNode(task))
+  const foundNodes = query.trim()
+    ? nodes.filter((task) => matches(task, query))
+    : []
+  const foundTasks = query.trim()
+    ? irafTasks.filter((task) => matches(task, query))
+    : []
+  const found = [...foundNodes, ...foundTasks]
   const add = (task: Spec) => w.add(task.name)
 
   function branch(node: TaskPackage) {
@@ -138,18 +185,44 @@ export function AddTaskButton() {
               <ListSkeleton />
             ) : query.trim() ? (
               found.length ? (
-                found.map((task) => (
-                  <TaskOption
-                    key={task.name}
-                    task={task}
-                    onAdd={() => add(task)}
-                  />
-                ))
+                <>
+                  {!!foundNodes.length && (
+                    <div className="library-nodes">
+                      {foundNodes.map((task) => (
+                        <TaskOption
+                          key={task.name}
+                          task={task}
+                          onAdd={() => add(task)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {foundTasks.map((task) => (
+                    <TaskOption
+                      key={task.name}
+                      task={task}
+                      onAdd={() => add(task)}
+                    />
+                  ))}
+                </>
               ) : (
                 <NoFiles>검색 결과가 없습니다.</NoFiles>
               )
             ) : (
-              taskPackageTree(tasks).map(branch)
+              <>
+                {!!nodes.length && (
+                  <div className="library-nodes library-tiles">
+                    {nodes.map((task) => (
+                      <NodeTile
+                        key={task.name}
+                        task={task}
+                        onAdd={() => add(task)}
+                      />
+                    ))}
+                  </div>
+                )}
+                {taskPackageTree(irafTasks).map(branch)}
+              </>
             )}
           </div>
         </PopoverContent>

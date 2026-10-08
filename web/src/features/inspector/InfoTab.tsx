@@ -81,29 +81,36 @@ export function InspectorInfo({
     <TabsContent value="info" className="inspector-info">
       <div className="inspector-sections inspector-info-body">
         <NodeErrors map={map} nodeId={task.id} />
-        <section className="inspector-section">
-          <h3>실행 명령어</h3>
-          <code className="inspector-command">
-            {spec.package
-              ? `${spec.package}.${spec.taskName || taskDisplayName(spec.name)}`
-              : spec.name}
-          </code>
-        </section>
-        <section className="inspector-section parameter-changes">
-          <h3>변경한 파라미터</h3>
-          {changedParameters.length ? (
-            <dl>
-              {changedParameters.map((p) => (
-                <div key={p.name}>
-                  <dt>{p.name}</dt>
-                  <dd>{p.value || "빈 값"}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p className="text-muted-foreground">변경한 파라미터가 없습니다.</p>
-          )}
-        </section>
+        {/* GIRAF's own file nodes run no IRAF command and have no parameters. */}
+        {!spec.executor && (
+          <>
+            <section className="inspector-section">
+              <h3>실행 명령어</h3>
+              <code className="inspector-command">
+                {spec.package
+                  ? `${spec.package}.${spec.taskName || taskDisplayName(spec.name)}`
+                  : spec.name}
+              </code>
+            </section>
+            <section className="inspector-section parameter-changes">
+              <h3>변경한 파라미터</h3>
+              {changedParameters.length ? (
+                <dl>
+                  {changedParameters.map((p) => (
+                    <div key={p.name}>
+                      <dt>{p.name}</dt>
+                      <dd>{p.value || "빈 값"}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                <p className="text-muted-foreground">
+                  변경한 파라미터가 없습니다.
+                </p>
+              )}
+            </section>
+          </>
+        )}
         {fixedParameters(spec).length > 0 && (
           <section className="inspector-section parameter-changes">
             <h3>고정된 파라미터</h3>

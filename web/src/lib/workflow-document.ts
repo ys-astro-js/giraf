@@ -11,6 +11,8 @@ export function workflowDocument(prefs: Preferences, taskMap: TaskMap) {
       draft.inputs = {}
       delete draft.alignmentBinding
     }
+    // A folder outside the project belongs to this device; relative ones travel.
+    if (task.draft.destination?.path.startsWith("/")) task.draft.destination.path = ""
   }
   graph.connections = graph.connections.flatMap((connection): Connection[] => {
     const source = connection.source

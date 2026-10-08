@@ -127,9 +127,9 @@ export function flowNodes(
   })
   return [...groups, ...tasks]
 }
-export function outputHandle(source: Source, spec: Spec | undefined) {
+export function outputHandle(source: Source, spec: Spec | undefined, task?: Instance) {
   if (source.kind === "files") return "output"
-  const primary = primaryOutputRole(spec)
+  const primary = primaryOutputRole(spec, task)
   if (primary && source.outputRole === primary && (!source.port || source.port === "output:" + primary)) return "output"
   if (source.port && !source.port.startsWith("output-group:")) return source.port
   if (source.group) return "output"
@@ -143,7 +143,7 @@ export function flowEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
     const target = map.tasks.find((t) => t.id === connection.target)
     // File inputs and results whose source was deleted are still shown in the input summary.
     if (!source || !target) return []
-    const sourceHandle = outputHandle(connection.source,catalog.tasks.find(s=>s.name===source.task))
+    const sourceHandle = outputHandle(connection.source,catalog.tasks.find(s=>s.name===source.task),source)
     const route = map.edgeRoutes?.[connection.id]
     const targetGroup = map.view.selected === source.id || map.view.selected === target.id
       ? map.subflows?.find(group => group.id === target.subflowId) : undefined
@@ -194,7 +194,8 @@ export function connectFlow(
   connection: FlowConnection,
   replacingId?: string
 ): TaskMap {
-  const customPort=map.tasks.find(t=>t.id===connection.source)?.outputPorts?.find(p=>customPortHandle(p.id)===connection.sourceHandle)
+  const sourceTask=map.tasks.find(t=>t.id===connection.source)
+  const customPort=sourceTask?.outputPorts?.find(p=>customPortHandle(p.id)===connection.sourceHandle)
   const sourcePort=parsePort(connection.sourceHandle,"output")
   if (!(customPort || sourcePort || connection.sourceHandle === "output" || connection.sourceHandle?.startsWith("output:")) || !connection.targetHandle)
     throw Error("출력과 입력 포트를 선택해 주세요.")
@@ -206,12 +207,12 @@ export function connectFlow(
     : map
   // Keep a frozen result version when only the target of an existing edge changes.
   const prior = map.connections.find((c) => c.id === replacingId)
-  const outputRole=customPort ? customPort.outputRole : sourcePort ? (sourcePort.role === "$primary" ? undefined : sourcePort.role) : connection.sourceHandle?.startsWith("output:") ? connection.sourceHandle.slice(7) : primaryOutputRole(catalog.tasks.find(s=>s.name===map.tasks.find(t=>t.id===connection.source)?.task))
+  const outputRole=customPort ? customPort.outputRole : sourcePort ? (sourcePort.role === "$primary" ? undefined : sourcePort.role) : connection.sourceHandle?.startsWith("output:") ? connection.sourceHandle.slice(7) : primaryOutputRole(catalog.tasks.find(s=>s.name===sourceTask?.task),sourceTask)
   const source =
     prior &&
     prior.source.kind !== "files" &&
     prior.source.taskId === connection.source &&
-    outputHandle(prior.source,catalog.tasks.find(s=>s.name===map.tasks.find(t=>t.id===connection.source)?.task)) === connection.sourceHandle &&
+    outputHandle(prior.source,catalog.tasks.find(s=>s.name===sourceTask?.task),sourceTask) === connection.sourceHandle &&
     prior.source.outputRole === outputRole && JSON.stringify(prior.source.group) === JSON.stringify(sourcePort?.group)
       ? prior.source
       : customPort ? customOutput(base,connection.source,customPort) : nodeOutput(base, connection.source, outputRole,sourcePort?.group)

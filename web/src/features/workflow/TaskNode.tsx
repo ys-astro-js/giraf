@@ -70,7 +70,7 @@ export const TaskNode = memo(function TaskNode({
   )
   const isOutputConnected = (handle: string) =>
     sourceConnections.some(
-      (connection) => outputHandle(connection.source, spec) === handle
+      (connection) => outputHandle(connection.source, spec, task) === handle
     )
   const run = map.runs.filter((r) => r.instanceId === id).at(-1)
   const nodeStatus = nodeIssue
@@ -79,8 +79,13 @@ export const TaskNode = memo(function TaskNode({
       ? stateLabel(run.state)
       : "실행 전"
   const output = nodeOutput(map, id, geometry.primaryOutputRole)
+  // A pass-through port is named by the kind of file it carries.
+  const primaryPass =
+    spec?.outputs?.find((slot) => slot.name === geometry.primaryOutputRole)
+      ?.mode === "pass"
   const primaryName =
-    task.outputPorts?.find((p) => p.id === "$default")?.name.trim() || ""
+    task.outputPorts?.find((p) => p.id === "$default")?.name.trim() ||
+    (primaryPass ? geometry.primaryOutputRole || "" : "")
   const clickStart = useStore((state) => state.connectionClickStartHandle)
   const connecting = useConnection((state) => state.inProgress)
   const connectionTarget = useConnection((connection) =>
@@ -223,32 +228,34 @@ export const TaskNode = memo(function TaskNode({
                 data-inactive={!enabled}
                 data-connection-target={connectionTarget === slot.name}
               >
-                <Handle
-                  ref={(element) => {
-                    if (element) inputHandles.current.set(slot.name, element)
-                    else inputHandles.current.delete(slot.name)
-                  }}
-                  data-connected={links.length > 0}
-                  role="button"
-                  tabIndex={enabled && isConnectable ? 0 : -1}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      e.currentTarget.click()
-                    }
-                  }}
-                  type="target"
-                  position={Position.Left}
-                  id={slot.name}
-                  style={{ top: geometry.inputY[slot.name] }}
-                  isConnectable={isConnectable && enabled}
-                  data-filter={slot.group?.filter || undefined}
-                  className={`workflow-input-handle${slot.group ? " workflow-group-handle" : ""}`}
-                  aria-label={`${task.label} ${slot.role} ${slot.group ? groupLabel(slot.group) + " " : ""}입력 연결`}
-                >
-                  {slot.group && <span>{compactPortLabel(slot.group)}</span>}
-                </Handle>
+                {slot.connectable !== false && (
+                  <Handle
+                    ref={(element) => {
+                      if (element) inputHandles.current.set(slot.name, element)
+                      else inputHandles.current.delete(slot.name)
+                    }}
+                    data-connected={links.length > 0}
+                    role="button"
+                    tabIndex={enabled && isConnectable ? 0 : -1}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        e.currentTarget.click()
+                      }
+                    }}
+                    type="target"
+                    position={Position.Left}
+                    id={slot.name}
+                    style={{ top: geometry.inputY[slot.name] }}
+                    isConnectable={isConnectable && enabled}
+                    data-filter={slot.group?.filter || undefined}
+                    className={`workflow-input-handle${slot.group ? " workflow-group-handle" : ""}`}
+                    aria-label={`${task.label} ${slot.role} ${slot.group ? groupLabel(slot.group) + " " : ""}입력 연결`}
+                  >
+                    {slot.group && <span>{compactPortLabel(slot.group)}</span>}
+                  </Handle>
+                )}
                 <Tooltip disabled={connecting}>
                   <TooltipTrigger
                     render={<button />}
@@ -327,37 +334,40 @@ export const TaskNode = memo(function TaskNode({
             <span>{output.ids.length}</span>
           </span>
         )}
-        <Handle
-          type="source"
-          position={Position.Right}
-          id="output"
-          role="button"
-          tabIndex={isConnectable ? 0 : -1}
-          aria-label={`${task.label} ${primaryName ? primaryName + " " : ""}출력 연결`}
-          title={primaryName || "기본 출력 연결"}
-          isConnectable={isConnectable}
-          className={`workflow-output-handle${primaryName ? " workflow-named-port" : ""}`}
-          style={{
-            top: geometry.outputY,
-            left: geometry.outputX,
-            bottom: "auto",
-            transform: "translate(-50%, -50%)",
-          }}
-          data-connected={isOutputConnected("output")}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault()
-              e.stopPropagation()
-              e.currentTarget.click()
-            }
-          }}
-        >
-          {primaryName ? (
-            <span>{primaryName}</span>
-          ) : (
-            <ArrowRight aria-hidden="true" />
-          )}
-        </Handle>
+        {/* A file sink ends the flow; it has no output to connect. */}
+        {!spec?.destination && (
+          <Handle
+            type="source"
+            position={Position.Right}
+            id="output"
+            role="button"
+            tabIndex={isConnectable ? 0 : -1}
+            aria-label={`${task.label} ${primaryName ? primaryName + " " : ""}출력 연결`}
+            title={primaryName || "기본 출력 연결"}
+            isConnectable={isConnectable}
+            className={`workflow-output-handle${primaryName ? " workflow-named-port" : ""}`}
+            style={{
+              top: geometry.outputY,
+              left: geometry.outputX,
+              bottom: "auto",
+              transform: "translate(-50%, -50%)",
+            }}
+            data-connected={isOutputConnected("output")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                e.stopPropagation()
+                e.currentTarget.click()
+              }
+            }}
+          >
+            {primaryName ? (
+              <span>{primaryName}</span>
+            ) : (
+              <ArrowRight aria-hidden="true" />
+            )}
+          </Handle>
+        )}
       </div>
 
       {geometry.outputs.map((slot) => {

@@ -36,9 +36,9 @@ class GenericTaskRun:
         write_scripts(self.job, self.m, self.calls, only)
 
     def execute(self):
-        if self.spec.get('executor') == 'image-list':
-            from ..image_lists import execute_image_list
-            return execute_image_list(self)
+        if self.spec.get('executor') in ('file-input', 'file-save'):
+            from ..file_nodes import execute_file_input, execute_file_save
+            return (execute_file_input if self.spec['executor'] == 'file-input' else execute_file_save)(self)
         self.state('입력과 파라미터 준비 중'); self.prepare()
         with (self.job / 'task.log').open('a') as log:
             for warning in self.m.get('warnings', []):
