@@ -39,10 +39,15 @@ jobs:
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libx11-dev
       - run: bun install --frozen-lockfile
+      # Each release has a higher version, so installed apps see it as an update.
+      - run: npm pkg set version=0.1.${{ github.run_number }}
       - run: node scripts/stage.mjs
       - run: bunx electron-builder ${{ matrix.platform }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+      # Installed Linux apps update from latest-linux.yml.
+      - if: runner.os == 'Linux'
+        run: test -f dist/latest-linux.yml
 
       - uses: actions/upload-artifact@v4
         with:
@@ -51,6 +56,8 @@ jobs:
           path: |
             desktop/dist/*.dmg
             desktop/dist/*.AppImage
+            desktop/dist/latest*.yml
+            desktop/dist/*.blockmap
 
       # The Windows app runs this Linux backend in WSL.
       - if: runner.os == 'Linux'
@@ -80,12 +87,16 @@ jobs:
           name: wsl-backend
           path: desktop/build/wsl
       - run: bun install --frozen-lockfile
+      - run: npm pkg set version=0.1.${{ github.run_number }}
       - run: bunx electron-builder --win --publish never
       - uses: actions/upload-artifact@v4
         with:
           name: giraf-Windows
           if-no-files-found: error
-          path: desktop/dist/*.exe
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/latest*.yml
+            desktop/dist/*.blockmap
 
   release:
     needs: [build, windows]
@@ -102,8 +113,11 @@ jobs:
           MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           short="${GITHUB_SHA::7}"
-          gh release create "build-${GITHUB_RUN_NUMBER}" dist/* \
+          # Installed Windows and Linux apps update from latest*.yml in the
+          # latest release (see desktop/package.json build.publish).
+          test -f dist/latest.yml && test -f dist/latest-linux.yml
+          gh release create "v0.1.${GITHUB_RUN_NUMBER}" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "GIRAF build ${GITHUB_RUN_NUMBER} (${short})" \
+            --title "GIRAF 0.1.${GITHUB_RUN_NUMBER} (${short})" \
             --notes "${MESSAGE:-$short}"

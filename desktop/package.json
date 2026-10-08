@@ -85,7 +85,13 @@
           "to": "backend"
         }
       ]
-    }
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/ys-astro-js/giraf/releases/latest/download"
+      }
+    ]
   },
   "devDependencies": {
     "electron": "^44.7.0",
@@ -95,5 +101,8 @@
     "electron"
   ],
   "author": "Jeongho Shin",
-  "homepage": "https://github.com/ys-astro-js/giraf"
+  "homepage": "https://github.com/ys-astro-js/giraf",
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
 }

@@ -23,10 +23,19 @@ class RevealFileTests(unittest.TestCase):
         for platform, command in [('darwin', ['open', '-R', str(self.path)]),
                                   ('win32', ['explorer', '/select,', str(self.path)]),
                                   ('linux', ['xdg-open', str(self.path.parent)])]:
-            with self.subTest(platform=platform), patch.object(server.sys, 'platform', platform), patch.object(server.subprocess, 'run') as run:
+            with self.subTest(platform=platform), patch.object(server.sys, 'platform', platform), patch.object(server.subprocess, 'run') as run, patch.dict(server.os.environ, clear=False) as env:
+                env.pop('WSL_DISTRO_NAME', None)
                 self.assertEqual(asyncio.run(request('POST', 'reveal', {'id': 'known'}))[0], 200)
                 self.assertEqual(run.call_args.args[0], command)
                 self.assertNotIn('shell', run.call_args.kwargs)
+
+    def test_wsl_opens_windows_explorer(self):
+        wslpath = subprocess.CompletedProcess([], 0, stdout='C:\\Users\\me\\image with spaces.fits\n')
+        with patch.object(server.sys, 'platform', 'linux'), patch.dict(server.os.environ, {'WSL_DISTRO_NAME': 'Ubuntu'}), \
+                patch.object(server.subprocess, 'run', side_effect=[wslpath, subprocess.CompletedProcess([], 1)]) as run:
+            self.assertEqual(asyncio.run(request('POST', 'reveal', {'id': 'known'}))[0], 200)
+            self.assertEqual(run.call_args_list[0].args[0], ['wslpath', '-w', str(self.path)])
+            self.assertEqual(run.call_args.args[0], ['explorer.exe', '/select,C:\\Users\\me\\image with spaces.fits'])
 
     def test_invalid_requests_do_not_launch(self):
         with patch.object(server.subprocess, 'run') as run:

@@ -118,11 +118,27 @@ def inspect_file(path: Path) -> dict:
     return row
 
 
+def listing(directory):
+    """Folders and files in a directory, skipping entries that cannot be
+    inspected: Windows folders seen from WSL (/mnt/c) hold junctions and
+    system files whose stat is denied."""
+    dirs, files = [], []
+    for p in Path(directory).iterdir():
+        try:
+            if p.is_dir():
+                dirs.append(p)
+            elif p.is_file():
+                files.append(p)
+        except OSError:
+            continue
+    return dirs, files
+
+
 def scan(folder: str, *, inspector=None) -> list[dict]:
     directory = Path(folder).expanduser().resolve()
     if not directory.is_dir():
         raise ValueError('존재하는 데이터 폴더를 입력해 주세요.')
-    paths = sorted(p for p in directory.iterdir() if p.is_file() and p.suffix.lower() in ('.fits', '.fit', '.fts'))
+    paths = sorted(p for p in listing(directory)[1] if p.suffix.lower() in ('.fits', '.fit', '.fts'))
     if not paths:
         raise ValueError('이 폴더에 FITS 파일이 없습니다. 하위 폴더는 자동 검색하지 않습니다.')
     return [(inspector or inspect_file)(p) for p in paths]

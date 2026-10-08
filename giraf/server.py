@@ -29,7 +29,7 @@ from .image_rendering import image_info, image_png, image_pixel
 from .display import display_number, start_display, stop_display
 from .workflow_documents import WorkflowDocuments
 from .jobs import ROOT, DATA, HOME, RUNS, start, status, atomic_json
-from .model import Settings, inspect_file, scan, validate
+from .model import Settings, inspect_file, listing, scan, validate
 from .combine import validate_combination
 from .task_catalog import catalog
 from .task_jobs import validate_task, preview_task, start_task, authorize_file_plan
@@ -381,10 +381,11 @@ async def browse_endpoint(request: Request):
     path = Path(q.get('path', workspace['folder'])).expanduser().resolve()
     if not path.is_dir():
         raise ValueError('폴더를 찾을 수 없습니다.')
-    dirs = sorted([p for p in path.iterdir() if p.is_dir() and not p.name.startswith('.')], key=lambda p: p.name.lower())
-    count = sum(p.is_file() and p.suffix.lower() in ('.fits', '.fit', '.fts') for p in path.iterdir())
+    folders, files = await run_in_threadpool(listing, path)
+    dirs = sorted([p for p in folders if not p.name.startswith('.')], key=lambda p: p.name.lower())
+    count = sum(p.suffix.lower() in ('.fits', '.fit', '.fts') for p in files)
     extensions=('.fits','.fit','.fts','.pl','.txt','.dat','.list','.log','.gki','.bin')
-    entries=await run_in_threadpool(lambda:[register(p) for p in sorted(path.iterdir()) if p.is_file() and p.suffix.lower() in extensions])
+    entries=await run_in_threadpool(lambda:[register(p) for p in sorted(files) if p.suffix.lower() in extensions])
     roots=[('작업 폴더',DATA),('홈',HOME),('다운로드',HOME/'Downloads'),('문서',HOME/'Documents')]
     return JSONResponse(dict(path=str(path), parent=str(path.parent),
         breadcrumbs=[dict(name=p.name or '/',path=str(p)) for p in [*reversed(path.parents),path]],
