@@ -193,14 +193,19 @@ export function syncPassOutputs(map: TaskMap, catalog: Catalog | null, rows: Fra
     const pass = spec?.outputs?.filter((slot) => slot.mode === "pass" && slot.from) || []
     if (!pass.length) return task
     const outputs = { ...task.draft.outputs }
+    const passed: Record<string, string[]> = {}
     for (const slot of pass) {
-      const frames = assigned(map, task, slot.from!).ids.map((id) => all.get(id))
+      const ids = assigned(map, task, slot.from!).ids
+      const frames = ids.map((id) => all.get(id))
       if (frames.some((frame) => !frame)) continue
       outputs[slot.name] = frames.some((frame) => (frame!.asset || "image") === slot.kind) ? "*" : ""
+      passed[slot.name] = ids.filter((id) => (all.get(id)!.asset || "image") === slot.kind)
     }
-    if (pass.every((slot) => (outputs[slot.name] || "") === (task.draft.outputs?.[slot.name] || ""))) return task
+    const same = pass.every((slot) => (outputs[slot.name] || "") === (task.draft.outputs?.[slot.name] || "")) &&
+      JSON.stringify(passed) === JSON.stringify(task.passed ?? {})
+    if (same) return task
     changed = true
-    return { ...task, draft: { ...task.draft, outputs } }
+    return { ...task, passed, draft: { ...task.draft, outputs } }
   })
   return changed ? { ...map, tasks } : map
 }

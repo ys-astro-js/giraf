@@ -100,7 +100,17 @@ export function InspectorFileSource({
       {limit > 0 && (
         <Tabs
           defaultValue={
-            expression ? "expression" : links.length ? "node" : "files"
+            expression
+              ? "expression"
+              : links.length &&
+                  !links.every(
+                    (c) =>
+                      map.tasks.find(
+                        (t) => "taskId" in c.source && t.id === c.source.taskId
+                      )?.passed
+                  )
+                ? "node"
+                : "files"
           }
         >
           <TabsList className="w-full">

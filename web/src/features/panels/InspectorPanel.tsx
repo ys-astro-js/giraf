@@ -11,9 +11,11 @@ import { registerLockTarget } from "@/features/dock/store"
 import { activeJob } from "@/lib/queries"
 import { parsePort } from "@/lib/calibration-ports"
 import { connectInputPort } from "@/lib/workflow-flow"
+import { isSourceNode } from "@/lib/file-nodes"
 import {
   connect,
   connectionRoles,
+  removeTask,
   replaceRoleInputs,
   type Source,
 } from "@/lib/task-map"
@@ -124,6 +126,35 @@ export function InspectorPanel() {
     if (!task || !catalog) return
     try {
       const m = w.editor.getMap()
+      // Files chosen for an input edit the source node that already feeds it alone.
+      if (source.kind === "files" && !parsePort(role, "input")) {
+        const fed = m.connections.filter(
+          (c) => c.target === task.id && c.role === role
+        )
+        const from = fed.length === 1 ? fed[0].source : undefined
+        const node =
+          from && from.kind !== "files"
+            ? m.tasks.find((t) => t.id === from.taskId)
+            : undefined
+        const nodeSpec = catalog.tasks.find((s) => s.name === node?.task)
+        const dedicated =
+          node &&
+          isSourceNode(nodeSpec) &&
+          m.connections.filter(
+            (c) => c.source.kind !== "files" && c.source.taskId === node.id
+          ).length === 1
+        if (node && nodeSpec && dedicated) {
+          w.update(
+            (map) =>
+              source.ids.length
+                ? connect(map, node.id, nodeSpec.inputs[0].name, source, false)
+                : removeTask(map, node.id),
+            `${task.label} 입력 변경`
+          )
+          w.setTaskError("")
+          return
+        }
+      }
       const value = source.kind === "expression" ? source.value : ""
       const connected =
         parsePort(role, "input") && source.kind !== "expression"

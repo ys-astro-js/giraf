@@ -74,7 +74,7 @@ class WorkflowDocumentTests(unittest.TestCase):
             lambda g: g['connections'][0].update(target=123),
             lambda g: g['connections'][0]['source'].update(kind='unknown'),
             lambda g: g['view'].update(zoom='1'),
-            lambda g: g.update(version=2),
+            lambda g: g.update(version=3),
         ]
         for mutate in mutations:
             with self.subTest(mutate=mutate):

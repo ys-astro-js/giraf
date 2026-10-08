@@ -124,7 +124,7 @@ class MapRun(DocumentModel):
 
 
 class TaskMap(DocumentModel):
-    version: Literal[1] = 1
+    version: Literal[1, 2] = 2
     tasks: list[Task]
     connections: list[Connection]
     runs: list[MapRun] = Field(default_factory=list)
@@ -168,7 +168,7 @@ class ImportedTask(Task):
 
 
 class ImportedMap(TaskMap):
-    version: Literal[1]
+    version: Literal[1, 2]
     tasks: list[ImportedTask]
 
 

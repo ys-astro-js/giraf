@@ -232,6 +232,13 @@ export function resolvedSource(
   kind?: string
 ): Source {
   if (source.kind !== "pending") return source
+  // A pass output carries its input files as they are now, without a run.
+  const passed = source.outputRole
+    ? map.tasks.find((t) => t.id === source.taskId)?.passed?.[source.outputRole]
+    : undefined
+  // A port's file filter matches labels the run publishes, so it waits for that run.
+  if (passed && !source.files)
+    return passed.length ? { ...source, kind: "result", runId: "", ids: passed } : source
   const run = map.runs.filter((r) => r.instanceId === source.taskId).at(-1)
   if (!run || run.state !== "completed") return source
   const products = run.products.filter(

@@ -15,7 +15,7 @@ class WorkflowDocuments:
     def new(self):
         return {'_document': {'path': str(self.folder / '.giraf' / 'workflows' / f'{uuid4().hex}.json'),
                               'name': '새 워크플로우', 'saved': False},
-                'taskMap': {'version': 1, 'tasks': [], 'connections': [], 'runs': [],
+                'taskMap': {'version': 2, 'tasks': [], 'connections': [], 'runs': [],
                             'view': {'selected': '', 'mode': 'map', 'zoom': 1, 'x': 0, 'y': 0, 'focus': False}}}
 
     def path(self, value):

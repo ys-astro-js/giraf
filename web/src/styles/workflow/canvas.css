@@ -129,6 +129,7 @@ div:has(> [data-slot="tooltip-content"] .connection-port-feedback) { pointer-eve
 .node-input-row[data-expression="true"] .node-input-source { font-family:var(--font-mono, ui-monospace, monospace); font-size:12px; }
 .node-input-row[data-empty="true"] .node-input-source { color:var(--muted-foreground); }
 .workflow-node[data-diagnostic="warning"] .node-input-row[data-empty="true"] .node-input-source { color:var(--warning); }
+.node-input-file { width:14px; height:14px; flex-shrink:0; margin-right:-4px; color:var(--muted-foreground); }
 .node-input-flag { flex-shrink:0; font-size:11px; color:var(--muted-foreground); }
 .node-input:not(:disabled):hover { background:var(--muted); }
 .node-input:disabled { opacity:.5; cursor:not-allowed; }

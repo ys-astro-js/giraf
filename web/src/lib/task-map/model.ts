@@ -54,6 +54,8 @@ export type Instance = {
   filePolicy: { mode: "copy" | "direct"; backup: boolean }
   position?: { x: number; y: number }
   collapsed?: boolean
+  /** Derived: the files each pass output carries now (syncPassOutputs). */
+  passed?: Record<string, string[]>
   subflowId?: string
 }
 
@@ -88,7 +90,8 @@ export type TaskMap = {
     }
   >
   subflows?: Subflow[]
-  version: 1
+  /** 2: files reach tasks only through source nodes (lib/file-nodes). */
+  version: 1 | 2
   tasks: Instance[]
   connections: Connection[]
   runs: MapRun[]
@@ -96,6 +99,8 @@ export type TaskMap = {
     selected: string
     coordinateSystem?: "react-flow"
     edgeStyle?: "default" | "smoothstep"
+    /** Edges out of source nodes appear only on hover or selection. */
+    hideFileEdges?: boolean
     mode: "map" | "list"
     zoom: number
     x: number
@@ -107,7 +112,7 @@ export type TaskMap = {
 export const uid = () => crypto.randomUUID()
 
 export const emptyMap = (): TaskMap => ({
-  version: 1,
+  version: 2,
   tasks: [],
   connections: [],
   runs: [],

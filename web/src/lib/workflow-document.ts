@@ -7,6 +7,8 @@ export function workflowDocument(prefs: Preferences, taskMap: TaskMap) {
   // Share the recipe, not this workspace's selected files or past executions.
   for (const task of graph.tasks) {
     task.instrument = []
+    // Derived from the files a file node held here.
+    delete task.passed
     for (const draft of [task.draft, task.preprocess]) {
       draft.inputs = {}
       delete draft.alignmentBinding

@@ -20,6 +20,7 @@ import {
   type TaskMap,
 } from "@/lib/task-map"
 import type * as React from "react"
+import { normalizeFileInputs } from "@/lib/file-nodes"
 
 export function useWorkflowDocuments({
   editor,
@@ -78,7 +79,11 @@ export function useWorkflowDocuments({
       drafts: value.drafts || {},
       packageValues: { ...defaults(catalog.ccdred), ...value.packageValues },
     }
-    const nextMap = reconcileRuns(migrateMap(next, catalog), runs)
+    const nextMap = normalizeFileInputs(
+      reconcileRuns(migrateMap(next, catalog), runs),
+      catalog,
+      [...workspace.files, ...runs.flatMap((j) => j.products || [])]
+    )
     diagnosticController.current?.change(
       next._document?.path || "현재 문서",
       workflowDiagnosticRequest(nextMap, catalog, workspace.folder),

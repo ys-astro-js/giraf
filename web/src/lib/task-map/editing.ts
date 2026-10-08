@@ -86,7 +86,7 @@ export function restoreRun(
 }
 
 export function migrateMap(prefs: Preferences, catalog: Catalog): TaskMap {
-  if (prefs.taskMap?.version === 1) {
+  if (prefs.taskMap?.version === 1 || prefs.taskMap?.version === 2) {
     const map = clone(prefs.taskMap)
     map.connections = map.connections.filter(
       (c) => c.source.kind !== "files" || c.source.ids.length > 0

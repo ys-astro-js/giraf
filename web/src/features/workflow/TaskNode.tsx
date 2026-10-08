@@ -20,6 +20,7 @@ import {
   CircleX,
   Clock3,
   Copy,
+  File,
   LoaderCircle,
   TriangleAlert,
 } from "lucide-react"
@@ -39,6 +40,7 @@ import {
   roleActive,
 } from "@/lib/node-interaction"
 import { outputHandle, type TaskFlowNode } from "@/lib/workflow-flow"
+import { isSourceNode } from "@/lib/file-nodes"
 import type { Source } from "@/lib/task-map"
 
 import { WorkflowContext } from "./context"
@@ -386,7 +388,18 @@ export const TaskNode = memo(function TaskNode({
                         ? `파일 ${a.ids.length}개`
                         : "미지정")
                 const enabled = roleActive(task, slot.role, catalog)
-                const pending = links.some((c) => c.source.kind === "pending")
+                const fromFiles = links.some((c) => {
+                  const from = map.tasks.find(
+                    (t) => "taskId" in c.source && t.id === c.source.taskId
+                  )
+                  return isSourceNode(
+                    catalog.tasks.find((s) => s.name === from?.task)
+                  )
+                })
+                // A file source's files are ready without running it.
+                const pending =
+                  !fromFiles &&
+                  links.some((c) => c.source.kind === "pending")
                 return (
                   <div
                     className="node-input-row"
@@ -421,6 +434,12 @@ export const TaskNode = memo(function TaskNode({
                             ? calibrationLabels[slot.role] || slot.role
                             : slot.role}
                         </span>
+                        {fromFiles && (
+                          <File
+                            className="node-input-file"
+                            aria-hidden="true"
+                          />
+                        )}
                         <span className="node-input-source" title={summary}>
                           {pending ? `${summary} 출력 대기` : summary}
                         </span>

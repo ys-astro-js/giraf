@@ -15,7 +15,7 @@ import {
 } from "@/components/toolbar"
 import { SearchField } from "@/components/search-field"
 import { WorkflowEdge } from "@/components/workflow-edge"
-import { useCallback, useMemo, useSyncExternalStore } from "react"
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { displayQueryOptions } from "@/lib/display"
 import {
@@ -98,6 +98,7 @@ export function TaskMapView({
   open,
   add,
 }: TaskMapViewProps) {
+  const [hoveredNode, setHoveredNode] = useState("")
   const autoCollapse = useNodeView((state) => state.autoCollapse)
   const setAutoCollapse = useNodeView((state) => state.setAutoCollapse)
   const setCollapsed = useCallback(
@@ -173,6 +174,21 @@ export function TaskMapView({
     revealNode,
     revealConnection,
   })
+  // Hidden file edges return for the node under the pointer and the selected one.
+  const shownEdges = useMemo(
+    () =>
+      map.view.hideFileEdges
+        ? edges.map((edge) =>
+            edge.data?.fromFiles &&
+            ![edge.source, edge.target].some(
+              (id) => id === hoveredNode || id === map.view.selected
+            )
+              ? { ...edge, hidden: true }
+              : edge
+          )
+        : edges,
+    [edges, hoveredNode, map.view.hideFileEdges, map.view.selected]
+  )
   return (
     <section
       className="map-workspace"
@@ -250,7 +266,9 @@ export function TaskMapView({
               connectOnClick={true}
               proOptions={{ hideAttribution: true }}
               nodes={nodes}
-              edges={edges}
+              edges={shownEdges}
+              onNodeMouseEnter={(_, node) => setHoveredNode(node.id)}
+              onNodeMouseLeave={() => setHoveredNode("")}
               nodeTypes={nodeTypes}
               edgeTypes={workflowEdgeTypes}
               // Groups < edges < task nodes/ports, including selected edges and grouped tasks.
@@ -489,6 +507,25 @@ export function TaskMapView({
                         onCheckedChange={setAutoCollapse}
                       >
                         축소하면 자동으로 접기
+                      </DropdownMenuCheckboxItem>
+                      <DropdownMenuCheckboxItem
+                        checked={!!map.view.hideFileEdges}
+                        onCheckedChange={(hideFileEdges) =>
+                          update(
+                            (m) => ({
+                              ...m,
+                              view: {
+                                ...m.view,
+                                hideFileEdges: hideFileEdges || undefined,
+                              },
+                            }),
+                            hideFileEdges
+                              ? "파일 연결선 숨기기"
+                              : "파일 연결선 보이기"
+                          )
+                        }
+                      >
+                        파일 연결선 숨기기
                       </DropdownMenuCheckboxItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

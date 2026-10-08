@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { syncPassOutputs } from "@/lib/output-ports"
+import { normalizeFileInputs } from "@/lib/file-nodes"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { useStore } from "zustand"
 import { createEditorStore } from "@/lib/edit-history"
@@ -154,7 +154,7 @@ export function useWorkbenchController() {
     (fn: (m: TaskMap) => TaskMap, label?: string) => {
       const { catalog, cache } = passContext.current
       const next = (m: TaskMap) =>
-        syncPassOutputs(fn(m), catalog, Object.values(cache))
+        normalizeFileInputs(fn(m), catalog, Object.values(cache))
       if (editor.update(next, label)) queueSave()
     },
     [editor, queueSave]

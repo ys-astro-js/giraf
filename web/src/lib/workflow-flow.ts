@@ -18,6 +18,7 @@ import {
 } from "./node-interaction"
 import type { Catalog, Frame, Spec } from "./workbench"
 import { subflowColor } from "./subflow"
+import { isSourceNode } from "./file-nodes"
 
 export type TaskFlowNode = Node<
   {
@@ -160,6 +161,8 @@ export function flowEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
             ? { points: route.points } : {}),
           // A collapsed target hides its input rows; the edge names the role instead.
           role: connection.role,
+          // Edges out of a file source can be hidden (view.hideFileEdges).
+          fromFiles: isSourceNode(catalog.tasks.find((s) => s.name === source.task)),
         },
         source: source.id,
         target: target.id,

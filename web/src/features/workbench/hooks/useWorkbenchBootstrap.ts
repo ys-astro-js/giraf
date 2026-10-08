@@ -11,6 +11,7 @@ import {
   type Job,
 } from "@/lib/workbench"
 import { reconcileRuns, migrateMap, type TaskMap } from "@/lib/task-map"
+import { normalizeFileInputs } from "@/lib/file-nodes"
 import type * as React from "react"
 
 export function useWorkbenchBootstrap({
@@ -86,7 +87,12 @@ export function useWorkbenchBootstrap({
       pref._document?.saved ? "저장됨" : "작업을 추가하면 자동 저장됩니다"
     )
     replacePreferences(pref)
-    setMap(reconcileRuns(migrateMap(pref, c), j))
+    const known = [
+      ...(p.files || []),
+      ...w.files,
+      ...j.flatMap((j) => j.products || []),
+    ]
+    setMap(normalizeFileInputs(reconcileRuns(migrateMap(pref, c), j), c, known))
     if (recovered !== p) queueSave()
     setWorkspace(w)
     setJobs(j)

@@ -72,10 +72,18 @@ export function InspectorInputSlot({
       map.tasks.find((t) => "taskId" in c.source && t.id === c.source.taskId)
         ?.label || "저장한 결과"
   )
+  // File nodes pass their files on unchanged: name them, not their "output".
+  const fromFiles =
+    links.length > 0 &&
+    links.every(
+      (c) =>
+        map.tasks.find((t) => "taskId" in c.source && t.id === c.source.taskId)
+          ?.passed
+    )
   const summary =
     expression ||
     (sources.length
-      ? [...new Set(sources)].join(", ") + " 출력"
+      ? [...new Set(sources)].join(", ") + (fromFiles ? "" : " 출력")
       : ids.length === 1
         ? rows.find((r) => r.id === ids[0])?.label || "파일 1개"
         : ids.length
