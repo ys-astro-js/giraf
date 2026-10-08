@@ -6,27 +6,25 @@ const net = require("node:net")
 const os = require("node:os")
 const path = require("node:path")
 
+const WINDOWS = process.platform === "win32"
+
 // Runs and app state live here (GIRAF_DATA); the bundle itself is read-only.
+// On Windows the backend runs in WSL and keeps them in the WSL home (~/GIRAF).
 const DATA = process.env.GIRAF_DATA || path.join(os.homedir(), "Documents", "GIRAF")
+const LOG = WINDOWS ? path.join(app.getPath("userData"), "giraf.log") : path.join(DATA, "giraf.log")
 
 let backend = null
+let stopBackend = () => backend?.kill("SIGTERM")
 let quitting = false
-
-const pythonIn = (home) =>
-  process.platform === "win32" ? path.join(home, "python.exe") : path.join(home, "bin", "python3")
 
 function backendPaths() {
   if (app.isPackaged) {
     const resources = process.resourcesPath
-    return {
-      python: pythonIn(path.join(resources, "python")),
-      root: path.join(resources, "backend"),
-    }
+    return { python: path.join(resources, "python", "bin", "python3"), root: path.join(resources, "backend") }
   }
   // Development: the repository's own uv environment.
   const root = path.resolve(__dirname, "..")
-  const venv = path.join(root, ".venv")
-  return { python: process.platform === "win32" ? path.join(venv, "Scripts", "python.exe") : pythonIn(venv), root }
+  return { python: path.join(root, ".venv", "bin", "python3"), root }
 }
 
 /**
@@ -34,7 +32,6 @@ function backendPaths() {
  * irafcl) is usually configured in the login shell, so take it from there.
  */
 function loginShellEnv() {
-  if (process.platform === "win32") return {}
   const marker = "__GIRAF_ENV__"
   try {
     const shellPath = process.env.SHELL || "/bin/zsh"
@@ -67,8 +64,8 @@ function freePort() {
   })
 }
 
-async function waitForServer(url, child) {
-  for (let i = 0; i < 300; i++) {
+async function waitForServer(url, child, seconds) {
+  for (let i = 0; i < seconds * 10; i++) {
     if (child.exitCode !== null) throw new Error(`백엔드가 종료되었습니다 (코드 ${child.exitCode}).`)
     try {
       const response = await fetch(url)
@@ -76,14 +73,12 @@ async function waitForServer(url, child) {
     } catch {}
     await new Promise((r) => setTimeout(r, 100))
   }
-  throw new Error("백엔드가 30초 안에 응답하지 않았습니다.")
+  throw new Error(`백엔드가 ${seconds}초 안에 응답하지 않았습니다.`)
 }
 
-async function startBackend() {
+function launchLocal(port, log) {
   const { python, root } = backendPaths()
-  const port = await freePort()
   fs.mkdirSync(DATA, { recursive: true })
-  const log = fs.openSync(path.join(DATA, "giraf.log"), "a")
   const env = {
     ...process.env,
     ...loginShellEnv(),
@@ -95,19 +90,62 @@ async function startBackend() {
   delete env.PYTHONHOME
   delete env.PYTHONPATH
   delete env.VIRTUAL_ENV
-  backend = spawn(python, [path.join(root, "main.py")], {
-    cwd: root,
-    env,
+  return spawn(python, [path.join(root, "main.py")], { cwd: root, env, stdio: ["ignore", log, log] })
+}
+
+const wsl = (args, options = {}) =>
+  execFileSync("wsl.exe", ["-e", ...args], { encoding: "utf8", windowsHide: true, ...options }).trim()
+
+/**
+ * Windows: IRAF lives in WSL, so the bundled Linux backend runs there. It is
+ * unpacked into the WSL home once per app build, then started by start.sh.
+ */
+function launchWsl(port, log) {
+  const archive = path.join(process.resourcesPath, "wsl", "giraf-linux.tar.gz")
+  const stamp = `${app.getVersion()}-${fs.statSync(archive).size}`
+  let runtime
+  try {
+    runtime = wsl(
+      [
+        "sh",
+        "-c",
+        'd="$HOME/.giraf/runtime"; a=$(wslpath -a "$1"); ' +
+          '[ "$(cat "$d/.stamp" 2>/dev/null)" = "$2" ] || ' +
+          '{ rm -rf "$d" && mkdir -p "$d" && tar -xzf "$a" -C "$d" && echo "$2" > "$d/.stamp"; } && echo "$d"',
+        "sh",
+        archive,
+        stamp,
+      ],
+      { timeout: 300000 }
+    )
+  } catch (error) {
+    throw new Error(`WSL에 GIRAF 백엔드를 준비하지 못했습니다. WSL과 Linux 배포판이 설치되어 있는지 확인해 주세요.\n${error.message}`)
+  }
+  stopBackend = () => {
+    try {
+      wsl(["sh", "-c", 'kill "$(cat "$HOME/.giraf/backend.pid")"'], { timeout: 10000 })
+    } catch {}
+    backend?.kill()
+  }
+  return spawn("wsl.exe", ["-e", "sh", `${runtime}/start.sh`, String(port)], {
     stdio: ["ignore", log, log],
+    windowsHide: true,
   })
+}
+
+async function startBackend() {
+  const port = await freePort()
+  fs.mkdirSync(path.dirname(LOG), { recursive: true })
+  const log = fs.openSync(LOG, "a")
+  backend = WINDOWS ? launchWsl(port, log) : launchLocal(port, log)
   backend.on("exit", (code) => {
     if (!quitting) {
-      dialog.showErrorBox("GIRAF", `백엔드가 종료되었습니다 (코드 ${code}).\n로그: ${path.join(DATA, "giraf.log")}`)
+      dialog.showErrorBox("GIRAF", `백엔드가 종료되었습니다 (코드 ${code}).\n로그: ${LOG}`)
       app.quit()
     }
   })
   const url = `http://127.0.0.1:${port}/`
-  await waitForServer(url, backend)
+  await waitForServer(url, backend, WINDOWS ? 90 : 30)
   return url
 }
 
@@ -156,8 +194,8 @@ app.whenReady().then(async () => {
     })
   } catch (error) {
     quitting = true
-    dialog.showErrorBox("GIRAF", `${error.message}\n로그: ${path.join(DATA, "giraf.log")}`)
-    backend?.kill()
+    dialog.showErrorBox("GIRAF", `${error.message}\n로그: ${LOG}`)
+    stopBackend()
     app.quit()
   }
 })
@@ -166,5 +204,5 @@ app.on("window-all-closed", () => app.quit())
 
 app.on("before-quit", () => {
   quitting = true
-  backend?.kill("SIGTERM")
+  stopBackend()
 })

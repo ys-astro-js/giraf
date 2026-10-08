@@ -21,8 +21,6 @@ jobs:
         include:
           - os: macos-latest
             platform: --mac
-          - os: windows-latest
-            platform: --win
           - os: ubuntu-latest
             platform: --linux
     runs-on: ${{ matrix.os }}
@@ -52,15 +50,50 @@ jobs:
           if-no-files-found: error
           path: |
             desktop/dist/*.dmg
-            desktop/dist/*.exe
             desktop/dist/*.AppImage
 
-  release:
+      # The Windows app runs this Linux backend in WSL.
+      - if: runner.os == 'Linux'
+        run: bun run wsl-archive
+      - if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wsl-backend
+          retention-days: 1
+          if-no-files-found: error
+          path: desktop/build/giraf-linux.tar.gz
+
+  windows:
     needs: build
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: wsl-backend
+          path: desktop/build/wsl
+      - run: bun install --frozen-lockfile
+      - run: bunx electron-builder --win --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: giraf-Windows
+          if-no-files-found: error
+          path: desktop/dist/*.exe
+
+  release:
+    needs: [build, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
+          pattern: giraf-*
           path: dist
           merge-multiple: true
       - name: Publish release
