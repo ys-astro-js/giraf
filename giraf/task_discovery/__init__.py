@@ -53,5 +53,7 @@ def discover(root=None, extra_roots=(), descriptors=(), schema_directories=None)
                                                    layers.get(identity, ()))
             except (OSError, ValueError) as exc:
                 diagnostics.append(f'{identity}: {exc}')
+    from ..node_schema import NODE_PREFIX, node_definition
+    tasks.update({name: node_definition(name, layers[name]) for name in sorted(layers) if name.startswith(NODE_PREFIX)})
     diagnostics += [f'{layer["source"]}: {name} 작업을 찾지 못했습니다.' for name in layers.keys() - tasks.keys() for layer in layers[name]]
     return dict(tasks=tasks, diagnostics=diagnostics, descriptions=task_descriptions)

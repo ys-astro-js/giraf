@@ -6,7 +6,7 @@ import {
   compactPortLabel,
 } from "@/lib/calibration-ports"
 import { ccdTasks, calibrationLabels } from "@/lib/calibration"
-import { taskDisplayName } from "@/lib/workbench"
+import { acceptsSource, taskDisplayName } from "@/lib/workbench"
 import { ArrowRight } from "lucide-react"
 import { memo, useContext, useEffect, useRef } from "react"
 import {
@@ -79,13 +79,8 @@ export const TaskNode = memo(function TaskNode({
       ? stateLabel(run.state)
       : "실행 전"
   const output = nodeOutput(map, id, geometry.primaryOutputRole)
-  // A pass-through port is named by the kind of file it carries.
-  const primaryPass =
-    spec?.outputs?.find((slot) => slot.name === geometry.primaryOutputRole)
-      ?.mode === "pass"
   const primaryName =
-    task.outputPorts?.find((p) => p.id === "$default")?.name.trim() ||
-    (primaryPass ? geometry.primaryOutputRole || "" : "")
+    task.outputPorts?.find((p) => p.id === "$default")?.name.trim() || ""
   const clickStart = useStore((state) => state.connectionClickStartHandle)
   const connecting = useConnection((state) => state.inProgress)
   const connectionTarget = useConnection((connection) =>
@@ -228,7 +223,7 @@ export const TaskNode = memo(function TaskNode({
                 data-inactive={!enabled}
                 data-connection-target={connectionTarget === slot.name}
               >
-                {slot.connectable !== false && (
+                {acceptsSource(slot, "node") && (
                   <Handle
                     ref={(element) => {
                       if (element) inputHandles.current.set(slot.name, element)
@@ -334,8 +329,8 @@ export const TaskNode = memo(function TaskNode({
             <span>{output.ids.length}</span>
           </span>
         )}
-        {/* A file sink ends the flow; it has no output to connect. */}
-        {!spec?.destination && (
+        {/* A save-files node (node schema) ends the flow: it has no output. */}
+        {spec?.run !== "save-files" && (
           <Handle
             type="source"
             position={Position.Right}

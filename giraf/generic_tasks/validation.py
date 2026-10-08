@@ -9,7 +9,7 @@ from ..jobs import DATA
 from ..task_discovery import file_hash
 from ..task_capabilities import parameter_number
 from ..products import product_name
-from .inputs import resolve_generic_inputs, validate_cursor_records, alignment_pairs
+from .inputs import accepts_source, resolve_generic_inputs, validate_cursor_records, alignment_pairs
 from .preview import preview_generic
 
 
@@ -105,7 +105,7 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
         backend = 'cl'
         schema_warnings.append('interactive: 대화형 실행은 IRAF CL에서 진행합니다.')
     cursor_commands = payload.get('cursorCommands', {})
-    cursor_roles = {s['name'] for s in spec['inputs'] if s.get('valueType') == 'cursor'}
+    cursor_roles = {s['name'] for s in spec['inputs'] if s.get('valueType') == 'cursor' and accepts_source(s, 'cursor')}
     if not isinstance(cursor_commands, dict) or set(cursor_commands) - cursor_roles:
         raise ValueError('알 수 없는 커서 입력입니다.')
     for name, records in cursor_commands.items():
@@ -114,6 +114,8 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
         validate_cursor_records(records, name)
     text_inputs = payload.get('textInputs', {})
     allowed_text = {'coords', 'shifts'} if spec['name'] == 'images.immatch.imalign' else set()
+    allowed_text = {s['name'] for s in spec['inputs'] if 'text' in s.get('sources', ())} | {
+        name for name in allowed_text if accepts_source(next((s for s in spec['inputs'] if s['name'] == name), {}), 'text')}
     if not isinstance(text_inputs, dict) or set(text_inputs) - allowed_text:
         raise ValueError('지원하지 않는 직접 텍스트 입력입니다.')
     pairs = {name: alignment_pairs(value, name) for name, value in text_inputs.items()}
@@ -150,7 +152,7 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
              inputLists=list(input_lists.values()), workingDirectory=directory, filePolicy=dict(mode='copy', backup=True), instanceId=payload.get('instanceId'),
              settings=dict(task=spec['name'], backend=backend, **params))
     if input_lists: m['inputSelections']=deepcopy(supplied_inputs)
-    if spec.get('destination'):
+    if spec.get('run') == 'save-files':
         from ..file_nodes import checked_destination
         m['destination'] = checked_destination(payload.get('destination'), directory)
     if interactive:

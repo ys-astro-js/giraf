@@ -21,7 +21,7 @@ import {
 import { SearchField } from "@/components/search-field"
 import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
 import { taskPackageTree, type TaskPackage } from "@/lib/task-tree"
-import { taskDisplayName, type Spec } from "@/lib/workbench"
+import { isGirafNode, taskDisplayName, type Spec } from "@/lib/workbench"
 import { useWorkbench } from "@/features/workbench/context"
 import { ListSkeleton, NoFiles, RefreshButton } from "./shared"
 import { useRefresh } from "./useRefresh"
@@ -32,16 +32,15 @@ const matches = (task: Spec, query: string) =>
     .toLowerCase()
     .includes(query.trim().toLowerCase())
 
-/** GIRAF's own nodes (file input, file save, …) stand apart from IRAF tasks. */
-const isWorkflowNode = (task: Spec) => !!task.executor
-const NodeIcon = ({ task }: { task: Spec }) =>
-  task.executor === "file-input" ? (
-    <FileInput aria-hidden="true" />
-  ) : task.executor === "file-save" ? (
-    <FolderDown aria-hidden="true" />
-  ) : (
-    <Terminal aria-hidden="true" />
-  )
+/** The node schema's `icon` symbols for GIRAF's own nodes. */
+const NODE_ICONS: Record<string, typeof Terminal> = {
+  "file-input": FileInput,
+  "folder-down": FolderDown,
+}
+const NodeIcon = ({ task }: { task: Spec }) => {
+  const Icon = (task.icon && NODE_ICONS[task.icon]) || Terminal
+  return <Icon aria-hidden="true" />
+}
 
 /** One task to add: its name and what it does. */
 function TaskOption({ task, onAdd }: { task: Spec; onAdd: () => void }) {
@@ -60,7 +59,7 @@ function TaskOption({ task, onAdd }: { task: Spec; onAdd: () => void }) {
         <span className="library-option-detail">
           {task.runnable === false
             ? `실행 미지원 · ${task.package}`
-            : (isWorkflowNode(task) && task.description) ||
+            : (isGirafNode(task) && task.description) ||
               task.title ||
               task.package}
         </span>
@@ -100,8 +99,8 @@ export function AddTaskButton() {
   const { refreshing, refresh } = useRefresh(w.refreshCatalog, w.setError)
   const search = useRef<HTMLInputElement>(null)
   const tasks = w.catalog?.tasks ?? []
-  const nodes = tasks.filter(isWorkflowNode)
-  const irafTasks = tasks.filter((task) => !isWorkflowNode(task))
+  const nodes = tasks.filter(isGirafNode)
+  const irafTasks = tasks.filter((task) => !isGirafNode(task))
   const foundNodes = query.trim()
     ? nodes.filter((task) => matches(task, query))
     : []

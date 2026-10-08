@@ -190,11 +190,11 @@ export function syncPassOutputs(map: TaskMap, catalog: Catalog | null, rows: Fra
   let changed = false
   const tasks = map.tasks.map((task) => {
     const spec = catalog.tasks.find((s) => s.name === task.task)
-    const pass = spec?.outputs?.filter((slot) => slot.mode === "pass" && slot.source) || []
+    const pass = spec?.outputs?.filter((slot) => slot.mode === "pass" && slot.from) || []
     if (!pass.length) return task
     const outputs = { ...task.draft.outputs }
     for (const slot of pass) {
-      const frames = assigned(map, task, slot.source!).ids.map((id) => all.get(id))
+      const frames = assigned(map, task, slot.from!).ids.map((id) => all.get(id))
       if (frames.some((frame) => !frame)) continue
       outputs[slot.name] = frames.some((frame) => (frame!.asset || "image") === slot.kind) ? "*" : ""
     }

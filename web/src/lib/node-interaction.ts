@@ -7,7 +7,7 @@ import {
   type Source,
   type TaskMap,
 } from "@/lib/task-map"
-import { acceptsAsset, type Catalog, type Frame, type Slot } from "./workbench"
+import { acceptsAsset, acceptsSource, type Catalog, type Frame, type Slot } from "./workbench"
 
 const flags: Record<string, string> = {
   zero: "zerocor",
@@ -102,7 +102,7 @@ export function connectionChoices(
   }
   const inputs = connectionRoles(spec, catalog)
   if (targetRole) {
-    const slot = inputs.find(s => s.name === targetRole && s.connectable !== false)
+    const slot = inputs.find(s => s.name === targetRole && acceptsSource(s, "node"))
     if (!slot) throw Error("입력 포트를 찾을 수 없습니다.")
     if (!roleActive(t, slot.name, catalog))
       throw Error(`${slot.name} 입력이 비활성 상태입니다. 설정에서 켜 주세요.`)
@@ -116,7 +116,7 @@ export function connectionChoices(
   }
   const roles = inputs.filter(
     (s) =>
-      s.connectable !== false &&
+      acceptsSource(s, "node") &&
       roleActive(t, s.name, catalog) &&
       (source.kind === "pending" ? kinds.some(k => acceptsAsset(s.kind, k)) : kinds.every((k) => acceptsAsset(s.kind, k))) &&
       (s.multiple || count === 1)

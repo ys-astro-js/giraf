@@ -125,7 +125,7 @@ export function InspectorOutputs({
           <FieldGroup>{outputFields.map((s) => outputField(s))}</FieldGroup>
         </section>
       )}
-      {spec.destination ? (
+      {spec.run === "save-files" ? (
         <DestinationFields task={task} edit={edit} />
       ) : (
         <OutputPortEditor

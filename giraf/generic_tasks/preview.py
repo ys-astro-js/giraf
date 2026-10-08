@@ -7,7 +7,7 @@ from ..task_schema import file_extension
 
 def preview_generic(manifest):
     spec = manifest['definition']; rows = {r['id']: r for r in manifest['rows']}
-    if spec.get('executor') in ('file-input', 'file-save'):
+    if spec.get('run'):
         from ..file_nodes import preview_nodes
         return preview_nodes(manifest)
     main = manifest['inputs'].get(spec['inputs'][0]['name'], []) if spec['inputs'] else []

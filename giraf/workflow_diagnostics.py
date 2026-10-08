@@ -146,6 +146,9 @@ def diagnose_connections(by_id, connections, add):
             if components[target_id] == components[parent_id]:
                 add('error', '순환 연결은 만들 수 없습니다.', target_id, edge_id)
                 continue
+            if 'node' not in slot.get('sources', ('node',)):
+                add('error', '다른 노드의 출력을 받지 않는 입력입니다.', target_id, edge_id)
+                continue
             parent_spec = TASKS.get(parent['payload'].get('task'))
             outputs = parent_spec.get('outputs', []) if parent_spec else []
             output_role = source.get('outputRole')

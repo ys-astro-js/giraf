@@ -108,6 +108,48 @@ class NodeSchemaTests(unittest.TestCase):
                 self.assertFalse(s['runnable'])
                 self.assertIn('measure.json', s['reason'])
 
+    def test_sources_limit_where_an_iraf_input_comes_from(self):
+        self.write(self.giraf, {'inputs': {'image': {'sources': ['files']}}})
+        s = self.spec()
+        self.assertEqual({p['name']: p.get('sources') for p in s['inputs']}['image'], ['files'])
+        from giraf.generic_tasks import validate_generic
+        with self.assertRaisesRegex(ValueError, '표현식'):
+            validate_generic(s, dict(inputs={'image': []}, expressions={'image': 'a.fits'}), lambda _: None)
+        for data in ({'inputs': {'image': {'sources': []}}}, {'inputs': {'image': {'sources': ['disk']}}},
+                     {'outputs': {'output': {'mode': 'pass', 'from': 'image'}}}, {'icon': 'file-input'},
+                     {'components': [{'type': 'save-files'}]}, {'inputs': {'image': {'kind': 'image-list'}}}):
+            with self.subTest(data=data):
+                self.write(self.user, data)
+                self.assertFalse(self.spec()['runnable'])
+
+    def node(self, data, name='node.json'):
+        (self.giraf / name).write_text(json.dumps({'version': 2, 'task': 'giraf.copy', **data}))
+        return self.discover()['tasks']['giraf.copy']
+
+    def test_giraf_nodes_are_defined_by_ports_and_one_run_component(self):
+        node = self.node({'title': '복사', 'icon': 'file-input',
+                          'inputs': {'files': {'kind': 'any', 'sources': ['files']}},
+                          'outputs': {'list': {'kind': 'image-list', 'mode': 'pass', 'from': 'files'}},
+                          'components': [{'type': 'pass-files'}]})
+        self.assertTrue(node['runnable'], node['reason'])
+        self.assertEqual((node['run'], node['taskName'], node['package'], node['icon']), ('pass-files', '복사', 'giraf', 'file-input'))
+        self.assertEqual(node['outputs'], [dict(name='list', label='list', kind='image-list', mode='pass', **{'from': 'files'}, default='', optional=True)])
+        self.write(self.user, {'task': 'giraf.copy', 'title': '사본', 'outputs': {'list': None}, 'components': [{'type': 'save-files'}]}, 'patch.json')
+        patched = self.discover()['tasks']['giraf.copy']
+        self.assertEqual((patched['taskName'], patched['run'], patched['outputs']), ('사본', 'save-files', []))
+        self.assertEqual(patched['schemaProvenance']['title'], 'user')
+        (self.user / 'patch.json').unlink()
+        for data in ({'inputs': {'files': {'kind': 'any'}}},
+                     {'inputs': {'files': {'kind': 'any'}}, 'components': [{'type': 'loop'}]},
+                     {'inputs': {'files': {'kind': 'any'}}, 'components': [{'type': 'image-cursor'}, {'type': 'pass-files'}]},
+                     {'inputs': {'files': {'kind': 'any'}}, 'outputs': {'image': {'kind': 'image', 'mode': 'pass', 'from': 'nope'}},
+                      'components': [{'type': 'pass-files'}]},
+                     {'inputs': {'files': {'kind': 'any'}}, 'outputs': {'image': {'kind': 'image', 'mode': 'each', 'from': 'files'}},
+                      'components': [{'type': 'pass-files'}]},
+                     {'parameters': {'sigma': {'label': 'x'}}, 'components': [{'type': 'save-files'}]}):
+            with self.subTest(data=data):
+                self.assertFalse(self.node(data)['runnable'])
+
     def test_files_without_a_known_task_are_reported(self):
         (self.user / 'broken.json').write_text('{')
         (self.user / 'other.json').write_text(json.dumps({'version': 2, 'task': 'demo.absent'}))

@@ -76,7 +76,6 @@ _catalog_lock = RLock()
 
 def refresh_catalog():
     from .task_discovery import discover, env_paths
-    from .file_nodes import node_specs
     global DISCOVERY
     with _catalog_lock:
         discovery = discover(extra_roots=env_paths('GIRAF_IRAF_PACKAGE_ROOTS'),
@@ -89,7 +88,6 @@ def refresh_catalog():
                 task['schemaIssues'] = [dict(severity='warning', message='전용 어댑터로 실행하는 작업이라 노드 스키마를 아직 적용하지 않습니다.')]
         tasks.update({DISCOVERED_ALIASES.get(k, k): dict(v, name=DISCOVERED_ALIASES.get(k, k)) for k, v in discovery['tasks'].items()
                       if not any(t['package'] + '.' + t['name'] == k for t in LEGACY_TASKS.values())})
-        tasks.update({spec['name']: spec for spec in node_specs()})
         # Build completely before publishing; a failed discovery retains the
         # previous catalog. Existing imports keep the same registry identity.
         removed = TASKS.keys() - tasks.keys()

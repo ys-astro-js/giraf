@@ -3,6 +3,10 @@
 Each file patches one task by name. Presentation and structure are applied
 automatically; problems are reported as schema issues for workflow diagnostics.
 A malformed file fails closed: the task is not runnable until it is fixed.
+
+A file whose task is in the `giraf.` namespace defines a node of GIRAF's own
+(file input, file save, …) instead of patching an IRAF task. Its ports carry
+their kinds and one run or flow component says what it does.
 """
 import json
 import re
@@ -14,13 +18,31 @@ from .task_discovery.packages import IDENT, file_hash, env_paths
 BUNDLED = Path(__file__).resolve().parent / 'schemas'
 USER = DATA / 'user-schemas'
 KINDS = ('image', 'text', 'mask', 'metacode', 'binary')
-TOP = {'version', 'task', 'title', 'description', 'inputs', 'outputs', 'parameters', 'groups', 'components'}
+# A GIRAF node also passes image lists on; an input may take every kind.
+NODE_KINDS = KINDS + ('image-list',)
+ANY = 'any'
+NODE_PREFIX = 'giraf.'
+TOP = {'version', 'task', 'title', 'description', 'icon', 'inputs', 'outputs', 'parameters', 'groups', 'components'}
 PORT_FIELDS = {
-    'inputs': {'kind': str, 'label': str, 'multiple': bool, 'required': bool},
-    'outputs': {'kind': str, 'label': str, 'mode': str, 'default': str, 'optional': bool},
+    'inputs': {'kind': str, 'label': str, 'multiple': bool, 'required': bool, 'sources': list},
+    'outputs': {'kind': str, 'label': str, 'mode': str, 'default': str, 'optional': bool, 'from': str},
 }
+# Where an input's files may come from: chosen files, an IRAF expression,
+# another node's output, text typed in place, recorded cursor commands.
+SOURCES = ('files', 'expression', 'node', 'text', 'cursor')
+# Symbols a GIRAF node shows in the add-task popover.
+NODE_ICONS = ('file-input', 'folder-down')
 PARAMETER_FIELDS = {'label', 'default', 'fixed'}
-PLANNED_COMPONENTS = ('image-cursor', 'value-output', 'value-input', 'ccd-preprocess', 'calibration-groups')
+# `task` components extend an IRAF task; `run` and `flow` components are what a
+# GIRAF node does: run as a job, or steer the workflow runner.
+COMPONENT_CLASSES = {
+    'image-cursor': 'task', 'value-output': 'task', 'value-input': 'task',
+    'ccd-preprocess': 'task', 'calibration-groups': 'task',
+    'pass-files': 'run', 'save-files': 'run',
+    'loop': 'flow', 'branch': 'flow',
+}
+RUN_COMPONENTS = ('pass-files', 'save-files')
+PLANNED_COMPONENTS = ('image-cursor', 'value-output', 'value-input', 'ccd-preprocess', 'calibration-groups', 'loop', 'branch')
 KEY = re.compile(rf'^(?:{IDENT}\.)?{IDENT}$')
 
 
@@ -48,12 +70,19 @@ def load_layers(directories=None):
 
 def format_errors(data):
     errors = []
+    node = str(data.get('task', '')).startswith(NODE_PREFIX)
     if data.get('version') != 2:
         errors.append('version은 2여야 합니다.')
     errors += [f'{key}: 알 수 없는 필드입니다.' for key in sorted(set(data) - TOP)]
     for key in ('title', 'description'):
         if key in data and not isinstance(data[key], str):
             errors.append(f'{key}: 문자열이어야 합니다.')
+    if 'icon' in data and not node:
+        errors.append('icon: GIRAF 노드(giraf.)에만 쓸 수 있습니다.')
+    elif 'icon' in data and data['icon'] not in NODE_ICONS:
+        errors.append(f'icon: {", ".join(NODE_ICONS)} 중 하나여야 합니다.')
+    if node and (data.get('parameters') or data.get('groups')):
+        errors.append('parameters, groups: GIRAF 노드에는 IRAF 파라미터가 없습니다.')
     for direction, fields in PORT_FIELDS.items():
         ports = data.get(direction, {})
         if not isinstance(ports, dict):
@@ -68,10 +97,17 @@ def format_errors(data):
             elif port:
                 errors += [f'{where}.{k}: 알 수 없는 필드입니다.' for k in sorted(set(port) - set(fields))]
                 errors += [f'{where}.{k}: 자료형이 올바르지 않습니다.' for k, typ in fields.items() if k in port and type(port[k]) is not typ]
-                if 'kind' in port and port['kind'] not in KINDS:
-                    errors.append(f'{where}.kind: {", ".join(KINDS)} 중 하나여야 합니다.')
-                if port.get('mode', 'single') not in ('single', 'each'):
-                    errors.append(f'{where}.mode: single 또는 each여야 합니다.')
+                kinds = (NODE_KINDS if node else KINDS) + ((ANY,) if direction == 'inputs' else ())
+                if 'kind' in port and port['kind'] not in kinds:
+                    errors.append(f'{where}.kind: {", ".join(kinds)} 중 하나여야 합니다.')
+                modes = ('pass',) if node else ('single', 'each')
+                if port.get('mode', modes[0]) not in modes:
+                    errors.append(f'{where}.mode: {" 또는 ".join(modes)}여야 합니다.')
+                if node and direction == 'outputs' and not isinstance(port.get('from'), str):
+                    errors.append(f'{where}.from: 파일을 넘겨줄 입력 이름이 필요합니다.')
+                if 'sources' in port and not (port['sources'] and len(set(port['sources'])) == len(port['sources'])
+                                              and all(v in SOURCES for v in port['sources'])):
+                    errors.append(f'{where}.sources: {", ".join(SOURCES)} 중 하나 이상의 목록이어야 합니다.')
     parameters = data.get('parameters', {})
     if not isinstance(parameters, dict):
         errors.append('parameters: 이름을 키로 하는 객체여야 합니다.')
@@ -99,8 +135,15 @@ def format_errors(data):
     else:
         for item in components:
             kind = item.get('type') if isinstance(item, dict) else None
-            planned = ' (예정된 구성 요소)' if kind in PLANNED_COMPONENTS else ''
-            errors.append(f'components: {kind or "type 없음"}은 아직 지원하지 않습니다{planned}.')
+            kind_class = COMPONENT_CLASSES.get(kind)
+            if kind_class and (kind_class == 'task') == node:
+                errors.append(f'components: {kind}은 {"IRAF 작업" if kind_class == "task" else "GIRAF 노드(giraf.)"}에만 쓸 수 있습니다.')
+            elif kind in RUN_COMPONENTS:
+                if set(item) != {'type'}:
+                    errors.append(f'components.{kind}: type 외의 필드는 없습니다.')
+            else:
+                planned = ' (예정된 구성 요소)' if kind in PLANNED_COMPONENTS else ''
+                errors.append(f'components: {kind or "type 없음"}은 아직 지원하지 않습니다{planned}.')
     return errors
 
 
@@ -216,3 +259,65 @@ def apply_presentation(spec, presentation, issues, provenance, layers):
     spec['schemaProvenance'] = provenance
     spec['schemaIssues'] = issues
     return spec
+
+
+def node_definition(task, layers):
+    """Build a GIRAF node (`giraf.` namespace) from its schema layers.
+
+    Layers patch each other as they patch an IRAF task: ports by name, `null`
+    removes one, components replace the list. What the node does comes from its
+    one run or flow component, never from code keyed on its name.
+    """
+    import hashlib
+    issues, provenance, files = [], {}, {}
+    ports = {'inputs': {}, 'outputs': {}}
+    shown = dict(title=task[len(NODE_PREFIX):], description='', icon=None)
+    components = []
+    error = lambda message: issues.append(dict(severity='error', message=message))
+    for layer in layers:
+        files[layer['source']] = layer['hash']
+        if layer['errors']:
+            for message in layer['errors']:
+                error(f'{Path(layer["source"]).name}: {message}')
+            continue
+        patch, name = layer['patch'], layer['layer']
+        for key in shown:
+            if key in patch:
+                shown[key] = patch[key]
+                provenance[key] = name
+        for direction in ports:
+            for role, port in patch.get(direction, {}).items():
+                where = f'{direction}.{role}'
+                provenance[where] = name
+                if port is None:
+                    ports[direction].pop(role, None)
+                elif role not in ports[direction] and 'kind' not in port:
+                    error(f'{where}: 새 포트에는 kind가 필요합니다.')
+                else:
+                    ports[direction][role] = {**ports[direction].get(role, {'name': role}), **port}
+        if 'components' in patch:
+            components = patch['components']
+            provenance['components'] = name
+    actions = [c['type'] for c in components if COMPONENT_CLASSES.get(c.get('type')) in ('run', 'flow')]
+    if len(actions) != 1:
+        error('components: 실행 또는 흐름 구성 요소가 하나 필요합니다.')
+    run = actions[0] if len(actions) == 1 else None
+    inputs = [{'label': p['name'], 'multiple': True, 'required': False, **p} for p in ports['inputs'].values()]
+    # A pass output exists only while its input holds files of its kind.
+    outputs = [{'label': p['name'], 'default': '', 'optional': True, **p} for p in ports['outputs'].values()]
+    for slot in outputs:
+        if slot['from'] not in ports['inputs']:
+            error(f'outputs.{slot["name"]}.from: {slot["from"]} 입력이 없습니다.')
+    if run == 'save-files' and outputs:
+        error('outputs: save-files 노드는 출력이 없습니다.')
+    if run == 'pass-files' and not outputs:
+        error('outputs: pass-files 노드에는 넘겨줄 출력이 필요합니다.')
+    fingerprint = hashlib.sha256(json.dumps(dict(files=files, inputs=inputs, outputs=outputs, run=run),
+                                            sort_keys=True).encode()).hexdigest()
+    reason = ' '.join(dict.fromkeys(i['message'] for i in issues))
+    return dict(name=task, package=NODE_PREFIX.rstrip('.'), taskName=shown['title'], title=shown['title'],
+                description=shown['description'], icon=shown['icon'], run=run, adapter='generic',
+                inputs=inputs, outputs=outputs, output=None, kind=ANY, parameters=[], allParameters=[],
+                parameterSets=[], fixed={}, schemaFiles=files, schemaFingerprint=fingerprint,
+                schemaLayers=[dict(layer=l['layer'], source=l['source']) for l in layers],
+                schemaProvenance=provenance, schemaIssues=issues, runnable=not issues, reason=reason)

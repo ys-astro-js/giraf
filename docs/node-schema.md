@@ -1,6 +1,6 @@
 # 노드 스키마 v2
 
-노드의 입출력 포트, 설정 탭 구성, 고정 파라미터를 코드가 아닌 JSON 스키마로 정합니다. IRAF에서 자동 생성한 스키마 위에 필요한 부분만 덮어씁니다. 관련 이슈: #7(노드 설정 분리), #3(입출력 구분).
+노드의 입출력 포트, 설정 탭 구성, 고정 파라미터를 코드가 아닌 JSON 스키마로 정합니다. IRAF에서 자동 생성한 스키마 위에 필요한 부분만 덮어씁니다. IRAF 작업이 아닌 GIRAF 노드(파일 입력, 파일 저장 등)도 같은 형식으로 정의합니다([GIRAF 노드](#giraf-노드)). 관련 이슈: #7(노드 설정 분리), #3(입출력 구분).
 
 ## 계층
 
@@ -57,13 +57,27 @@
 
 | 필드 | 입력 | 출력 | 설명 |
 | --- | --- | --- | --- |
-| `kind` | ✓ | ✓ | `image`, `text`, `mask`, `metacode`, `binary` |
+| `kind` | ✓ | ✓ | `image`, `text`, `mask`, `metacode`, `binary`. 입력은 `any`(모든 종류)도 가능. GIRAF 노드는 `image-list`도 가능 |
 | `label` | ✓ | ✓ | 표시 이름 |
 | `multiple` | ✓ | | 여러 파일 입력 |
 | `required` | ✓ | | 필수 입력 |
-| `mode` | | ✓ | `single` 또는 `each`(입력마다 출력) |
+| `sources` | ✓ | | 입력을 받는 방법의 목록. 생략하면 지금처럼 모두 허용 |
+| `mode` | | ✓ | `single` 또는 `each`(입력마다 출력). GIRAF 노드는 `pass` |
+| `from` | | ✓ | `pass` 출력이 파일을 받아 넘기는 입력 이름 |
 | `default` | | ✓ | 기본 출력 이름 또는 접두사 |
 | `optional` | | ✓ | 이름을 입력했을 때만 생성 |
+
+`sources`의 값은 다음과 같습니다. 목록에 없는 방법은 설정 탭과 캔버스에서 사라지고, 실행 전 검증에서 거부합니다.
+
+| 값 | 입력 방법 |
+| --- | --- |
+| `files` | 파일 선택기로 고른 파일 |
+| `expression` | IRAF 표현식 |
+| `node` | 다른 노드의 출력 연결. 없으면 캔버스의 입력 연결점이 없음 |
+| `text` | 직접 입력한 텍스트 (imalign `coords`·`shifts` 같은 표) |
+| `cursor` | 커서 명령 기록 (커서 parameter) |
+
+`pass` 출력은 `from` 입력에 들어온 파일 중 자기 `kind`인 파일을 그대로 넘깁니다. 이름을 입력받지 않으며 해당 종류의 파일이 있을 때만 포트로 나타납니다. 가장 먼저 나타난 포트가 기본 출력입니다.
 
 ### 파라미터 필드
 
@@ -81,15 +95,54 @@ pset 파라미터는 `datapars.fwhmpsf`처럼 pset 이름을 앞에 붙입니다
 
 ### 구성 요소
 
-`components`는 내장 동작을 불러와 조합합니다. 코드 실행은 지원하지 않습니다. 종류마다 별도 검증 규칙을 둡니다.
+`components`는 내장 동작을 불러와 조합합니다. 코드 실행은 지원하지 않습니다. 종류마다 별도 검증 규칙을 둡니다. 구성 요소는 쓰는 곳에 따라 셋으로 나뉩니다.
 
-| 종류 | 상태 | 용도 |
+| 분류 | 쓰는 곳 | 뜻 |
 | --- | --- | --- |
-| `image-cursor` | 예정 | 영상을 클릭해 커서 명령으로 측정 (daoedit) |
-| `value-output`, `value-input` | 예정 | 측정값을 연결선으로 다른 노드의 파라미터에 전달 |
-| `ccd-preprocess`, `calibration-groups` | 예정 | ccdred 계열 전처리와 보정 그룹 포트 |
+| 작업 확장 | IRAF 작업 | IRAF가 실행하는 작업에 GIRAF의 상호작용이나 포트를 붙임 |
+| 실행 | GIRAF 노드 | 노드가 작업 하나로 실행될 때 하는 일 |
+| 흐름 | GIRAF 노드 | 워크플로 실행기가 해석하는 제어 흐름 |
 
-아직 지원하지 않는 종류는 오류로 표시합니다.
+| 종류 | 분류 | 상태 | 용도 |
+| --- | --- | --- | --- |
+| `image-cursor` | 작업 확장 | 예정 | 영상을 클릭해 커서 명령으로 측정 (daoedit) |
+| `value-output`, `value-input` | 작업 확장 | 예정 | 측정값을 연결선으로 다른 노드의 파라미터에 전달 |
+| `ccd-preprocess`, `calibration-groups` | 작업 확장 | 예정 | ccdred 계열 전처리와 보정 그룹 포트 |
+| `pass-files` | 실행 | 지원 | `pass` 출력대로 입력 파일을 넘김 |
+| `save-files` | 실행 | 지원 | 입력 파일을 노드에서 고른 폴더에 저장. 출력이 없어야 함 |
+| `loop`, `branch` | 흐름 | 예정 | 반복, 분기 |
+
+아직 지원하지 않는 종류와 쓰는 곳이 맞지 않는 구성 요소는 오류로 표시합니다.
+
+`save-files` 노드는 출력 탭에서 저장 위치와 같은 이름 처리를 정합니다. 저장 위치는 폴더 선택기로 고르며, 비우면 프로젝트 폴더입니다. 프로젝트 안의 폴더는 상대 경로로 기록하고, 프로젝트 밖 폴더는 워크플로 내보내기에서 제외합니다. 같은 이름이 있으면 첫 점 앞에 번호를 붙이거나(`m67.mag.1` → `m67_1.mag.1`) 덮어씁니다.
+
+### GIRAF 노드
+
+`task`가 `giraf.`로 시작하는 파일은 IRAF 작업을 덮어쓰지 않고 새 노드를 정의합니다. 같은 이름의 파일이 여러 계층에 있으면 IRAF 작업처럼 차례로 덮어씁니다. 실행이나 흐름 구성 요소가 정확히 하나 있어야 하며, IRAF 파라미터가 없으므로 `parameters`와 `groups`는 쓸 수 없습니다. 새 포트에는 `kind`가 필요하고, 출력은 `pass`만 가능합니다.
+
+| 필드 | 설명 |
+| --- | --- |
+| `title` | 노드 이름. 캔버스와 작업 추가 목록에 표시 |
+| `description` | 노드 설명 |
+| `icon` | 작업 추가 목록의 아이콘. `file-input`, `folder-down` 중 하나 |
+
+GIRAF 노드는 작업 추가 목록에서 IRAF 패키지 위에 타일로 표시하고, Info 탭에 IRAF 실행 명령어와 도움말을 두지 않습니다. 예: `giraf/schemas/file-input.json`, `giraf/schemas/file-save.json`.
+
+```json
+{
+  "version": 2,
+  "task": "giraf.file_input",
+  "title": "파일 입력",
+  "description": "선택한 파일을 다른 작업에 전달",
+  "icon": "file-input",
+  "inputs": { "files": { "kind": "any", "label": "파일", "multiple": true, "required": true, "sources": ["files"] } },
+  "outputs": {
+    "image": { "kind": "image", "mode": "pass", "from": "files" },
+    "list": { "kind": "image-list", "mode": "pass", "from": "files" }
+  },
+  "components": [{ "type": "pass-files" }]
+}
+```
 
 ### 전용 어댑터 작업
 
@@ -111,7 +164,8 @@ ccdred 계열처럼 전용 어댑터(`task_catalog.py`의 `TASKS`)로 실행하�
 
 ## 구현 위치
 
-- `giraf/node_schema.py`: 계층 읽기, 형식 검증, 병합, 출처 기록
+- `giraf/node_schema.py`: 계층 읽기, 형식 검증, 병합, 출처 기록, GIRAF 노드 정의(`node_definition`)
+- `giraf/file_nodes.py`: `pass-files`, `save-files` 실행
 - `giraf/task_discovery/definition.py`: 자동 생성 스키마에 계층 적용
 - `giraf/task_catalog.py`: 전용 어댑터 작업의 미지원 경고
 - `giraf/generic_tasks/validation.py`, `scripts.py`: 작업·pset `fixed` 실행 반영

@@ -54,6 +54,11 @@ def alignment_pairs(records, name):
     return pairs
 
 
+def accepts_source(slot, source):
+    """A port without declared `sources` keeps taking every kind it already did."""
+    return source in slot.get('sources', (source,))
+
+
 def resolve_generic_inputs(spec, payload, supplied, directory, resolve, *, hash_file, diagnostics, pending_roles):
     cursor_commands = payload.get('cursorCommands', {})
     text_inputs = payload.get('textInputs', {})
@@ -77,6 +82,8 @@ def resolve_generic_inputs(spec, payload, supplied, directory, resolve, *, hash_
         if not isinstance(ids, list) or any(not isinstance(i, str) for i in ids): raise ValueError(f'{name}: 파일 목록을 선택해 주세요.')
         expanded = {}
         expr = expressions.get(name, '')
+        if expr and not accepts_source(slot, 'expression'):
+            raise ValueError(f'{name}: 표현식을 받지 않는 입력입니다. 파일을 선택해 주세요.')
         if (cursor_commands.get(name, '').strip() or text_inputs.get(name, '').strip()) and (ids or expr):
             raise ValueError(f'{name}: 직접 입력과 파일/노드 연결 중 하나를 선택해 주세요.')
         if expr:

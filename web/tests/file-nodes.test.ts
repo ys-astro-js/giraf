@@ -5,16 +5,16 @@ import { connectionChoices, nodeGeometry } from "../src/lib/node-interaction"
 import { syncPassOutputs } from "../src/lib/output-ports"
 import { workflowDocument } from "../src/lib/workflow-document"
 
-const kinds = ["image", "text", "image-list", "mask", "metacode", "binary"]
+const kinds: [string, string][] = [["image", "image"], ["text", "text"], ["list", "image-list"]]
 const source: Spec = {
-  name: "workflow.file_input", taskName: "파일 입력", title: "파일 입력", package: "workflow",
-  adapter: "generic", executor: "file-input", runnable: true, parameters: [], output: null, kind: "any",
-  inputs: [{ name: "files", label: "파일", kind: "any", multiple: true, required: true, connectable: false }],
-  outputs: kinds.map((kind) => ({ name: kind, kind, mode: "pass", source: "files", optional: true, default: "" })),
+  name: "giraf.file_input", taskName: "파일 입력", title: "파일 입력", package: "giraf", icon: "file-input",
+  adapter: "generic", run: "pass-files", runnable: true, parameters: [], output: null, kind: "any",
+  inputs: [{ name: "files", label: "파일", kind: "any", multiple: true, required: true, sources: ["files"] }],
+  outputs: kinds.map(([name, kind]) => ({ name, kind, mode: "pass", from: "files", optional: true, default: "" })),
 }
 const sink: Spec = {
-  name: "workflow.file_save", taskName: "파일 저장", title: "파일 저장", package: "workflow",
-  adapter: "generic", executor: "file-save", destination: true, runnable: true, parameters: [], output: null,
+  name: "giraf.file_save", taskName: "파일 저장", title: "파일 저장", package: "giraf", icon: "folder-down",
+  adapter: "generic", run: "save-files", runnable: true, parameters: [], output: null,
   kind: "any", inputs: [{ name: "files", label: "파일", kind: "any", multiple: true, required: true }], outputs: [],
 }
 const catalog: Catalog = { version: "test", tasks: [source, sink], ccdproc: { parameters: [], inputs: [] }, ccdred: [], exam: {} }
@@ -36,10 +36,10 @@ test("a file source shows one port per kind it carries, the first as its main ou
   expect(geometry.primaryOutputRole).toBe("image")
   expect(geometry.outputs.map((o) => o.name)).toEqual(["text"])
   expect(syncPassOutputs(map, catalog, rows)).toBe(map)
-  expect(payloadFor(map, "a", catalog).outputs).toMatchObject({ image: "*", text: "*", mask: "" })
+  expect(payloadFor(map, "a", catalog).outputs).toMatchObject({ image: "*", text: "*", list: "" })
 })
 
-test("a file source takes no node outputs, and a file sink carries its destination", () => {
+test("an input without the node source takes no node outputs; a save-files node carries its destination", () => {
   const a = makeInstance(source, catalog, prefs, "a"), b = makeInstance(sink, catalog, prefs, "b")
   b.draft.destination = { path: "/Volumes/USB/결과", conflict: "overwrite" }
   const map = { ...emptyMap(), tasks: [a, b] }

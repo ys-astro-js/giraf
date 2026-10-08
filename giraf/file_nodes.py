@@ -1,8 +1,8 @@
-"""GIRAF's own workflow nodes: a file source and a file sink.
+"""What the `pass-files` and `save-files` schema components do (giraf/node_schema.py).
 
-Both reuse the generic node contract. The source passes its selected files on
-through one output per file kind; the sink copies what it receives into a
-folder on the user's device and has no outputs.
+`pass-files` hands its input files on through the output whose kind matches
+each file; `save-files` copies what it receives into a folder on the user's
+device. The nodes themselves are defined in giraf/schemas.
 """
 import json
 import os
@@ -10,34 +10,7 @@ from pathlib import Path
 import shlex
 import shutil
 
-# Images first: the first kind in use becomes the node's main output.
-FILE_KINDS = ('image', 'text', 'image-list', 'mask', 'metacode', 'binary')
 CONFLICTS = ('number', 'overwrite')
-
-
-def _spec(name, title, description, executor, inputs, outputs):
-    return dict(name='workflow.' + name, taskName=title, title=title, package='workflow',
-                description=description, adapter='generic', executor=executor,
-                inputs=inputs, outputs=outputs, output=None, kind='any', parameters=[],
-                allParameters=[], parameterSets=[], fixed={}, schemaFiles={},
-                schemaFingerprint=executor + '-v1', runnable=True)
-
-
-def file_input_spec():
-    return _spec('file_input', '파일 입력', '선택한 파일을 다른 작업에 전달', 'file-input',
-                 [dict(name='files', label='파일', kind='any', multiple=True, required=True, connectable=False)],
-                 [dict(name=kind, label=kind, kind=kind, mode='pass', source='files', optional=True, default='')
-                  for kind in FILE_KINDS])
-
-
-def file_save_spec():
-    return dict(_spec('file_save', '파일 저장', '연결한 파일을 폴더에 저장', 'file-save',
-                      [dict(name='files', label='파일', kind='any', multiple=True, required=True)], []),
-                destination=True)
-
-
-def node_specs():
-    return [file_input_spec(), file_save_spec()]
 
 
 def checked_destination(value, directory):
@@ -70,7 +43,8 @@ def save_targets(manifest):
     folder = Path(destination['folder'])
     rows = {r['id']: r for r in manifest['rows']}
     planned, taken = [], set()
-    for id in manifest['inputs'].get('files', []):
+    ids = [id for slot in manifest['definition']['inputs'] for id in manifest['inputs'].get(slot['name'], [])]
+    for id in ids:
         row = rows[id]
         target = folder / Path(row.get('label') or row['path']).name
         if destination['conflict'] == 'number' and (target.exists() or target in taken):
@@ -80,15 +54,27 @@ def save_targets(manifest):
     return planned
 
 
-def preview_nodes(manifest):
-    spec = manifest['definition']
+def passed(manifest):
+    """(row, output slot) for each input file, in the order the inputs list them."""
     rows = {r['id']: r for r in manifest['rows']}
-    if spec['executor'] == 'file-save':
+    result = []
+    for slot in manifest['definition']['inputs']:
+        outputs = {o['kind']: o for o in manifest['definition']['outputs'] if o['from'] == slot['name']}
+        for id in manifest['inputs'].get(slot['name'], []):
+            row = rows[id]
+            output = outputs.get(row.get('asset', 'image'))
+            if not output:
+                raise ValueError(f'{row.get("label") or row["name"]}: 이 노드가 넘겨줄 수 없는 파일 종류입니다.')
+            result.append((row, output))
+    return result
+
+
+def preview_nodes(manifest):
+    if manifest['definition']['run'] == 'save-files':
         return [dict(inputs=[row.get('label') or Path(row['path']).name], output=str(target))
                 for row, target in save_targets(manifest)]
-    ids = manifest['inputs'].get('files', [])
-    return [dict(role=rows[id].get('asset', 'image'), source=id, inputs=[rows[id].get('label', rows[id]['name'])],
-                 output=rows[id].get('label', rows[id]['name'])) for id in ids]
+    return [dict(role=output['name'], source=row['id'], inputs=[row.get('label', row['name'])],
+                 output=row.get('label', row['name'])) for row, output in passed(manifest)]
 
 
 def _absolute_list(path):
@@ -120,31 +106,29 @@ def _verified(runner, row):
     return path
 
 
-def execute_file_input(runner):
+def execute_pass_files(runner):
     from .jobs import atomic_json
     from .products import publish_product
-    rows = {r['id']: r for r in runner.m['rows']}
     products = []
     staging = runner.job / 'output'
     staging.mkdir(exist_ok=True)
-    for id in runner.m['inputs']['files']:
-        row = rows[id]
+    for row, output in passed(runner.m):
         path = _verified(runner, row)
-        asset = row.get('asset', 'image')
         source = path
-        if asset == 'image-list':
+        if output['kind'] == 'image-list':
             source = staging / f'{len(products):05d}.list'
             source.write_text(_absolute_list(path))
         products.append(publish_product(runner.job, dict(file=str(source), label=row.get('label') or path.name,
-                                                          asset=asset, role=asset, source=id), len(products)))
-    atomic_json(runner.job / 'sources.json', list(rows.values()))
+                                                          asset=output['kind'], role=output['name'], source=row['id']), len(products)))
+    atomic_json(runner.job / 'sources.json', runner.m['rows'])
     (runner.job / 'task.log').write_text(f'{len(products)}개 파일을 전달했습니다.\n')
-    products.append(publish_product(runner.job, dict(file='task.log', label='파일 입력-results.txt', asset='text', role='$log'), len(products)))
+    name = runner.m['definition']['taskName']
+    products.append(publish_product(runner.job, dict(file='task.log', label=f'{name}-results.txt', asset='text', role='$log'), len(products)))
     atomic_json(runner.job / 'products.json', products)
-    runner.state('파일 입력 완료', 1, 'completed')
+    runner.state(f'{name} 완료', 1, 'completed')
 
 
-def execute_file_save(runner):
+def execute_save_files(runner):
     from .jobs import atomic_json
     from .products import publish_product
     destination = runner.m['destination']
@@ -162,5 +146,5 @@ def execute_file_save(runner):
             log.write(f'{row.get("label") or path.name} -> {target}\n')
     atomic_json(runner.job / 'saved.json', saved)
     atomic_json(runner.job / 'products.json', [publish_product(
-        runner.job, dict(file='task.log', label='파일 저장-results.txt', asset='text', role='$log'), 0)])
+        runner.job, dict(file='task.log', label=runner.m['definition']['taskName'] + '-results.txt', asset='text', role='$log'), 0)])
     runner.state(f'{len(saved)}개 파일 저장 완료', 1, 'completed')

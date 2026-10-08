@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Choice } from "@/components/workbench-controls"
-import { type Frame, type Slot } from "@/lib/workbench"
+import { acceptsSource, type Frame, type Slot } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
 import type * as React from "react"
 
@@ -105,11 +105,11 @@ export function InspectorFileSource({
         >
           <TabsList className="w-full">
             <TabsTrigger value="files">파일</TabsTrigger>
-            {/* A file source takes chosen files only, not other nodes or typed names. */}
-            {!port && s.connectable !== false && (
+            {/* A port may limit where its files come from (node schema `sources`). */}
+            {!port && acceptsSource(s, "expression") && (
               <TabsTrigger value="expression">표현식</TabsTrigger>
             )}
-            {s.connectable !== false && (
+            {acceptsSource(s, "node") && (
               <TabsTrigger value="node">노드 출력</TabsTrigger>
             )}
           </TabsList>
