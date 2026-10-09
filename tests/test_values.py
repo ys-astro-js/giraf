@@ -143,6 +143,67 @@ class GraphTests(unittest.TestCase):
         whole = graph({'n': dict(node='edit', output='fwhm'), 'gain': dict(node='gain', output='gain')}, partition=None, extra=[gain])
         self.assertAlmostEqual(whole.output(dict(node='calc', output='m'))['values'][0], 8.14 * 2)
 
+    def test_table_rows_follow_the_image_their_product_came_from(self):
+        (self.root / 'b.txt').write_text(DAOEDIT)
+        (self.root / 'v.txt').write_text(DAOEDIT.replace('8.28', '3.00').replace('8.00', '3.50'))
+        spec = dict(name='fwhm', kind='real', **{'from': '$stdout'}, column='FWHM')
+        rows = [dict(id='img-b', path=self.files['b.fits'])]
+        # daoedit runs over one image; a foreach run merges each image's table.
+        daoedit = dict(state='completed', manifest=dict(rows=rows, definition=dict(taskName='daoedit', values=[spec])),
+                       products=[dict(id='t1', role='$stdout', path=str(self.root / 'b.txt'), sourceInput='img-b'),
+                                 dict(id='t2', role='$stdout', path=str(self.root / 'v.txt'), sourceInput='img-v')])
+        # A per-image output (phot's .mag) names its input as `source`.
+        phot = dict(daoedit, products=[dict(p, source=p['sourceInput'], sourceInput=None) for p in daoedit['products']])
+        files = {'img-v': self.files['v.fits']}
+        for job in (daoedit, phot):
+            with self.subTest(products=job['products']):
+                graph = ValueGraph(dict(nodes=[dict(id='calc', run='value-compute', partition='FILTER',
+                                                    rows=[dict(name='m', value='median(fwhm)')],
+                                                    inputs={'fwhm': dict(node='edit', output='fwhm')})]),
+                                   {'edit': job}.get, files.__getitem__)
+                result = graph.output(dict(node='calc', output='m'))
+                self.assertEqual(result['groups'], dict(keyword='FILTER', values={'B': [8.14], 'V': [3.25]}))
+        # One untraced table leaves the whole value untraced.
+        mixed = dict(daoedit, products=[*daoedit['products'], dict(id='t3', role='$stdout', path=str(self.root / 'b.txt'))])
+        graph = ValueGraph(dict(nodes=[dict(id='calc', run='value-compute', partition='FILTER',
+                                            rows=[dict(name='m', value='median(fwhm)')],
+                                            inputs={'fwhm': dict(node='edit', output='fwhm')})]),
+                           {'edit': mixed}.get, files.__getitem__)
+        self.assertIn('알 수 없어', graph.outputs([dict(node='calc', output='m')])['calc:m']['error'])
+
+    def test_pset_node_rows_are_typed_values_and_follow_their_connections(self):
+        pset = dict(id='datapars', run='pset', rows=[
+            dict(name='readnoise', value='5.2', type='r'), dict(name='datamax', value='INDEF', type='r'),
+            dict(name='emission', value='yes', type='b'), dict(name='nmax', value='3', type='i'),
+            dict(name='filter', value='', type='s'), dict(name='fwhmpsf', value='2.5', type='r')],
+            inputs={'fwhmpsf': dict(node='calc', output='m')})
+        calc = dict(id='calc', run='value-compute', rows=[dict(name='m', value='median(fwhm) * 2')],
+                    inputs={'fwhm': dict(node='edit', output='fwhm')})
+        links = [dict(id=name, target='imcombine', parameter=name, type=type_, source=dict(node='datapars', output=source))
+                 for name, type_, source in (('rdnoise', 's', 'readnoise'), ('high', 'r', 'datamax'),
+                                             ('flag', 'b', 'emission'), ('n', 'i', 'nmax'), ('fw', 'r', 'fwhmpsf'))]
+        graph = ValueGraph(dict(nodes=[pset, calc], links=links), lambda id: self.job() if id == 'edit' else None, str)
+        outputs = graph.outputs([dict(node='datapars', output=n) for n in ('readnoise', 'emission', 'nmax', 'filter')])
+        self.assertEqual([outputs[f'datapars:{n}'] for n in ('readnoise', 'emission', 'nmax', 'filter')], [
+            dict(kind='real', values=[5.2]), dict(kind='bool', values=[True]),
+            dict(kind='int', values=[3]), dict(kind='string', values=[''])])
+        resolved = graph.parameters('imcombine')
+        self.assertEqual({k: v['value'] for k, v in resolved.items()},
+                         {'rdnoise': '5.2', 'high': 'INDEF', 'flag': 'yes', 'n': 3, 'fw': 8.14 * 2})
+        # The upstream run feeds the forwarded row, so it orders first.
+        self.assertEqual(graph.dependencies('imcombine'), {'edit'})
+        # A pset row fed (through a compute node) by its own pset row is a cycle.
+        loop = dict(calc, inputs={'fwhm': dict(node='datapars', output='fwhmpsf')})
+        error = ValueGraph(dict(nodes=[pset, loop], links=links), lambda id: None, str).parameters('imcombine')['fw']['error']
+        self.assertEqual(error, '값 연결이 순환합니다.')
+        # Workflow runs accept pset nodes and their typed rows.
+        from giraf.request_schema import WorkflowValues
+        checked = WorkflowValues.model_validate(dict(nodes=[pset, calc], links=links)).model_dump(exclude_unset=True)
+        self.assertEqual(checked['nodes'][0]['rows'][0], dict(name='readnoise', value='5.2', type='r'))
+        bad = dict(pset, rows=[dict(name='readnoise', value='x', type='r')], inputs={})
+        self.assertIn('수치가 아닙니다', ValueGraph(dict(nodes=[bad], links=links[:1]), lambda id: None, str)
+                      .parameters('imcombine')['rdnoise']['error'])
+
     def test_workflow_orders_value_sources_and_writes_parameters(self):
         graph = dict(nodes=[dict(id='phot', label='phot', payload=dict(task='phot', parameters={}, parameterSets={})),
                             dict(id='edit', label='daoedit', payload=dict(task='daoedit'))],

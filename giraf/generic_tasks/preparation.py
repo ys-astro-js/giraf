@@ -62,7 +62,10 @@ def prepare_parameters(job, manifest, aliases):
 
 
 def plan_outputs(manifest, previews):
-    slots = {slot['name']: slot for slot in manifest['definition']['outputs']}
+    spec = manifest['definition']
+    slots = {slot['name']: slot for slot in spec['outputs']}
+    rows = {r['id']: r for r in manifest['rows']}
+    main = manifest['inputs'].get(spec['inputs'][0]['name'], []) if spec['inputs'] else []
     expected = []
     for index, preview in enumerate(p for p in previews if 'role' in p):
         slot = slots[preview['role']]
@@ -70,6 +73,10 @@ def plan_outputs(manifest, previews):
                        label=preview['output'], asset=slot['kind'], role=preview['role'])
         if 'source' in preview:
             product.update(source=preview['source'], index=preview['index'])
+        elif len(main) == 1 and main[0] in rows and rows[main[0]].get('asset', 'image') == 'image':
+            # A single output of a run over one image (daoedit's table) comes from
+            # that image. `source` stays for per-input outputs, which name outcomes.
+            product['sourceInput'] = main[0]
         expected.append(product)
     return expected
 

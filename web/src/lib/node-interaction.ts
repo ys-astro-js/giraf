@@ -153,7 +153,7 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
     ...psetLinksInto(map, t.id).map((c) => ({ key: c.role.slice(PSET_INPUT.length), handleId: c.role, pset: true })),
     ...(spec ? pinnedKeys(map, catalog, t) : []).map((key) => ({ key, handleId: PARAM_HANDLE + key, pset: false })),
   ]
-  const values = valueOutputs(spec, t).map((o) => ({ ...o, handleId: VALUE_HANDLE + o.name }))
+  const values = valueOutputs(spec, t, catalog).map((o) => ({ ...o, handleId: VALUE_HANDLE + o.name }))
   const psetOutput = spec?.run === "pset"
   // A partitioned port is a bundle; its members are `~value` handles listed under it when open.
   const bundle = (handleId: string) => {

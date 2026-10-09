@@ -24,6 +24,7 @@ import {
   isJobNode,
   isValueNode,
   psetDefinition,
+  psetOutputName,
   psetSource,
   togglePinned,
   valueLinksInto,
@@ -366,8 +367,13 @@ export function TaskInspector({
   const valueLinks = valueLinksInto(map, task.id)
   const pinning = {
     pinned: (key: string) => (task.pinned ?? []).includes(key),
-    locked: (key: string) =>
-      valueLinks.some((c) => c.role === PARAM_HANDLE + key),
+    // A pset node's parameter whose value is connected onward stays pinned too.
+    locked: (key: string) => {
+      const offered = psetOutputName(task, key)
+      return valueLinks.some((c) => c.role === PARAM_HANDLE + key) ||
+        (!!offered && map.connections.some((c) => c.source.kind !== "files" && c.source.taskId === task.id &&
+          c.source.outputRole === VALUE_HANDLE + offered))
+    },
     // A connected parameter names its source and cannot be edited or unpinned.
     // A pset fed by a pset node takes the values connected to that node.
     linked: (key: string) => {

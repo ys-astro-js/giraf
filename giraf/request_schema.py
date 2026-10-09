@@ -93,11 +93,13 @@ class ValueRow(RequestModel):
     name: str
     value: str = ''
     groups: dict[str, str] | None = None
+    # A pset node's row carries its parameter's IRAF type.
+    type: str | None = None
 
 
 class ValueNode(RequestModel):
     id: str
-    run: Literal['value-constant', 'value-header', 'value-compute']
+    run: Literal['value-constant', 'value-header', 'value-compute', 'pset']
     rows: list[ValueRow] = Field(default_factory=list)
     partition: str | None = None
     files: list[str] = Field(default_factory=list)

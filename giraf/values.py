@@ -1,17 +1,18 @@
 """Values that flow along value connections into task parameters (docs/node-schema.md).
 
 A value is a list of numbers or strings, optionally split by a header keyword
-(`groups`). It comes from one of four sources: a task's `value-output`
-component (a text column or a header keyword of its output), or a GIRAF value
-node (`value-constant`, `value-header`, `value-compute`). Values reach a task
-parameter as one scalar; a partitioned target picks its own group's value.
+(`groups`). It comes from a task's `value-output` component (a text column
+or a header keyword of its output), or a GIRAF value node (`value-constant`,
+`value-header`, `value-compute`, or a `pset` node's parameter). Values reach a
+task parameter as one scalar; a partitioned target picks its own group's value.
 A compute node with a partition splits its inputs by that keyword
 (partition_input); values read from files carry their files (`sources`) so
-they can be split by each file's header.
+they can be split by each file's header. A table's rows are traced to the
+input image its product was made from (`source` or `sourceInput`).
 
 The request shape is shared by the `/api/values` endpoint and workflow runs:
 
-  nodes: [{id, run, rows: [{name, value, groups?}], partition?, files: [file id],
+  nodes: [{id, run, rows: [{name, value, groups?, type?}], partition?, files: [file id],
            fileLinks: [{source, sourceRole?, sourceFiles?, sourcePartition?}],
            inputs: {variable: ref}}]
   links: [{id, target, parameter, type, source: ref, partition?: {keyword, value}}]
@@ -123,7 +124,8 @@ def task_value(job, name, resolve_file):
         raise ValueError(f'{name}: 작업 스키마에 없는 값입니다.')
     products = [p for p in job.get('products', []) if p.get('role') == spec['from']]
     kind = spec.get('kind', 'real')
-    values, sources = [], []
+    inputs = {r['id']: r.get('path') for r in (job.get('manifest') or {}).get('rows', [])}
+    values, sources, traced = [], [], True
     for product in products:
         path = _product_path(product, resolve_file)
         if 'keyword' in spec:
@@ -131,11 +133,29 @@ def task_value(job, name, resolve_file):
             if value is not None:
                 values.append(value)
                 sources.append(str(path))
-        else:
-            values += column_values(path.read_text(errors='replace'), spec['column'], kind)
-    # A header keyword comes from one file per value; a table column does not say which.
-    trace = dict(sources=sources) if 'keyword' in spec else {}
+            continue
+        column = column_values(path.read_text(errors='replace'), spec['column'], kind)
+        values += column
+        # A table's rows come from the input image it was made from, when the run
+        # recorded one: a per-image output (`source`) or a run over one image.
+        source = _input_path(product.get('source') or product.get('sourceInput'), inputs, resolve_file)
+        traced = traced and source is not None
+        sources += [source] * len(column)
+    trace = dict(sources=sources) if traced else {}
     return dict(kind=kind, values=values, origin=definition.get('taskName') or None, **trace)
+
+
+def _input_path(id, inputs, resolve_file):
+    """The input file a run read as `id`, or None when it is not known."""
+    if not id:
+        return None
+    path = inputs.get(id)
+    if path and Path(path).is_file():
+        return str(path)
+    try:
+        return str(resolve_file(id))
+    except (ValueError, OSError, KeyError):
+        return None
 
 
 def _group_by(keyed, keyword):
@@ -158,6 +178,31 @@ def constant_value(node, row):
         result['values'] = [v for vs in groups.values() for v in vs]
         result['kind'] = 'real' if all(isinstance(v, float) for v in result['values']) else 'string'
     return result
+
+
+PSET_KINDS = {'r': 'real', 'd': 'real', 'i': 'int', 'b': 'bool'}
+
+
+def pset_value(row):
+    """A parameter a pset node holds, typed by its IRAF type (`type`: r, d, i, b, s, f)."""
+    text = str(row.get('value', '')).strip()
+    kind = PSET_KINDS.get(row.get('type'), 'string')
+    if kind == 'string':
+        return dict(kind=kind, values=[text], constant=True)
+    if not text:
+        return dict(kind=kind, values=[], constant=True)
+    if text.upper() == 'INDEF':
+        value = 'INDEF'
+    elif kind == 'bool':
+        if text.lower() not in ('yes', 'no', 'true', 'false'):
+            raise ValueError(f'{row["name"]}: {text}은 yes 또는 no가 아닙니다.')
+        value = text.lower() in ('yes', 'true')
+    else:
+        number = _number(text)
+        if number is None:
+            raise ValueError(f'{row["name"]}: {text}은 수치가 아닙니다.')
+        value = int(number) if kind == 'int' else number
+    return dict(kind=kind, values=[value], constant=True)
 
 
 def header_values(paths, keyword, partition=None):
@@ -345,6 +390,8 @@ def parameter_value(result, partition, type_):
     if len(distinct) > 1:
         raise ValueError(f'값이 {len(values)}개입니다. 계산 노드에서 하나로 모아 주세요.')
     value = distinct[0]
+    if value == 'INDEF' and type_ in ('r', 'd', 'i'):
+        return 'INDEF'  # IRAF's undefined number, as a pset row may hold it.
     if type_ in ('r', 'd', 'i'):
         number = 1.0 if value is True else 0.0 if value is False else _number(value)
         if number is None:
@@ -415,6 +462,12 @@ class ValueGraph:
             if node.get('partition'):
                 inputs = {k: partition_input(v, node['partition']) for k, v in inputs.items()}
             return compute_value(rows[name], {**inputs, **local})
+        if run == 'pset':
+            # A value connected into the parameter replaces the stored one.
+            ref = node.get('inputs', {}).get(name)
+            if ref:
+                return self.output(ref, seen)
+            return pset_value(rows[name])
         raise ValueError(f'{run}: 값을 계산할 수 없는 노드입니다.')
 
     def files(self, node):

@@ -9,6 +9,8 @@ import {
   pinnedKeys,
   psetValues,
   takeOutPset,
+  valueOutputs,
+  valueRefs,
   valueRequest,
 } from "../src/lib/values"
 import type { Catalog, Param, Preferences, Spec } from "../src/lib/workbench"
@@ -151,6 +153,28 @@ test("a pset node shares one pset between tasks", () => {
   const geometry = nodeGeometry(map, map.tasks.find((t) => t.id === "find")!, catalog)
   expect(geometry.params.map((p) => p.handleId)).toEqual(["pset:datapars", "p:datapars.fwhmpsf"])
   expect(nodeGeometry(map, pset, catalog).psetOutput).toBe(true)
+})
+
+test("a pset node offers its pinned parameters as values", () => {
+  let map = fixture()
+  map = addTask(map, make(phot, "find"))
+  map = { ...map, tasks: map.tasks.map((t) => t.id === "phot" ? { ...t, pinned: ["datapars.fwhmpsf", "datapars.emission"], parameterSets: { ...t.parameterSets, datapars: { ...t.parameterSets!.datapars, fwhmpsf: 3.2 } } } : t) }
+  map = takeOutPset(map, catalog, "phot", "datapars")
+  const pset = map.tasks.at(-1)!
+  expect(valueOutputs(catalog.tasks[4], pset, catalog)).toEqual([{ name: "fwhmpsf", kind: "real" }, { name: "emission", kind: "bool" }])
+  expect(nodeGeometry(map, pset, catalog).values.map((v) => v.handleId)).toEqual(["value:fwhmpsf", "value:emission"])
+  // One row feeds another task's parameter beside the whole-set pset output; types must fit.
+  map = link(map, pset.id, "value:fwhmpsf", "find", "p:photpars.apertures")
+  expect(connectionFeedback(map, catalog, [], { source: pset.id, sourceHandle: "value:emission", target: "find", targetHandle: "p:datapars.fwhmpsf" }).valid).toBe(false)
+  let request = valueRequest(map, catalog)
+  expect(request.nodes.find((n) => n.id === pset.id)).toEqual({ id: pset.id, run: "pset", partition: null, files: [], fileLinks: [], inputs: {},
+    rows: [{ name: "fwhmpsf", value: "3.2", type: "r" }, { name: "emission", value: "", type: "b" }] })
+  expect(request.links.map((l) => [l.target, l.parameter, l.source])).toEqual([["find", "photpars.apertures", { node: pset.id, output: "fwhmpsf" }]])
+  // A value connected into the row is what the row passes on.
+  map = link(map, "gain", "value:gain", pset.id, "p:datapars.fwhmpsf")
+  request = valueRequest(map, catalog)
+  expect(request.nodes.find((n) => n.id === pset.id)?.inputs).toEqual({ fwhmpsf: { node: "gain", output: "gain" } })
+  expect(valueRefs(map, catalog)).toContainEqual({ node: pset.id, output: "emission" })
 })
 
 test("values format compactly for rows and labels", () => {

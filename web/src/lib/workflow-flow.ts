@@ -42,7 +42,7 @@ import { connectValue, isValueSource, parameterEntries, valueOutputs, PARAM_HAND
 function valueEnds(catalog: Catalog, source: Instance, target: Instance, sourceHandle: string, role: string) {
   const spec = catalog.tasks.find((s) => s.name === source.task)
   const from = sourceHandle === PSET_OUTPUT ? !!source.draft.pset
-    : valueOutputs(spec, source).some((o) => VALUE_HANDLE + o.name === sourceHandle)
+    : valueOutputs(spec, source, catalog).some((o) => VALUE_HANDLE + o.name === sourceHandle)
   const to = role.startsWith(PSET_INPUT) || parameterEntries(catalog, target).has(role.slice(PARAM_HANDLE.length))
   return from && to
 }

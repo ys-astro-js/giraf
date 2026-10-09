@@ -6,7 +6,8 @@
  * outputs come from a task's `value-output` schema components or from GIRAF
  * value nodes whose run component is `value-constant`, `value-header` or
  * `value-compute`. A `pset` node holds one IRAF pset; its output
- * (`pset`) feeds the pset input (`pset:<name>`) of every task that shares it.
+ * (`pset`) feeds the pset input (`pset:<name>`) of every task that shares it,
+ * and each parameter pinned on it is also a value output (`value:<param>`).
  * The server evaluates values (giraf/values.py); this module only describes them.
  */
 import { uid, makeInstance, type Instance, type Source, type TaskMap } from "./task-map/model"
@@ -60,10 +61,29 @@ export function expressionNames(text: string): string[] {
 
 const rowsOf = (task: Instance): ValueRow[] => task.draft.valueRows ?? []
 
-/** Value outputs of a node: schema `value-output` components or a value node's rows. */
-export function valueOutputs(spec: Spec | undefined, task: Instance): { name: string; kind: string }[] {
+// IRAF parameter types as value kinds: r/d real, i int, b bool, the rest strings.
+const typeKinds: Record<string, string> = { r: "real", d: "real", i: "int", b: "bool" }
+
+/** A pset node's parameter `pset.name` as its value output's name, if the node holds that pset. */
+export function psetOutputName(task: Instance, key: string): string | undefined {
+  const prefix = task.draft.pset ? task.draft.pset.name + "." : undefined
+  return prefix && key.startsWith(prefix) ? key.slice(prefix.length) : undefined
+}
+
+/** The parameters a pset node offers as values: those pinned on it, in order. */
+function psetOutputs(catalog: Catalog, task: Instance): { name: string; kind: string; param: Param }[] {
+  const params = psetDefinition(catalog, task.draft.pset)?.parameters ?? []
+  return (task.pinned ?? []).flatMap((key) => {
+    const param = params.find((p) => p.name === psetOutputName(task, key))
+    return param ? [{ name: param.name, kind: typeKinds[param.type] ?? "string", param }] : []
+  })
+}
+
+/** Value outputs of a node: schema `value-output` components, a value node's rows or a pset node's pinned parameters. */
+export function valueOutputs(spec: Spec | undefined, task: Instance, catalog: Catalog): { name: string; kind: string }[] {
   if (!spec) return []
   if (spec.values?.length) return spec.values.map((v) => ({ name: v.name, kind: v.kind || "real" }))
+  if (spec.run === "pset") return psetOutputs(catalog, task).map(({ name, kind }) => ({ name, kind }))
   if (spec.run === "for") {
     // A for container's variable: an int when the whole range is.
     const flow = task.draft.flow ?? {}
@@ -215,7 +235,7 @@ export function connectValue(
   if (!sourceHandle.startsWith(VALUE_HANDLE) || !targetHandle.startsWith(PARAM_HANDLE))
     throw Error("값 출력은 노드에 고정한 파라미터에만 연결할 수 있습니다.")
   const name = sourceHandle.slice(VALUE_HANDLE.length)
-  const output = valueOutputs(specOf(catalog, source), source).find((o) => o.name === name)
+  const output = valueOutputs(specOf(catalog, source), source, catalog).find((o) => o.name === name)
   if (!output) throw Error("값 출력을 찾을 수 없습니다.")
   const key = targetHandle.slice(PARAM_HANDLE.length)
   const entry = parameterEntries(catalog, target).get(key)
@@ -306,7 +326,7 @@ export function dropStaleLinks(map: TaskMap, catalog: Catalog, id: string): Task
   const task = map.tasks.find((t) => t.id === id)
   const spec = specOf(catalog, task)
   if (!task || !spec || !isValueNode(spec)) return map
-  const outputs = new Set(valueOutputs(spec, task).map((o) => VALUE_HANDLE + o.name))
+  const outputs = new Set(valueOutputs(spec, task, catalog).map((o) => VALUE_HANDLE + o.name))
   const entries = parameterEntries(catalog, task)
   const inputs = new Set(spec.inputs.map((i) => i.name))
   const pset = task.draft.pset
@@ -383,6 +403,20 @@ export function valueRequest(map: TaskMap, catalog: Catalog, inRun: Set<string> 
       return flow.variable ? [{ id: task.id, run: "value-constant", rows: [{ name: flow.variable, value: flow.start ?? "" } as ValueRow],
         partition: null as string | null, files: [] as string[], fileLinks: [] as Record<string, unknown>[], inputs: {} as Record<string, Ref> }] : []
     }
+    if (spec?.run === "pset") {
+      // Each offered parameter is its stored value, or the value connected into it.
+      const set = task.draft.pset?.name ?? ""
+      const inputs: Record<string, Ref> = {}
+      for (const c of valueLinksInto(map, task.id)) {
+        const name = psetOutputName(task, c.role.slice(PARAM_HANDLE.length)), ref = refOf(c.source)
+        if (!name || !ref) continue
+        inputs[name] = ref
+        latest(ref.node)
+      }
+      const rows = psetOutputs(catalog, task).map(({ name, param }) =>
+        ({ name, value: storedValue(task, { key: `${set}.${name}`, owner: set, param }), type: param.type }))
+      return [{ id: task.id, run: spec.run, rows, partition: null as string | null, files: [] as string[], fileLinks: [] as Record<string, unknown>[], inputs }]
+    }
     if (!spec?.run || !["value-constant", "value-header", "value-compute"].includes(spec.run)) return []
     const files: string[] = []
     const fileLinks: Record<string, unknown>[] = []
@@ -433,7 +467,7 @@ export function valueRequest(map: TaskMap, catalog: Catalog, inRun: Set<string> 
 
 /** Every value output that is drawn: node rows and connection labels. */
 export function valueRefs(map: TaskMap, catalog: Catalog): Ref[] {
-  return map.tasks.flatMap((task) => valueOutputs(specOf(catalog, task), task).map((o) => ({ node: task.id, output: o.name })))
+  return map.tasks.flatMap((task) => valueOutputs(specOf(catalog, task), task, catalog).map((o) => ({ node: task.id, output: o.name })))
 }
 
 const short = (value: ValueScalar) =>

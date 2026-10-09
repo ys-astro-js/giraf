@@ -61,6 +61,19 @@ class GenericPreparationTests(unittest.TestCase):
         self.assertEqual(runner.calls[0][0]['output'], 'output/output_')
         self.assertEqual([p['file'] for p in runner.expected], ['output/output_s00000.fits', 'output/output_s00001.fits'])
 
+    def test_single_output_of_one_image_records_that_image(self):
+        self.manifest['outputs']['optional'] = 'table.txt'
+        # Two images: the single table cannot say which image each row came from.
+        single = next(p for p in self.prepare().expected if p['role'] == 'optional')
+        self.assertNotIn('sourceInput', single)
+        self.manifest['inputs']['input'] = ['a']
+        expected = self.prepare().expected
+        single = next(p for p in expected if p['role'] == 'optional')
+        self.assertEqual(single['sourceInput'], 'a')
+        # Per-input outputs keep `source`, which names the run's outcomes.
+        self.assertEqual([p.get('source') for p in expected if p['role'] == 'output'], ['a'])
+        self.assertNotIn('source', single)
+
     def test_source_changes_and_missing_primary_input_fail_before_execution(self):
         (self.root / 'a.fits').write_bytes(b'changed')
         with self.assertRaisesRegex(ValueError, '검증 이후 변경'):
