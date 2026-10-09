@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type RefObject } from "react"
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react"
 import { TableOfContents } from "lucide-react"
-import { ParameterTable } from "./parameter-fields"
+import { ParameterTable, type ParameterPinning } from "./parameter-fields"
 import {
   Select,
   SelectContent,
@@ -22,12 +22,17 @@ export function ParameterEditorFields({
   changedOnly,
   hasOtherResults = false,
   task,
+  pinning,
+  actions,
 }: {
   groups: ParameterGroup[]
   query: string
   changedOnly: boolean
   hasOtherResults?: boolean
   task?: string
+  pinning?: ParameterPinning
+  /** Buttons beside a group's heading (a pset's 노드로 꺼내기). */
+  actions?: (group: ParameterGroup) => ReactNode
 }) {
   const visible = filterParameterGroups(groups, query, changedOnly)
   return (
@@ -39,7 +44,14 @@ export function ParameterEditorFields({
           aria-label={group.label}
           data-parameter-group={group.id}
         >
-          <h3 tabIndex={-1}>{group.label}</h3>
+          {actions?.(group) ? (
+            <div className="section-heading">
+              <h3 tabIndex={-1}>{group.label}</h3>
+              {actions(group)}
+            </div>
+          ) : (
+            <h3 tabIndex={-1}>{group.label}</h3>
+          )}
           <ParameterTable
             task={group.id === "task" ? task : undefined}
             parameters={group.parameters}
@@ -47,6 +59,8 @@ export function ParameterEditorFields({
             change={group.change}
             scope={`editor-${group.id}`}
             showInactive
+            keyPrefix={group.keyPrefix}
+            pinning={pinning}
           />
         </section>
       ))}

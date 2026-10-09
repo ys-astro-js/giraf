@@ -56,6 +56,8 @@ export type Instance = {
   filePolicy: { mode: "copy" | "direct"; backup: boolean }
   position?: { x: number; y: number }
   collapsed?: boolean
+  /** Parameters shown on the node (`name` or `pset.name`); the schema's `pinned` starts the list. */
+  pinned?: string[]
   /** Derived: the files each pass output carries now (syncPassOutputs). */
   passed?: Record<string, string[]>
   subflowId?: string
@@ -146,6 +148,7 @@ export function makeInstance(
       ])
     ),
     draft: makeDraft(spec, prefs.drafts[spec.name]),
+    ...(spec.pinned?.length ? { pinned: [...spec.pinned] } : {}),
     preprocess,
     mapping: prefs.mapping,
     instrument: prefs.instrument,

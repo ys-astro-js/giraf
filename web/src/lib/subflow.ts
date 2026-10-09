@@ -7,6 +7,7 @@ import {
 } from "@/lib/task-map"
 import { nodeLayout, roleActive } from "./node-interaction"
 import type { Catalog } from "./workbench"
+import { isValueNode, isValueRole } from "./values"
 
 export function saveSubflow(
   map: TaskMap,
@@ -90,6 +91,7 @@ export function subflowRequest(
     const external = connections.filter(
       (c) =>
         c.target === task.id &&
+        !isValueRole(c.role) &&
         c.source.kind !== "files" &&
         (!c.source.taskId || !ids.has(c.source.taskId))
     )
@@ -110,10 +112,13 @@ export function subflowRequest(
     }
     payloadFor({ ...map, connections: external }, task.id, catalog)
   }
+  // Value and pset nodes stay available to the group's tasks; they never run as jobs.
+  const values = map.tasks.filter((t) => !ids.has(t.id) && isValueNode(catalog.tasks.find((s) => s.name === t.task)))
   return workflowRequest(
-    { ...map, tasks, connections },
+    { ...map, tasks: [...tasks, ...values], connections },
     catalog,
-    workingDirectory
+    workingDirectory,
+    map
   )
 }
 

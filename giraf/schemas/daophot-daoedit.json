@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "task": "noao.digiphot.daophot.daoedit",
+  "components": [
+    { "type": "value-output", "name": "fwhm", "kind": "real", "from": "$stdout", "column": "FWHM" },
+    { "type": "value-output", "name": "sky", "kind": "real", "from": "$stdout", "column": "SKY" },
+    { "type": "value-output", "name": "skysigma", "kind": "real", "from": "$stdout", "column": "SKYSIGMA" }
+  ]
+}

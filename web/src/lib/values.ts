@@ -1,0 +1,356 @@
+/**
+ * Pinned parameters, value connections and pset nodes (docs/node-structure-brief.md §3.4).
+ *
+ * A value output (diamond handle `value:<name>`) connects to a pinned
+ * parameter (diamond handle `p:<key>`, key `name` or `pset.name`). Value
+ * outputs come from a task's `value-output` schema components or from GIRAF
+ * value nodes whose run component is `value-constant`, `value-header` or
+ * `value-compute`. A `pset` node holds one IRAF pset; its output
+ * (`pset`) feeds the pset input (`pset:<name>`) of every task that shares it.
+ * The server evaluates values (giraf/values.py); this module only describes them.
+ */
+import { uid, makeInstance, type Instance, type Source, type TaskMap } from "./task-map/model"
+import { resolvedSource } from "./task-map/runs"
+import type { Catalog, Param, ParameterSet, Spec, ValueRow } from "./workbench"
+
+export const VALUE_HANDLE = "value:"
+export const PARAM_HANDLE = "p:"
+export const PSET_OUTPUT = "pset"
+export const PSET_INPUT = "pset:"
+const VALUE_RUNS = new Set(["value-constant", "value-header", "value-compute", "pset"])
+
+export type ValueScalar = string | number | boolean
+export type ValueResult = {
+  kind?: string
+  values: ValueScalar[]
+  groups?: { keyword: string; values: Record<string, ValueScalar[]> }
+  error?: undefined
+} | { error: string; values?: undefined; groups?: undefined; kind?: undefined }
+export type ValueResponse = {
+  outputs: Record<string, ValueResult>
+  parameters: Record<string, { value: ValueScalar; error?: undefined } | { error: string; value?: undefined }>
+}
+
+/** Value and pset nodes are evaluated with the tasks they feed, never run as jobs. */
+export const isValueNode = (spec: Spec | undefined) => !!spec?.run && VALUE_RUNS.has(spec.run)
+export const isJobNode = (spec: Spec | undefined) => !isValueNode(spec)
+export const isValueRole = (role: string) => role.startsWith(PARAM_HANDLE) || role.startsWith(PSET_INPUT)
+export const isValueSource = (source: Source) =>
+  source.kind !== "files" && !!source.outputRole &&
+  (source.outputRole.startsWith(VALUE_HANDLE) || source.outputRole === PSET_OUTPUT)
+
+const specOf = (catalog: Catalog, task: Instance | undefined) =>
+  catalog.tasks.find((s) => s.name === task?.task)
+
+// Names an expression reads: identifiers that are not called as functions.
+const WORDS = new Set(["and", "or", "not", "INDEF"])
+export function expressionNames(text: string): string[] {
+  const names: string[] = []
+  for (const match of text.replace(/"[^"]*"|'[^']*'/g, " ").matchAll(/[A-Za-z_][A-Za-z0-9_]*(\s*\()?/g)) {
+    const name = match[0].replace(/\s*\($/, "")
+    if (!match[1] && !WORDS.has(name) && !names.includes(name)) names.push(name)
+  }
+  return names
+}
+
+const rowsOf = (task: Instance): ValueRow[] => task.draft.valueRows ?? []
+
+/** Value outputs of a node: schema `value-output` components or a value node's rows. */
+export function valueOutputs(spec: Spec | undefined, task: Instance): { name: string; kind: string }[] {
+  if (!spec) return []
+  if (spec.values?.length) return spec.values.map((v) => ({ name: v.name, kind: v.kind || "real" }))
+  const named = rowsOf(task).filter((r) => r.name.trim())
+  if (spec.run === "value-constant")
+    return named.map((r) => {
+      const entries = task.draft.partition ? Object.values(r.groups ?? {}) : [r.value]
+      const numeric = entries.length > 0 && entries.every((v) => v.trim() !== "" && Number.isFinite(Number(v)))
+      return { name: r.name, kind: numeric ? "real" : "string" }
+    })
+  if (spec.run === "value-header") return named.map((r) => ({ name: r.name, kind: "any" }))
+  if (spec.run === "value-compute") return named.map((r) => ({ name: r.name, kind: "real" }))
+  return []
+}
+
+/** A compute node's inputs: the names its expressions read that no row defines. */
+export function computeVariables(task: Instance): string[] {
+  const rows = rowsOf(task).map((r) => r.name)
+  return [...new Set(rowsOf(task).flatMap((r) => expressionNames(r.value)))].filter((n) => !rows.includes(n))
+}
+
+/** The IRAF pset a pset node holds, from any task that declares it. */
+export function psetDefinition(catalog: Catalog, pset: { name: string; task: string } | undefined): ParameterSet | undefined {
+  if (!pset) return undefined
+  for (const spec of catalog.tasks)
+    for (const set of spec.parameterSets ?? [])
+      if (set.task === pset.task) return set
+  return undefined
+}
+
+export type ParameterEntry = { key: string; owner: string; param: Param }
+/** Every parameter a node can show or receive a value into, by key. */
+export function parameterEntries(catalog: Catalog, task: Instance): Map<string, ParameterEntry> {
+  const spec = specOf(catalog, task)
+  const entries = new Map<string, ParameterEntry>()
+  if (!spec) return entries
+  if (spec.run === "value-compute") {
+    for (const name of computeVariables(task))
+      entries.set(name, { key: name, owner: "", param: { name, type: "any", default: "", choices: [], prompt: "", min: "", max: "" } })
+    return entries
+  }
+  if (spec.run === "pset") {
+    const set = psetDefinition(catalog, task.draft.pset)
+    for (const param of set?.parameters ?? [])
+      entries.set(`${task.draft.pset!.name}.${param.name}`, { key: `${task.draft.pset!.name}.${param.name}`, owner: task.draft.pset!.name, param })
+    return entries
+  }
+  for (const param of spec.parameters) entries.set(param.name, { key: param.name, owner: "", param })
+  for (const set of spec.parameterSets ?? [])
+    for (const param of set.parameters)
+      entries.set(`${set.name}.${param.name}`, { key: `${set.name}.${param.name}`, owner: set.name, param })
+  return entries
+}
+
+/** The stored value of a parameter, before any value connection replaces it. */
+export function storedValue(task: Instance, entry: ParameterEntry): string {
+  const name = entry.param.name
+  const value = entry.owner ? task.parameterSets?.[entry.owner]?.[name] : task.draft.parameters[name]
+  return String(value ?? entry.param.default ?? "")
+}
+
+/** Connections that put a value into one of the node's parameters. */
+export const valueLinksInto = (map: TaskMap, id: string) =>
+  map.connections.filter((c) => c.target === id && c.role.startsWith(PARAM_HANDLE))
+
+/** Keys pinned on the node, in order; a connected parameter is always pinned. */
+export function pinnedKeys(map: TaskMap, catalog: Catalog, task: Instance): string[] {
+  const entries = parameterEntries(catalog, task)
+  if (specOf(catalog, task)?.run === "value-compute") return [...entries.keys()]
+  const connected = valueLinksInto(map, task.id).map((c) => c.role.slice(PARAM_HANDLE.length))
+  return [...new Set([...(task.pinned ?? []), ...connected])].filter((key) => entries.has(key))
+}
+
+/** Psets of a task fed by a pset node: `pset:<name>` connections. */
+export const psetLinksInto = (map: TaskMap, id: string) =>
+  map.connections.filter((c) => c.target === id && c.role.startsWith(PSET_INPUT))
+
+/** The pset node feeding a task's pset, if any. */
+export function psetSource(map: TaskMap, id: string, name: string): Instance | undefined {
+  const link = map.connections.find((c) => c.target === id && c.role === PSET_INPUT + name)
+  const from = link?.source
+  return from && from.kind !== "files" ? map.tasks.find((t) => t.id === from.taskId) : undefined
+}
+
+export function togglePinned(task: Instance, key: string, pinned: boolean): Instance {
+  const keys = (task.pinned ?? []).filter((k) => k !== key)
+  return { ...task, pinned: pinned ? [...keys, key] : keys }
+}
+
+// IRAF parameter types: r/d real, i int, b bool, s/f strings.
+const accepts: Record<string, string[]> = {
+  real: ["r", "d", "i", "s"],
+  int: ["r", "d", "i", "s"],
+  bool: ["b", "s"],
+  string: ["s", "f"],
+}
+const typeNames: Record<string, string> = { r: "real", d: "real", i: "int", b: "bool", s: "string", f: "file" }
+export const acceptsValue = (kind: string, type: string) =>
+  kind === "any" || type === "any" || (accepts[kind] ?? []).includes(type)
+
+function reaches(map: TaskMap, from: string, to: string) {
+  const seen = new Set<string>()
+  const visit = (id: string): boolean =>
+    id === to || (!seen.has(id) && (seen.add(id), map.connections.some(
+      (c) => c.source.kind !== "files" && c.source.taskId === id && visit(c.target))))
+  return visit(from)
+}
+
+/** Connect a value output to a parameter, or a pset node to a task's pset. */
+export function connectValue(
+  map: TaskMap,
+  catalog: Catalog,
+  connection: { source: string; sourceHandle?: string | null; target: string; targetHandle?: string | null },
+  replacingId?: string
+): TaskMap {
+  const source = map.tasks.find((t) => t.id === connection.source)
+  const target = map.tasks.find((t) => t.id === connection.target)
+  if (!source || !target) throw Error("연결할 노드를 찾을 수 없습니다.")
+  const base = replacingId ? { ...map, connections: map.connections.filter((c) => c.id !== replacingId) } : map
+  const sourceHandle = connection.sourceHandle ?? "", targetHandle = connection.targetHandle ?? ""
+  if (source.id === target.id) throw Error("자기 자신에게는 연결할 수 없습니다.")
+  if (sourceHandle === PSET_OUTPUT || targetHandle.startsWith(PSET_INPUT)) {
+    const pset = source.draft.pset
+    if (sourceHandle !== PSET_OUTPUT || !pset) throw Error("pset 입력에는 pset 노드만 연결할 수 있습니다.")
+    if (!targetHandle.startsWith(PSET_INPUT)) throw Error("pset 출력은 작업의 pset 입력에 연결합니다.")
+    const name = targetHandle.slice(PSET_INPUT.length)
+    const set = specOf(catalog, target)?.parameterSets?.find((s) => s.name === name)
+    if (!set || set.task !== pset.task) throw Error(`${pset.name} pset(${pset.task})을 쓰는 입력에만 연결할 수 있습니다.`)
+    if (reaches(base, target.id, source.id)) throw Error("순환 연결은 만들 수 없습니다.")
+    return replaceInto(base, target.id, PSET_INPUT + name, { kind: "pending", taskId: source.id, outputRole: PSET_OUTPUT })
+  }
+  if (!sourceHandle.startsWith(VALUE_HANDLE) || !targetHandle.startsWith(PARAM_HANDLE))
+    throw Error("값 출력은 노드에 고정한 파라미터에만 연결할 수 있습니다.")
+  const name = sourceHandle.slice(VALUE_HANDLE.length)
+  const output = valueOutputs(specOf(catalog, source), source).find((o) => o.name === name)
+  if (!output) throw Error("값 출력을 찾을 수 없습니다.")
+  const key = targetHandle.slice(PARAM_HANDLE.length)
+  const entry = parameterEntries(catalog, target).get(key)
+  if (!entry) throw Error(`${key}: 파라미터를 찾을 수 없습니다.`)
+  if (entry.param.connectable === false) throw Error(`${key}는 값을 연결받지 않는 파라미터입니다.`)
+  if (!acceptsValue(output.kind, entry.param.type))
+    throw Error(`${key}는 ${typeNames[entry.param.type] ?? entry.param.type} 파라미터입니다. ${name} 값은 ${output.kind}입니다.`)
+  if (reaches(base, target.id, source.id)) throw Error("순환 연결은 만들 수 없습니다.")
+  const next = replaceInto(base, target.id, PARAM_HANDLE + key, { kind: "pending", taskId: source.id, outputRole: VALUE_HANDLE + name })
+  // A connected parameter is shown on the node until it is disconnected.
+  return { ...next, tasks: next.tasks.map((t) => t.id === target.id && !(t.pinned ?? []).includes(key) && specOf(catalog, t)?.run !== "value-compute" ? togglePinned(t, key, true) : t) }
+}
+
+function replaceInto(map: TaskMap, target: string, role: string, source: Source): TaskMap {
+  return {
+    ...map,
+    connections: [...map.connections.filter((c) => !(c.target === target && c.role === role)), { id: uid(), target, role, source }],
+  }
+}
+
+/** Move a task's pset into its own node, connected back to the task. */
+export function takeOutPset(map: TaskMap, catalog: Catalog, taskId: string, name: string): TaskMap {
+  const task = map.tasks.find((t) => t.id === taskId)
+  const set = specOf(catalog, task)?.parameterSets?.find((s) => s.name === name)
+  const psetSpec = catalog.tasks.find((s) => s.run === "pset")
+  if (!task || !set || !psetSpec) throw Error("pset 노드를 만들 수 없습니다.")
+  const node = makeInstance(psetSpec, catalog, { drafts: {}, backend: task.backend, mapping: task.mapping, instrument: task.instrument, packageValues: task.packageValues })
+  node.label = name
+  node.draft = { ...node.draft, pset: { name, task: set.task } }
+  node.parameterSets = { [name]: structuredClone(task.parameterSets?.[name] ?? {}) }
+  node.pinned = (task.pinned ?? []).filter((k) => k.startsWith(name + "."))
+  node.subflowId = task.subflowId
+  if (task.position) node.position = { x: task.position.x - 264 - 80, y: task.position.y + 40 }
+  // Value connections into the pset's parameters move to the node.
+  const moved = map.connections.map((c) =>
+    c.target === taskId && c.role.startsWith(PARAM_HANDLE + name + ".") ? { ...c, target: node.id } : c)
+  return {
+    ...map,
+    tasks: [...map.tasks.map((t) => t.id === taskId ? { ...t, pinned: (t.pinned ?? []).filter((k) => !k.startsWith(name + ".")) } : t), node],
+    connections: [...moved, { id: uid(), target: taskId, role: PSET_INPUT + name, source: { kind: "pending", taskId: node.id, outputRole: PSET_OUTPUT } }],
+  }
+}
+
+/** The pset values a task runs with: a connected pset node's values replace its own. */
+export function psetValues(map: TaskMap, task: Instance) {
+  const sets = structuredClone(task.parameterSets ?? {})
+  for (const link of psetLinksInto(map, task.id)) {
+    const name = link.role.slice(PSET_INPUT.length)
+    const node = psetSource(map, task.id, name)
+    const held = node?.draft.pset && node.parameterSets?.[node.draft.pset.name]
+    if (held) sets[name] = { ...sets[name], ...structuredClone(held) }
+  }
+  return sets
+}
+
+/** Apply resolved parameter values (`name` or `pset.name`) to a payload's settings. */
+export function withValues<T extends { parameters: Record<string, unknown>; parameterSets: Record<string, Record<string, unknown>> }>(
+  payload: T, values: Record<string, ValueScalar>
+): T {
+  const parameters = { ...payload.parameters }, parameterSets = { ...payload.parameterSets }
+  for (const [key, value] of Object.entries(values)) {
+    const [owner, name] = key.includes(".") ? [key.slice(0, key.lastIndexOf(".")), key.slice(key.lastIndexOf(".") + 1)] : ["", key]
+    if (owner) parameterSets[owner] = { ...parameterSets[owner], [name]: value }
+    else parameters[name] = value
+  }
+  return { ...payload, parameters, parameterSets }
+}
+
+type Ref = { node: string; output: string }
+type ValueLink = { id: string; target: string; parameter: string; type: string; source: Ref; partition?: { keyword: string; value: string } }
+
+const refOf = (source: Source): Ref | undefined =>
+  source.kind !== "files" && source.outputRole?.startsWith(VALUE_HANDLE)
+    ? { node: source.taskId!, output: source.outputRole.slice(VALUE_HANDLE.length) } : undefined
+
+/** The partition a task runs for: the member its file inputs come from, if any. */
+function targetPartition(map: TaskMap, id: string) {
+  const link = map.connections.find((c) => c.target === id && !isValueRole(c.role) && c.source.kind !== "files" && c.source.partition)
+  return link && link.source.kind !== "files" ? link.source.partition : undefined
+}
+
+/**
+ * The value request for giraf/values.py: value nodes, links into task
+ * parameters (through pset nodes), and the latest run of each task whose
+ * value output is read. `inRun` names job nodes a workflow runs now; their
+ * files are read from this run instead of the last one.
+ */
+export function valueRequest(map: TaskMap, catalog: Catalog, inRun: Set<string> = new Set()) {
+  const runs: Record<string, string> = {}
+  const latest = (id: string) => {
+    const run = map.runs.filter((r) => r.instanceId === id).at(-1)
+    if (run?.state === "completed" && !inRun.has(id)) runs[id] = run.id
+  }
+  const nodes = map.tasks.flatMap((task) => {
+    const spec = specOf(catalog, task)
+    if (!spec?.run || !["value-constant", "value-header", "value-compute"].includes(spec.run)) return []
+    const files: string[] = []
+    const fileLinks: Record<string, unknown>[] = []
+    for (const c of map.connections.filter((c) => c.target === task.id && !isValueRole(c.role))) {
+      if (c.source.kind !== "files" && c.source.taskId && inRun.has(c.source.taskId)) {
+        fileLinks.push({ source: c.source.taskId, ...(c.source.outputRole ? { sourceRole: c.source.outputRole } : {}),
+          ...(c.source.files ? { sourceFiles: c.source.files } : {}), ...(c.source.partition ? { sourcePartition: c.source.partition } : {}) })
+        continue
+      }
+      const resolved = resolvedSource(map, c.source, "image")
+      if (resolved.kind !== "pending") files.push(...resolved.ids)
+    }
+    const inputs = Object.fromEntries(valueLinksInto(map, task.id).flatMap((c) => {
+      const ref = refOf(c.source)
+      if (ref) latest(ref.node)
+      return ref ? [[c.role.slice(PARAM_HANDLE.length), ref]] : []
+    }))
+    return [{ id: task.id, run: spec.run, rows: rowsOf(task).filter((r) => r.name.trim()).map((r) => ({ name: r.name, value: r.value, ...(r.groups ? { groups: r.groups } : {}) })),
+      partition: task.draft.partition || null, files, fileLinks, inputs }]
+  })
+  const links: ValueLink[] = []
+  for (const c of map.connections) {
+    if (!c.role.startsWith(PARAM_HANDLE)) continue
+    const ref = refOf(c.source)
+    const target = map.tasks.find((t) => t.id === c.target)
+    const spec = specOf(catalog, target)
+    if (!ref || !target || !spec || spec.run === "value-compute") continue
+    const key = c.role.slice(PARAM_HANDLE.length)
+    const entry = parameterEntries(catalog, target).get(key)
+    if (!entry) continue
+    if (!map.tasks.some((t) => t.id === ref.node && isValueNode(specOf(catalog, t)))) latest(ref.node)
+    if (spec.run === "pset") {
+      // A pset node's parameter reaches every task that uses the node.
+      for (const use of map.connections.filter((u) => u.source.kind !== "files" && u.source.taskId === target.id && u.role.startsWith(PSET_INPUT))) {
+        const user = map.tasks.find((t) => t.id === use.target)
+        const name = use.role.slice(PSET_INPUT.length)
+        if (!user) continue
+        const partition = targetPartition(map, user.id)
+        links.push({ id: `${c.id}:${user.id}`, target: user.id, parameter: `${name}.${entry.param.name}`, type: entry.param.type, source: ref, ...(partition ? { partition } : {}) })
+      }
+      continue
+    }
+    const partition = targetPartition(map, target.id)
+    links.push({ id: c.id, target: target.id, parameter: key, type: entry.param.type, source: ref, ...(partition ? { partition } : {}) })
+  }
+  return { nodes, links, runs }
+}
+
+/** Every value output that is drawn: node rows and connection labels. */
+export function valueRefs(map: TaskMap, catalog: Catalog): Ref[] {
+  return map.tasks.flatMap((task) => valueOutputs(specOf(catalog, task), task).map((o) => ({ node: task.id, output: o.name })))
+}
+
+const short = (value: ValueScalar) =>
+  typeof value === "number" ? String(Number(value.toPrecision(4))) : typeof value === "boolean" ? (value ? "yes" : "no") : String(value)
+
+/** A value for a row or a connection label: `3.21`, `B 3.38, V 3.07`, `8.28, 8.00 외 10개`. */
+export function formatValue(result: ValueResult | undefined): string {
+  if (!result || result.error !== undefined) return ""
+  if (result.groups) return Object.entries(result.groups.values).map(([key, values]) => `${key || "값 없음"} ${formatList(values)}`).join(", ")
+  return formatList(result.values)
+}
+function formatList(values: ValueScalar[]) {
+  const distinct = [...new Set(values.map(short))]
+  return distinct.length <= 2 ? distinct.join(", ") : `${distinct.slice(0, 2).join(", ")} 외 ${distinct.length - 2}개`
+}
+export const formatScalar = short
+

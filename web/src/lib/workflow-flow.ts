@@ -20,6 +20,15 @@ import type { Catalog, Frame, Spec } from "./workbench"
 import { subflowColor } from "./subflow"
 import { isSourceNode } from "./file-nodes"
 import { compoundEdges, compoundPorts, memberConnection } from "./compound"
+import { connectValue, isValueSource, parameterEntries, valueOutputs, PARAM_HANDLE, PSET_INPUT, PSET_OUTPUT, VALUE_HANDLE } from "./values"
+
+function valueEnds(catalog: Catalog, source: Instance, target: Instance, sourceHandle: string, role: string) {
+  const spec = catalog.tasks.find((s) => s.name === source.task)
+  const from = sourceHandle === PSET_OUTPUT ? !!source.draft.pset
+    : valueOutputs(spec, source).some((o) => VALUE_HANDLE + o.name === sourceHandle)
+  const to = role.startsWith(PSET_INPUT) || parameterEntries(catalog, target).has(role.slice(PARAM_HANDLE.length))
+  return from && to
+}
 
 export type TaskFlowNode = Node<
   {
@@ -101,6 +110,10 @@ export function flowNodes(
           x: 0,
           y: geometry.inputY(role.name),
         })),
+        // Pinned parameters take values; pset inputs take a pset node.
+        ...geometry.params.map((row) => ({ id: row.handleId, type: "target" as const, position: Position.Left, x: 0, y: row.y })),
+        ...geometry.values.map((row) => ({ id: row.handleId, type: "source" as const, position: Position.Right, x: row.x, y: row.y })),
+        ...(geometry.psetOutput ? [{ id: PSET_OUTPUT, type: "source" as const, position: Position.Right, x: geometry.outputX, y: geometry.psetOutputY }] : []),
       ],
       selected: map.view.selected === task.id,
       dragHandle: ".node-heading",
@@ -158,6 +171,8 @@ export function flowNodes(
   return [...groups, ...tasks]
 }
 export function outputHandle(source: Source, spec: Spec | undefined, task?: Instance): string {
+  // Value and pset outputs are named by their handle.
+  if (isValueSource(source) && source.kind !== "files") return source.outputRole!
   if (source.kind !== "files" && source.partition)
     return memberHandle(outputHandle({ ...source, partition: undefined }, spec, task), source.partition.value)
   if (source.kind === "files") return "output"
@@ -181,6 +196,9 @@ export function taskEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
     if (!source || !target) return []
     const sourceHandle = outputHandle(connection.source,catalog.tasks.find(s=>s.name===source.task),source)
     const route = map.edgeRoutes?.[connection.id]
+    const value = isValueSource(connection.source)
+    // A renamed value row or compute input leaves its connection without handles.
+    if (value && !valueEnds(catalog, source, target, sourceHandle, connection.role)) return []
     const targetGroup = map.view.selected === source.id || map.view.selected === target.id
       ? map.subflows?.find(group => group.id === target.subflowId) : undefined
     return [
@@ -192,7 +210,9 @@ export function taskEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
           ...(route && route.source === source.id && route.target === target.id && route.sourceHandle === sourceHandle && route.targetHandle === connection.role
             ? { points: route.points } : {}),
           // A collapsed target hides its input rows; the edge names the role instead.
-          role: connection.role,
+          role: connection.role.startsWith(PARAM_HANDLE) ? connection.role.slice(PARAM_HANDLE.length) : connection.role,
+          // A value connection is dotted and shows its current value.
+          ...(value && connection.source.kind !== "files" && connection.source.outputRole !== PSET_OUTPUT ? { value: true } : {}),
           // Edges out of a file source can be hidden (view.hideFileEdges).
           fromFiles: isSourceNode(catalog.tasks.find((s) => s.name === source.task)),
         },
@@ -204,8 +224,9 @@ export function taskEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
           opacity: matches(source, search) && matches(target, search) ? 1 : 0.3,
           ...(targetGroup ? { "--xy-edge-stroke": subflowColor(targetGroup.color) } : {}),
         },
-        className:
-          !target.expressions[connection.role] &&
+        className: value
+          ? connection.role.startsWith(PSET_INPUT) ? "workflow-edge-pset" : "workflow-edge-value"
+          : !target.expressions[connection.role] &&
           roleActive(target, connection.role, catalog)
             ? undefined
             : "workflow-edge-inactive",
@@ -236,6 +257,9 @@ export function connectFlow(
   drawn: FlowConnection,
   replacingId?: string
 ): TaskMap {
+  // Values go to pinned parameters, psets to pset inputs (lib/values).
+  if ([drawn.sourceHandle, drawn.targetHandle].some((h) => h && (h.startsWith(VALUE_HANDLE) || h.startsWith(PARAM_HANDLE) || h === PSET_OUTPUT || h.startsWith(PSET_INPUT))))
+    return connectValue(map, catalog, drawn, replacingId)
   const connection = memberConnection(map, drawn)
   const sourceTask=map.tasks.find(t=>t.id===connection.source)
   // `<bundle>~<value>` picks one member of a partitioned port.

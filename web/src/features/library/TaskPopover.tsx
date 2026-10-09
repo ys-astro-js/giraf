@@ -1,7 +1,10 @@
 import { useRef, useState } from "react"
 import {
+  Calculator,
   ChevronRight,
   FileInput,
+  FileSearch,
+  Variable,
   Folder,
   FolderDown,
   Plus,
@@ -36,6 +39,9 @@ const matches = (task: Spec, query: string) =>
 const NODE_ICONS: Record<string, typeof Terminal> = {
   "file-input": FileInput,
   "folder-down": FolderDown,
+  variable: Variable,
+  "file-search": FileSearch,
+  calculator: Calculator,
 }
 const NodeIcon = ({ task }: { task: Spec }) => {
   const Icon = (task.icon && NODE_ICONS[task.icon]) || Terminal
@@ -99,7 +105,8 @@ export function AddTaskButton() {
   const { refreshing, refresh } = useRefresh(w.refreshCatalog, w.setError)
   const search = useRef<HTMLInputElement>(null)
   const tasks = w.catalog?.tasks ?? []
-  const nodes = tasks.filter(isGirafNode)
+  // A pset node is taken out of a task's pset (inspector), not added empty.
+  const nodes = tasks.filter((task) => isGirafNode(task) && task.run !== "pset")
   const irafTasks = tasks.filter((task) => !isGirafNode(task))
   const foundNodes = query.trim()
     ? nodes.filter((task) => matches(task, query))

@@ -23,6 +23,7 @@ export type TaskMapViewProps = {
   duplicate: (id: string) => void
   onSelect?: () => void
   onInput?: (id: string, role: string) => void
+  onParameter?: (id: string, key: string) => void
   onRunSubflow?: (id: string) => void
   workflowBusy?: boolean
   runDisabled?: boolean

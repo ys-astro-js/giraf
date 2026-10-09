@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "task": "giraf.compute",
+  "title": "계산",
+  "description": "연결한 값을 IRAF 식으로 계산",
+  "icon": "calculator",
+  "components": [{ "type": "value-compute" }]
+}

@@ -173,3 +173,18 @@ div:has(> [data-slot="tooltip-content"] .connection-port-feedback) { pointer-eve
 
 /* Labels name the role on edges into collapsed nodes. */
 .workflow-edge-label { position:absolute; pointer-events:none; height:20px; padding:0 8px; display:flex; align-items:center; border-radius:10px; font-size:11px; line-height:14px; color:var(--muted-foreground); background:var(--glass-background); border:1px solid var(--glass-border); -webkit-backdrop-filter:var(--glass-filter); backdrop-filter:var(--glass-filter); white-space:nowrap; z-index:1; }
+
+/* Pinned parameters: `name  value` rows between inputs and outputs. */
+.workflow-node .node-param-row .node-input { padding-right:16px; }
+.node-param-name { flex:0 1 auto; min-width:0; font-family:var(--font-mono, ui-monospace, monospace); font-size:11.5px; line-height:16px; color:var(--muted-foreground); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.node-param-value { flex:1 1 0; min-width:24px; text-align:right; font-family:var(--font-mono, ui-monospace, monospace); font-size:12px; line-height:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; }
+.node-value-text { font-family:var(--font-mono, ui-monospace, monospace); }
+/* Values travel through diamonds, psets through rounded squares, files through circles. */
+.map-viewport .react-flow__handle.workflow-value-handle:not([data-connection-state="unavailable"]) { width:10px; height:10px; border-radius:1px; }
+.map-viewport .react-flow__handle-left.workflow-value-handle { transform:translate(-50%, -50%) rotate(45deg); }
+.map-viewport .react-flow__handle-right.workflow-value-handle { transform:translate(50%, -50%) rotate(45deg); }
+.workflow-value-handle > * { transform:rotate(-45deg); }
+.map-viewport .react-flow__handle.workflow-pset-handle:not([data-connection-state="unavailable"]) { width:12px; height:12px; border-radius:3px; }
+/* An unconnected value input appears only while a value is being connected. */
+.map-viewport .react-flow__handle[data-hidden="true"] { visibility:hidden; }
+.map-viewport .react-flow__edge.workflow-edge-value .react-flow__edge-path { stroke-dasharray:0 6; stroke-linecap:round; stroke-width:2.5; }

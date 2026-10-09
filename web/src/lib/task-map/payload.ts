@@ -2,9 +2,11 @@ import { type Catalog } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "./model"
 import { connectionRoles } from "./connections"
 import { resolvedSource } from "./runs"
+import { isJobNode, isValueRole, psetValues, valueRequest, withValues, type ValueScalar } from "@/lib/values"
 const clone = <T,>(value: T): T => structuredClone(value)
 
-export function payloadFor(map: TaskMap, id: string, catalog: Catalog) {
+/** `values` are resolved value connections (`name` or `pset.name`), see lib/values. */
+export function payloadFor(map: TaskMap, id: string, catalog: Catalog, values: Record<string, ValueScalar> = {}) {
   const t = map.tasks.find((t) => t.id === id)
   if (!t) throw Error("task를 선택해 주세요.")
   const spec = catalog.tasks.find((s) => s.name === t.task)!
@@ -73,7 +75,7 @@ export function payloadFor(map: TaskMap, id: string, catalog: Catalog) {
     inputs[slot.name] ??= []
   }
   if (spec.adapter !== "generic") inputs.instrument = clone(t.instrument)
-  return taskPayload(t, inputs)
+  return withValues(taskPayload({ ...t, parameterSets: psetValues(map, t) }, inputs), values)
 }
 
 // Execution and live inspection serialize the same settings, but only execution
@@ -106,15 +108,20 @@ function taskPayload(t: Instance, inputs: Record<string, string[]>) {
   })
 }
 
+/** `valueMap` is the whole workflow when only part of it runs (a group). */
 export function workflowRequest(
   map: TaskMap,
   catalog: Catalog,
-  workingDirectory: string
+  workingDirectory: string,
+  valueMap: TaskMap = map
 ) {
+  // Value and pset nodes are evaluated by the server with the tasks they feed.
+  const jobs = map.tasks.filter((t) => isJobNode(catalog.tasks.find((s) => s.name === t.task)))
+  const running = new Set(jobs.map((t) => t.id))
   const links = map.connections.flatMap((c) => {
     if (c.source.kind === "files" || !c.source.taskId) return []
     const sourceId = c.source.taskId
-    if (!map.tasks.some((t) => t.id === sourceId)) return []
+    if (!running.has(sourceId) || !running.has(c.target) || isValueRole(c.role)) return []
     const target = map.tasks.find((t) => t.id === c.target)!
     const spec = catalog.tasks.find((s) => s.name === target.task)!
     const role = connectionRoles(spec, catalog).find((s) => s.name === c.role)
@@ -167,13 +174,15 @@ export function workflowRequest(
         : c
     ),
   }
+  const values = valueRequest(valueMap, catalog, running)
   return {
-    nodes: map.tasks.map((t) => ({
+    nodes: jobs.map((t) => ({
       id: t.id,
       label: t.label,
       payload: { ...payloadFor(prepared, t.id, catalog), workingDirectory },
     })),
     links,
+    values: { ...values, links: values.links.filter((l) => running.has(l.target)) },
   }
 }
 
@@ -183,7 +192,11 @@ export function workflowDiagnosticRequest(
   catalog: Catalog,
   workingDirectory: string
 ) {
-  const connections = map.connections.map((connection) => {
+  const jobs = map.tasks.filter((t) => isJobNode(catalog.tasks.find((s) => s.name === t.task)))
+  const checked = new Set(jobs.map((t) => t.id))
+  const connections = map.connections.filter((c) => checked.has(c.target) && !isValueRole(c.role) &&
+    (c.source.kind === "files" || !c.source.taskId || checked.has(c.source.taskId) ||
+      !map.tasks.some((t) => c.source.kind !== "files" && t.id === c.source.taskId))).map((connection) => {
     const task = map.tasks.find((task) => task.id === connection.target)
     const spec = catalog.tasks.find((spec) => spec.name === task?.task)
     const role =
@@ -198,7 +211,7 @@ export function workflowDiagnosticRequest(
   })
   return {
     workingDirectory,
-    nodes: map.tasks.map((task) => {
+    nodes: jobs.map((task) => {
       const spec = catalog.tasks.find((spec) => spec.name === task.task)
       const inputs = clone(task.draft.inputs)
       if (spec?.preprocess)
@@ -218,7 +231,7 @@ export function workflowDiagnosticRequest(
       return {
         id: task.id,
         label: task.label,
-        payload: { ...taskPayload(task, inputs), workingDirectory },
+        payload: { ...taskPayload({ ...task, parameterSets: psetValues(map, task) }, inputs), workingDirectory },
       }
     }),
     connections,

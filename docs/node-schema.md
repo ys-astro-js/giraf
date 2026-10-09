@@ -41,6 +41,7 @@
   "groups": [
     { "label": "측광 반경", "parameters": ["photpars.aperture", "fitskypars.annulus", "fitskypars.dannulus"] }
   ],
+  "pinned": ["datapars.fwhmpsf"],
   "components": []
 }
 ```
@@ -50,7 +51,7 @@
 - `inputs`, `outputs`, `parameters`는 이름을 키로 하는 객체입니다. 같은 키의 필드만 덮어쓰고, 적지 않은 필드는 아래 계층 값을 유지합니다.
 - 포트에 `null`을 주면 포트를 제거하고 일반 파라미터로 되돌립니다.
 - 아래 계층에 없는 포트 이름을 쓰면 해당 파라미터를 포트로 만듭니다. 이때는 `kind`가 필요합니다.
-- `groups`와 `components`는 목록 전체를 교체합니다.
+- `groups`, `components`, `pinned`는 목록 전체를 교체합니다.
 - `title`, `description`은 값을 교체합니다.
 
 ### 포트 필드
@@ -88,6 +89,11 @@ pset 파라미터는 `datapars.fwhmpsf`처럼 pset 이름을 앞에 붙입니다
 | `label` | 설정 탭 표시 이름 |
 | `default` | 새 노드의 초기값. 이미 만든 노드의 값은 바꾸지 않음 |
 | `fixed` | 실행에 항상 이 값을 사용. 설정 탭에서 숨기고 Info 탭에만 표시 |
+| `connectable` | `false`이면 값 연결을 받지 않음. 기본은 모든 파라미터가 IRAF 타입에 맞는 값을 받음 |
+
+### 고정 파라미터
+
+`pinned`는 새 노드에서 노드에 고정해 보여 줄 파라미터 목록입니다(`name` 또는 `pset.name`). 노드는 자기 목록을 `Instance.pinned`에 저장하며, 설정 탭의 고정 버튼으로 바꿉니다. 값이 연결된 파라미터는 항상 고정되어 보입니다. 설정 탭에 없는 파라미터는 경고 후 무시합니다.
 
 ### 그룹
 
@@ -107,13 +113,43 @@ pset 파라미터는 `datapars.fwhmpsf`처럼 pset 이름을 앞에 붙입니다
 | --- | --- | --- | --- |
 | `cursor` | 작업 확장 | 지원 | 대화형 실행(`interactive=yes`)의 커서 키에 이름과 아이콘을 붙임. 동작은 추가하지 않음 |
 | `image-cursor` | 작업 확장 | 예정 | 영상을 클릭해 커서 명령으로 측정 (daoedit) |
-| `value-output`, `value-input` | 작업 확장 | 예정 | 측정값을 연결선으로 다른 노드의 파라미터에 전달 |
+| `value-output` | 작업 확장 | 지원 | 작업의 출력에서 측정값을 읽어 값 출력(마름모 연결점)으로 내보냄 |
+| `value-input` | 작업 확장 | 예정 | |
 | `ccd-preprocess`, `calibration-groups` | 작업 확장 | 예정 | ccdred 계열 전처리와 보정 그룹 포트 |
 | `pass-files` | 실행 | 지원 | `pass` 출력대로 입력 파일을 넘김 |
 | `save-files` | 실행 | 지원 | 입력 파일을 노드에서 고른 폴더에 저장. 출력이 없어야 함 |
+| `value-constant` | 실행 | 지원 | 노드에 적은 `이름 = 값` 행을 값 출력으로 내보냄. 나누기 기준을 정하면 그룹마다 값 |
+| `value-header` | 실행 | 지원 | 입력 파일 헤더에서 행마다 적은 키워드 값을 읽음. 나누기 기준을 정하면 그룹마다 값 |
+| `value-compute` | 실행 | 지원 | `이름 = 식` 행을 IRAF 식으로 계산. 식이 읽는 이름이 값 입력이 됨 |
+| `pset` | 실행 | 지원 | IRAF pset 하나를 노드로 꺼냄. pset 출력(둥근 사각 연결점)을 같은 pset을 쓰는 작업의 pset 입력에 연결 |
 | `loop`, `branch` | 흐름 | 예정 | 반복, 분기 |
 
 아직 지원하지 않는 종류와 쓰는 곳이 맞지 않는 구성 요소는 오류로 표시합니다.
+
+### 값 출력과 값 노드
+
+`value-output`은 작업이 실행에서 만든 값을 내보냅니다. 값은 숫자(또는 문자열)의 목록입니다.
+
+```json
+{ "type": "value-output", "name": "fwhm", "kind": "real", "from": "$stdout", "column": "FWHM" }
+```
+
+| 필드 | 설명 |
+| --- | --- |
+| `name` | 값 출력 이름. 노드 출력 행과 연결점 `value:<name>` |
+| `kind` | `real`(기본), `int`, `bool`, `string`. 받는 파라미터의 IRAF 타입(r/d, i, b, s/f)과 맞아야 연결됨 |
+| `from` | 값을 읽을 출력 이름 |
+| `column` | 텍스트 표의 열 이름(`#N` 줄 또는 마지막 `#` 머리줄) 또는 1부터 세는 열 번호. `INDEF` 칸은 건너뜀 |
+| `keyword` | 출력 영상마다 읽을 FITS 헤더 키워드. `column`과 함께 쓸 수 없음 |
+
+`value-constant`, `value-header`, `value-compute`, `pset` 노드는 작업으로 실행하지 않습니다. 값은 서버(`giraf/values.py`)가 계산합니다.
+
+- 한 작업만 실행할 때는 클라이언트가 `POST /api/values`로 연결된 값을 받아 파라미터에 넣고 실행합니다. 작업 측정값은 그 작업의 마지막 완료 실행에서 읽습니다.
+- 워크플로 실행에서는 서버가 값을 내는 작업을 먼저 실행하고, 받는 작업을 실행하기 직전에 값을 계산합니다. 값 노드의 행과 연결은 실행 요청의 `values`에 함께 보냅니다.
+- 파라미터는 값 하나를 받습니다. 그룹별 값은 받는 작업의 입력 연결이 나눈 포트의 한 값(`source.partition`)이면 그 그룹의 값을 씁니다. 값이 여러 개면 계산 노드에서 하나로 모으라는 오류로 실행을 막습니다.
+- 계산 식은 IRAF 식(`+ - * / **`, 비교, `&&`, `||`, `!`, `abs`, `sqrt`, `exp`, `log`, `log10`, `nint`, `int`, `real`)에 모음 함수 `mean`, `median`, `min`, `max`, `stddev`, `sum`, `count`를 더한 것입니다. 목록끼리는 원소마다 계산합니다.
+
+연결 형식: 값 연결은 `role: "p:<key>"`, `source: {kind: "pending", taskId, outputRole: "value:<name>"}`이고, pset 연결은 `role: "pset:<pset 이름>"`, `outputRole: "pset"`입니다. pset 노드에 연결한 작업은 실행할 때 그 노드의 pset 값을 씁니다.
 
 `save-files` 노드는 출력 탭에서 저장 위치와 같은 이름 처리를 정합니다. 저장 위치는 폴더 선택기로 고르며, 비우면 프로젝트 폴더입니다. 프로젝트 안의 폴더는 상대 경로로 기록하고, 프로젝트 밖 폴더는 워크플로 내보내기에서 제외합니다. 같은 이름이 있으면 첫 점 앞에 번호를 붙이거나(`m67.mag.1` → `m67_1.mag.1`) 덮어씁니다.
 
@@ -125,9 +161,9 @@ pset 파라미터는 `datapars.fwhmpsf`처럼 pset 이름을 앞에 붙입니다
 | --- | --- |
 | `title` | 노드 이름. 캔버스와 작업 추가 목록에 표시 |
 | `description` | 노드 설명 |
-| `icon` | 작업 추가 목록의 아이콘. `file-input`, `folder-down` 중 하나 |
+| `icon` | 작업 추가 목록의 아이콘. `file-input`, `folder-down`, `variable`, `file-search`, `calculator` 중 하나 |
 
-GIRAF 노드는 작업 추가 목록에서 IRAF 패키지 위에 타일로 표시하고, Info 탭에 IRAF 실행 명령어와 도움말을 두지 않습니다. 예: `giraf/schemas/file-input.json`, `giraf/schemas/file-save.json`.
+GIRAF 노드는 작업 추가 목록에서 IRAF 패키지 위에 타일로 표시하고, Info 탭에 IRAF 실행 명령어와 도움말을 두지 않습니다. `pset` 노드는 목록에 두지 않고 설정 탭의 pset 그룹에서 꺼냅니다. 예: `giraf/schemas/file-input.json`, `file-save.json`, `value.json`, `header.json`, `compute.json`, `pset.json`.
 
 ```json
 {
@@ -180,6 +216,8 @@ ccdred 계열처럼 전용 어댑터(`task_catalog.py`의 `TASKS`)로 실행하�
 
 - `giraf/node_schema.py`: 계층 읽기, 형식 검증, 병합, 출처 기록, GIRAF 노드 정의(`node_definition`)
 - `giraf/file_nodes.py`: `pass-files`, `save-files` 실행
+- `giraf/values.py`: 값 출력 읽기, 값 노드 계산, 파라미터 값 해석(`/api/values`, 워크플로 실행)
+- `web/src/lib/values.ts`: 고정 파라미터, 값과 pset 연결, 값 요청
 - `giraf/task_discovery/definition.py`: 자동 생성 스키마에 계층 적용
 - `giraf/task_catalog.py`: 전용 어댑터 작업의 미지원 경고
 - `giraf/generic_tasks/validation.py`, `scripts.py`: 작업·pset `fixed` 실행 반영

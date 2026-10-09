@@ -49,6 +49,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useNodeView } from "./node-view"
+import { useValueResults } from "./useValueResults"
 import { diagnostics } from "@/lib/diagnostics"
 import { revealPanel, useWindowShown } from "@/features/dock/store"
 import { WindowToolbar } from "@/features/dock/WindowToolbar"
@@ -93,6 +94,7 @@ export function TaskMapView({
   duplicate,
   onSelect,
   onInput,
+  onParameter,
   onRunSubflow,
   workflowBusy,
   runDisabled,
@@ -100,6 +102,7 @@ export function TaskMapView({
   add,
 }: TaskMapViewProps) {
   const [hoveredNode, setHoveredNode] = useState("")
+  const values = useValueResults(map, catalog)
   const autoCollapse = useNodeView((state) => state.autoCollapse)
   const setAutoCollapse = useNodeView((state) => state.setAutoCollapse)
   const setCollapsed = useCallback(
@@ -274,6 +277,9 @@ export function TaskMapView({
               setPortOpen,
               setGroupCollapsed,
               onInput: selectingGroup ? undefined : onInput,
+              onParameter: selectingGroup ? undefined : onParameter,
+              values: values.results,
+              valueLabel: values.label,
               selectingGroup,
               dragPreview,
               beginEdit: onEditStart,

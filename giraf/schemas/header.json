@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "task": "giraf.header",
+  "title": "헤더 값",
+  "description": "파일 헤더의 키워드 값을 파라미터에 전달",
+  "icon": "file-search",
+  "inputs": {
+    "files": { "kind": "image", "label": "파일", "multiple": true, "required": true, "sources": ["node"] }
+  },
+  "components": [{ "type": "value-header" }]
+}

@@ -2,18 +2,22 @@ import { collectResponseDiagnostics, diagnostics, requestDiagnosticScope } from 
 import {headerFrame} from "./calibration"
 import type { CursorComponent } from "./cursor-session"
 export type Values = Record<string, string | number | boolean | null>
-export type Param = { label?:string; mode?:string; required?:boolean; indirect?:string; name:string; type:string; default:string | number | boolean | null; choices:string[]; prompt:string; min:unknown; max:unknown }
+export type Param = { connectable?:boolean; label?:string; mode?:string; required?:boolean; indirect?:string; name:string; type:string; default:string | number | boolean | null; choices:string[]; prompt:string; min:unknown; max:unknown }
 export type InputSource = 'files'|'expression'|'node'|'text'|'cursor'
 export type Slot = { sources?:InputSource[]; valueType?:string; cursorType?:string; representation?:string; name:string; label:string; multiple:boolean; required?:boolean; kind:string }
 export type OutputSlot = { from?:string; eachWhen?:string; optional?:boolean; name:string; kind:string; default:string; mode?:string; label?:string }
 export type ParameterSet = { name:string; task:string; parameters:Param[]; fixed?:Values }
 export type SchemaIssue = { severity:'warning'|'error'; message:string }
-export type Spec = { run?:'pass-files'|'save-files'; icon?:string; fixed?:Values; groups?:{label:string;parameters:string[]}[]; schemaProvenance?:Record<string,string>; schemaIssues?:SchemaIssue[]; taskName?:string; adapter?:'generic'; runnable?:boolean; reason?:string; description?:string; outputs?:OutputSlot[]; parameterSets?:ParameterSet[]; name:string; title:string; package:string; parameters:Param[]; inputs:Slot[]; output:{ name:string; mode:string; default:string } | null; kind:string; preprocess?:boolean }
+/** A task's `value-output` component (node schema): numbers read from one of its outputs. */
+export type ValueOutputSpec = { name:string; kind:string; from:string; column?:string|number; keyword?:string }
+export type Spec = { run?:'pass-files'|'save-files'|'value-constant'|'value-header'|'value-compute'|'pset'; values?:ValueOutputSpec[]; pinned?:string[]; icon?:string; fixed?:Values; groups?:{label:string;parameters:string[]}[]; schemaProvenance?:Record<string,string>; schemaIssues?:SchemaIssue[]; taskName?:string; adapter?:'generic'; runnable?:boolean; reason?:string; description?:string; outputs?:OutputSlot[]; parameterSets?:ParameterSet[]; name:string; title:string; package:string; parameters:Param[]; inputs:Slot[]; output:{ name:string; mode:string; default:string } | null; kind:string; preprocess?:boolean }
 export type Catalog = { version:string; tasks:Spec[]; ccdproc:{parameters:Param[];inputs:Slot[]}; ccdred:Param[]; exam:Record<string,Param[]>; capabilities?:{version:string;schemaFingerprint:string;fallback:string[];limits:Record<string,string>} }
 export type Frame = { calibrationMetadata?:{filter:string;exposure:number}; role?:string; id:string; label:string; path?:string; name?:string; asset?:string; filter?:string; exposure?:number; shape?:string; width?:number; height?:number; detected_kind?:string; group?:string; job?:string; error?:string; history?:Record<string,string>;headers?:Record<string,string>;source?:string;viewer_supported?:boolean }
 export type AlignmentBinding = {reference:string[];input:string[]}
 export type Destination = { path:string; conflict:'number'|'overwrite' }
-export type Draft = { destination?:Destination; calibration?:import("./calibration").CalibrationOptions; textInputs?:Record<string,string>; alignmentBinding?:AlignmentBinding; cursorCommands?:Record<string,string>; outputs?:Record<string,string>; parameters:Values; inputs:Record<string,string[]>; output:{name:string}; section:string; exam:{x:number|null;y:number|null;key:string;parameters:Record<string,Values>} }
+/** A row of a value node: `name = value`, an expression, or a header keyword. */
+export type ValueRow = { name:string; value:string; groups?:Record<string,string> }
+export type Draft = { valueRows?:ValueRow[]; partition?:string; partitionValues?:string[]; pset?:{name:string;task:string}; destination?:Destination; calibration?:import("./calibration").CalibrationOptions; textInputs?:Record<string,string>; alignmentBinding?:AlignmentBinding; cursorCommands?:Record<string,string>; outputs?:Record<string,string>; parameters:Values; inputs:Record<string,string[]>; output:{name:string}; section:string; exam:{x:number|null;y:number|null;key:string;parameters:Record<string,Values>} }
 export type WorkflowDocument = {path: string; name: string; saved?: boolean}
 export type RecentFolder = { path:string; name:string; parent:string; opened:number; workflow?:string|null }
 export type Home = { startup:'home'|'resume'; recent:RecentFolder[]; engines:{ cl:boolean; pyraf:boolean } }
@@ -32,7 +36,7 @@ export function makeDraft(spec:Spec | undefined, saved?:Partial<Draft>):Draft {
   if (spec?.adapter === 'generic' && !saved?.outputs && saved?.output?.name && spec.outputs?.length === 1) {
     outputs[spec.outputs[0].name] = saved.output.name
   }
-  return {calibration:undefined,destination:saved?.destination,textInputs:{...saved?.textInputs},alignmentBinding:saved?.alignmentBinding,cursorCommands:{...saved?.cursorCommands},outputs,parameters,inputs:{...saved?.inputs},output:{name:spec?.output?.default||'',...saved?.output},section:saved?.section||'',exam:{x:null,y:null,key:'r',parameters:{},...saved?.exam}}
+  return {calibration:undefined,...(saved?.valueRows?{valueRows:saved.valueRows}:{}),...(saved?.partition?{partition:saved.partition}:{}),...(saved?.partitionValues?{partitionValues:saved.partitionValues}:{}),...(saved?.pset?{pset:saved.pset}:{}),destination:saved?.destination,textInputs:{...saved?.textInputs},alignmentBinding:saved?.alignmentBinding,cursorCommands:{...saved?.cursorCommands},outputs,parameters,inputs:{...saved?.inputs},output:{name:spec?.output?.default||'',...saved?.output},section:saved?.section||'',exam:{x:null,y:null,key:'r',parameters:{},...saved?.exam}}
 }
 export function buildPayload(task:Spec,drafts:Record<string,Draft>,catalog:Catalog,prefs:Omit<Preferences,'drafts'>){
   const d=makeDraft(task,drafts[task.name]),proc=makeDraft(catalog.tasks.find(t=>t.name==='ccdproc')!,drafts.ccdproc)

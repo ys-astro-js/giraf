@@ -52,6 +52,8 @@ export type ParameterGroup = {
   parameters: Param[]
   values: Values
   change: (key: string, value: string) => void
+  /** Pinnable rows: the node key is `keyPrefix + name` (task `""`, pset `"name."`). */
+  keyPrefix?: string
 }
 /**
  * Put schema-defined groups first. Keys are `name` for the task and
@@ -79,6 +81,7 @@ export function schemaParameterGroups(
     return {
       id: `schema-${index}`,
       label: schema.label,
+      keyPrefix: "",
       parameters: members.map(({ key, p }) => ({ ...p, name: key })),
       values: Object.fromEntries(
         members.map(({ key, group, p }) => [key, group.values[p.name]])

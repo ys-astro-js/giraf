@@ -241,10 +241,30 @@ def workflow_cancel_job(id):
         (job / 'cancel').write_text('워크플로우 중단 요청')
 
 
+def run_info(id):
+    job = (RUNS / str(id)).resolve()
+    if job.parent != RUNS.resolve() or not (job / 'manifest.json').exists():
+        raise ValueError('실행을 찾을 수 없습니다.')
+    return job_info(job)
+
+
+def with_run_records(values):
+    """The client names each task's latest run; values read that run's products."""
+    values = dict(values or {})
+    runs = {}
+    for node, id in (values.get('runs') or {}).items():
+        try:
+            runs[node] = run_info(id)
+        except (ValueError, OSError, TypeError):
+            pass  # A deleted run reads as "not run yet" for the values it held.
+    values['runs'] = runs
+    return values
+
+
 from .workflow import WorkflowManager
 workflow_manager = WorkflowManager(DATA / '.workflow', workflow_prepare,
     lambda manifest: job_info(start_task(manifest, manifest.get('workingDirectory', workspace['folder']))),
-    lambda id: job_info(RUNS / id), workflow_cancel_job)
+    lambda id: job_info(RUNS / id), workflow_cancel_job, resolve_file=lambda id: get_file(id))
 
 
 def catalog_endpoint(request: Request):
@@ -313,6 +333,8 @@ async def workflow_run_endpoint(request: Request, *, action):
     payload = await request_payload(request) if request.method == 'POST' else {}
     if action == 'workflow-run':
         payload = WorkflowRequest.model_validate(payload).model_dump(exclude_unset=True)
+        if payload.get('values'):
+            payload['values'] = await run_in_threadpool(with_run_records, payload['values'])
         if any(status(p.parent)['state'] in ('queued','running','waiting') for p in RUNS.glob('*/manifest.json')):
             raise ValueError('실행 중인 작업이 끝난 뒤 워크플로우를 실행해 주세요.')
         return JSONResponse(workflow_manager.start(payload))
@@ -335,6 +357,20 @@ async def task_validate_endpoint(request: Request, *, action):
     authorize_file_plan(manifest,payload.get('fileConfirmation'))
     job=await run_in_threadpool(start_task,manifest,workspace['folder'])
     return JSONResponse(job_info(job))
+
+
+def resolve_values(payload):
+    from .workflow import value_graph
+    graph = value_graph({'values': with_run_records(payload)}, resolve_file=get_file)
+    return dict(outputs=graph.outputs(payload.get('refs', [])), parameters=graph.parameters())
+
+
+async def values_endpoint(request: Request):
+    """Current values of value outputs and the parameter values their links give."""
+    payload = await request_payload(request)
+    if not isinstance(payload, dict):
+        raise ValueError('값 요청 형식이 올바르지 않습니다.')
+    return JSONResponse(await run_in_threadpool(resolve_values, payload))
 
 
 async def header_endpoint(request: Request):
@@ -612,6 +648,7 @@ api_routes = [
     Route('/task-validate', partial(task_validate_endpoint, action='task-validate'), methods=['POST'], name='task-validate'),
     Route('/task-run', partial(task_validate_endpoint, action='task-run'), methods=['POST'], name='task-run'),
     Route('/header', header_endpoint, methods=['GET'], name='header'),
+    Route('/values', values_endpoint, methods=['POST'], name='values'),
     Route('/task-respond', partial(task_respond_endpoint, action='task-respond'), methods=['POST'], name='task-respond'),
     Route('/task-cancel', partial(task_respond_endpoint, action='task-cancel'), methods=['POST'], name='task-cancel'),
     Route('/task-graphics', partial(task_respond_endpoint, action='task-graphics'), methods=['GET'], name='task-graphics'),

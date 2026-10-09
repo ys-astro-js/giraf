@@ -12,6 +12,7 @@ import { activeJob } from "@/lib/queries"
 import { parsePort } from "@/lib/calibration-ports"
 import { connectInputPort } from "@/lib/workflow-flow"
 import { isSourceNode } from "@/lib/file-nodes"
+import { takeOutPset } from "@/lib/values"
 import {
   connect,
   connectionRoles,
@@ -32,6 +33,7 @@ export function InspectorPanel() {
   const setInspectorTab = useLayout((state) => state.setInspectorTab)
   const inputRequest = useLayout((state) => state.inputRequest)
   const requestInput = useLayout((state) => state.requestInput)
+  const parameterRequest = useLayout((state) => state.parameterRequest)
   const { catalog } = w
   const task = w.map.tasks.find((t) => t.id === (locked ?? w.map.view.selected))
   const taskJob = locked
@@ -209,6 +211,20 @@ export function InspectorPanel() {
         inputRequest={
           inputRequest?.taskId === task.id ? inputRequest : undefined
         }
+        parameterRequest={
+          parameterRequest?.taskId === task.id ? parameterRequest : undefined
+        }
+        editNode={(id, fn) => w.edit(fn, id)}
+        onTakeOutPset={(name) => {
+          try {
+            w.update(
+              (m) => takeOutPset(m, catalog, task.id, name),
+              `${name} pset 노드로 꺼내기`
+            )
+          } catch (e) {
+            w.setTaskError((e as Error).message)
+          }
+        }}
         activeTab={locked ? undefined : inspectorTab}
         onTabChange={locked ? undefined : setInspectorTab}
         onSelectNode={(id) => {

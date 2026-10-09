@@ -30,6 +30,17 @@ def matches_partition(product, partition):
 ACTIVE = {'running', 'waiting', 'confirmation', 'cancelling'}
 
 
+def value_graph(graph, completed=None, resolve_file=None):
+    from .values import ValueGraph
+    runs = graph.get('values', {}).get('runs', {})
+    def job_of(id):
+        if completed is not None and id in completed:
+            return completed[id]
+        # A value from a task outside this run reads its latest run, sent by the client.
+        return runs.get(id) if isinstance(runs.get(id), dict) else None
+    return ValueGraph(graph.get('values') or {}, job_of, resolve_file or (lambda id: id))
+
+
 def workflow_order(graph):
     nodes = graph.get('nodes', [])
     ids = [n['id'] for n in nodes]
@@ -40,6 +51,13 @@ def workflow_order(graph):
         if link['source'] not in incoming or link['target'] not in incoming:
             raise ValueError('없는 작업에 연결되어 있습니다. 연결을 다시 설정해 주세요.')
         incoming[link['target']].add(link['source'])
+    # A value read from a task's run (directly or through value nodes) orders it first.
+    values = value_graph(graph)
+    for link in values.links:
+        if link['target'] not in incoming:
+            raise ValueError('없는 작업에 값이 연결되어 있습니다. 연결을 다시 설정해 주세요.')
+    for id in ids:
+        incoming[id] |= {source for source in values.dependencies(id) if source in incoming}
     sorter = TopologicalSorter(incoming)
     try:
         sorter.prepare()
@@ -55,7 +73,8 @@ def workflow_order(graph):
     return order
 
 
-def execute_workflow(graph, run, cancelled, report):
+def execute_workflow(graph, run, cancelled, report, resolve_file=None):
+    from .values import apply_parameters
     graph = deepcopy(graph)
     order = workflow_order(graph)
     nodes = {n['id']: n for n in graph['nodes']}
@@ -83,6 +102,10 @@ def execute_workflow(graph, run, cancelled, report):
             for role, ids in bindings.items():
                 existing = payload.setdefault('inputs', {}).get(role, [])
                 payload['inputs'][role] = list(dict.fromkeys(existing + ids))
+            # Values are read once their sources finished, so B's group gets B's value.
+            values = value_graph(graph, completed, resolve_file)
+            links = [link for link in values.links if link['target'] == id]
+            apply_parameters(payload, links, values.parameters(id))
             report(deepcopy(state))
             job = run(node, payload)
             state['jobs'].append(dict(job, instanceId=id))
@@ -106,9 +129,10 @@ def execute_workflow(graph, run, cancelled, report):
 
 
 class WorkflowManager:
-    def __init__(self, root, prepare, launch, inspect, cancel_job):
+    def __init__(self, root, prepare, launch, inspect, cancel_job, resolve_file=None):
         self.root = Path(root)
         self.prepare, self.launch, self.inspect, self.cancel_job = prepare, launch, inspect, cancel_job
+        self.resolve_file = resolve_file
         self.lock = threading.RLock()
         self.stop = threading.Event()
         self.approved = threading.Event()
@@ -215,7 +239,7 @@ class WorkflowManager:
             return self.current()
 
     def _execute(self, graph):
-        execute_workflow(graph, self._run, self.stop.is_set, self.save)
+        execute_workflow(graph, self._run, self.stop.is_set, self.save, self.resolve_file)
         self.save({'currentJob': None, 'plan': None})
 
     def _run(self, node, payload):

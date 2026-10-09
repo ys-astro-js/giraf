@@ -70,6 +70,9 @@ def without_fixed(supplied, fixed, prefix, warnings):
 
 def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles=frozenset()):
     if not spec['runnable']: raise ValueError(spec['reason'])
+    from ..node_schema import VALUE_RUNS
+    if spec.get('run') in VALUE_RUNS:
+        raise ValueError('값과 pset 노드는 연결한 작업을 실행할 때 함께 계산합니다.')
     backend = payload.get('backend', 'cl')
     if backend not in ('cl', 'pyraf'): raise ValueError('CL 또는 PyRAF를 선택해 주세요.')
     if payload.get('filePolicy', {}).get('mode', 'copy') != 'copy':

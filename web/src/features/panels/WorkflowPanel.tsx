@@ -11,6 +11,7 @@ export function WorkflowPanel() {
   const revealNode = useLayout((state) => state.revealedNode)
   const revealConnection = useLayout((state) => state.revealedConnection)
   const requestInput = useLayout((state) => state.requestInput)
+  const requestParameter = useLayout((state) => state.requestParameter)
   const clearInputRequest = useLayout((state) => state.clearInputRequest)
   return (
     <main className="main-workspace">
@@ -60,6 +61,7 @@ export function WorkflowPanel() {
             remove={w.remove}
             duplicate={w.duplicate}
             onInput={requestInput}
+            onParameter={requestParameter}
             onSelect={() => {
               clearInputRequest()
               revealPanel("inspector")

@@ -97,7 +97,8 @@ export function migrateMap(prefs: Preferences, catalog: Catalog): TaskMap {
         ? {
             ...t,
             draft: makeDraft(spec, t.draft),
-            parameterSets: Object.fromEntries(
+            // A pset node (run component `pset`) holds a pset its spec does not declare.
+            parameterSets: spec.run === "pset" ? t.parameterSets : Object.fromEntries(
               (spec.parameterSets || []).map((group) => [
                 group.name,
                 {

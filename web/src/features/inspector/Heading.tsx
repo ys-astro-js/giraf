@@ -1,3 +1,4 @@
+import { isValueNode } from "@/lib/values"
 import { useRef, useState } from "react"
 import { taskDisplayName } from "@/lib/workbench"
 import { Pencil, Check, X, Play } from "lucide-react"
@@ -79,7 +80,7 @@ export function InspectorHeading({
           <ToolbarButton
             prominent
             label={checking ? "확인 중" : busy ? "실행 중" : "이 작업 실행"}
-            disabled={busy || checking || spec.runnable === false}
+            disabled={busy || checking || spec.runnable === false || isValueNode(spec)}
             onClick={onRun}
           >
             <Play />

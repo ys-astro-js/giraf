@@ -1,4 +1,4 @@
-import { RotateCcw } from "lucide-react"
+import { Pin, PinOff, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -56,6 +56,14 @@ export function ParamControl({
     />
   )
 }
+/** Pinning parameters to the node; a connected parameter shows its source instead of a control. */
+export type ParameterPinning = {
+  pinned: (key: string) => boolean
+  /** A parameter connected on this node stays pinned until it is disconnected. */
+  locked: (key: string) => boolean
+  linked: (key: string) => string | undefined
+  toggle: (key: string) => void
+}
 /** Kept as an export for the existing callers; parameters are edited as fields. */
 export function ParameterTable({
   parameters,
@@ -65,6 +73,8 @@ export function ParameterTable({
   filter = "",
   showInactive = false,
   task,
+  keyPrefix,
+  pinning,
 }: {
   parameters: Param[]
   values: Values
@@ -73,6 +83,9 @@ export function ParameterTable({
   filter?: string
   showInactive?: boolean
   task?: string
+  /** Parameters can be pinned under `keyPrefix + name` (`name` or `pset.name`). */
+  keyPrefix?: string
+  pinning?: ParameterPinning
 }) {
   const dependencies: Record<string, string> = {
     biassec: "overscan",
@@ -108,18 +121,37 @@ export function ParameterTable({
         const changed =
             String(values[p.name] ?? p.default) !== String(p.default),
           id = `${scope}-${p.name}`
+        const key = pinning && keyPrefix !== undefined ? keyPrefix + p.name : undefined
+        const linked = key ? pinning!.linked(key) : undefined
+        const locked = !!key && pinning!.locked(key)
+        const pinned = !!key && (locked || pinning!.pinned(key))
         return (
           <Field
             key={p.name}
             className="parameter-field"
-            data-boolean={p.type === "b"}
+            data-boolean={p.type === "b" && !linked}
+            data-parameter-key={key}
           >
             <div className="parameter-label">
               <FieldLabel htmlFor={id} title={p.label ? p.name : undefined}>
                 {label(p)}
                 {p.required && <span aria-hidden="true">*</span>}
               </FieldLabel>
-              {changed && (
+              <span className="parameter-actions">
+              {key && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`${p.name} 노드에 고정`}
+                  aria-pressed={pinned}
+                  title={pinned ? "노드에서 고정 해제" : "노드에 고정"}
+                  disabled={locked}
+                  onClick={() => pinning!.toggle(key)}
+                >
+                  {pinned ? <PinOff /> : <Pin />}
+                </Button>
+              )}
+              {changed && !linked && (
                 <Button
                   variant="ghost"
                   size="icon-xs"
@@ -130,14 +162,19 @@ export function ParameterTable({
                   <RotateCcw />
                 </Button>
               )}
+              </span>
             </div>
-            <ParamControl
-              task={task}
-              p={p}
-              id={id}
-              value={values[p.name] ?? p.default}
-              onChange={(v) => change(p.name, v)}
-            />
+            {linked ? (
+              <Input id={id} value={linked} readOnly aria-label={label(p)} aria-describedby={`${id}-description`} />
+            ) : (
+              <ParamControl
+                task={task}
+                p={p}
+                id={id}
+                value={values[p.name] ?? p.default}
+                onChange={(v) => change(p.name, v)}
+              />
+            )}
             <ParameterHelp p={p} id={`${id}-description`} />
           </Field>
         )

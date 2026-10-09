@@ -16,7 +16,7 @@ class ApiRouteTests(unittest.TestCase):
     def test_methods_are_rejected_before_handlers_run(self):
         posts = ('workflow-diagnostics', 'workflow-run', 'workflow-cancel', 'workflow-confirm',
                  'task-run', 'task-validate', 'task-respond', 'task-cancel', 'folder',
-                 'delete-files', 'delete-jobs', 'metadata', 'alignment-star', 'validate', 'run', 'reveal')
+                 'delete-files', 'delete-jobs', 'metadata', 'alignment-star', 'validate', 'run', 'reveal', 'values')
         gets = ('catalog', 'workflow', 'header', 'task-graphics', 'text', 'plot', 'workspace',
                 'browse', 'info', 'image', 'pixel', 'jobs', 'job', 'download')
         for method, actions in [('GET', posts), ('POST', gets)]:

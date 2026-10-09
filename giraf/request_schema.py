@@ -84,7 +84,45 @@ class WorkflowLink(RequestModel):
     sourcePartition: WorkflowPartition | None = None
 
 
+class ValueRef(RequestModel):
+    node: str
+    output: str
+
+
+class ValueRow(RequestModel):
+    name: str
+    value: str = ''
+    groups: dict[str, str] | None = None
+
+
+class ValueNode(RequestModel):
+    id: str
+    run: Literal['value-constant', 'value-header', 'value-compute']
+    rows: list[ValueRow] = Field(default_factory=list)
+    partition: str | None = None
+    files: list[str] = Field(default_factory=list)
+    fileLinks: list[dict[str, ParameterValue | list[str] | dict[str, str] | None]] = Field(default_factory=list)
+    inputs: dict[str, ValueRef] = Field(default_factory=dict)
+
+
+class ValueLink(RequestModel):
+    id: str
+    target: str
+    parameter: str
+    type: str = 's'
+    source: ValueRef
+    partition: WorkflowPartition | None = None
+
+
+class WorkflowValues(RequestModel):
+    """Value nodes and links into task parameters (giraf/values.py)."""
+    nodes: list[ValueNode] = Field(default_factory=list)
+    links: list[ValueLink] = Field(default_factory=list)
+    runs: dict[str, str] = Field(default_factory=dict)
+
+
 class WorkflowRequest(RequestModel):
     nodes: list[WorkflowNode]
     links: list[WorkflowLink] = Field(default_factory=list)
+    values: WorkflowValues | None = None
 

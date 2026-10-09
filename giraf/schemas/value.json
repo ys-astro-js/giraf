@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "task": "giraf.value",
+  "title": "값",
+  "description": "직접 정한 값을 파라미터에 전달",
+  "icon": "variable",
+  "components": [{ "type": "value-constant" }]
+}

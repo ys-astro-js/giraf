@@ -3,10 +3,13 @@ import { toggleTray } from "@/features/dock/store"
 
 type Request = { id: string; revision: number }
 export type InputRequest = { taskId: string; role: string; sequence: number }
+/** A parameter to open in the settings tab: `name` or `pset.name`. */
+export type ParameterRequest = { taskId: string; key: string; sequence: number }
 
 type LayoutState = {
   inspectorTab: string
   inputRequest: InputRequest | null
+  parameterRequest: ParameterRequest | null
   revealedNode?: Request
   revealedConnection?: Request
   logRequest: Request | null
@@ -14,6 +17,7 @@ type LayoutState = {
   logRevision: number
   setInspectorTab: (tab: string) => void
   requestInput: (taskId: string, role: string) => void
+  requestParameter: (taskId: string, key: string) => void
   clearInputRequest: () => void
   revealNode: (id: string) => void
   revealConnection: (id: string) => void
@@ -34,6 +38,7 @@ const next = (previous: Request | null | undefined, id: string) => ({
 export const useLayout = create<LayoutState>()((set) => ({
   inspectorTab: "info",
   inputRequest: null,
+  parameterRequest: null,
   logRequest: null,
   logRevision: 0,
   setInspectorTab: (inspectorTab) => set({ inspectorTab }),
@@ -46,7 +51,16 @@ export const useLayout = create<LayoutState>()((set) => ({
         sequence: (state.inputRequest?.sequence || 0) + 1,
       },
     })),
-  clearInputRequest: () => set({ inputRequest: null }),
+  requestParameter: (taskId, key) =>
+    set((state) => ({
+      inspectorTab: "settings",
+      parameterRequest: {
+        taskId,
+        key,
+        sequence: (state.parameterRequest?.sequence || 0) + 1,
+      },
+    })),
+  clearInputRequest: () => set({ inputRequest: null, parameterRequest: null }),
   revealNode: (id) =>
     set((state) => ({ revealedNode: next(state.revealedNode, id) })),
   revealConnection: (id) =>

@@ -8,6 +8,7 @@ import {
   type TaskMap,
 } from "@/lib/task-map"
 import { acceptsAsset, acceptsSource, type Catalog, type Frame, type Slot } from "./workbench"
+import { isValueNode, pinnedKeys, psetLinksInto, valueOutputs, PARAM_HANDLE, PSET_INPUT, PSET_OUTPUT, VALUE_HANDLE } from "./values"
 
 const flags: Record<string, string> = {
   zero: "zerocor",
@@ -150,7 +151,17 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
   )
   const outputs = [...outputPorts(map,t,catalog,rows).filter(slot => !slot.group).map(slot=>({...slot,name:t.outputPorts?.find(p=>customPortHandle(p.id)===slot.handleId)?.name ?? slot.name})), ...(t.outputPorts || []).filter(p=>!p.id.startsWith('$')).map(port=>({name:port.name,kind:"",default:"",handleId:customPortHandle(port.id),outputRole:port.outputRole,group:undefined,customId:port.id}))]
   // A save-files node (node schema) ends the flow: it has no primary output.
-  const primary = spec?.run !== "save-files"
+  // Value and pset nodes only carry values, so they have no file output either.
+  const valueNode = isValueNode(spec)
+  const primary = spec?.run !== "save-files" && !valueNode
+  const showInputs = !valueNode || roles.length > 0
+  // Parameters shown on the node: psets fed by a pset node, then pinned parameters.
+  const params = [
+    ...psetLinksInto(map, t.id).map((c) => ({ key: c.role.slice(PSET_INPUT.length), handleId: c.role, pset: true })),
+    ...(spec ? pinnedKeys(map, catalog, t) : []).map((key) => ({ key, handleId: PARAM_HANDLE + key, pset: false })),
+  ]
+  const values = valueOutputs(spec, t).map((o) => ({ ...o, handleId: VALUE_HANDLE + o.name }))
+  const psetOutput = spec?.run === "pset"
   // A partitioned port is a bundle; its members are `~value` handles listed under it when open.
   const bundle = (handleId: string) => {
     const port = t.outputPorts?.find(p => customPortHandle(p.id) === handleId)
@@ -158,7 +169,7 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
   }
   const bundles = Object.fromEntries([...(primary ? ["output"] : []), ...outputs.map(slot => slot.handleId)]
     .flatMap(handleId => { const b = bundle(handleId); return b ? [[handleId, b]] : [] })) as Record<string, { keyword: string; values: string[]; open: boolean }>
-  const base = { primaryOutputRole: primaryOutputRole(spec, t), roles, primary, collapsed, bundles }
+  const base = { primaryOutputRole: primaryOutputRole(spec, t), roles, primary, collapsed, bundles, showInputs, psetOutput }
   const members = (handleId: string, y: (index: number) => number) =>
     (bundles[handleId]?.values ?? []).map((value, index) => ({ handleId: memberHandle(handleId, value), base: handleId, value, y: y(index) }))
   if (collapsed) {
@@ -172,6 +183,9 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
       occupiedHeight: COLLAPSED_HEIGHT,
       outputY: middle,
       outputs: outputs.map((slot) => ({ ...slot, x: COLLAPSED_WIDTH, y: middle })),
+      params: params.map((row) => ({ ...row, y: middle })),
+      values: values.map((row) => ({ ...row, x: COLLAPSED_WIDTH, y: middle })),
+      psetOutputY: middle,
       members: Object.keys(bundles).flatMap(handleId => members(handleId, () => middle)).map(m => ({ ...m, x: COLLAPSED_WIDTH })),
       // Every role shares the capsule's single visible port.
       inputY: (role: string) => {
@@ -183,9 +197,12 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
   const m = NODE_METRICS
   // The 1px node border precedes the header.
   const inputsTop = 1 + m.header + m.sectionStart
-  const inputsEnd = inputsTop + m.row * Math.max(roles.length, 1) + m.sectionEnd
-  const outputRows = [...(primary ? ["output"] : []), ...outputs.map(slot => slot.handleId)]
-  const outputsTop = inputsEnd + m.sectionStart
+  const inputsEnd = showInputs ? inputsTop + m.row * Math.max(roles.length, 1) + m.sectionEnd : 1 + m.header
+  // Pinned parameters sit between inputs and outputs.
+  const paramsTop = inputsEnd + m.sectionStart
+  const paramsEnd = params.length ? paramsTop + m.row * params.length + m.sectionEnd : inputsEnd
+  const outputRows = [...(primary ? ["output"] : []), ...outputs.map(slot => slot.handleId), ...values.map(row => row.handleId), ...(psetOutput ? [PSET_OUTPUT] : [])]
+  const outputsTop = paramsEnd + m.sectionStart
   // Each row's top; an open bundle's member rows follow it.
   const tops: Record<string, number> = {}
   let bottom = outputsTop
@@ -193,7 +210,7 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
     tops[handleId] = bottom
     bottom += m.row + (bundles[handleId]?.open ? bundles[handleId].values.length * m.member : 0)
   }
-  const outputsEnd = outputRows.length ? bottom + m.sectionEnd : inputsEnd
+  const outputsEnd = outputRows.length ? bottom + m.sectionEnd : paramsEnd
   const preview = nodePreviewIds(map, t.id).length > 0
   const height = outputsEnd + (preview ? m.preview : 0) + 1
   const outputY = outputsTop + m.row / 2
@@ -207,6 +224,9 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
     occupiedHeight: height,
     outputY,
     outputs: outputs.map((slot) => ({ ...slot, x: NODE_WIDTH, y: rowY(slot.handleId) })),
+    params: params.map((row, index) => ({ ...row, y: paramsTop + m.row / 2 + m.row * index })),
+    values: values.map((row) => ({ ...row, x: NODE_WIDTH, y: rowY(row.handleId) })),
+    psetOutputY: psetOutput ? rowY(PSET_OUTPUT) : 0,
     // A closed bundle stacks its members on the bundle handle so their edges stay attached.
     members: Object.keys(bundles).flatMap(handleId => members(handleId, index => bundles[handleId].open
       ? tops[handleId] + m.row + m.member * index + m.member / 2 : rowY(handleId))).map(member => ({ ...member, x: NODE_WIDTH })),

@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "task": "noao.digiphot.daophot.daofind",
+  "pinned": ["datapars.fwhmpsf", "findpars.threshold"],
+  "parameters": {
+    "datapars.exposure": { "connectable": false },
+    "datapars.airmass": { "connectable": false },
+    "datapars.filter": { "connectable": false },
+    "datapars.obstime": { "connectable": false },
+    "datapars.ccdread": { "connectable": false },
+    "datapars.gain": { "connectable": false }
+  }
+}

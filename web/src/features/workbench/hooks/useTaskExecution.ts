@@ -8,6 +8,7 @@ import { useRef, useState } from "react"
 import { api, type Catalog, type Workspace, type Job, type Manifest } from "@/lib/workbench"
 import { daoeditSession, type DaoeditSession } from "@/lib/daoedit"
 import { payloadFor, type TaskMap } from "@/lib/task-map"
+import { valueRequest, type ValueResponse, type ValueScalar } from "@/lib/values"
 import { toggleTray } from "@/features/dock/store"
 import type * as React from "react"
 
@@ -69,8 +70,21 @@ export function useTaskExecution({
     setPreparingName(task.label || task.task)
     setChecking(true)
     try {
+      // Value connections are read from the latest runs before this run.
+      const values = valueRequest(map, catalog)
+      const links = values.links.filter((l) => l.target === task.id)
+      const resolved: Record<string, ValueScalar> = {}
+      if (links.length) {
+        const answer = await api<ValueResponse>("values", { ...values, links, refs: [] })
+        for (const link of links) {
+          const outcome = answer.parameters[link.id]
+          if (!outcome) continue
+          if (outcome.error !== undefined) throw Error(`${link.parameter}: ${outcome.error}`)
+          resolved[link.parameter] = outcome.value
+        }
+      }
       const payload = {
-        ...payloadFor(map, task.id, catalog),
+        ...payloadFor(map, task.id, catalog, resolved),
         workingDirectory: workspace.folder,
       }
       const p = await api<Plan>("task-validate", payload)

@@ -11,12 +11,24 @@ import { taskDisplayName } from "@/lib/workbench"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 import {
   Info,
+  LocateFixed,
+  SquareArrowOutUpRight,
   SquareArrowRightEnter,
   SquareArrowRightExit,
   SlidersVertical,
   Route,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
+import {
+  isValueNode,
+  psetDefinition,
+  psetSource,
+  togglePinned,
+  valueLinksInto,
+  PARAM_HANDLE,
+  VALUE_HANDLE,
+} from "@/lib/values"
 
 import { SearchField } from "@/components/search-field"
 import { SidebarHeader } from "@/components/ui/sidebar"
@@ -69,6 +81,10 @@ type Props = {
   ) => void
   checking?: boolean
   inputRequest?: { role: string; sequence: number }
+  parameterRequest?: { key: string; sequence: number }
+  /** Edits another node: a pset node this task's pset is connected to. */
+  editNode?: (id: string, fn: (t: Instance) => Instance) => void
+  onTakeOutPset?: (name: string) => void
   onSelectNode?: (id: string) => void
   activeTab?: string
   onTabChange?: (value: string) => void
@@ -91,6 +107,9 @@ export function TaskInspector({
   onInputSource,
   checking,
   inputRequest,
+  parameterRequest,
+  editNode,
+  onTakeOutPset,
   activeTab,
   onSelectNode,
   onTabChange,
@@ -139,6 +158,33 @@ export function TaskInspector({
       cancelAnimationFrame(focusFrame)
     }
   }, [inputRequest])
+  const openRequestedParameter = useEffectEvent(() => {
+    setLocalTab("settings")
+    onTabChange?.("settings")
+    setQuery("")
+  })
+  useEffect(() => {
+    if (!parameterRequest) return
+    let focusFrame = 0
+    const frame = requestAnimationFrame(() => {
+      openRequestedParameter()
+      focusFrame = requestAnimationFrame(() => {
+        const field = inspectorRef.current?.querySelector<HTMLElement>(
+          `[data-parameter-key="${CSS.escape(parameterRequest.key)}"]`
+        )
+        const control =
+          field?.querySelector<HTMLElement>(
+            'input, [role="switch"], [role="combobox"]'
+          ) ?? field
+        control?.scrollIntoView({ block: "center" })
+        control?.focus({ preventScroll: true })
+      })
+    })
+    return () => {
+      cancelAnimationFrame(frame)
+      cancelAnimationFrame(focusFrame)
+    }
+  }, [parameterRequest])
   const [headerPreview, setHeaderPreview] = useState<
     { label: string; key: string; before: string }[]
   >([])
@@ -223,6 +269,7 @@ export function TaskInspector({
       parameters: spec.parameters,
       values: d.parameters,
       change,
+      keyPrefix: "",
     },
     ...(spec.preprocess
       ? [
@@ -235,24 +282,38 @@ export function TaskInspector({
           },
         ]
       : []),
-    ...(spec.parameterSets || []).map((group) => ({
-      id: `set-${group.name}`,
-      label: group.name === "$package" ? spec.package : group.name,
-      parameters: group.parameters,
-      values: task.parameterSets?.[group.name] || defaults(group.parameters),
-      change: (key: string, value: string) =>
-        edit((t) => ({
-          ...t,
-          parameterSets: {
-            ...t.parameterSets,
-            [group.name]: {
-              ...defaults(group.parameters),
-              ...t.parameterSets?.[group.name],
-              [key]: value,
+    ...[
+      ...(spec.parameterSets || []),
+      // A pset node edits the one pset it holds.
+      ...(spec.run === "pset" && task.draft.pset
+        ? [{ ...psetDefinition(catalog, task.draft.pset)!, name: task.draft.pset.name }].filter((g) => g.parameters)
+        : []),
+    ].map((group) => {
+      // A pset fed by a pset node shows and edits that node's shared values.
+      const shared = psetSource(map, task.id, group.name)
+      const owner = shared?.draft.pset ? shared : task
+      const held = owner === task ? group.name : shared!.draft.pset!.name
+      const editOwner = owner === task ? edit : (fn: (t: Instance) => Instance) => editNode?.(owner.id, fn)
+      return {
+        id: `set-${group.name}`,
+        label: group.name === "$package" ? spec.package : group.name,
+        parameters: group.parameters,
+        values: owner.parameterSets?.[held] || defaults(group.parameters),
+        keyPrefix: `${group.name}.`,
+        change: (key: string, value: string) =>
+          editOwner((t) => ({
+            ...t,
+            parameterSets: {
+              ...t.parameterSets,
+              [held]: {
+                ...defaults(group.parameters),
+                ...t.parameterSets?.[held],
+                [key]: value,
+              },
             },
-          },
-        })),
-    })),
+          })),
+      }
+    }),
     ...(spec.adapter !== "generic"
       ? [
           {
@@ -269,7 +330,60 @@ export function TaskInspector({
         ]
       : []),
   ]
-  const displayGroups = schemaParameterGroups(spec, groups)
+  const displayGroups = schemaParameterGroups(spec, groups).filter(
+    (group) => group.parameters.length > 0 || !isValueNode(spec)
+  )
+  const valueLinks = valueLinksInto(map, task.id)
+  const pinning = {
+    pinned: (key: string) => (task.pinned ?? []).includes(key),
+    locked: (key: string) =>
+      valueLinks.some((c) => c.role === PARAM_HANDLE + key),
+    // A connected parameter names its source and cannot be edited or unpinned.
+    linked: (key: string) => {
+      // A pset fed by a pset node takes the values connected to that node.
+      const owner = key.includes(".") ? key.slice(0, key.lastIndexOf(".")) : ""
+      const shared = owner ? psetSource(map, task.id, owner) : undefined
+      const held = shared?.draft.pset
+        ? `${shared.draft.pset.name}.${key.slice(owner.length + 1)}`
+        : key
+      const link = (shared?.draft.pset ? valueLinksInto(map, shared.id) : valueLinks).find(
+        (c) => c.role === PARAM_HANDLE + held
+      )
+      if (!link || link.source.kind === "files") return undefined
+      const from = link.source
+      const node = map.tasks.find((t) => t.id === from.taskId)
+      return `${node?.label ?? "삭제된 노드"} ${from.outputRole?.slice(VALUE_HANDLE.length) ?? ""}`
+    },
+    toggle: (key: string) =>
+      edit((t) => togglePinned(t, key, !(t.pinned ?? []).includes(key))),
+  }
+  const psetActions = (group: ParameterGroup) => {
+    if (!group.id.startsWith("set-") || spec.run === "pset") return null
+    const name = group.id.slice(4)
+    if (name === "$package") return null
+    const shared = psetSource(map, task.id, name)
+    return shared ? (
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`${shared.label} 노드 선택`}
+        title={`${shared.label} 노드 선택`}
+        onClick={() => onSelectNode?.(shared.id)}
+      >
+        <LocateFixed />
+      </Button>
+    ) : onTakeOutPset ? (
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={`${name} pset 노드로 꺼내기`}
+        title="pset 노드로 꺼내기"
+        onClick={() => onTakeOutPset(name)}
+      >
+        <SquareArrowOutUpRight />
+      </Button>
+    ) : null
+  }
   const changedParameters = groups.flatMap((g) =>
     g.parameters
       .filter((p) => parameterChanged(p, g.values))
@@ -392,6 +506,8 @@ export function TaskInspector({
             edit={edit}
             saveDefaults={saveDefaults}
             bodyRef={settingsBodyRef}
+            pinning={pinning}
+            actions={psetActions}
           />
         </Tabs>
       </TooltipProvider>

@@ -56,6 +56,8 @@ class Task(DocumentModel):
     collapsed: bool = False
     subflowId: str | None = None
     outputPorts: list[OutputPort] = Field(default_factory=list)
+    # `name` or `pset.name` keys shown on the node; connected parameters are pinned too.
+    pinned: list[str] = Field(default_factory=list)
 
 
 class CalibrationGroup(DocumentModel):

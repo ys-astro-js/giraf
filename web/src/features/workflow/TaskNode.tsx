@@ -35,6 +35,17 @@ import {
 } from "@/lib/node-interaction"
 import { outputHandle, type TaskFlowNode } from "@/lib/workflow-flow"
 import { isSourceNode } from "@/lib/file-nodes"
+import {
+  formatScalar,
+  formatValue,
+  parameterEntries,
+  psetSource,
+  storedValue,
+  PARAM_HANDLE,
+  PSET_INPUT,
+  PSET_OUTPUT,
+  VALUE_HANDLE,
+} from "@/lib/values"
 import type { Source } from "@/lib/task-map"
 
 import { WorkflowContext } from "./context"
@@ -79,6 +90,8 @@ export const TaskNode = memo(function TaskNode({
     setCollapsed,
     setPortOpen,
     currentIssues,
+    values,
+    onParameter,
   } = useContext(WorkflowContext)!
   const { task, geometry } = data
   const nodeIssues = currentIssues.filter((issue) => issue.nodeId === id)
@@ -111,6 +124,9 @@ export const TaskNode = memo(function TaskNode({
   const clickStart = useStore((state) => state.connectionClickStartHandle)
   const connecting = useConnection((state) => state.inProgress)
   const connectionOrigin = useConnection((state) => state.fromNode?.id)
+  const fromNode = useConnection((state) => (state.inProgress ? state.fromHandle?.nodeId : undefined))
+  const fromId = useConnection((state) => (state.inProgress ? state.fromHandle?.id : undefined))
+  const connectionFrom = fromNode ? { nodeId: fromNode, id: fromId } : null
   const connectionTarget = useConnection((connection) =>
     connection.inProgress && connection.isValid && connection.toNode?.id === id
       ? (connection.toHandle?.id ?? null)
@@ -149,6 +165,19 @@ export const TaskNode = memo(function TaskNode({
     }
   }, [linking, folded])
   const collapsed = folded && !(peek && linking)
+  const linkFrom = connectionFrom ?? (clickStart ? { nodeId: clickStart.nodeId, id: clickStart.id } : null)
+  // A pset node being connected offers this task's matching pset as a row.
+  const offeredPset = linkFrom?.id === PSET_OUTPUT && linkFrom.nodeId !== id
+    ? map.tasks.find((t) => t.id === linkFrom.nodeId)?.draft.pset
+    : undefined
+  const entries = parameterEntries(catalog, task)
+  const params = [
+    ...geometry.params,
+    ...(spec?.parameterSets ?? [])
+      .filter((set) => offeredPset && set.task === offeredPset.task &&
+        !geometry.params.some((row) => row.handleId === PSET_INPUT + set.name))
+      .map((set) => ({ key: set.name, handleId: PSET_INPUT + set.name, pset: true, y: 0 })),
+  ]
 
   const inputHandles = useRef(new Map<string, HTMLDivElement>())
   const updateNodeInternals = useUpdateNodeInternals()
@@ -160,6 +189,8 @@ export const TaskNode = memo(function TaskNode({
     ...geometry.roles.map((s) => s.name),
     ...geometry.outputs.map((s) => s.handleId + ":" + s.name),
     ...geometry.members.map((s) => s.handleId + ":" + s.y),
+    ...params.map((s) => s.handleId),
+    ...geometry.values.map((s) => s.handleId),
   ].join("|")
   useEffect(() => {
     updateNodeInternals(id)
@@ -209,6 +240,72 @@ export const TaskNode = memo(function TaskNode({
       />
     )
   }
+
+  const paramLink = (handleId: string) =>
+    map.connections.find((c) => c.target === id && c.role === handleId)
+  const paramHandle = (row: (typeof params)[number], stacked = false) => {
+    const link = paramLink(row.handleId)
+    const entry = entries.get(row.key)
+    return (
+      <Handle
+        key={row.handleId}
+        type="target"
+        position={Position.Left}
+        id={row.handleId}
+        role="button"
+        tabIndex={isConnectable && !stacked && entry?.param.connectable !== false ? 0 : -1}
+        onKeyDown={activate}
+        isConnectable={isConnectable && entry?.param.connectable !== false}
+        className={`workflow-input-handle ${row.pset ? "workflow-pset-handle" : "workflow-value-handle"}`}
+        data-connected={!!link}
+        data-stacked={stacked || undefined}
+        // Every pinned parameter shows that it can take a value, like an input row.
+        data-hidden={entry?.param.connectable === false || undefined}
+        aria-label={`${task.label} ${row.key} ${row.pset ? "pset" : "값"} 연결`}
+      />
+    )
+  }
+  const paramText = (row: (typeof params)[number]) => {
+    const link = paramLink(row.handleId)
+    if (row.pset)
+      return link && link.source.kind !== "files"
+        ? map.tasks.find((t) => t.id === (link.source.kind !== "files" ? link.source.taskId : ""))?.label ?? ""
+        : ""
+    if (link && link.source.kind !== "files") {
+      const taken = values?.parameters[link.id]
+      if (taken && taken.error === undefined) return formatScalar(taken.value)
+      return formatValue(values?.outputs[`${link.source.taskId}:${link.source.outputRole?.slice(VALUE_HANDLE.length)}`])
+    }
+    const entry = entries.get(row.key)
+    if (!entry) return ""
+    // A pset fed by a pset node runs with that node's values.
+    const shared = entry.owner ? psetSource(map, id, entry.owner) : undefined
+    if (!shared?.draft.pset) return storedValue(task, entry)
+    const held = `${shared.draft.pset.name}.${entry.param.name}`
+    const sharedLink = map.connections.find((c) => c.target === shared.id && c.role === PARAM_HANDLE + held)
+    if (sharedLink && sharedLink.source.kind !== "files") {
+      const taken = values?.parameters[`${sharedLink.id}:${id}`]
+      if (taken && taken.error === undefined) return formatScalar(taken.value)
+      return formatValue(values?.outputs[`${sharedLink.source.taskId}:${sharedLink.source.outputRole?.slice(VALUE_HANDLE.length)}`])
+    }
+    return storedValue(shared, { ...entry, owner: shared.draft.pset.name })
+  }
+  const valueHandle = (handleId: string, name: string, stacked = false) => (
+    <Handle
+      key={handleId}
+      type="source"
+      position={Position.Right}
+      id={handleId}
+      role="button"
+      tabIndex={isConnectable && !stacked ? 0 : -1}
+      isConnectable={isConnectable}
+      className={`workflow-output-handle ${handleId === PSET_OUTPUT ? "workflow-pset-handle" : "workflow-value-handle"}`}
+      data-connected={isOutputConnected(handleId)}
+      data-stacked={stacked || undefined}
+      aria-label={`${task.label} ${name} 출력 연결`}
+      onKeyDown={activate}
+    />
+  )
 
   const outputSlots = geometry.outputs.map((slot) => {
     const custom = task.outputPorts?.find(
@@ -399,6 +496,11 @@ export const TaskNode = memo(function TaskNode({
             )
           )}
           {geometry.members.map((m) => memberHandleElement(m, true))}
+          {params.map((row, i) => paramHandle(row, geometry.roles.length > 0 || i > 0))}
+          {geometry.values.map((row, i) =>
+            valueHandle(row.handleId, row.name, geometry.primary || outputSlots.length > 0 || i > 0)
+          )}
+          {geometry.psetOutput && valueHandle(PSET_OUTPUT, task.draft.pset?.name ?? "pset")}
         </>
       ) : (
         <>
@@ -444,7 +546,7 @@ export const TaskNode = memo(function TaskNode({
               </Button>
             </span>
           </header>
-          <div className="node-section node-inputs">
+          {geometry.showInputs && <div className="node-section node-inputs">
             {geometry.roles.length ? (
               geometry.roles.map((slot) => {
                 const a = assigned(map, task, slot.role)
@@ -566,13 +668,64 @@ export const TaskNode = memo(function TaskNode({
             ) : (
               <p className="node-no-input">입력 없음</p>
             )}
-          </div>
-          {(geometry.primary || outputSlots.length > 0) && (
+          </div>}
+          {params.length > 0 && (
+            <div className="node-section node-params">
+              {params.map((row) => (
+                <div
+                  className="node-input-row node-param-row"
+                  key={row.handleId}
+                  data-connection-target={connectionTarget === row.handleId}
+                >
+                  {paramHandle(row)}
+                  <button
+                    className="node-input node-param nodrag nopan"
+                    aria-label={`${task.label} ${row.key} 설정`}
+                    title={row.key}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (clickStart) {
+                        document
+                          .querySelector<HTMLElement>(
+                            `[data-node-id="${CSS.escape(id)}"] .react-flow__handle[data-handleid="${CSS.escape(row.handleId)}"]`
+                          )
+                          ?.click()
+                      } else {
+                        choose(id)
+                        onParameter?.(id, row.key)
+                      }
+                    }}
+                  >
+                    <span className="node-param-name">{row.key}</span>
+                    <span className="node-param-value">{paramText(row)}</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {(geometry.primary || outputSlots.length > 0 || geometry.values.length > 0 || geometry.psetOutput) && (
             <div className="node-section node-outputs">
               {geometry.primary &&
                 outputRow("output", primaryName, output, "결과")}
               {outputSlots.map(({ slot, result, name }) =>
                 outputRow(slot.handleId, name, result, "이름 없는 포트")
+              )}
+              {geometry.values.map((row) => (
+                <div className="node-output-row" key={row.handleId}>
+                  <span className="node-output-name">{row.name}</span>
+                  <span className="node-output-count node-value-text">
+                    {formatValue(values?.outputs[`${id}:${row.name}`])}
+                  </span>
+                  {valueHandle(row.handleId, row.name)}
+                </div>
+              ))}
+              {geometry.psetOutput && (
+                <div className="node-output-row">
+                  <span className="node-output-name">
+                    {task.draft.pset?.name ?? "pset"}
+                  </span>
+                  {valueHandle(PSET_OUTPUT, task.draft.pset?.name ?? "pset")}
+                </div>
               )}
             </div>
           )}

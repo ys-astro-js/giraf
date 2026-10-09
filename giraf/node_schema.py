@@ -22,7 +22,7 @@ KINDS = ('image', 'text', 'mask', 'metacode', 'binary')
 NODE_KINDS = KINDS + ('image-list',)
 ANY = 'any'
 NODE_PREFIX = 'giraf.'
-TOP = {'version', 'task', 'title', 'description', 'icon', 'inputs', 'outputs', 'parameters', 'groups', 'components'}
+TOP = {'version', 'task', 'title', 'description', 'icon', 'inputs', 'outputs', 'parameters', 'groups', 'components', 'pinned'}
 PORT_FIELDS = {
     'inputs': {'kind': str, 'label': str, 'multiple': bool, 'required': bool, 'sources': list},
     'outputs': {'kind': str, 'label': str, 'mode': str, 'default': str, 'optional': bool, 'from': str},
@@ -31,18 +31,24 @@ PORT_FIELDS = {
 # another node's output, text typed in place, recorded cursor commands.
 SOURCES = ('files', 'expression', 'node', 'text', 'cursor')
 # Symbols a GIRAF node shows in the add-task popover.
-NODE_ICONS = ('file-input', 'folder-down')
-PARAMETER_FIELDS = {'label', 'default', 'fixed'}
+NODE_ICONS = ('file-input', 'folder-down', 'variable', 'file-search', 'calculator')
+PARAMETER_FIELDS = {'label', 'default', 'fixed', 'connectable'}
 # `task` components extend an IRAF task; `run` and `flow` components are what a
 # GIRAF node does: run as a job, or steer the workflow runner.
 COMPONENT_CLASSES = {
     'cursor': 'task', 'image-cursor': 'task', 'value-output': 'task', 'value-input': 'task',
     'ccd-preprocess': 'task', 'calibration-groups': 'task',
     'pass-files': 'run', 'save-files': 'run',
+    'value-constant': 'run', 'value-header': 'run', 'value-compute': 'run', 'pset': 'run',
     'loop': 'flow', 'branch': 'flow',
 }
-RUN_COMPONENTS = ('pass-files', 'save-files')
-PLANNED_COMPONENTS = ('image-cursor', 'value-output', 'value-input', 'ccd-preprocess', 'calibration-groups', 'loop', 'branch')
+RUN_COMPONENTS = ('pass-files', 'save-files', 'value-constant', 'value-header', 'value-compute', 'pset')
+# Run components evaluated by GIRAF instead of launched as a job: their value
+# outputs (and a pset node's values) feed other nodes' parameters.
+VALUE_RUNS = ('value-constant', 'value-header', 'value-compute', 'pset')
+PLANNED_COMPONENTS = ('image-cursor', 'value-input', 'ccd-preprocess', 'calibration-groups', 'loop', 'branch')
+# What a value carries; an IRAF parameter of a matching type can take it.
+VALUE_KINDS = ('real', 'int', 'bool', 'string')
 COMPONENTS = ('cursor',)
 # Toolbar symbols a cursor action may use (HIG: symbols over text).
 CURSOR_ICONS = ('check', 'trash', 'sigma', 'save', 'plus', 'minus', 'refresh', 'list', 'eye', 'x')
@@ -84,8 +90,12 @@ def format_errors(data):
         errors.append('icon: GIRAF 노드(giraf.)에만 쓸 수 있습니다.')
     elif 'icon' in data and data['icon'] not in NODE_ICONS:
         errors.append(f'icon: {", ".join(NODE_ICONS)} 중 하나여야 합니다.')
-    if node and (data.get('parameters') or data.get('groups')):
-        errors.append('parameters, groups: GIRAF 노드에는 IRAF 파라미터가 없습니다.')
+    if node and (data.get('parameters') or data.get('groups') or data.get('pinned')):
+        errors.append('parameters, groups, pinned: GIRAF 노드에는 IRAF 파라미터가 없습니다.')
+    pinned = data.get('pinned', [])
+    if not (isinstance(pinned, list) and all(isinstance(k, str) and KEY.fullmatch(k) for k in pinned)
+            and len(set(pinned)) == len(pinned)):
+        errors.append('pinned: 파라미터 또는 pset.파라미터 이름의 목록이어야 합니다.')
     for direction, fields in PORT_FIELDS.items():
         ports = data.get(direction, {})
         if not isinstance(ports, dict):
@@ -125,6 +135,8 @@ def format_errors(data):
                 errors += [f'{where}.{k}: 알 수 없는 필드입니다.' for k in sorted(set(entry) - PARAMETER_FIELDS)]
                 if 'label' in entry and not isinstance(entry['label'], str):
                     errors.append(f'{where}.label: 문자열이어야 합니다.')
+                if 'connectable' in entry and not isinstance(entry['connectable'], bool):
+                    errors.append(f'{where}.connectable: true 또는 false여야 합니다.')
                 errors += [f'{where}.{k}: 문자열, 수치 또는 불리언이어야 합니다.' for k in ('default', 'fixed')
                            if k in entry and not isinstance(entry[k], (str, int, float, bool))]
     groups = data.get('groups', [])
@@ -143,6 +155,8 @@ def format_errors(data):
                 errors.append(f'components: {kind}은 {"IRAF 작업" if kind_class == "task" else "GIRAF 노드(giraf.)"}에만 쓸 수 있습니다.')
             elif kind == 'cursor':
                 errors += cursor_errors(item)
+            elif kind == 'value-output':
+                errors += value_output_errors(item)
             elif kind in RUN_COMPONENTS:
                 if set(item) != {'type'}:
                     errors.append(f'components.{kind}: type 외의 필드는 없습니다.')
@@ -151,6 +165,35 @@ def format_errors(data):
                 errors.append(f'components: {kind or "type 없음"}은 아직 지원하지 않습니다{planned}.')
         if sum(isinstance(i, dict) and i.get('type') == 'cursor' for i in components) > 1:
             errors.append('components: cursor는 하나만 둘 수 있습니다.')
+        names = [i.get('name') for i in components if isinstance(i, dict) and i.get('type') == 'value-output']
+        if len(set(names)) != len(names):
+            errors.append('components: value-output 이름은 겹칠 수 없습니다.')
+    return errors
+
+
+def value_output_errors(item):
+    """The `value-output` component: numbers a task's run produces, read from
+    one output. `column` reads a text table column (header name or 1-based
+    index); `keyword` reads a FITS header keyword of each output image.
+    """
+    errors = []
+    extra = set(item) - {'type', 'name', 'kind', 'from', 'column', 'keyword'}
+    if extra:
+        errors.append(f'components.value-output: {", ".join(sorted(extra))}은 알 수 없는 필드입니다.')
+    if not (isinstance(item.get('name'), str) and re.fullmatch(IDENT, item['name'])):
+        errors.append('components.value-output.name: 올바른 이름이 필요합니다.')
+    if item.get('kind', 'real') not in VALUE_KINDS:
+        errors.append(f'components.value-output.kind: {", ".join(VALUE_KINDS)} 중 하나여야 합니다.')
+    if not isinstance(item.get('from'), str) or not item['from']:
+        errors.append('components.value-output.from: 값을 읽을 출력 이름이 필요합니다.')
+    column, keyword = item.get('column'), item.get('keyword')
+    if (column is None) == (keyword is None):
+        errors.append('components.value-output: column 또는 keyword 중 하나가 필요합니다.')
+    elif column is not None and not ((isinstance(column, str) and column.strip())
+                                     or (type(column) is int and column >= 1)):
+        errors.append('components.value-output.column: 열 이름 또는 1부터 세는 열 번호여야 합니다.')
+    elif keyword is not None and not (isinstance(keyword, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,70}', keyword)):
+        errors.append('components.value-output.keyword: FITS 헤더 키워드여야 합니다.')
     return errors
 
 
@@ -206,7 +249,7 @@ def merge_layers(profile, parameters, sets, layers):
     pars = {p['name']: p for p in parameters}
     set_pars = {s['name']: {p['name'] for p in s['parameters']} for s in sets}
     ports = {d: {s['name']: dict(s) for s in profile[d]} for d in ('inputs', 'outputs')}
-    presentation = dict(parameters={}, groups=None, components=None)
+    presentation = dict(parameters={}, groups=None, components=None, pinned=None)
     fixed = dict(profile.get('fixed', {}))
     warn = lambda message: issues.append(dict(severity='warning', message=message))
     for layer in layers:
@@ -256,6 +299,9 @@ def merge_layers(profile, parameters, sets, layers):
         if 'components' in patch:
             presentation['components'] = patch['components']
             provenance['components'] = name
+        if 'pinned' in patch:
+            presentation['pinned'] = patch['pinned']
+            provenance['pinned'] = name
     order = {name: i for i, name in enumerate(pars)}
     merged = {d: sorted(ports[d].values(), key=lambda s: order.get(s['name'], len(order))) for d in ports}
     return dict(merged, fixed=fixed), presentation, issues, provenance
@@ -273,6 +319,7 @@ def apply_presentation(spec, presentation, issues, provenance, layers):
         entry = entries.get(p['name'], {})
         if 'label' in entry: p['label'] = entry['label']
         if 'default' in entry: p['default'] = entry['default']
+        if 'connectable' in entry: p['connectable'] = entry['connectable']
     if spec.get('fixed'):
         pars = {p['name']: p for p in spec.get('allParameters', spec['parameters'])}
         for name, value in list(spec['fixed'].items()):
@@ -291,6 +338,7 @@ def apply_presentation(spec, presentation, issues, provenance, layers):
             entry = entries.get(prefix + p['name'], {})
             if 'label' in entry: p['label'] = entry['label']
             if 'default' in entry: p['default'] = entry['default']
+            if 'connectable' in entry: p['connectable'] = entry['connectable']
             if 'fixed' in entry:
                 try:
                     group['fixed'][p['name']] = checked_values([p], {p['name']: entry['fixed']})[p['name']]
@@ -310,6 +358,21 @@ def apply_presentation(spec, presentation, issues, provenance, layers):
     cursor = next((c for c in presentation.get('components') or [] if c.get('type') == 'cursor'), None)
     if cursor:
         spec['cursor'] = {k: v for k, v in cursor.items() if k != 'type'}
+    outputs = {s['name'] for s in spec['outputs']}
+    for item in presentation.get('components') or []:
+        if item.get('type') == 'value-output' and item.get('from') not in outputs:
+            warn(f'components.value-output.{item.get("name")}: {item.get("from")} 출력이 없습니다.')
+    values = [{'kind': 'real', **{k: v for k, v in c.items() if k != 'type'}}
+              for c in presentation.get('components') or [] if c.get('type') == 'value-output' and c.get('from') in outputs]
+    if values:
+        spec['values'] = values
+    if presentation.get('pinned') is not None:
+        shown = {p['name'] for p in spec['parameters']} | {
+            g['name'] + '.' + p['name'] for g in spec['parameterSets'] for p in g['parameters']}
+        for key in presentation['pinned']:
+            if key not in shown:
+                warn(f'pinned: {key}는 노드에 고정할 수 없는 파라미터입니다.')
+        spec['pinned'] = [k for k in presentation['pinned'] if k in shown]
     spec['schemaLayers'] = [dict(layer=l['layer'], source=l['source']) for l in layers]
     spec['schemaProvenance'] = provenance
     spec['schemaIssues'] = issues

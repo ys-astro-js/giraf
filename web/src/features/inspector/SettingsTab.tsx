@@ -1,4 +1,4 @@
-import { useState, type RefObject } from "react"
+import { useState, type ReactNode, type RefObject } from "react"
 import type { Draft } from "@/lib/workbench"
 import { FolderOpen, RotateCcw } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -16,6 +16,9 @@ import { Choice } from "@/components/workbench-controls"
 import { type Spec, type Slot, type Values } from "@/lib/workbench"
 import { type Instance, resetInstanceParameters } from "@/lib/task-map"
 import { ParameterEditorFields } from "@/components/parameter-editor"
+import { type ParameterPinning } from "@/components/parameter-fields"
+import { ValueRowsEditor } from "@/components/value-rows-editor"
+import { isValueNode } from "@/lib/values"
 import { type ParameterGroup } from "@/lib/parameter-presentation"
 
 export function InspectorSettings({
@@ -28,6 +31,8 @@ export function InspectorSettings({
   edit,
   saveDefaults,
   bodyRef,
+  pinning,
+  actions,
 }: {
   groups: ParameterGroup[]
   query: string
@@ -38,6 +43,8 @@ export function InspectorSettings({
   edit: (fn: (t: Instance) => Instance) => void
   saveDefaults: () => void
   bodyRef: RefObject<HTMLDivElement | null>
+  pinning?: ParameterPinning
+  actions?: (group: ParameterGroup) => ReactNode
 }) {
   const [resetValues, setResetValues] = useState<{
     parameters: Values
@@ -46,12 +53,18 @@ export function InspectorSettings({
   return (
     <TabsContent value="settings" className="inspector-settings">
       <div ref={bodyRef} className="parameter-editor-body">
-        <ParameterEditorFields
-          task={spec.name}
-          groups={groups}
-          query={query}
-          changedOnly={false}
-        />
+        <ValueRowsEditor spec={spec} task={task} edit={edit} />
+        {(!isValueNode(spec) || groups.length > 0) && (
+          <ParameterEditorFields
+            task={spec.name}
+            groups={groups}
+            query={query}
+            changedOnly={false}
+            hasOtherResults={isValueNode(spec)}
+            pinning={pinning}
+            actions={actions}
+          />
+        )}
 
         {spec.name === "ccdhedit" && String(d.parameters.value) === "" && (
           <Alert>
@@ -151,7 +164,7 @@ export function InspectorSettings({
             )}
           </Accordion>
         )}
-        <div className="inspector-secondary">
+        {!isValueNode(spec) && <div className="inspector-secondary">
           <Button variant="outline" size="sm" onClick={saveDefaults}>
             기본 설정으로 저장
           </Button>
@@ -190,7 +203,7 @@ export function InspectorSettings({
               초기화 취소
             </Button>
           )}
-        </div>
+        </div>}
       </div>
     </TabsContent>
   )

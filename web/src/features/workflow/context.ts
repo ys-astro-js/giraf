@@ -24,5 +24,9 @@ type NodeContext = Pick<
   setCollapsed: (ids: string[], collapsed: boolean) => void
   setPortOpen: (nodeId: string, portId: string, open: boolean) => void
   setGroupCollapsed: (id: string, collapsed: boolean) => void
+  /** Current values (lib/values); the label of a value connection by its id. */
+  values?: import("@/lib/values").ValueResponse
+  valueLabel: (connectionId: string) => string
+  onParameter?: (id: string, key: string) => void
 }
 export const WorkflowContext = createContext<NodeContext | null>(null)
