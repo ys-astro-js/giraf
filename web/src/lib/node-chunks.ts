@@ -4,7 +4,7 @@ import { VALUE_MODES } from "./value-modes"
 type Run = NonNullable<Spec["run"]>
 
 export type NodeChunk = {
-  id: "files" | "flow" | "values"
+  id: "files" | "script"
   label: string
   nodes: Spec[]
 }
@@ -19,8 +19,11 @@ export const isModeOnly = (node: Spec) => MODE_RUNS.has(node.run ?? "")
 /** GIRAF's own nodes, by what they do; a chunk orders its nodes as listed. */
 const CHUNKS: { id: NodeChunk["id"]; label: string; runs: Run[] }[] = [
   { id: "files", label: "파일", runs: ["pass-files", "save-files"] },
-  { id: "flow", label: "흐름", runs: ["foreach", "for", "if"] },
-  { id: "values", label: "값", runs: [VALUE_MODES[0].run] },
+  {
+    id: "script",
+    label: "스크립트하기",
+    runs: ["foreach", "for", "if", VALUE_MODES[0].run],
+  },
 ]
 
 /**

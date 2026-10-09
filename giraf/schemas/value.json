@@ -2,7 +2,7 @@
   "version": 2,
   "task": "giraf.value",
   "title": "값",
-  "description": "직접 정한 값을 파라미터에 전달",
+  "description": "파라미터에 값 넘기기",
   "icon": "variable",
   "components": [{ "type": "value-constant" }]
 }

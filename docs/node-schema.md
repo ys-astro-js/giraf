@@ -203,7 +203,7 @@ GIRAF 노드는 작업 추가 목록에서 IRAF 패키지 위에 타일로 표�
   "version": 2,
   "task": "giraf.file_input",
   "title": "파일 입력",
-  "description": "선택한 파일을 다른 작업에 전달",
+  "description": "고른 파일을 넘김",
   "icon": "file-input",
   "inputs": { "files": { "kind": "any", "label": "파일", "multiple": true, "required": true, "sources": ["files"] } },
   "outputs": {

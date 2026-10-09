@@ -2,7 +2,7 @@
   "version": 2,
   "task": "giraf.file_save",
   "title": "파일 저장",
-  "description": "연결한 파일을 폴더에 저장",
+  "description": "결과를 폴더에 저장",
   "icon": "folder-down",
   "inputs": {
     "files": { "kind": "any", "label": "파일", "multiple": true, "required": true }

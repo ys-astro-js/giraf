@@ -2,7 +2,7 @@
   "version": 2,
   "task": "giraf.for",
   "title": "반복",
-  "description": "정한 범위의 숫자마다 안의 작업을 실행",
+  "description": "숫자 범위만큼 실행",
   "icon": "list-ordered",
   "components": [{ "type": "for" }]
 }

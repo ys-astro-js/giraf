@@ -6,7 +6,7 @@ import type { Spec } from "../src/lib/workbench"
 const node = (name: string, run?: string) =>
   ({ name, title: name, package: "giraf", run }) as Spec
 
-test("GIRAF nodes split into files, flow and values by run, in a fixed order; 값 is one tile", () => {
+test("GIRAF nodes split into files and script by run, in a fixed order; 값 is one tile", () => {
   // Catalog order, as the server sends it.
   const nodes = [
     node("compute", "value-compute"),
@@ -21,17 +21,16 @@ test("GIRAF nodes split into files, flow and values by run, in a fixed order; �
   ]
   expect(nodeChunks(nodes).map((c) => [c.id, c.label, c.nodes.map((n) => n.name)])).toEqual([
     ["files", "파일", ["files", "save"]],
-    ["flow", "흐름", ["foreach", "for", "if"]],
-    ["values", "값", ["value"]],
+    ["script", "스크립트하기", ["foreach", "for", "if", "value"]],
   ])
   // The other 가져오기 runs are reached from the 값 node; search still finds them.
   expect(nodes.filter(isModeOnly).map((n) => n.name)).toEqual(["compute", "header", "pset"])
 })
 
-test("a node no chunk names joins the values chunk, and empty chunks drop", () => {
+test("a node no chunk names joins the script chunk after the known ones, and empty chunks drop", () => {
   const chunks = nodeChunks([node("later", "something-new"), node("header", "value-header"), node("value", "value-constant"), node("bare")])
   expect(chunks.map((c) => [c.id, c.nodes.map((n) => n.name)])).toEqual([
-    ["values", ["value", "later", "bare"]],
+    ["script", ["value", "later", "bare"]],
   ])
 })
 
