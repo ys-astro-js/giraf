@@ -1,4 +1,4 @@
-import { type Catalog, type Frame } from "@/lib/workbench"
+import { type Catalog, type Frame, type Preferences } from "@/lib/workbench"
 import { type TaskMap, type Source } from "@/lib/task-map"
 
 export type TaskMapViewProps = {
@@ -11,6 +11,7 @@ export type TaskMapViewProps = {
   layoutBusy?: boolean
   map: TaskMap
   catalog: Catalog
+  prefs: Preferences
   rows: Frame[]
   update: (fn: (m: TaskMap) => TaskMap, label?: string) => void
   onEditStart?: () => void

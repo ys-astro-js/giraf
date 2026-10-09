@@ -2,6 +2,7 @@ import { memo, useContext, useEffect, type CSSProperties } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { ChevronsUpDown, GripVertical, Pencil, Play, Terminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { NodeIcon } from "@/components/node-icon"
 import { compoundStatus } from "@/lib/compound"
 import { flowProgress } from "@/lib/containers"
 import { subflowColor } from "@/lib/subflow"
@@ -63,6 +64,7 @@ export const CompoundNode = memo(function CompoundNode({
         }}
       >
         <GripVertical aria-hidden="true" />
+        {flow && <NodeIcon icon={flow.icon} />}
         <strong title={name}>{name}</strong>
         {flow && <span className="flow-statement" title={flow.statement}>{flow.statement}</span>}
         <span
@@ -75,7 +77,11 @@ export const CompoundNode = memo(function CompoundNode({
         >
           <StatusIcon severity={status.severity} state={status.state} />
         </span>
-        {meta && <span className="flow-progress">{meta}</span>}
+        {meta && (
+          <span className="flow-progress" role="img" aria-label={meta.label} title={meta.label}>
+            {meta.text}
+          </span>
+        )}
         <Button
           className="nodrag nopan"
           variant="ghost"

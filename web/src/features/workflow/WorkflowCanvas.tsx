@@ -59,7 +59,7 @@ import { SubflowEditor } from "@/components/subflow-editor"
 import { setSubflowCollapsed, subflowColor } from "@/lib/subflow"
 import { WorkflowClickConnection } from "@/components/workflow-click-connection"
 import { type WorkflowNode } from "@/lib/workflow-flow"
-import { containerLabel, containerTask, isContainerId } from "@/lib/containers"
+import { isContainerId } from "@/lib/containers"
 
 const workflowEdgeTypes = { default: WorkflowEdge, smoothstep: WorkflowEdge }
 
@@ -86,6 +86,7 @@ export function TaskMapView({
   layoutBusy = false,
   map,
   catalog,
+  prefs,
   rows,
   update,
   onEditStart,
@@ -218,11 +219,6 @@ export function TaskMapView({
         : edges,
     [edges, hoveredNode, map.view.hideFileEdges, map.view.selected]
   )
-  const container = editingGroup ? containerTask(map, editingGroup) : undefined
-  const editedContainer = container && {
-    kind: catalog.tasks.find((s) => s.name === container.task)?.title ?? "그룹",
-    name: containerLabel(map, catalog, container),
-  }
   return (
     <section
       className="map-workspace"
@@ -241,7 +237,7 @@ export function TaskMapView({
           map={map}
           catalog={catalog}
           group={map.subflows?.find((g) => g.id === editingGroup)}
-          container={editedContainer}
+          prefs={prefs}
           update={update}
           taskIds={groupSelection.filter((id) =>
             map.tasks.some((t) => t.id === id && !t.subflowId)

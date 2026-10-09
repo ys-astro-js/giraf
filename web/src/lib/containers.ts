@@ -157,7 +157,7 @@ export type FlowPort = {
   y: number
 }
 /** Ports of an expanded container in its own coordinates. */
-export function flowPorts(map: TaskMap, catalog: Catalog, group: Subflow): { ports: FlowPort[]; lane?: number } {
+export function flowPorts(map: TaskMap, catalog: Catalog, group: Subflow): { ports: FlowPort[] } {
   const task = containerTask(map, group.id)
   const spec = specOf(catalog, task)
   if (!task || !isFlowSpec(spec)) return { ports: [] }
@@ -174,17 +174,17 @@ export function flowPorts(map: TaskMap, catalog: Catalog, group: Subflow): { por
   const s = flowSettings(task)
   if (spec.run === "for" && s.variable)
     ports.push({ handleId: VALUE_HANDLE + s.variable, type: "source", side: "right", value: true, label: "이번 숫자", x: FLOW_INSET, y: top })
-  // An if body is two lanes, 참 above 거짓.
-  const lane = spec.run === "if" ? FLOW_HEADER + Math.max(FLOW_ROW * 2, (group.height - FLOW_HEADER) / 2) : undefined
+  // An if body is two halves, 참 above 거짓.
+  const half = FLOW_HEADER + Math.max(FLOW_ROW * 2, (group.height - FLOW_HEADER) / 2)
   for (const port of INNER[spec.run])
     ports.push({
       handleId: "output:" + port, type: "source", side: "right",
       label: port === ITEM_PORT ? ITEM_LABEL : port === THEN_PORT ? "참" : "거짓",
-      x: FLOW_INSET, y: port === ELSE_PORT ? lane! + FLOW_ROW / 2 : top,
+      x: FLOW_INSET, y: port === ELSE_PORT ? half + FLOW_ROW / 2 : top,
     })
   ports.push({ handleId: COLLECT_PORT, type: "target", side: "left", label: "결과", x: group.width - FLOW_INSET, y: top })
   ports.push({ handleId: "output:" + RESULTS_PORT, type: "source", side: "right", x: group.width, y: top })
-  return { ports, lane }
+  return { ports }
 }
 
 /** Rows of a collapsed container that stand for its own boundary ports. */
@@ -222,6 +222,47 @@ export function addContainer(map: TaskMap, catalog: Catalog, spec: Spec, prefs: 
     subflows: [...(map.subflows ?? []), group],
     view: { ...map.view, selected: task.id },
   }
+}
+
+/**
+ * A group's 실행 방식 (subflow-editor): `undefined` runs it once as a plain group.
+ * The container task comes and goes with the group's id; members stay, and
+ * connections keep only the ports the new kind still has.
+ */
+export function setGroupRun(map: TaskMap, catalog: Catalog, prefs: Preferences, groupId: string, run: FlowRun | undefined): TaskMap {
+  const group = map.subflows?.find((g) => g.id === groupId)
+  if (!group || run === flowRun(map, catalog, groupId)) return map
+  const own = (c: TaskMap["connections"][number]) =>
+    c.target === groupId || (c.source.kind !== "files" && c.source.taskId === groupId)
+  if (!run) return {
+    ...map,
+    tasks: map.tasks.filter((t) => t.id !== groupId),
+    connections: map.connections.filter((c) => !own(c)),
+    view: map.view.selected === groupId ? { ...map.view, selected: "" } : map.view,
+  }
+  const spec = catalog.tasks.find((s) => isFlowSpec(s) && s.run === run)
+  if (!spec) throw Error("이 실행 방식을 찾을 수 없습니다.")
+  const current = containerTask(map, groupId)
+  const made = current ?? { ...makeInstance(spec, catalog, prefs), id: groupId, label: group.name, position: group.position }
+  // The variable keeps its old name so member output names follow it (syncFlowVariables).
+  const variable = flowSettings(current).variable
+  const flow = { ...defaultFlowSettings(run), ...(run !== "if" && variable ? { variable } : {}) }
+  const task = { ...made, task: spec.name, draft: { ...made.draft, flow } }
+  // An if keeps room for both lanes.
+  const height = run === "if" ? Math.max(group.height, FLOW_HEADER + FLOW_ROW * 4) : group.height
+  const next = {
+    ...map,
+    tasks: current ? map.tasks.map((t) => (t.id === groupId ? task : t)) : [...map.tasks, task],
+    subflows: map.subflows!.map((g) => (g.id === groupId ? { ...g, height } : g)),
+  }
+  const handles = new Set(flowPorts(next, catalog, next.subflows.find((g) => g.id === groupId)!).ports.map((p) => p.type + p.handleId))
+  const kept = (c: TaskMap["connections"][number]) => {
+    if (c.target === groupId && !handles.has("target" + c.role)) return false
+    if (c.source.kind === "files" || c.source.taskId !== groupId) return true
+    const role = c.source.outputRole ?? ""
+    return handles.has("source" + (role.startsWith(VALUE_HANDLE) ? role : "output:" + role))
+  }
+  return { ...next, connections: next.connections.filter(kept) }
 }
 
 /** The files the container hands its members first: one file, or the first group. */
@@ -411,8 +452,9 @@ export function flowRequests(map: TaskMap, catalog: Catalog, inRun: Set<string>)
   })
 }
 
-/** Progress text for a running container: `24개 중 9번째`, `5회 중 2번째`. */
+/** Progress for a running container: `9/24` shown, `24개 중 9번째` read aloud. */
 export function flowProgress(run: FlowRun | undefined, progress: { index: number; total: number } | undefined) {
-  if (!run || !progress || run === "if") return ""
-  return run === "for" ? `${progress.total}회 중 ${progress.index}번째` : `${progress.total}개 중 ${progress.index}번째`
+  if (!run || !progress || run === "if") return undefined
+  const { index, total } = progress
+  return { text: `${index}/${total}`, label: run === "for" ? `${total}회 중 ${index}번째` : `${total}개 중 ${index}번째` }
 }

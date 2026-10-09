@@ -1,18 +1,5 @@
 import { useRef, useState } from "react"
-import {
-  Calculator,
-  ChevronRight,
-  FileInput,
-  FileSearch,
-  Variable,
-  Folder,
-  FolderDown,
-  ListOrdered,
-  Plus,
-  Repeat,
-  Split,
-  Terminal,
-} from "lucide-react"
+import { ChevronRight, Folder, Plus } from "lucide-react"
 import {
   Collapsible,
   CollapsibleContent,
@@ -24,6 +11,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { NodeIcon } from "@/components/node-icon"
 import { SearchField } from "@/components/search-field"
 import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
 import { taskPackageTree, type TaskPackage } from "@/lib/task-tree"
@@ -38,22 +26,6 @@ const matches = (task: Spec, query: string) =>
     .toLowerCase()
     .includes(query.trim().toLowerCase())
 
-/** The node schema's `icon` symbols for GIRAF's own nodes. */
-const NODE_ICONS: Record<string, typeof Terminal> = {
-  "file-input": FileInput,
-  "folder-down": FolderDown,
-  variable: Variable,
-  "file-search": FileSearch,
-  calculator: Calculator,
-  repeat: Repeat,
-  "list-ordered": ListOrdered,
-  split: Split,
-}
-const NodeIcon = ({ task }: { task: Spec }) => {
-  const Icon = (task.icon && NODE_ICONS[task.icon]) || Terminal
-  return <Icon aria-hidden="true" />
-}
-
 /** One task to add: its name and what it does. */
 function TaskOption({ task, onAdd }: { task: Spec; onAdd: () => void }) {
   const name = task.taskName || taskDisplayName(task.name)
@@ -65,7 +37,7 @@ function TaskOption({ task, onAdd }: { task: Spec; onAdd: () => void }) {
       aria-label={`${name} 추가`}
       onClick={onAdd}
     >
-      <NodeIcon task={task} />
+      <NodeIcon icon={task.icon} />
       <span className="library-option-text">
         <span className="library-option-name">{name}</span>
         <span className="library-option-detail">
@@ -90,7 +62,7 @@ function NodeTile({ task, onAdd }: { task: Spec; onAdd: () => void }) {
       title={task.description}
       onClick={onAdd}
     >
-      <NodeIcon task={task} />
+      <NodeIcon icon={task.icon} />
       <span className="library-option-text">
         <span className="library-option-name">{task.title}</span>
         <span className="library-option-detail">{task.description}</span>

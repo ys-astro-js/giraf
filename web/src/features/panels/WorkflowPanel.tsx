@@ -52,6 +52,7 @@ export function WorkflowPanel() {
             runDisabled={w.workflowStarting || w.busy || w.running}
             map={w.map}
             catalog={w.catalog}
+            prefs={w.prefs}
             rows={w.rows}
             update={w.update}
             onEditStart={w.editor.beginEdit}

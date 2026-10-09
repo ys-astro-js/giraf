@@ -57,13 +57,13 @@ export type TaskFlowNode = Node<
   "task"
 >
 /** A foreach, for or if container drawn on its group (lib/containers). */
-export type FlowView = { run: FlowRun; label: string; statement: string; ports: FlowPort[]; lane?: number }
+export type FlowView = { run: FlowRun; icon?: string; label: string; statement: string; ports: FlowPort[] }
 export type SubflowNode = Node<
   { group: Subflow; count: number; minWidth: number; minHeight: number; flow?: FlowView },
   "subflow"
 >
 export type CompoundNode = Node<
-  { group: Subflow; members: string[]; flow?: Omit<FlowView, "ports" | "lane"> } & ReturnType<typeof compoundPorts>,
+  { group: Subflow; members: string[]; flow?: Omit<FlowView, "ports"> } & ReturnType<typeof compoundPorts>,
   "compound"
 >
 export type WorkflowNode = TaskFlowNode | SubflowNode | CompoundNode
@@ -146,7 +146,12 @@ export function flowNodes(
     const container = containerTask(map, group.id)
     const run = flowRun(map, catalog, group.id)
     const flow = container && run
-      ? { run, label: containerLabel(map, catalog, container), statement: flowStatement(map, catalog, container) }
+      ? {
+          run,
+          icon: catalog.tasks.find((s) => s.name === container.task)?.icon,
+          label: containerLabel(map, catalog, container),
+          statement: flowStatement(map, catalog, container),
+        }
       : undefined
     const name = flow?.label ?? group.name
     if (group.collapsed) {

@@ -2,6 +2,7 @@ import { memo, useContext, useEffect, type CSSProperties } from "react"
 import { NodeResizeControl, Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { Play, GripVertical, Pencil, Maximize2, Terminal, ChevronsDownUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { NodeIcon } from "@/components/node-icon"
 import { subflowColor } from "@/lib/subflow"
 import { flowProgress } from "@/lib/containers"
 import { compoundStatus } from "@/lib/compound"
@@ -74,6 +75,7 @@ export const GroupNode = memo(function GroupNode({
     >
       <header className="subflow-heading">
         <GripVertical aria-hidden="true" />
+        {flow && <NodeIcon icon={flow.icon} />}
         <strong title={name}>{name}</strong>
         {flow && <span className="flow-statement" title={flow.statement}>{flow.statement}</span>}
         <span
@@ -86,7 +88,11 @@ export const GroupNode = memo(function GroupNode({
         >
           <StatusIcon severity={status.severity} state={status.state} />
         </span>
-        {meta && <span className="flow-progress">{meta}</span>}
+        {meta && (
+          <span className="flow-progress" role="img" aria-label={meta.label} title={meta.label}>
+            {meta.text}
+          </span>
+        )}
         <Button
           className="nodrag nopan"
           variant="ghost"
@@ -122,9 +128,6 @@ export const GroupNode = memo(function GroupNode({
           <Play />
         </Button>
       </header>
-      {flow?.lane !== undefined && (
-        <div className="flow-lane" style={{ top: flow.lane }} aria-hidden="true" />
-      )}
       {flow?.ports.map((port) => (
         <Handle
           key={port.handleId}

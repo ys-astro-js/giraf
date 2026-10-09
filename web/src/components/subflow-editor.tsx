@@ -8,7 +8,7 @@ import {
   type SubflowColor,
   uid,
 } from "@/lib/task-map"
-import type { Catalog } from "@/lib/workbench"
+import type { Catalog, Preferences } from "@/lib/workbench"
 import {
   saveSubflow,
   dissolveSubflow,
@@ -16,12 +16,21 @@ import {
   subflowColors,
   subflowColor,
 } from "@/lib/subflow"
+import {
+  FLOW_RUNS,
+  containerLabel,
+  containerTask,
+  flowRun,
+  isFlowSpec,
+  setGroupRun,
+  type FlowRun,
+} from "@/lib/containers"
 
 export function SubflowEditor({
   map,
   catalog,
+  prefs,
   group,
-  container,
   taskIds = [],
   update,
   close,
@@ -30,9 +39,8 @@ export function SubflowEditor({
 }: {
   map: TaskMap
   catalog: Catalog
+  prefs: Preferences
   group?: Subflow
-  /** A container is edited like a group, under its own kind (각각 반복) and name. */
-  container?: { kind: string; name: string }
   taskIds?: string[]
   update: (fn: (map: TaskMap) => TaskMap, label?: string) => void
   reselect?: () => void
@@ -40,14 +48,25 @@ export function SubflowEditor({
   close: () => void
 }) {
   const [id] = useState(() => group?.id ?? `subflow-${uid()}`)
+  const container = containerTask(map, group?.id)
   const [name, setName] = useState(
-    container?.name ?? group?.name ?? `그룹 ${(map.subflows?.length ?? 0) + 1}`
+    (container && containerLabel(map, catalog, container)) ??
+      group?.name ??
+      `그룹 ${(map.subflows?.length ?? 0) + 1}`
   )
   const [color, setColor] = useState<SubflowColor>(group?.color ?? "teal")
+  const [run, setRun] = useState<FlowRun | undefined>(flowRun(map, catalog, id))
+  // 한 번 runs a plain group; the others are the containers' own names.
+  const runs = [
+    { id: "once", run: undefined, label: "한 번" },
+    ...FLOW_RUNS.flatMap((r) => {
+      const spec = catalog.tasks.find((s) => isFlowSpec(s) && s.run === r)
+      return spec ? [{ id: r, run: r, label: spec.title }] : []
+    }),
+  ]
   const [error, setError] = useState("")
   const nameInput = useRef<HTMLInputElement>(null)
-  const kind = container?.kind ?? "그룹"
-  const heading = group ? `${kind} 편집` : "그룹 만들기"
+  const heading = group ? "그룹 편집" : "그룹 만들기"
   useEffect(() => {
     if (hidden) return
     const frame = requestAnimationFrame(() => nameInput.current?.focus())
@@ -68,10 +87,11 @@ export function SubflowEditor({
       onSubmit={(e) => {
         e.preventDefault()
         try {
-          const next = group
+          const saved = group
             ? updateSubflow(map, id, { name, color })
             : saveSubflow(map, catalog, { id, name, color, taskIds })
-          update(() => next, group ? `${kind} 설정 변경` : "그룹 만들기")
+          const next = setGroupRun(saved, catalog, prefs, id, run)
+          update(() => next, group ? "그룹 설정 변경" : "그룹 만들기")
           close()
         } catch (e) {
           setError((e as Error).message)
@@ -131,6 +151,23 @@ export function SubflowEditor({
           ))}
         </div>
       </fieldset>
+      <fieldset>
+        <legend>실행 방식</legend>
+        <div className="subflow-runs">
+          {runs.map((r) => (
+            <label key={r.id}>
+              <input
+                type="radio"
+                name="subflow-run"
+                value={r.id}
+                checked={run === r.run}
+                onChange={() => setRun(r.run)}
+              />
+              <span>{r.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
       {error && (
         <p className="subflow-error" role="alert">
           {error}
@@ -142,11 +179,11 @@ export function SubflowEditor({
           variant="outline"
           hidden={!group}
           onClick={() => {
-            update((m) => dissolveSubflow(m, id), `${kind} 해제`)
+            update((m) => dissolveSubflow(m, id), "그룹 해제")
             close()
           }}
         >
-          {kind} 해제
+          그룹 해제
         </Button>
         <Button
           type="submit"
