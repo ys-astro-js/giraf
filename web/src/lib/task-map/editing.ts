@@ -30,24 +30,49 @@ export function duplicateTask(
 ): TaskMap {
   const original = map.tasks.find((task) => task.id === id)
   if (!original) return map
-  const task = { ...clone(original), id: uid(), position }
-  // A container's copy gets its own empty group.
+  // A container's copy brings its own group and copies of its members.
   const group = map.subflows?.find((g) => g.id === id)
+  const members = group ? map.tasks.filter((t) => t.subflowId === id) : []
+  const ids = new Map([original, ...members].map((t) => [t.id, uid()]))
+  const newId = ids.get(id)!
+  const from = group?.position ?? original.position ?? position
+  const shift = (p: { x: number; y: number }) => ({ x: p.x + position.x - from.x, y: p.y + position.y - from.y })
+  const task = { ...clone(original), id: newId, position }
+  const copies = members.map((t) => ({
+    ...clone(t),
+    id: ids.get(t.id)!,
+    subflowId: newId,
+    ...(t.position ? { position: shift(t.position) } : {}),
+  }))
+  // Links into the copies come along; a link between copied nodes waits for the copy's own run.
+  const links = map.connections
+    .filter((link) => ids.has(link.target))
+    .map((link) => {
+      const source = link.source
+      const copied = source.kind !== "files" && source.taskId ? ids.get(source.taskId) : undefined
+      return {
+        ...clone(link),
+        id: uid(),
+        target: ids.get(link.target)!,
+        ...(copied && source.kind !== "files"
+          ? {
+              source: {
+                ...(source.port ? { port: source.port } : {}),
+                ...(source.partition ? { partition: clone(source.partition) } : {}),
+                kind: "pending" as const,
+                taskId: copied,
+                ...(source.outputRole ? { outputRole: source.outputRole } : {}),
+              },
+            }
+          : {}),
+      }
+    })
   return {
     ...map,
-    ...(group ? { subflows: [...map.subflows!, { ...clone(group), id: task.id, position, collapsed: undefined }] } : {}),
-    tasks: [...map.tasks, task],
-    connections: [
-      ...map.connections,
-      ...map.connections
-        .filter((link) => link.target === id)
-        .map((link) => ({
-          ...clone(link),
-          id: uid(),
-          target: task.id,
-        })),
-    ],
-    view: { ...map.view, selected: task.id },
+    ...(group ? { subflows: [...map.subflows!, { ...clone(group), id: newId, position, collapsed: undefined }] } : {}),
+    tasks: [...map.tasks, task, ...copies],
+    connections: [...map.connections, ...links],
+    view: { ...map.view, selected: newId },
   }
 }
 

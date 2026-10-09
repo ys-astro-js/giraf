@@ -85,7 +85,9 @@ test("group persistence, parent ordering and relative coordinates", () => {
   expect(child.parentId).toBe("group")
   const wired = connect(m, "b", "images", { kind: "pending", taskId: "a" })
   const edge = flowEdges(wired, catalog)[0]
-  expect(parent.zIndex).toBeLessThan(edge.zIndex!)
+  // The group paints after edges (its heading covers them) and below its tasks.
+  expect(parent.zIndex).toBe(edge.zIndex!)
+  expect(child.zIndex).toBeGreaterThan(parent.zIndex!)
   expect(child.zIndex).toBeGreaterThan(edge.zIndex!)
   expect(nodes.find(n => n.id === "c")!.zIndex).toBeGreaterThan(edge.zIndex!)
   expect(child.extent).toBeUndefined()

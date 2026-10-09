@@ -4,6 +4,7 @@ import {
   type SubflowColor,
   workflowRequest,
   payloadFor,
+  removeTask,
 } from "@/lib/task-map"
 import { nodeLayout, roleActive } from "./node-interaction"
 import type { Catalog } from "./workbench"
@@ -68,6 +69,8 @@ export function saveSubflow(
 }
 
 export function dissolveSubflow(map: TaskMap, id: string): TaskMap {
+  // A container goes with its task; its members stay, as with a group.
+  if (containerTask(map, id)) return removeTask(map, id)
   return {
     ...map,
     subflows: (map.subflows ?? []).filter((g) => g.id !== id),
@@ -150,6 +153,8 @@ export function updateSubflow(
     subflows: map.subflows?.map((g) =>
       g.id === id ? { ...g, name, color: values.color } : g
     ),
+    // A container's name is its task's label (lib/containers).
+    tasks: map.tasks.map((t) => (t.id === id ? { ...t, label: name } : t)),
   }
 }
 export function setSubflowCollapsed(map: TaskMap, id: string, collapsed: boolean): TaskMap {

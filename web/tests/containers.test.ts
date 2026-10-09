@@ -1,6 +1,6 @@
 import { beforeAll, expect, test } from "bun:test"
-import { emptyMap, makeInstance, addTask, removeTask, restoreTask, workflowRequest, workflowDiagnosticRequest, migrateMap } from "../src/lib/task-map"
-import { setSubflowCollapsed, autoLayoutMap, moveTaskToSubflow, subflowRequest } from "../src/lib/subflow"
+import { emptyMap, makeInstance, addTask, removeTask, duplicateTask, restoreTask, workflowRequest, workflowDiagnosticRequest, migrateMap } from "../src/lib/task-map"
+import { setSubflowCollapsed, autoLayoutMap, moveTaskToSubflow, subflowRequest, updateSubflow, dissolveSubflow } from "../src/lib/subflow"
 import { compoundPorts } from "../src/lib/compound"
 import { addContainer, containerLabel, flowPorts, flowStatement, syncContainerItems, loopOutputNames, loopVariable, FLOW_HEADER } from "../src/lib/containers"
 import { flowNodes, flowEdges, taskEdges, connectFlow, connectionFeedback } from "../src/lib/workflow-flow"
@@ -240,4 +240,47 @@ test("settings survive saving; auto layout places the container as its group", a
   const laid = await autoLayoutMap(loaded, catalog)
   const group = laid.subflows!.find((g) => g.id === id)!
   expect(laid.tasks.find((t) => t.id === id)!.position).toEqual(group.position)
+})
+
+test("a container is named and colored like a group; one name for canvas and inspector", () => {
+  const { map, id } = fixture()
+  const edited = updateSubflow(map, id, { name: "필터별 측광", color: "rose" })
+  const task = edited.tasks.find((t) => t.id === id)!
+  expect(task.label).toBe("필터별 측광")
+  expect(containerLabel(edited, catalog, task)).toBe("필터별 측광")
+  expect(edited.subflows!.find((g) => g.id === id)!.color).toBe("rose")
+  // Renaming in the inspector edits the label alone; the canvas follows.
+  const renamed = { ...edited, tasks: edited.tasks.map((t) => (t.id === id ? { ...t, label: "다시" } : t)) }
+  expect(containerLabel(renamed, catalog, renamed.tasks.find((t) => t.id === id)!)).toBe("다시")
+})
+
+test("dissolving a container removes it and keeps its members", () => {
+  const { map, id } = fixture()
+  const dissolved = dissolveSubflow(map, id)
+  expect(dissolved.tasks.some((t) => t.id === id)).toBe(false)
+  expect(dissolved.subflows!.some((g) => g.id === id)).toBe(false)
+  expect(dissolved.tasks.find((t) => t.id === "proc")!.subflowId).toBeUndefined()
+})
+
+test("a duplicated container brings copies of its members and their links", () => {
+  const made = fixture()
+  const id = made.id
+  let map = wire(made.map, "object", "output", id, "items")
+  map = wire(map, id, "output:item", "proc", "images")
+  map = wire(map, "proc", "output", id, "result")
+  const copy = duplicateTask(map, id, { x: 1000, y: 40 })
+  const newId = copy.view.selected
+  expect(newId).not.toBe(id)
+  expect(copy.subflows!.find((g) => g.id === newId)!.position).toEqual({ x: 1000, y: 40 })
+  const members = copy.tasks.filter((t) => t.subflowId === newId)
+  expect(members).toHaveLength(1)
+  const member = members[0]
+  expect(member.id).not.toBe("proc")
+  expect(member.position).toEqual({ x: 1080, y: 140 })
+  // Outside input, inner item and collected result all point at the copies.
+  expect(copy.connections.find((c) => c.target === newId && c.role === "items")!.source).toMatchObject({ taskId: "object" })
+  expect(copy.connections.find((c) => c.target === member.id)!.source).toMatchObject({ kind: "pending", taskId: newId, outputRole: "item" })
+  expect(copy.connections.find((c) => c.target === newId && c.role === "result")!.source).toMatchObject({ kind: "pending", taskId: member.id })
+  // The original keeps its member.
+  expect(copy.tasks.find((t) => t.id === "proc")!.subflowId).toBe(id)
 })

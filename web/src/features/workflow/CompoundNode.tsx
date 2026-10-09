@@ -19,7 +19,7 @@ export const CompoundNode = memo(function CompoundNode({
   dragging,
   isConnectable,
 }: NodeProps<CompoundFlowNode>) {
-  const { map, currentIssues, runGroup, groupRunDisabled, setGroupCollapsed, editGroup, choose, flowProgress: progress } =
+  const { map, currentIssues, runGroup, groupRunDisabled, setGroupCollapsed, editGroup, flowProgress: progress } =
     useContext(WorkflowContext)!
   const { group, members, inputs, outputs, height, flow } = data
   // A container keeps its name and what it does as the heading, collapsed or not.
@@ -83,8 +83,7 @@ export const CompoundNode = memo(function CompoundNode({
           aria-label={`${name} 편집`}
           onClick={(e) => {
             e.stopPropagation()
-            if (flow) choose(id)
-            else editGroup(group.id)
+            editGroup(group.id)
           }}
         >
           <Pencil />

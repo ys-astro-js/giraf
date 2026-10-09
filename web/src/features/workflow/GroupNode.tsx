@@ -4,10 +4,13 @@ import { Play, GripVertical, Pencil, Maximize2, Terminal, ChevronsDownUp } from 
 import { Button } from "@/components/ui/button"
 import { subflowColor } from "@/lib/subflow"
 import { flowProgress } from "@/lib/containers"
+import { compoundStatus } from "@/lib/compound"
+import { stateLabel } from "@/lib/task-map"
 import { type SubflowNode } from "@/lib/workflow-flow"
 
 import { WorkflowContext } from "./context"
 import { Handle } from "./Handle"
+import { StatusIcon } from "./StatusIcon"
 export const GroupNode = memo(function GroupNode({
   id,
   data,
@@ -23,13 +26,21 @@ export const GroupNode = memo(function GroupNode({
     beginEdit,
     endEdit,
     setGroupCollapsed,
-    choose,
+    currentIssues,
     flowProgress: progress,
   } = useContext(WorkflowContext)!
   const { flow } = data
   // A container's heading is its name, then what it does (`M67 FILTER별로`).
   const name = flow?.label ?? data.group.name
   const meta = flowProgress(flow?.run, progress?.id === id ? progress : undefined)
+  // The same status as the collapsed node: members' runs and diagnostics, and the container's own.
+  const members = map.tasks.filter((t) => t.subflowId === data.group.id).map((t) => t.id)
+  const status = compoundStatus(map, members, currentIssues, flow ? id : undefined)
+  const statusLabel = status.severity
+    ? `${status.severity === "error" ? "오류" : "경고"}: ${status.issues.map((issue) => issue.message).join("; ")}`
+    : status.state
+      ? stateLabel(status.state)
+      : "실행 전"
   const updateNodeInternals = useUpdateNodeInternals()
   const handlesKey = flow?.ports.map((port) => `${port.handleId}@${port.x},${port.y}`).join("|")
   useEffect(() => {
@@ -49,6 +60,7 @@ export const GroupNode = memo(function GroupNode({
       aria-label={name}
       data-flow={flow?.run}
       data-selected={flow ? selected : undefined}
+      data-diagnostic={status.severity}
       data-drop-state={
         dragPreview.leaving === data.group.id
           ? "leaving"
@@ -64,14 +76,23 @@ export const GroupNode = memo(function GroupNode({
         <GripVertical aria-hidden="true" />
         <strong title={name}>{name}</strong>
         {flow && <span className="flow-statement" title={flow.statement}>{flow.statement}</span>}
+        <span
+          className="node-state"
+          data-severity={status.severity}
+          data-running={status.state === "running"}
+          role="img"
+          aria-label={statusLabel}
+          title={statusLabel}
+        >
+          <StatusIcon severity={status.severity} state={status.state} />
+        </span>
         {meta && <span className="flow-progress">{meta}</span>}
         <Button
           className="nodrag nopan"
           variant="ghost"
           size="icon-sm"
           aria-label={`${name} 편집`}
-          // A container's settings are in the inspector.
-          onClick={() => (flow ? choose(id) : editGroup(data.group.id))}
+          onClick={() => editGroup(data.group.id)}
         >
           <Pencil />
         </Button>

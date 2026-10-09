@@ -21,6 +21,7 @@ export function SubflowEditor({
   map,
   catalog,
   group,
+  container,
   taskIds = [],
   update,
   close,
@@ -30,6 +31,8 @@ export function SubflowEditor({
   map: TaskMap
   catalog: Catalog
   group?: Subflow
+  /** A container is edited like a group, under its own kind (각각 반복) and name. */
+  container?: { kind: string; name: string }
   taskIds?: string[]
   update: (fn: (map: TaskMap) => TaskMap, label?: string) => void
   reselect?: () => void
@@ -38,11 +41,13 @@ export function SubflowEditor({
 }) {
   const [id] = useState(() => group?.id ?? `subflow-${uid()}`)
   const [name, setName] = useState(
-    group?.name ?? `그룹 ${(map.subflows?.length ?? 0) + 1}`
+    container?.name ?? group?.name ?? `그룹 ${(map.subflows?.length ?? 0) + 1}`
   )
   const [color, setColor] = useState<SubflowColor>(group?.color ?? "teal")
   const [error, setError] = useState("")
   const nameInput = useRef<HTMLInputElement>(null)
+  const kind = container?.kind ?? "그룹"
+  const heading = group ? `${kind} 편집` : "그룹 만들기"
   useEffect(() => {
     if (hidden) return
     const frame = requestAnimationFrame(() => nameInput.current?.focus())
@@ -52,7 +57,7 @@ export function SubflowEditor({
     <form
       className="subflow-editor"
       hidden={hidden}
-      aria-label={group ? "그룹 편집" : "그룹 만들기"}
+      aria-label={heading}
       onKeyDown={(e) => {
         if (e.key === "Enter" && e.nativeEvent.isComposing) e.preventDefault()
         if (e.key === "Escape") {
@@ -66,7 +71,7 @@ export function SubflowEditor({
           const next = group
             ? updateSubflow(map, id, { name, color })
             : saveSubflow(map, catalog, { id, name, color, taskIds })
-          update(() => next, group ? "서브플로우 설정 변경" : "서브플로우 추가")
+          update(() => next, group ? `${kind} 설정 변경` : "그룹 만들기")
           close()
         } catch (e) {
           setError((e as Error).message)
@@ -74,12 +79,12 @@ export function SubflowEditor({
       }}
     >
       <div className="subflow-editor-heading">
-        <h2>{group ? "그룹 편집" : "그룹 만들기"}</h2>
+        <h2>{heading}</h2>
         <Button
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label={group ? "그룹 편집 닫기" : "그룹 만들기 취소"}
+          aria-label={group ? `${heading} 닫기` : "그룹 만들기 취소"}
           onClick={close}
         >
           <X />
@@ -137,11 +142,11 @@ export function SubflowEditor({
           variant="outline"
           hidden={!group}
           onClick={() => {
-            update((m) => dissolveSubflow(m, id), "서브플로우 해제")
+            update((m) => dissolveSubflow(m, id), `${kind} 해제`)
             close()
           }}
         >
-          그룹 해제
+          {kind} 해제
         </Button>
         <Button
           type="submit"

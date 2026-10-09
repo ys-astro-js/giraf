@@ -59,7 +59,7 @@ import { SubflowEditor } from "@/components/subflow-editor"
 import { setSubflowCollapsed, subflowColor } from "@/lib/subflow"
 import { WorkflowClickConnection } from "@/components/workflow-click-connection"
 import { type WorkflowNode } from "@/lib/workflow-flow"
-import { isContainerId } from "@/lib/containers"
+import { containerLabel, containerTask, isContainerId } from "@/lib/containers"
 
 const workflowEdgeTypes = { default: WorkflowEdge, smoothstep: WorkflowEdge }
 
@@ -218,6 +218,11 @@ export function TaskMapView({
         : edges,
     [edges, hoveredNode, map.view.hideFileEdges, map.view.selected]
   )
+  const container = editingGroup ? containerTask(map, editingGroup) : undefined
+  const editedContainer = container && {
+    kind: catalog.tasks.find((s) => s.name === container.task)?.title ?? "그룹",
+    name: containerLabel(map, catalog, container),
+  }
   return (
     <section
       className="map-workspace"
@@ -236,6 +241,7 @@ export function TaskMapView({
           map={map}
           catalog={catalog}
           group={map.subflows?.find((g) => g.id === editingGroup)}
+          container={editedContainer}
           update={update}
           taskIds={groupSelection.filter((id) =>
             map.tasks.some((t) => t.id === id && !t.subflowId)
@@ -306,7 +312,7 @@ export function TaskMapView({
               onNodeMouseLeave={() => setHoveredNode("")}
               nodeTypes={nodeTypes}
               edgeTypes={workflowEdgeTypes}
-              // Groups < edges < task nodes/ports, including selected edges and grouped tasks.
+              // Edges < groups (see-through bodies) < task nodes/ports, including grouped tasks.
               zIndexMode="manual"
               connectionLineType={
                 map.view.edgeStyle === "smoothstep"

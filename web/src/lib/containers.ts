@@ -104,12 +104,13 @@ export function flowPartition(map: TaskMap, catalog: Catalog, task: Instance): s
 
 /** Names containers had before they were named for beginners. */
 const OLD_NAMES = new Set<string>(FLOW_RUNS)
-/** The container's name: the one a user gave it, or the node's own (각각 반복). */
-export function containerLabel(map: TaskMap, catalog: Catalog, task: Instance): string {
-  const spec = specOf(catalog, task)
-  const name = map.subflows?.find((g) => g.id === task.id)?.name.trim()
-  return name && !OLD_NAMES.has(name) ? name : spec?.taskName || spec?.title || task.label
+/** The container's name: its task's label, which the inspector and the group editor both edit, or the node's own (각각 반복). */
+export function containerName(spec: Spec | undefined, task: Instance): string {
+  const name = task.label.trim()
+  return name && !OLD_NAMES.has(name) && name !== task.task ? name : spec?.taskName || spec?.title || task.label
 }
+export const containerLabel = (_map: TaskMap, catalog: Catalog, task: Instance): string =>
+  containerName(specOf(catalog, task), task)
 
 /** What the container does, beside its name: `M67 FILTER별로`, `1부터 3까지 1씩`, `EXPTIME > 30`. */
 export function flowStatement(map: TaskMap, catalog: Catalog, task: Instance): string {

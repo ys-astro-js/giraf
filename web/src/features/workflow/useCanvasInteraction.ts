@@ -209,7 +209,7 @@ export function useTaskMapInteraction({
         update(
           (m) => changeFlowNodes(m, catalog, changes),
           changes.some((c) => c.type === "dimensions" && c.resizing)
-            ? "서브플로우 크기 변경"
+            ? "그룹 크기 변경"
             : "노드 이동"
         )
     },

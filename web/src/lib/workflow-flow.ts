@@ -183,7 +183,8 @@ export function flowNodes(
     return {
       id: group.id,
       type: "subflow",
-      zIndex: 0,
+      // Above edges (1) by DOM order: the heading covers them, the see-through body does not.
+      zIndex: 1,
       data: { group, count: children.length, minWidth, minHeight, ...(view ? { flow: view } : {}) },
       position: group.position,
       style: {
