@@ -258,6 +258,10 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
         apply_parameters(payload, incoming, values.parameters(id))
         report(deepcopy(state))
         job = run(node, payload)
+        if ctx:
+            # Results carry the round they were made in; the editor reads them too.
+            job = dict(job, products=[dict(p, labels={**(p.get('labels') or {}), **current})
+                                      for p in job.get('products', [])])
         state['jobs'].append(dict(job, instanceId=id))
         if cancelled() or job['state'] == 'cancelled':
             raise Cancelled()
@@ -265,9 +269,7 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
             raise ValueError(f"{node['label']}에서 처리된 파일이 없습니다. 실행 기록을 확인해 주세요.")
         if job['state'] != 'completed':
             raise ValueError(f"{node['label']} 실행이 완료되지 않았습니다. 실행 기록을 확인해 주세요.")
-        # Results carry the round they were made in.
-        return dict(job, products=[dict(p, labels={**(p.get('labels') or {}), **current})
-                                   for p in job.get('products', [])]) if ctx else job
+        return job
 
     def run_region(flow, done, ctx):
         id = flow['id']

@@ -369,12 +369,12 @@ def _kind(values):
 
 
 def round_values(result, match):
-    """The values of `result` a round takes: those labelled with its values `match`."""
+    """The values of `result` a round takes: those whose labels agree with its values `match`
+    (a label a value does not carry does not decide)."""
     values, labels = result['values'], result.get('labels')
     if not match or not labels:
         return values
-    chosen = [v for v, tag in zip(values, labels) if all(name in tag and same_value(tag[name], value)
-                                                          for name, value in match.items())]
+    chosen = [v for v, tag in zip(values, labels) if agrees(tag, match)]
     if not chosen:
         shown = ' '.join(pass_value(v) for v in match.values())
         raise ValueError(f'{shown} 회차에 맞는 값이 없습니다.')
