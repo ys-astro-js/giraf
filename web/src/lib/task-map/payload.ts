@@ -181,8 +181,9 @@ export function workflowRequest(
     ...map,
     // The run, not the first round, decides what each round takes.
     tasks: map.tasks.map((t) => (t.firstRound ? { ...t, firstRound: undefined } : t)),
+    // Pset links stay: each task takes its pset node's values (lib/values psetValues).
     connections: map.connections.map((c) =>
-      c.source.kind === "pending" || links.some((l) => l.target === c.target && l.role === c.role)
+      !isValueRole(c.role) && (c.source.kind === "pending" || links.some((l) => l.target === c.target && l.role === c.role))
         ? { ...c, source: { kind: "files" as const, ids: [], label: "" } }
         : c
     ),

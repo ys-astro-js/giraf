@@ -2,6 +2,7 @@ import { expect, test } from "bun:test"
 import { addTask, emptyMap, makeInstance, payloadFor, workflowRequest, workflowDiagnosticRequest, type Instance, type TaskMap } from "../src/lib/task-map"
 import { nodeGeometry, NODE_METRICS, NODE_WIDTH } from "../src/lib/node-interaction"
 import { connectFlow, connectionFeedback, flowNodes, taskEdges } from "../src/lib/workflow-flow"
+import { setGroupRun } from "../src/lib/containers"
 import {
   computeVariables,
   expressionNames,
@@ -153,6 +154,34 @@ test("a pset node shares one pset between tasks", () => {
   const geometry = nodeGeometry(map, map.tasks.find((t) => t.id === "find")!, catalog)
   expect(geometry.params.map((p) => p.handleId)).toEqual(["pset:datapars", "p:datapars.fwhmpsf"])
   expect(nodeGeometry(map, pset, catalog).psetOutput).toBe(true)
+})
+
+test("a pset node's values reach every task it feeds, in a run, a region and a run alone", () => {
+  let map = fixture()
+  map = addTask(map, make(phot, "find"))
+  map = { ...map, tasks: map.tasks.map((t) => t.id === "phot" ? { ...t, parameterSets: { ...t.parameterSets, datapars: { ...t.parameterSets!.datapars, fwhmpsf: 3.2, exposure: "EXPTIME" } } } : t) }
+  map = takeOutPset(map, catalog, "phot", "datapars")
+  const pset = map.tasks.at(-1)!
+  map = link(map, pset.id, "pset", "find", "pset:datapars")
+  // The tasks hold nothing of their own; the pset node holds the values.
+  map = { ...map, tasks: map.tasks.map((t) => (t.id === "phot" || t.id === "find" ? { ...t, parameterSets: { ...t.parameterSets, datapars: {} } } : t)) }
+  const held = (payload: { parameterSets: Record<string, Record<string, unknown>> }) =>
+    [payload.parameterSets.datapars.fwhmpsf, payload.parameterSets.datapars.exposure]
+  for (const id of ["phot", "find"]) expect(held(payloadFor(map, id, catalog))).toEqual([3.2, "EXPTIME"])
+  // A value into one of the pset node's parameters goes with the run to both tasks.
+  map = link(map, "gain", "value:gain", pset.id, "p:datapars.fwhmpsf")
+  const run = workflowRequest(map, catalog, "/tmp")
+  for (const id of ["phot", "find"]) expect(held(run.nodes.find((n) => n.id === id)!.payload)).toEqual([3.2, "EXPTIME"])
+  expect(run.values.links.map((l) => [l.target, l.parameter])).toEqual([["phot", "datapars.fwhmpsf"], ["find", "datapars.fwhmpsf"]])
+  // Members of a region, fed by a task inside it, take them too.
+  const region: Spec = { ...node("giraf.foreach", "foreach"), taskName: "반복" }
+  const looped: Catalog = { ...catalog, tasks: [...catalog.tasks, region] }
+  let inner = setGroupRun({ ...map, subflows: [{ id: "loop", name: "반복", position: { x: 0, y: 0 }, width: 400, height: 240 }] }, looped, prefs, "loop", "foreach")
+  inner = { ...inner, tasks: inner.tasks.map((t) => (t.id === "phot" || t.id === "find" ? { ...t, subflowId: "loop" } : t)) }
+  inner = { ...inner, connections: [...inner.connections, { id: "chain", target: "find", role: "image", source: { kind: "pending", taskId: "phot", outputRole: "output" } }] }
+  const regionRun = workflowRequest(inner, looped, "/tmp")
+  expect(regionRun.flows.map((f) => f.members)).toEqual([["phot", "find"]])
+  for (const id of ["phot", "find"]) expect(held(regionRun.nodes.find((n) => n.id === id)!.payload)).toEqual([3.2, "EXPTIME"])
 })
 
 test("a pset node offers its pinned parameters as values", () => {
