@@ -102,6 +102,16 @@ const number = (text: string | undefined) => {
   return Number.isFinite(value) ? value : undefined
 }
 
+/**
+ * A pass's value as people read it and output names take it (giraf/values.py
+ * pass_value): a whole number without decimals (15.0 is 15), otherwise the
+ * trimmed text (30.66011, B). Passes still group and match by the header's text.
+ */
+export function passValue(text: string): string {
+  const value = number(text)
+  return value !== undefined && Number.isInteger(value) ? String(value) : text.trim()
+}
+
 /** The connections that feed the container's list (foreach, any number) or routed input (if). */
 export function flowInputs(map: TaskMap, catalog: Catalog, task: Instance) {
   const role = specOf(catalog, task)?.inputs[0]?.name
@@ -170,11 +180,11 @@ export function flowKeywordChoices(map: TaskMap, catalog: Catalog, task: Instanc
   const keywords = [...found, ...flowKeywords(task).filter((k) => !found.includes(k))]
   return keywords.map((keyword) => ({
     keyword,
-    values: partitionValues(ids, [...frames.values()], keyword).filter(Boolean),
+    values: [...new Set(partitionValues(ids, [...frames.values()], keyword).filter(Boolean).map(passValue))],
   }))
 }
 
-/** One run of a 각각 반복: `B 30` and its files, or one file by its name. */
+/** One run of a 각각 반복: `B 30` and its files, or one file by its name; `values` are the headers' text. */
 export type FlowPass = { name: string; values: Record<string, string>; ids: string[] }
 const compareText = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true })
 /** Passes by the values of `keywords`, sorted naturally (giraf/flows.py iterations); none, one per file. */
@@ -189,7 +199,7 @@ export function groupPasses(ids: string[], frames: Map<string, Frame>, keywords:
     const values = keywords.map((k) => partitionValue(frames.get(id), k))
     const key = JSON.stringify(values)
     const pass = groups.get(key) ?? {
-      name: values.map((v) => v || "없음").join(" "),
+      name: values.map((v) => (v ? passValue(v) : "없음")).join(" "),
       values: Object.fromEntries(keywords.map((k, i) => [k, values[i]])),
       ids: [],
     }
@@ -458,7 +468,7 @@ export function loopVariables(map: TaskMap, catalog: Catalog, member: Instance, 
   }
   const first = flowPasses(map, catalog, container, rows).passes[0]
   if (!first) return undefined
-  if (flowKeywords(container).length) return variables.map((variable) => ({ variable, value: first.values[variable] ?? "" }))
+  if (flowKeywords(container).length) return variables.map((variable) => ({ variable, value: passValue(first.values[variable] ?? "") }))
   return [{ variable: variables[0], value: first.name }]
 }
 
@@ -552,9 +562,10 @@ export function loopIssues(map: TaskMap, catalog: Catalog, rows: Frame[]) {
 /**
  * A member run on its own takes the container's first item (foreach); `passed`
  * holds it like a pass output, so resolvedSource finds it, and `firstPass` holds
- * the files the first pass takes from each matched outside connection. Lanes of
- * an if and a for variable's first number are settled at run time or by the
- * value request.
+ * the files the first pass takes from each matched outside connection and
+ * `firstPassValues` its values, which the member's value links take
+ * (lib/values valueRequest). Lanes of an if and a for variable's first number
+ * are settled at run time or by the value request.
  */
 export function syncContainerItems(map: TaskMap, catalog: Catalog | null, rows: Frame[]): TaskMap {
   if (!catalog || !map.subflows?.length) return map
@@ -590,9 +601,11 @@ export function syncContainerItems(map: TaskMap, catalog: Catalog | null, rows: 
         if (match.matched) matched[c.id] = match.ids
       }
     const firstPass = Object.keys(matched).length ? matched : undefined
-    if (JSON.stringify(firstPass) === JSON.stringify(task.firstPass)) return task
+    const firstPassValues = first && flowKeywords(container).length ? first.values : undefined
+    if (JSON.stringify(firstPass) === JSON.stringify(task.firstPass) &&
+      JSON.stringify(firstPassValues) === JSON.stringify(task.firstPassValues)) return task
     changed = true
-    return { ...task, firstPass }
+    return { ...task, firstPass, firstPassValues }
   })
   return changed ? { ...map, tasks } : map
 }

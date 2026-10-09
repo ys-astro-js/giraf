@@ -20,7 +20,8 @@ The request shape is shared by the `/api/values` endpoint and workflow runs:
 
 A loop pass sets `partition` to its own values, `{keyword: value}` for each
 keyword it runs by (partition_pairs reads both shapes); a value grouped by one
-of those keywords takes that keyword's group.
+of those keywords takes that keyword's group, found by same_value. The editor
+sends a loop member run alone with its loop's first pass.
 """
 import ast
 import math
@@ -37,6 +38,21 @@ def _number(text):
     except (TypeError, ValueError):
         return None
     return number if math.isfinite(number) else None
+
+
+def same_value(a, b):
+    """Header values as a loop compares them: as numbers when both read as
+    one (15 is 15.0), otherwise as trimmed text."""
+    x, y = _number(a), _number(b)
+    return x == y if x is not None and y is not None else str(a).strip() == str(b).strip()
+
+
+def pass_value(text):
+    """A loop pass's value as people read it and output names take it: a whole
+    number without decimals (15.0 is 15), otherwise the trimmed text (30.66011, B)."""
+    text = str(text).strip()
+    number = _number(text)
+    return str(int(number)) if number is not None and number.is_integer() else text
 
 
 def _scalar(value):
@@ -396,10 +412,12 @@ def parameter_value(result, partition, type_):
     groups = result.get('groups')
     pairs = partition_pairs(partition)
     if groups and groups['keyword'] in pairs:
+        # Groups are keyed by header text, so a pass value 15 finds the group 15.0.
         value = pairs[groups['keyword']]
-        if value not in groups['values']:
-            raise ValueError(f'{groups["keyword"]}={value}: 이 그룹의 값이 없습니다.')
-        values = groups['values'][value]
+        key = next((k for k in groups['values'] if same_value(k, value)), None)
+        if key is None:
+            raise ValueError(f'{groups["keyword"]}={pass_value(value)}: 이 그룹의 값이 없습니다.')
+        values = groups['values'][key]
     if not values:
         raise ValueError('값이 없습니다.')
     distinct = list(dict.fromkeys(values))

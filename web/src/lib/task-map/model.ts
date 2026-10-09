@@ -62,6 +62,8 @@ export type Instance = {
   passed?: Record<string, string[]>
   /** Derived: inside a 각각 반복, the files its first pass takes from each matched outside connection, by connection id (syncContainerItems). */
   firstPass?: Record<string, string[]>
+  /** Derived: inside a 각각 반복 by keywords, its first pass's values by keyword, which a run of this member alone takes (syncContainerItems). */
+  firstPassValues?: Record<string, string>
   subflowId?: string
 }
 

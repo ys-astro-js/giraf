@@ -212,7 +212,12 @@ export function workflowRequest(
         : c
     ),
   }
-  const values = valueRequest(valueMap, catalog, running)
+  // Each pass gives a member's value links its own values (giraf/workflow.py iteration_values).
+  const values = valueRequest(
+    { ...valueMap, tasks: valueMap.tasks.map((t) => (t.firstPassValues ? { ...t, firstPassValues: undefined } : t)) },
+    catalog,
+    running
+  )
   return {
     nodes: jobs.map((t) => ({
       id: t.id,

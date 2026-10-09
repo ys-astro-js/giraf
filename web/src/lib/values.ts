@@ -406,16 +406,22 @@ export function withValues<T extends { parameters: Record<string, unknown>; para
 }
 
 type Ref = { node: string; output: string }
-type ValueLink = { id: string; target: string; parameter: string; type: string; source: Ref; partition?: { keyword: string; value: string } }
+/** `partition` is a port member's `{keyword, value}`, or a loop pass's values by keyword. */
+type ValueLink = { id: string; target: string; parameter: string; type: string; source: Ref; partition?: { keyword: string; value: string } | Record<string, string> }
 
 const refOf = (source: Source): Ref | undefined =>
   source.kind !== "files" && source.outputRole?.startsWith(VALUE_HANDLE)
     ? { node: source.taskId!, output: source.outputRole.slice(VALUE_HANDLE.length) } : undefined
 
-/** The partition a task runs for: the member its file inputs come from, if any. */
+/**
+ * The partition a task runs for: the member its file inputs come from, else,
+ * inside a 각각 반복, its first pass, as a run of the member alone takes its
+ * files (giraf/workflow.py iteration_values gives each pass its own).
+ */
 function targetPartition(map: TaskMap, id: string) {
   const link = map.connections.find((c) => c.target === id && !isValueRole(c.role) && c.source.kind !== "files" && c.source.partition)
-  return link && link.source.kind !== "files" ? link.source.partition : undefined
+  if (link && link.source.kind !== "files") return link.source.partition
+  return map.tasks.find((t) => t.id === id)?.firstPassValues
 }
 
 /**

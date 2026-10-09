@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import type { Catalog, Frame, Preferences, Spec } from "../src/lib/workbench"
 import { addTask, connect, emptyMap, makeInstance, migrateMap, payloadFor, workflowDiagnosticRequest, workflowRequest, type TaskMap } from "../src/lib/task-map"
+import { valueRequest } from "../src/lib/values"
 import { subflowRequest, moveTaskToSubflow } from "../src/lib/subflow"
 import {
   addContainer,
@@ -15,6 +16,7 @@ import {
   matchPass,
   memberPassInputs,
   memberVariables,
+  passValue,
   syncContainerItems,
 } from "../src/lib/containers"
 import { syncPassOutputs } from "../src/lib/output-ports"
@@ -61,7 +63,7 @@ const files: Record<string, string[]> = {
 }
 
 /** File nodes outside a 각각 반복 holding proc; the loop's list is the science files. */
-function fixture(keywords: string[] = []) {
+function fixture(keywords: string[] = [], frames = rows) {
   let map = Object.keys(files).reduce((m, id, i) =>
     connect(addTask(m, { ...makeInstance(source, catalog, prefs, id), label: id, position: { x: 0, y: i * 120 } }), id, "files",
       { kind: "files", ids: files[id], label: "파일" }), emptyMap())
@@ -70,18 +72,18 @@ function fixture(keywords: string[] = []) {
   const id = map.subflows![0].id
   map = { ...map, subflows: map.subflows!.map((g) => ({ ...g, position: { x: 600, y: 40 }, width: 400, height: 280 })) }
   map = moveTaskToSubflow(map, catalog, "proc", id, { x: 640, y: 140 })
-  map = syncPassOutputs(map, catalog, rows)
-  map = connectFlow(map, catalog, rows, { source: "sci", sourceHandle: "output", target: id, targetHandle: "items" })
-  map = connectFlow(map, catalog, rows, { source: id, sourceHandle: "output:item", target: "proc", targetHandle: "images" })
+  map = syncPassOutputs(map, catalog, frames)
+  map = connectFlow(map, catalog, frames, { source: "sci", sourceHandle: "output", target: id, targetHandle: "items" })
+  map = connectFlow(map, catalog, frames, { source: id, sourceHandle: "output:item", target: "proc", targetHandle: "images" })
   for (const [from, role, outputRole] of [["bias", "zero", "image"], ["flats", "flat", "image"], ["darks", "dark", "image"],
     ["ref", "reference", "image"], ["coords", "coords", "text"]])
     map = connect(map, "proc", role, { kind: "pending", taskId: from, outputRole })
-  map = withKeywords(map, id, keywords)
+  map = withKeywords(map, id, keywords, frames)
   return { map, id }
 }
-const withKeywords = (map: TaskMap, id: string, keywords: string[]) => syncContainerItems(
+const withKeywords = (map: TaskMap, id: string, keywords: string[], frames = rows) => syncContainerItems(
   { ...map, tasks: map.tasks.map((t) => (t.id === id ? { ...t, draft: { ...t.draft, flow: { ...t.draft.flow, keywords } } } : t)) },
-  catalog, rows)
+  catalog, frames)
 const taskOf = (map: TaskMap, id: string) => map.tasks.find((t) => t.id === id)!
 
 test("passes are the value combinations of the chosen keywords, sorted naturally", () => {
@@ -246,4 +248,46 @@ test("outside files match by the keywords whose values the passes have, numbers 
   // Some values the passes have, some not: a pass without a file gets none.
   const byTime = [{ EXPTIME: "15" }, { EXPTIME: "30" }]
   expect(each(["Dark15i", "Dark60"], byTime)).toEqual([{ ids: ["Dark15i"], matched: true }, { ids: [], matched: true }])
+})
+
+test("whole number values read without decimals in pass names, value lists and output names", () => {
+  expect(["15.0", " 30.00 ", "15", "30.66011", "B", "", "1e2"].map(passValue)).toEqual(["15", "30", "15", "30.66011", "B", "", "100"])
+  // FITS headers give real numbers as 30.0; passes still group and match by that text.
+  const real = rows.map((r) => r.headers?.EXPTIME ? { ...r, headers: { ...r.headers, EXPTIME: r.headers.EXPTIME + ".0" } } : r)
+  const odd = image("b30c", { SUBSET: "B", EXPTIME: "30.66011", IMAGETYP: "object" })
+  const { map, id } = fixture(["SUBSET", "EXPTIME"], real)
+  const loop = taskOf(map, id)
+  const { passes } = flowPasses(map, catalog, loop, real)
+  expect(passes.map((p) => [p.name, p.values])).toEqual([["B 30", { SUBSET: "B", EXPTIME: "30.0" }], ["V 15", { SUBSET: "V", EXPTIME: "15.0" }]])
+  expect(flowKeywordChoices(map, catalog, loop, real).find((c) => c.keyword === "EXPTIME")!.values).toEqual(["15", "30"])
+  expect(groupPasses(["b30c"], new Map([[odd.id, odd]]), ["SUBSET", "EXPTIME"])[0].name).toBe("B 30.66011")
+  // `Dark{EXPTIME}.fits` reads 30, not 30.0.
+  const member = taskOf(map, "proc")
+  const loopValues = loopVariables(map, catalog, member, real)
+  expect(loopValues).toEqual([{ variable: "SUBSET", value: "B" }, { variable: "EXPTIME", value: "30" }])
+  expect(loopOutputNames({ ...member.draft, outputs: { output: "Dark{EXPTIME}.fits" } }, loopValues).outputs).toEqual({ output: "Dark30.fits" })
+  // The first pass's values stay the headers' text for value groups.
+  expect(member.firstPassValues).toEqual({ SUBSET: "B", EXPTIME: "30.0" })
+  // The V pass has no dark of its exposure.
+  let short = connect(map, "darks", "files", { kind: "files", ids: ["Dark30", "Dark60"], label: "파일" }, false)
+  short = syncContainerItems(syncPassOutputs(short, catalog, real), catalog, real)
+  expect(loopIssues(short, catalog, real)).toEqual([expect.objectContaining({ message: "V 15 회차에 맞는 dark가 없습니다." })])
+})
+
+test("a member run alone takes its loop's first pass for grouped values too", () => {
+  const value: Spec = { name: "giraf.value", title: "값", package: "giraf", adapter: "generic", run: "value-constant",
+    parameters: [], inputs: [], outputs: [], output: null, kind: "any" }
+  const fwhmpsf = { name: "fwhmpsf", type: "r", default: 1, choices: [], prompt: "", min: "", max: "" }
+  const valued: Catalog = { ...catalog, tasks: [source, { ...proc, parameters: [fwhmpsf] }, foreach, value] }
+  const made = fixture(["SUBSET", "EXPTIME"])
+  const id = made.id
+  let map = made.map
+  const node = makeInstance(value, valued, prefs, "fwhm")
+  map = addTask(map, { ...node, draft: { ...node.draft, partition: "SUBSET", valueRows: [{ name: "fwhmpsf", value: "", groups: { B: "3.38", V: "3.07" } }] } })
+  map = connect(map, "proc", "p:fwhmpsf", { kind: "pending", taskId: "fwhm", outputRole: "value:fwhmpsf" })
+  // The run button and the pinned rows read the B pass's value.
+  expect(valueRequest(map, valued).links).toEqual([expect.objectContaining({ target: "proc", parameter: "fwhmpsf", partition: { SUBSET: "B", EXPTIME: "30" } })])
+  // A run of the loop gives each pass its own (giraf/workflow.py iteration_values).
+  expect(workflowRequest(map, valued, "/work").values.links[0].partition).toBeUndefined()
+  expect(subflowRequest(map, valued, "/work", id).values.links[0].partition).toBeUndefined()
 })

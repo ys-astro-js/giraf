@@ -350,6 +350,30 @@ class LoopKeywordTests(unittest.TestCase):
              'zero': ['Zero.fits'], 'reference': ['Ref.fits'], 'coords': ['m67.coo']}])
         self.assertNotIn('warnings', state)
 
+    def test_whole_number_pass_values_read_without_decimals(self):
+        from giraf.flows import Items, iterations, loop_values, pass_name
+        from giraf.values import pass_value
+        self.assertEqual([pass_value(v) for v in ('15.0', ' 30.00 ', '15', '30.66011', 'B', '', '1e2')],
+                         ['15', '30', '15', '30.66011', 'B', '', '100'])
+        self.assertEqual(pass_name({'SUBSET': 'B', 'EXPTIME': '30.0'}), 'B 30')
+        self.assertEqual(pass_name({'SUBSET': '', 'EXPTIME': '30.66011'}), '없음 30.66011')
+        science = {'b30': {'SUBSET': 'B', 'EXPTIME': 30.0}, 'v15': {'SUBSET': 'V', 'EXPTIME': 15.0}}
+        flow = {'run': 'foreach', 'variable': 'SUBSET', 'keywords': ['SUBSET', 'EXPTIME']}
+        passes = iterations(flow, files(*science, headers=science), Items(lambda id: id), {})
+        # The pass keeps the header's text for grouping and matching.
+        self.assertEqual([p['partition'] for p in passes], [{'SUBSET': 'B', 'EXPTIME': '30.0'}, {'SUBSET': 'V', 'EXPTIME': '15.0'}])
+        self.assertEqual(loop_values(flow, passes[1], None), {'SUBSET': 'V', 'EXPTIME': '15'})
+        sources = {'object': files(*science, headers=science),
+                   'darks': files('Dark30.fits', 'Dark60.fits', headers={'Dark30.fits': {'EXPTIME': 30.0}, 'Dark60.fits': {'EXPTIME': 60.0}})}
+        graph = self.graph(['SUBSET', 'EXPTIME'], [link('darks', 'ccdproc', 'dark', multiple=False)], nodes=['darks'])
+        graph['nodes'][1]['payload']['outputs'] = {'output': 'Dark{EXPTIME}.fits'}
+        runner = Runner(sources)
+        state, _ = run(graph, runner)
+        self.assertEqual(state['state'], 'completed', state['message'])
+        self.assertEqual([p['outputs']['output'] for id, p in runner.calls if id == 'ccdproc'], ['Dark30.fits', 'Dark15.fits'])
+        self.assertEqual([p['inputs'].get('dark') for id, p in runner.calls if id == 'ccdproc'], [['Dark30.fits'], None])
+        self.assertEqual(state['warnings'], [{'nodeId': 'ccdproc', 'message': 'V 15 회차에 맞는 dark가 없습니다.'}])
+
     def test_darks_some_passes_lack_leave_those_passes_empty(self):
         science = {'s15': {'EXPTIME': '15'}, 's30': {'EXPTIME': '30'}}
         sources = {'object': files(*science, headers=science),

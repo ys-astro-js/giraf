@@ -25,7 +25,7 @@ import math
 from pathlib import Path
 import re
 
-from .values import _number, _scalar, evaluate_expression, expression_names
+from .values import _scalar, evaluate_expression, expression_names, pass_value, same_value
 
 FLOW_RUNS = ('foreach', 'for', 'if')
 INNER_PORTS = {'foreach': ('item',), 'for': (), 'if': ('then', 'else')}
@@ -144,13 +144,6 @@ class Items:
         return value.strip() if isinstance(value, str) else str(value)
 
 
-def same_value(a, b):
-    """Header values as the loop compares them: as numbers when both read as
-    one (15 is 15.0), otherwise as trimmed text."""
-    x, y = _number(a), _number(b)
-    return x == y if x is not None and y is not None else a.strip() == b.strip()
-
-
 def match_pass(products, values, files, passes):
     """(products, matched) a pass takes from a connection from outside its loop.
 
@@ -171,8 +164,9 @@ def match_pass(products, values, files, passes):
 
 
 def pass_name(values):
-    """How a pass is named to people: its values in keyword order, `B 30`."""
-    return ' '.join(value or '없음' for value in values.values())
+    """How a pass is named to people: its values in keyword order, `B 30`
+    (pass_value: a header's 30.0 reads 30)."""
+    return ' '.join(pass_value(value) if value.strip() else '없음' for value in values.values())
 
 
 def with_subject(word):
@@ -195,7 +189,8 @@ def loop_values(flow, iteration, files):
     variable = flow.get('variable')
     if 'number' in iteration:
         return {variable: str(iteration['number'])} if variable else {}
-    pairs = dict(iteration.get('partition') or {})
+    # Values as pass names show them: `Dark{EXPTIME}.fits` is Dark15.fits for 15.0.
+    pairs = {k: pass_value(v) for k, v in (iteration.get('partition') or {}).items()}
     if pairs:
         # An older document's variable reads its one keyword's value.
         if variable and variable not in pairs and len(pairs) == 1:

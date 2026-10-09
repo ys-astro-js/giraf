@@ -58,6 +58,24 @@ class ExpressionTests(unittest.TestCase):
         self.assertEqual(parameter_value(dict(values=[True]), None, 'b'), 'yes')
         self.assertEqual(parameter_value(dict(values=[3.0, 3.0]), None, 's'), '3')
 
+    def test_a_pass_value_finds_its_group_as_a_number(self):
+        # Groups keep the header's text; a pass of 15 and a typed group of 15.0 are one.
+        result = dict(kind='real', values=[1.0, 2.0], groups=dict(keyword='EXPTIME', values={'15.0': [1.0], '30': [2.0]}))
+        self.assertEqual(parameter_value(result, {'EXPTIME': '15'}, 'r'), 1.0)
+        self.assertEqual(parameter_value(result, {'EXPTIME': '30.00'}, 'r'), 2.0)
+        with self.assertRaisesRegex(ValueError, 'EXPTIME=60: '):
+            parameter_value(result, {'EXPTIME': '60.0'}, 'r')
+
+    def test_a_loop_member_run_alone_takes_its_first_pass_group(self):
+        # The editor stamps the loop's first pass on a member's value links (web/src/lib/values.ts).
+        request = dict(nodes=[dict(id='fwhm', run='value-constant', partition='SUBSET',
+                                   rows=[dict(name='fwhmpsf', value='', groups={'B': '3.38', 'V': '3.07'})])],
+                       links=[dict(id='l1', target='phot', parameter='datapars.fwhmpsf', type='r',
+                                   source=dict(node='fwhm', output='fwhmpsf'), partition={'SUBSET': 'B', 'EXPTIME': '30.0'})])
+        self.assertEqual(ValueGraph(request, lambda id: None, str).parameters('phot'), {'l1': {'value': 3.38}})
+        del request['links'][0]['partition']
+        self.assertIn('2개', ValueGraph(request, lambda id: None, str).parameters('phot')['l1']['error'])
+
 
 class GraphTests(unittest.TestCase):
     def setUp(self):
