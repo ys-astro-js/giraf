@@ -204,16 +204,21 @@ def rounds(flow, items, files):
     condition = (flow.get('condition') or '').strip()
     if condition:
         items = [item for item in items if holds(condition, item, files)]
-    groups = [({}, list(items))] if items or not splits(flow) else []
+    # Each round: its values, its items and how values read differently to people.
+    groups = [({}, list(items), {})] if items or not splits(flow) else []
     for criterion in flow.get('criteria') or []:
         name, refined = label_name(criterion), []
-        for values, members in groups:
+        for values, members, shown in groups:
             if 'times' in criterion:
-                refined += [({**values, name: str(n)}, members) for n in range(1, int(criterion['times']) + 1)]
+                refined += [({**values, name: str(n)}, members, shown) for n in range(1, int(criterion['times']) + 1)]
             elif 'count' in criterion:
                 ordered = sorted(members, key=_order_key(files, criterion.get('order') or 'name'))
                 size = int(criterion['count'])
-                refined += [({**values, name: str(k // size + 1)}, ordered[k:k + size]) for k in range(0, len(ordered), size)]
+                for k in range(0, len(ordered), size):
+                    end = min(k + size, len(ordered))
+                    # Named by the files it takes, `1–5`; its value stays the chunk number.
+                    refined.append(({**values, name: str(k // size + 1)}, ordered[k:end],
+                                    {**shown, name: f'{k + 1}–{end}' if end - k > 1 else str(end)}))
             else:
                 found = {}
                 for item in members:
@@ -227,19 +232,21 @@ def rounds(flow, items, files):
                     # 15 and 15.0 are one round, named as the first file has it.
                     key = next((k for k in found if same_value(k, value)), value)
                     found.setdefault(key, []).append(item)
-                refined += [({**values, name: value}, group) for value, group in found.items()]
+                refined += [({**values, name: value}, group, shown) for value, group in found.items()]
         groups = refined
         if len(groups) > MAX_ROUNDS:
             raise ValueError(f'반복은 {MAX_ROUNDS}회까지입니다. 지금은 {len(groups)}회입니다.')
     names = flow_labels(flow)
     groups.sort(key=lambda group: [natural(group[0][n]) for n in names])
-    return [dict(values=values, items=members) for values, members in groups]
+    return [dict(values=values, items=members, name=pass_name(values, shown)) for values, members, shown in groups]
 
 
-def pass_name(values):
+def pass_name(values, shown=None):
     """How a round is named to people: its values in criteria order, `B 30`
-    (pass_value: a header's 30.0 reads 30)."""
-    return ' '.join(pass_value(value) if str(value).strip() else '없음' for value in values.values())
+    (pass_value: a header's 30.0 reads 30); a chunk reads as its files, `15 1–5`."""
+    shown = shown or {}
+    return ' '.join(shown[name] if name in shown else pass_value(value) if str(value).strip() else '없음'
+                    for name, value in values.items())
 
 
 def _final(word):

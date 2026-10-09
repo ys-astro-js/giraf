@@ -162,7 +162,7 @@ def round_values(graph, ctx):
 
 
 def execute_workflow(graph, run, cancelled, report, resolve_file=None):
-    from .flows import (Items, flow_labels, loop_names, loop_values, matching, pass_name, receive_mode,
+    from .flows import (Items, flow_labels, loop_names, loop_values, matching, receive_mode,
                         rounds, unmatched_labels, with_object, with_subject, with_topic)
     from .values import apply_parameters
     graph = deepcopy(graph)
@@ -199,7 +199,7 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
             elif mode[0] == 'match':
                 products = matching(products, mode[1], current['values'], files)
                 if not products:
-                    warn(target, f"{pass_name(current['values'])} 회차에 맞는 {with_subject(link['role'])} 없습니다.")
+                    warn(target, f"{current['name']} 회차에 맞는 {with_subject(link['role'])} 없습니다.")
                     return None
             else:
                 source = labels.get(link.get('source')) or link['role']

@@ -199,6 +199,12 @@ class RoundTests(unittest.TestCase):
         self.assertEqual(self.names([{'times': 2}, {'keyword': 'FILTER'}])[1:3],
                          [({'회차': '1', 'FILTER': 'V'}, ['v15a', 'v15b', 'v30a']), ({'회차': '2', 'FILTER': 'B'}, ['b30a', 'b30b'])])
 
+    def test_chunks_are_named_by_their_files(self):
+        flow = dict(criteria=[{'keyword': 'FILTER'}, {'count': 2, 'order': 'EXPTIME'}], split={'taskId': 'x'})
+        self.assertEqual([step['name'] for step in rounds(flow, self.items, Items(str))], ['B 1–2', 'V 1–2', 'V 3'])
+        flow = dict(criteria=[{'count': 2}], split={'taskId': 'x'})
+        self.assertEqual([step['name'] for step in rounds(flow, self.items, Items(str))], ['1–2', '3–4', '5'])
+
     def test_condition_keeps_matching_files_in_one_round(self):
         self.assertEqual(self.names([], condition='EXPTIME > 20'), [({}, ['b30a', 'b30b', 'v30a'])])
         self.assertEqual(self.names([], condition='!(EXPTIME > 20)'), [({}, ['v15a', 'v15b'])])

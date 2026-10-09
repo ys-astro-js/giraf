@@ -244,12 +244,14 @@ export function roundsOf(ids: string[], frames: Map<string, Frame>, settings: Fl
       evaluated.set(`${k}:${id}`, expressionText(value))
     }
   }
-  let groups: [Record<string, string>, string[]][] = ids.length || !splitsFiles(settings) ? [[{}, ids]] : []
+  // Each round: its values, its files and how values read differently to people.
+  type Group = [Record<string, string>, string[], Record<string, string>]
+  let groups: Group[] = ids.length || !splitsFiles(settings) ? [[{}, ids, {}]] : []
   for (const [k, criterion] of criteria.entries()) {
     const name = labelName(criterion)
-    groups = groups.flatMap(([values, members]) => {
+    groups = groups.flatMap(([values, members, shown]): Group[] => {
       if ("times" in criterion)
-        return Array.from({ length: Math.max(0, Math.floor(criterion.times)) }, (_, k) => [{ ...values, [name]: String(k + 1) }, members] as [Record<string, string>, string[]])
+        return Array.from({ length: Math.max(0, Math.floor(criterion.times)) }, (_, k) => [{ ...values, [name]: String(k + 1) }, members, shown])
       if ("count" in criterion) {
         const order = criterion.order || "name"
         const key = (id: string) => (order === "name" ? labelOf(frames, id) : frameValue(frames.get(id), order))
@@ -258,8 +260,12 @@ export function roundsOf(ids: string[], frames: Map<string, Frame>, settings: Fl
           return x !== undefined && y !== undefined ? x - y : compareText(key(a), key(b))
         })
         const size = Math.max(1, Math.floor(criterion.count))
-        const chunks: [Record<string, string>, string[]][] = []
-        for (let k = 0; k < sorted.length; k += size) chunks.push([{ ...values, [name]: String(k / size + 1) }, sorted.slice(k, k + size)])
+        const chunks: Group[] = []
+        for (let k = 0; k < sorted.length; k += size) {
+          const end = Math.min(k + size, sorted.length)
+          // Named by the files it takes, `1–5`; its value stays the chunk number.
+          chunks.push([{ ...values, [name]: String(k / size + 1) }, sorted.slice(k, end), { ...shown, [name]: end - k > 1 ? `${k + 1}–${end}` : String(end) }])
+        }
         return chunks
       }
       const found: [string, string[]][] = []
@@ -272,7 +278,7 @@ export function roundsOf(ids: string[], frames: Map<string, Frame>, settings: Fl
         if (group) group[1].push(id)
         else found.push([value, [id]])
       }
-      return found.map(([value, group]) => [{ ...values, [name]: value }, group] as [Record<string, string>, string[]])
+      return found.map(([value, group]) => [{ ...values, [name]: value }, group, shown])
     })
   }
   const names = criteria.map(labelName)
@@ -284,11 +290,11 @@ export function roundsOf(ids: string[], frames: Map<string, Frame>, settings: Fl
       }
       return 0
     })
-    .map(([values, members]) => ({ name: roundName(values), values, ids: members }))
+    .map(([values, members, shown]) => ({ name: roundName(values, shown), values, ids: members }))
 }
-/** How a round is named to people: its values in criteria order, `B 30`. */
-export const roundName = (values: Record<string, string>) =>
-  Object.values(values).map((v) => (v.trim() ? passValue(v) : "없음")).join(" ")
+/** How a round is named to people: its values in criteria order, `B 30`; a chunk reads as its files, `15 1–5`. */
+export const roundName = (values: Record<string, string>, shown: Record<string, string> = {}) =>
+  Object.entries(values).map(([name, v]) => shown[name] ?? (v.trim() ? passValue(v) : "없음")).join(" ")
 
 /** A round's files in a few words: `Zero.fits` for one file, `5장` for images, `파일 3개` otherwise. */
 export function passFilesText(ids: string[], frames: Map<string, Frame>, nameOne = true): string {
@@ -418,10 +424,14 @@ export function splitChoices(map: TaskMap, task: Instance): { taskId: string; ou
 
 /** Names regions had before they were named for beginners. */
 const OLD_NAMES = new Set(["foreach", "for", "if", "각각 반복"])
+/** Whether the region has a name of its own, not the node's or an old default. */
+const isNamed = (spec: Spec | undefined, task: Instance) => {
+  const name = task.label.trim()
+  return !!name && !OLD_NAMES.has(name) && name !== task.task && name !== spec?.taskName && name !== spec?.title
+}
 /** The region's name: its task's label, which the inspector and the group editor both edit, or the node's own. */
 export function containerName(spec: Spec | undefined, task: Instance): string {
-  const name = task.label.trim()
-  return name && !OLD_NAMES.has(name) && name !== task.task ? name : spec?.taskName || spec?.title || task.label
+  return isNamed(spec, task) ? task.label.trim() : spec?.taskName || spec?.title || task.label
 }
 export const containerLabel = (_map: TaskMap, catalog: Catalog, task: Instance): string =>
   containerName(specOf(catalog, task), task)
@@ -456,6 +466,18 @@ export function flowStatement(_map: TaskMap, catalog: Catalog, task: Instance): 
   return parts.join(" ") || "무엇마다 반복할지 정해 주세요"
 }
 
+/**
+ * The region heading: a named region shows its name and, beside it, what it
+ * repeats by; an unnamed one is titled by what it repeats by (`EXPTIME마다`).
+ */
+export function flowHeading(map: TaskMap, catalog: Catalog, task: Instance): { title: string; statement?: string } {
+  const title = containerLabel(map, catalog, task)
+  const statement = flowStatement(map, catalog, task)
+  const settings = flowSettings(task)
+  const set = !!settings.criteria?.length || !!settings.condition?.trim()
+  return isNamed(specOf(catalog, task), task) || !set ? { title, statement } : { title: statement }
+}
+
 export type FlowPort = {
   handleId: string
   type: "source" | "target"
@@ -482,7 +504,8 @@ export function flowPorts(map: TaskMap, catalog: Catalog, group: Subflow): { por
 export function flowBoundary(map: TaskMap, catalog: Catalog, task: Instance) {
   // The heading keeps name and statement readable beside its controls, within
   // a group card's width range: about 14px a Hangul syllable, 8px other text.
-  const heading = [...`${containerLabel(map, catalog, task)} ${flowStatement(map, catalog, task)}`]
+  const { title, statement } = flowHeading(map, catalog, task)
+  const heading = [...(statement ? `${title} ${statement}` : title)]
     .reduce((sum, c) => sum + (/[ㄱ-힝]/.test(c) ? 14 : 8), 0)
   const width = Math.min(480, Math.max(320, 232 + heading))
   return { inputs: [], outputs: [], width }

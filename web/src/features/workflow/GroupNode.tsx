@@ -79,7 +79,7 @@ export const GroupNode = memo(function GroupNode({
         <GripVertical aria-hidden="true" />
         {flow && <NodeIcon icon={flow.icon} />}
         <strong title={name}>{name}</strong>
-        {flow && <span className="flow-statement" title={flow.statement}>{flow.statement}</span>}
+        {flow?.statement && <span className="flow-statement" title={flow.statement}>{flow.statement}</span>}
         <span
           className="node-state"
           data-severity={status.severity}

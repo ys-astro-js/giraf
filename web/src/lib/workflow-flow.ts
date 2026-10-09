@@ -26,7 +26,7 @@ import {
   flowBoundary,
   flowPorts,
   flowRun,
-  flowStatement,
+  flowHeading,
   crossedRegions,
   flowLabels,
   receiveMode,
@@ -34,7 +34,6 @@ import {
   isContainerId,
   type FlowPort,
   type FlowRun,
-  containerLabel,
 } from "./containers"
 import { connectValue, isValueSource, parameterEntries, valueOutputs, PARAM_HANDLE, PSET_INPUT, PSET_OUTPUT, VALUE_HANDLE } from "./values"
 
@@ -58,7 +57,8 @@ export type TaskFlowNode = Node<
 /** Where an edge crosses into a region: its chip's text and menu (components/workflow-edge). */
 export type EdgeCrossing = { region: string; text: string; mode: "split" | "all" | "match"; keys: string[]; labels: string[]; value: boolean }
 /** A loop region drawn on its group (lib/containers). */
-export type FlowView = { run: FlowRun; icon?: string; label: string; statement: string; ports: FlowPort[] }
+export type FlowView = { run: FlowRun; icon?: string; label: string; statement?: string; ports: FlowPort[] }
+const headingView = ({ title, statement }: { title: string; statement?: string }) => ({ label: title, ...(statement ? { statement } : {}) })
 export type SubflowNode = Node<
   { group: Subflow; count: number; minWidth: number; minHeight: number; flow?: FlowView },
   "subflow"
@@ -164,8 +164,7 @@ export function flowNodes(
       ? {
           run,
           icon: catalog.tasks.find((s) => s.name === container.task)?.icon,
-          label: containerLabel(map, catalog, container),
-          statement: flowStatement(map, catalog, container),
+          ...headingView(flowHeading(map, catalog, container)),
         }
       : undefined
     const name = flow?.label ?? group.name

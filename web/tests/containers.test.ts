@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from "bun:test"
 import { emptyMap, makeInstance, addTask, connect, removeTask, duplicateTask, restoreTask, workflowRequest, workflowDiagnosticRequest, migrateMap, payloadFor } from "../src/lib/task-map"
 import { setSubflowCollapsed, autoLayoutMap, moveTaskToSubflow, moveGroupToGroup, saveSubflow, updateSubflow, dissolveSubflow } from "../src/lib/subflow"
 import {
-  addContainer, containerLabel, flowPorts, flowProgress, flowStatement, setGroupRun, syncContainerItems, loopOutputNames,
+  addContainer, containerLabel, flowHeading, flowPorts, flowProgress, flowStatement, setGroupRun, syncContainerItems, loopOutputNames,
   loopVariables, memberPassInputs, loopIssues, receiveMode, regionRounds, roundsOf, setReceiveMode, type Criterion,
   chooseReceive, receiveText, WIDENED_MESSAGE,
 } from "../src/lib/containers"
@@ -109,6 +109,22 @@ test("the heading says what it repeats by", () => {
   expect(say({ criteria: [{ keyword: "FILTER" }], condition: "EXPTIME > 30" })).toBe("FILTER마다 EXPTIME > 30만")
 })
 
+test("an unnamed region is titled by what it repeats by; a named one keeps its name", () => {
+  const { map, id } = fixture()
+  const heading = (label: string, flow: Parameters<typeof setFlow>[2]) => {
+    const next = setFlow({ ...map, tasks: map.tasks.map((t) => (t.id === id ? { ...t, label } : t)) }, id, flow)
+    return flowHeading(next, catalog, next.tasks.find((t) => t.id === id)!)
+  }
+  const unnamed = map.tasks.find((t) => t.id === id)!.label
+  expect(heading(unnamed, { criteria: [{ keyword: "EXPTIME" }] })).toEqual({ title: "EXPTIME마다" })
+  expect(heading(unnamed, { criteria: [{ count: 5, order: "name" }], condition: "EXPTIME > 30" })).toEqual({ title: "5장씩 EXPTIME > 30만" })
+  expect(heading(unnamed, { criteria: [] })).toEqual({ title: containerLabel(map, catalog, map.tasks.find((t) => t.id === id)!), statement: "무엇마다 반복할지 정해 주세요" })
+  expect(heading("다크", { criteria: [{ times: 3 }] })).toEqual({ title: "다크", statement: "3번" })
+  const node = flowNodes(setFlow(map, id, { criteria: [{ keyword: "FILTER" }, { keyword: "EXPTIME" }] }), catalog).find((n) => n.id === id)!
+  expect((node.data as { flow: { label: string; statement?: string } }).flow).toMatchObject({ label: "FILTER, EXPTIME마다" })
+  expect((node.data as { flow: { statement?: string } }).flow.statement).toBeUndefined()
+})
+
 test("connections go straight to inner tasks; a region has nothing to connect to", () => {
   const made = fixture()
   const id = made.id
@@ -137,7 +153,11 @@ test("rounds divide by keywords, chunks, files and times, sorted naturally", () 
   expect(names([{ keyword: "FILTER" }, { keyword: "EXPTIME" }])).toEqual([
     ["B 30", ["b30a", "b30b"]], ["V 15", ["v15a", "v15b"]], ["V 30", ["v30"]],
   ])
-  expect(names([{ count: 2, order: "name" }])).toEqual([["1", ["b30a", "b30b"]], ["2", ["v15a", "v15b"]], ["3", ["v30"]]])
+  expect(names([{ count: 2, order: "name" }])).toEqual([["1–2", ["b30a", "b30b"]], ["3–4", ["v15a", "v15b"]], ["5", ["v30"]]])
+  // A chunk is named by its files; its value stays the chunk number.
+  expect(roundsOf(ids, frames, { criteria: [{ keyword: "FILTER" }, { count: 2, order: "name" }] })!.map((r) => [r.name, r.values])).toEqual([
+    ["B 1–2", { FILTER: "B", 묶음: "1" }], ["V 1–2", { FILTER: "V", 묶음: "1" }], ["V 3", { FILTER: "V", 묶음: "2" }],
+  ])
   expect(names([{ each: true }])[0]).toEqual(["b30a", ["b30a"]])
   expect(roundsOf([], frames, { criteria: [{ times: 2 }] })!.map((r) => r.values)).toEqual([{ 회차: "1" }, { 회차: "2" }])
   // Expressions and conditions read the headers the files here hold; others wait for the run.
