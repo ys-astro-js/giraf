@@ -273,6 +273,27 @@ class ReceiveTests(unittest.TestCase):
         diagnose_flows(graph['flows'], connections, lambda *a: issues.append(a), {'average': graph['nodes'][1]})
         self.assertEqual(issues, [])
 
+    def test_inside_a_region_one_task_gives_the_next_its_round_only(self):
+        """psf -> allstar inside one region: each round's one file, labelled with the round."""
+        graph = {
+            'nodes': [task('science'), task('psf'), task('allstar')],
+            'flows': [region('loop', [{'keyword': 'FILTER'}], 'science', ['psf', 'allstar'])],
+            'links': [link('science', 'psf', 'images'), link('science', 'allstar', 'images'),
+                      dict(link('psf', 'allstar', 'psfimage', multiple=False), id='c1')],
+        }
+        runner = Runner({'science': files(*SCIENCE, headers=SCIENCE)}, combine=['psf'])
+        state, _ = run(graph, runner)
+        self.assertEqual(state['state'], 'completed', state['message'])
+        self.assertEqual(runner.inputs('allstar', 'psfimage'), [['psf[b30a]'], ['psf[v15a]']])
+        made = [(job['instanceId'], [(p['id'], p['labels']) for p in job['products']]) for job in state['jobs'] if job['instanceId'] == 'psf']
+        self.assertEqual(made, [('psf', [('psf[b30a]', {'FILTER': 'B'})]), ('psf', [('psf[v15a]', {'FILTER': 'V'})])])
+        self.assertNotIn('warnings', state)
+        # Nothing to warn about before the run: the connection stays inside the region.
+        issues = []
+        connections = [{'id': 'c1', 'source': {'kind': 'pending', 'taskId': 'psf'}, 'target': 'allstar', 'role': 'psfimage'}]
+        diagnose_flows(graph['flows'], connections, lambda *a: issues.append(a), {n['id']: n for n in graph['nodes']})
+        self.assertEqual(issues, [])
+
     def fits_files(self, headers):
         """FITS files for ids the editor resolves; returns their resolver."""
         import tempfile

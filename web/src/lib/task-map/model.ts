@@ -60,7 +60,7 @@ export type Instance = {
   pinned?: string[]
   /** Derived: the files each pass output carries now (syncPassOutputs). */
   passed?: Record<string, string[]>
-  /** Derived: inside loop regions, the files their first rounds take from each connection crossing into them, by connection id (syncContainerItems). */
+  /** Derived: inside loop regions, the files their first rounds take from each connection crossing into them or from a task inside them that ran, by connection id (syncContainerItems). */
   firstRound?: Record<string, string[]>
   /** Derived: inside loop regions, their first rounds' values by label, which a run of this member alone takes (syncContainerItems). */
   roundValues?: Record<string, string>

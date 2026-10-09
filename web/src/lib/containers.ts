@@ -699,9 +699,31 @@ export function loopIssues(map: TaskMap, catalog: Catalog, rows: Frame[]): LoopI
 }
 
 /**
+ * What a source inside the same regions made in their first rounds: the
+ * results of its latest run labelled with those rounds (giraf/workflow.py
+ * run_task), or undefined when no run made any.
+ */
+function roundResults(map: TaskMap, connection: Connection, shared: Context): string[] | undefined {
+  const from = connection.source.kind !== "files" ? connection.source.taskId : undefined
+  const values = shared.flatMap(({ round }) => Object.entries(round.values))
+  const products = new Map(map.runs.flatMap((r) => r.products).map((p) => [p.id, p]))
+  const inRound = (id: string) => {
+    const labels = products.get(id)?.labels
+    return !!labels && values.every(([name, value]) => labels[name] !== undefined && sameValue(String(labels[name]), value))
+  }
+  for (const run of map.runs.filter((r) => r.instanceId === from && r.state === "completed").reverse()) {
+    const source = resolvedSource({ ...map, runs: [run] }, connection.source)
+    const ids = source.kind === "pending" ? [] : source.ids.filter(inRound)
+    if (ids.length) return ids
+  }
+  return undefined
+}
+
+/**
  * A member run on its own takes the first round of each region around it:
  * `firstRound` holds the files that round takes from each connection crossing
- * into it, and `roundValues` its values, which the member's value links take
+ * into it, and from a task inside it once a run made that round's results,
+ * and `roundValues` its values, which the member's value links take
  * (lib/values valueRequest).
  */
 export function syncContainerItems(map: TaskMap, catalog: Catalog | null, rows: Frame[]): TaskMap {
@@ -719,7 +741,11 @@ export function syncContainerItems(map: TaskMap, catalog: Catalog | null, rows: 
       for (const c of map.connections) {
         if (c.target !== task.id || isValueRole(c.role)) continue
         const from = c.source.kind !== "files" ? c.source.taskId : undefined
-        if (from && regions.some((r) => insideRegion(map, from, r.id))) continue
+        if (from && regions.some((r) => insideRegion(map, from, r.id))) {
+          const made = roundResults(map, c, context.filter(({ region }) => insideRegion(map, from, region.id)))
+          if (made) firstRound[c.id] = made
+          continue
+        }
         const source = resolvedSource(map, c.source)
         if (source.kind === "pending") continue
         firstRound[c.id] = through(map, c, source.ids, context, frames).ids

@@ -548,3 +548,36 @@ test("older documents mark connections that took one value of a port", () => {
   const loaded = migrateMap({ ...prefs, taskMap: map }, catalog)
   expect(loaded.connections.map((c) => [c.id, c.widened])).toEqual([["p", true], ["g", true], ["x", undefined]])
 })
+
+test("inside a region, a task's results reach the next task one round at a time", () => {
+  const one: Spec = { ...task("one"), inputs: [{ name: "images", label: "영상", kind: "image", multiple: true }, { name: "flat", label: "flat", kind: "image", multiple: false }] }
+  const local: Catalog = { ...catalog, tasks: [...catalog.tasks, one] }
+  let map = addTask(emptyMap(), { ...makeInstance(spec("ccdproc2"), catalog, prefs, "science"), label: "science" })
+  map = addTask(map, { ...makeInstance(spec("ccdproc2"), catalog, prefs, "psf"), label: "psf" })
+  map = addTask(map, { ...makeInstance(one, local, prefs, "allstar"), label: "allstar" })
+  map = setGroupRun({ ...map, subflows: [{ id: "loop", name: "반복", position: { x: 0, y: 0 }, width: 400, height: 240 }] }, local, prefs, "loop", "foreach")
+  map = { ...map, tasks: map.tasks.map((t) => (t.id === "psf" || t.id === "allstar" ? { ...t, subflowId: "loop" } : t)) }
+  map = setFlow(map, "loop", { criteria: [{ keyword: "FILTER" }], split: { taskId: "science" } })
+  map = connect(map, "psf", "images", { kind: "pending", taskId: "science" })
+  map = connect(map, "allstar", "images", { kind: "pending", taskId: "science" })
+  map = connect(map, "allstar", "flat", { kind: "pending", taskId: "psf" })
+  map = ran(map, "science", [frame("b", { FILTER: "B" }), frame("v", { FILTER: "V" })])
+  const into = map.connections.find((c) => c.target === "allstar" && c.role === "flat")!
+  const checked = (m: TaskMap) => workflowDiagnosticRequest(syncContainerItems(m, local, []), local, "/work").nodes.find((n) => n.id === "allstar")!.payload.inputs
+  // Before psf runs, the check waits for it; the run takes each round's one file.
+  expect(checked(map).flat).toEqual([])
+  expect(workflowRequest(map, local, "/work").links.find((l) => l.role === "flat")).toMatchObject({ source: "psf", target: "allstar", multiple: false })
+  // A run gives each round its own result, labelled with the round: the check reads the first round's.
+  const made = (id: string, filter: string) => frame(id, {}, { labels: { FILTER: filter } })
+  const rounds = { ...map, runs: [...map.runs,
+    { id: "psf-B", instanceId: "psf", state: "completed", products: [made("psfB", "B")] },
+    { id: "psf-V", instanceId: "psf", state: "completed", products: [made("psfV", "V")] }] }
+  expect(checked(rounds)).toMatchObject({ images: ["b"], flat: ["psfB"] })
+  expect(syncContainerItems(rounds, local, []).tasks.find((t) => t.id === "allstar")!.firstRound![into.id]).toEqual(["psfB"])
+  expect(payloadFor(syncContainerItems(rounds, local, []), "allstar", local).inputs.flat).toEqual(["psfB"])
+  // Every round's results in one run still give the first round one file.
+  const together = ran(map, "psf", [made("psfB", "B"), made("psfV", "V")])
+  expect(checked(together).flat).toEqual(["psfB"])
+  // The run itself carries no first round: the server gives each round its own.
+  expect(workflowRequest(syncContainerItems(rounds, local, []), local, "/work").nodes.find((n) => n.id === "allstar")!.payload.inputs.flat).toEqual([])
+})
