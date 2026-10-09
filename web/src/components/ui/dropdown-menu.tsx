@@ -1,11 +1,12 @@
 import { Menu } from "@base-ui/react/menu"
 import { cn } from "cn"
-import { Check } from "lucide-react"
+import { Check, ChevronRight } from "lucide-react"
 
 const DropdownMenu = Menu.Root
 const DropdownMenuTrigger = Menu.Trigger
 const DropdownMenuGroup = Menu.Group
 const DropdownMenuRadioGroup = Menu.RadioGroup
+const DropdownMenuSub = Menu.SubmenuRoot
 
 function DropdownMenuLabel({ className, ...props }: Menu.GroupLabel.Props) {
   return <Menu.GroupLabel className={cn("px-3 py-1.5 text-xs font-medium text-muted-foreground", className)} {...props} />
@@ -41,4 +42,11 @@ function DropdownMenuItem({ className, variant = "default", ...props }: Menu.Ite
   return <Menu.Item data-variant={variant} className={cn("flex cursor-default items-center gap-2 rounded-lg px-3 py-2 text-sm outline-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0", variant === "destructive" ? "text-destructive data-highlighted:bg-destructive/10" : "data-highlighted:bg-accent data-highlighted:text-accent-foreground", className)} {...props} />
 }
 
-export { DropdownMenu, DropdownMenuTrigger, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuCheckboxItem }
+function DropdownMenuSubTrigger({ className, children, ...props }: Menu.SubmenuTrigger.Props) {
+  return <Menu.SubmenuTrigger className={cn("flex cursor-default items-center gap-2 rounded-lg px-3 py-2 text-sm outline-none data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-accent data-highlighted:text-accent-foreground data-popup-open:bg-accent [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0", className)} {...props}>
+    {children}
+    <ChevronRight className="ml-auto" />
+  </Menu.SubmenuTrigger>
+}
+
+export { DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenu, DropdownMenuTrigger, DropdownMenuGroup, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuCheckboxItem }

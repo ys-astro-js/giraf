@@ -140,28 +140,6 @@
   gap: 4px;
   min-width: 0;
 }
-/* A loop region: the keywords it runs by, each with its values. */
-.keyword-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.keyword-list [data-slot="field-label"] {
-  display: flex;
-  gap: 12px;
-  min-width: 0;
-}
-.keyword-list .keyword-name {
-  min-width: 76px;
-}
-.keyword-values {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 400;
-  color: var(--muted-foreground);
-}
 /* A pass and what it holds, names in one column across the rows. */
 .pass-files {
   display: grid;
@@ -312,5 +290,66 @@
 .value-expert-toggle {
   align-self: flex-start;
   padding-left: 8px;
+  color: var(--muted-foreground);
+}
+/* A loop region's criteria: kind, its fields, and a remove button; a keyword's values below. */
+.criteria-rows {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.criteria-rows li {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  row-gap: 4px;
+}
+.criterion-kind {
+  color: var(--muted-foreground);
+}
+.criterion-fields {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+.criterion-fields > * {
+  min-width: 0;
+}
+.criterion-number {
+  width: 64px;
+  flex: none;
+}
+.criterion-name {
+  width: 96px;
+  flex: none;
+}
+.criterion-values {
+  grid-column: 2 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+.criterion-values:empty {
+  display: none;
+}
+.criteria-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.criterion-menu-values {
+  margin-left: auto;
+  padding-left: 16px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--muted-foreground);
 }

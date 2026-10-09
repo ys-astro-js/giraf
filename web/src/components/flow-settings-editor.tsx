@@ -1,6 +1,18 @@
+import { useState } from "react"
+import { Plus, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Choice } from "@/components/workbench-controls"
 import type { Instance, TaskMap } from "@/lib/task-map"
 import type { Catalog, Frame, Spec } from "@/lib/workbench"
@@ -12,8 +24,10 @@ import {
   passFilesText,
   regionRounds,
   splitChoices,
+  splitFiles,
   type Criterion,
   type FlowSettings,
+  type KeywordChoice,
 } from "@/lib/containers"
 
 const NO_SPLIT = "$none"
@@ -24,10 +38,37 @@ const whole = (text: string) => {
   const value = Number(text)
   return text.trim() && Number.isInteger(value) && value >= 1 ? value : undefined
 }
+const KIND: Record<string, string> = { keyword: "헤더 키워드", expression: "식", count: "N장씩", each: "파일마다", times: "N번" }
+const kindOf = (c: Criterion) => ("keyword" in c ? "keyword" : "expression" in c ? "expression" : "count" in c ? "count" : "each" in c ? "each" : "times")
+
+/** A whole number of 1 or more; other text waits while typed and goes back when left. */
+function WholeInput({ id, label, value, onChange }: { id: string; label: string; value: number; onChange: (n: number) => void }) {
+  const [text, setText] = useState<string>()
+  return (
+    <Input
+      id={id}
+      aria-label={label}
+      className="criterion-number"
+      inputMode="numeric"
+      value={text ?? String(value)}
+      onChange={(e) => {
+        setText(e.target.value)
+        const n = whole(e.target.value)
+        if (n) onChange(n)
+      }}
+      onBlur={() => setText(undefined)}
+    />
+  )
+}
+
+/** `15 10장, 30 10장`: a keyword's values with how many split files have each. */
+const valuesText = (choice: KeywordChoice | undefined) =>
+  choice?.values.map((v, i) => `${v} ${choice.counts[i]}장`).join(", ") ?? ""
 
 /**
- * What a loop region repeats by: its split files, its criteria and its
- * condition, with the rounds they make.
+ * What a loop region repeats by (docs/node-structure-brief.md §3.5): the
+ * files it divides, its criteria as rows, its condition, and the rounds they
+ * make.
  */
 export function FlowSettingsEditor({
   spec,
@@ -49,24 +90,28 @@ export function FlowSettingsEditor({
   const criteria = criteriaOf(task)
   const change = (patch: FlowSettings) =>
     edit((t) => ({ ...t, draft: { ...t.draft, flow: { ...t.draft.flow, ...patch } } }))
-  /** Replace the criteria of one kind, keeping the others in their order. */
-  const setKind = (is: (c: Criterion) => boolean, next: Criterion[]) => {
-    const at = criteria.findIndex(is)
-    const rest = criteria.filter((c) => !is(c))
-    change({ criteria: at < 0 ? [...rest, ...next] : [...rest.slice(0, at), ...next, ...rest.slice(at)] })
-  }
+  const setCriteria = (next: Criterion[]) => change({ criteria: next })
+  const replace = (at: number, next: Criterion) => setCriteria(criteria.map((c, i) => (i === at ? next : c)))
+  const add = (next: Criterion) => setCriteria([...criteria, next])
   const choices = flowKeywordChoices(map, catalog, task, rows)
   const chosen = criteria.flatMap((c) => ("keyword" in c ? [c.keyword] : []))
-  // Keywords keep the list's order, so rounds read the same way every time.
-  const toggle = (keyword: string, on: boolean) =>
-    setKind((c) => "keyword" in c, choices.map((c) => c.keyword)
-      .filter((k) => (k === keyword ? on : chosen.includes(k))).map((k) => ({ keyword: k })))
-  const count = criteria.find((c): c is Extract<Criterion, { count: number }> => "count" in c)
-  const times = criteria.find((c): c is Extract<Criterion, { times: number }> => "times" in c)
-  const each = criteria.some((c) => "each" in c)
+  const shown = choices.filter((c) => !c.folded)
+  const folded = choices.filter((c) => c.folded)
   const sources = splitChoices(map, task)
+  const { waiting: splitWaiting } = splitFiles(map, task)
   const { rounds, waiting } = regionRounds(map, task, rows)
   const frames = loopFrames(map, rows)
+  const keywordItem = (choice: KeywordChoice) => (
+    <DropdownMenuItem
+      key={choice.keyword}
+      disabled={chosen.includes(choice.keyword)}
+      title={choice.same.length ? choice.same.join(", ") : undefined}
+      onClick={() => add({ keyword: choice.keyword })}
+    >
+      <span className="font-mono">{choice.keyword}</span>
+      <span className="criterion-menu-values">{choice.values.join(", ")}</span>
+    </DropdownMenuItem>
+  )
   return (
     <section className="inspector-section" aria-label="무엇마다">
       <h3>무엇마다</h3>
@@ -87,72 +132,120 @@ export function FlowSettingsEditor({
             }}
           />
         </Field>
-        {choices.length ? (
-          <div className="keyword-list" role="group" aria-label="헤더 키워드">
-            {choices.map(({ keyword, values }) => (
-              <Field key={keyword} orientation="horizontal">
-                <Checkbox
-                  id={`loop-keyword-${keyword}`}
-                  checked={chosen.includes(keyword)}
-                  onCheckedChange={(on) => toggle(keyword, on)}
-                />
-                <FieldLabel htmlFor={`loop-keyword-${keyword}`}>
-                  <span className="keyword-name font-mono">{keyword}</span>
-                  <span className="keyword-values">{values.join(", ")}</span>
-                </FieldLabel>
-              </Field>
-            ))}
-          </div>
-        ) : (
-          <p className="text-muted-foreground">{waiting ? "실행하면 정해집니다" : "고를 헤더 키워드가 없습니다"}</p>
+        {!!criteria.length && (
+          <ul className="criteria-rows" aria-label="기준">
+            {criteria.map((criterion, at) => {
+              const kind = kindOf(criterion)
+              const id = `flow-criterion-${at}`
+              return (
+                <li key={at}>
+                  <span className="criterion-kind">{KIND[kind]}</span>
+                  <span className="criterion-fields">
+                    {"keyword" in criterion && (
+                      <Input
+                        id={id}
+                        aria-label={`${at + 1}번째 기준 헤더 키워드`}
+                        className="font-mono"
+                        value={criterion.keyword}
+                        onChange={(e) => replace(at, { keyword: e.target.value.trim().toUpperCase() })}
+                      />
+                    )}
+                    {"expression" in criterion && (
+                      <>
+                        <Input
+                          id={id}
+                          aria-label={`${at + 1}번째 기준 식`}
+                          className="font-mono"
+                          value={criterion.expression}
+                          onChange={(e) => replace(at, { expression: e.target.value, name: criterion.name })}
+                        />
+                        <Input
+                          aria-label={`${at + 1}번째 기준 이름`}
+                          className="criterion-name"
+                          value={criterion.name}
+                          placeholder="이름"
+                          onChange={(e) => replace(at, { expression: criterion.expression, name: e.target.value.trim() })}
+                        />
+                      </>
+                    )}
+                    {"count" in criterion && (
+                      <>
+                        <WholeInput
+                          id={id}
+                          label={`${at + 1}번째 기준 장수`}
+                          value={criterion.count}
+                          onChange={(n) => replace(at, { count: n, order: criterion.order })}
+                        />
+                        <Choice
+                          id={`${id}-order`}
+                          label={`${at + 1}번째 기준 순서`}
+                          value={criterion.order || BY_NAME}
+                          options={[
+                            { value: BY_NAME, label: "파일 이름 순" },
+                            ...choices.map((c) => ({ value: c.keyword, label: `${c.keyword} 순` })),
+                          ]}
+                          onChange={(order) => replace(at, { count: criterion.count, order })}
+                        />
+                      </>
+                    )}
+                    {"times" in criterion && (
+                      <WholeInput
+                        id={id}
+                        label={`${at + 1}번째 기준 횟수`}
+                        value={criterion.times}
+                        onChange={(n) => replace(at, { times: Math.min(n, 1000) })}
+                      />
+                    )}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`${at + 1}번째 기준 빼기`}
+                    title="빼기"
+                    onClick={() => setCriteria(criteria.filter((_, i) => i !== at))}
+                  >
+                    <X />
+                  </Button>
+                  {"keyword" in criterion && (
+                    <span className="criterion-values">{valuesText(choices.find((c) => c.keyword === criterion.keyword))}</span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
         )}
-        <Field orientation="horizontal">
-          <Checkbox
-            id="flow-each"
-            checked={each}
-            onCheckedChange={(on) => setKind((c) => "each" in c, on ? [{ each: true }] : [])}
-          />
-          <FieldLabel htmlFor="flow-each">파일마다</FieldLabel>
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="flow-count">몇 장씩</FieldLabel>
-          <Input
-            id="flow-count"
-            inputMode="numeric"
-            value={count ? String(count.count) : ""}
-            onChange={(e) => {
-              const n = whole(e.target.value)
-              setKind((c) => "count" in c, n ? [{ count: n, order: count?.order ?? BY_NAME }] : [])
-            }}
-          />
-        </Field>
-        {count && (
-          <Field>
-            <FieldLabel htmlFor="flow-order">순서</FieldLabel>
-            <Choice
-              id="flow-order"
-              label="순서"
-              value={count.order || BY_NAME}
-              options={[
-                { value: BY_NAME, label: "파일 이름" },
-                ...choices.map((c) => ({ value: c.keyword, label: c.keyword })),
-              ]}
-              onChange={(order) => setKind((c) => "count" in c, [{ count: count.count, order }])}
-            />
-          </Field>
-        )}
-        <Field>
-          <FieldLabel htmlFor="flow-times">몇 번</FieldLabel>
-          <Input
-            id="flow-times"
-            inputMode="numeric"
-            value={times ? String(times.times) : ""}
-            onChange={(e) => {
-              const n = whole(e.target.value)
-              setKind((c) => "times" in c, n ? [{ times: Math.min(n, 1000) }] : [])
-            }}
-          />
-        </Field>
+        <div className="criteria-add" role="group" aria-label="기준 추가">
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+              <Plus data-icon="inline-start" />
+              헤더 키워드
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="criterion-menu">
+              {!choices.length && <DropdownMenuLabel>{splitWaiting ? "실행하면 정해집니다" : "헤더 키워드가 없습니다"}</DropdownMenuLabel>}
+              {shown.map(keywordItem)}
+              {!!folded.length && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>더 보기</DropdownMenuSubTrigger>
+                  <DropdownMenuContent className="criterion-menu">{folded.map(keywordItem)}</DropdownMenuContent>
+                </DropdownMenuSub>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => add({ keyword: "" })}>직접 입력</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="outline" size="sm" onClick={() => add({ expression: "", name: "" })}>
+            <Plus data-icon="inline-start" />식
+          </Button>
+          <Button variant="outline" size="sm" disabled={criteria.some((c) => "count" in c)} onClick={() => add({ count: 5, order: BY_NAME })}>
+            <Plus data-icon="inline-start" />N장씩
+          </Button>
+          <Button variant="outline" size="sm" disabled={criteria.some((c) => "each" in c)} onClick={() => add({ each: true })}>
+            <Plus data-icon="inline-start" />파일마다
+          </Button>
+          <Button variant="outline" size="sm" disabled={criteria.some((c) => "times" in c)} onClick={() => add({ times: 3 })}>
+            <Plus data-icon="inline-start" />N번
+          </Button>
+        </div>
         <Field data-parameter-key="condition">
           <FieldLabel htmlFor="flow-condition">조건에 맞는 파일만</FieldLabel>
           <Input
