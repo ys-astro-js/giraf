@@ -32,6 +32,8 @@ export function DaoeditViewer({
   const [jobId, setJobId] = useState("")
   const [outputId, setOutputId] = useState("")
   const locked = useRef(false)
+  // Stars of the session's latest run: each run measures them all again.
+  const stars = useRef<{ x: number; y: number }[]>([])
   const alive = useRef(true)
   useEffect(() => {
     alive.current = true
@@ -47,7 +49,8 @@ export function DaoeditViewer({
     setError("")
     setJobId("")
     try {
-      let job = await onStart(daoeditPayload(session, x, y))
+      const picked = [...stars.current, { x, y }]
+      let job = await onStart(daoeditPayload(session, picked))
       if (!job)
         throw new Error(
           "측정을 시작하지 못했습니다. 입력 영상과 실행 설정을 확인해 주세요."
@@ -76,12 +79,13 @@ export function DaoeditViewer({
       )
       if (!alive.current) return
       const rows = parseDaoedit(result.text)
-      if (!rows.length)
+      if (rows.length !== picked.length)
         throw new Error(
           "측정값을 읽지 못했습니다. 실행 기록의 결과 파일을 확인해 주세요."
         )
-      setSelected(measurements.length)
-      setMeasurements((previous) => [...previous, ...rows])
+      stars.current = picked
+      setSelected(rows.length - 1)
+      setMeasurements(rows)
       setOutputId(output.id)
     } catch (e) {
       if (alive.current) setError((e as Error).message)
@@ -156,7 +160,7 @@ export function DaoeditViewer({
               )}
               {!busy && outputId && (
                 <ViewerToolButton
-                  label="최근 측정 결과 다운로드"
+                  label="측정 결과 다운로드"
                   render={
                     <a
                       href={`/api/download?id=${encodeURIComponent(outputId)}`}

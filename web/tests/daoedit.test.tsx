@@ -21,12 +21,19 @@ test("image-only daoedit opens a viewer with resolved input; scripted runs stay 
 test("measurement uses native a/q cursor replay without mutating the selected settings", () => {
   const session = daoeditSession(payload, effective)!
   const before = JSON.stringify(session)
-  const request = daoeditPayload(session, 32.25, 30.75)
+  const request = daoeditPayload(session, [{ x: 32.25, y: 30.75 }])
   expect(request.cursorCommands.icommands).toBe("32.25 30.75 1 a\n0 0 1 q\n")
   expect(request.backend).toBe("pyraf")
   expect(request.parameters).toEqual(payload.parameters)
   expect(JSON.stringify(session)).toBe(before)
-  for (const x of [NaN, Infinity, 0]) expect(() => daoeditPayload(session, x, 1)).toThrow()
+  for (const x of [NaN, Infinity, 0]) expect(() => daoeditPayload(session, [{ x: 10, y: 10 }, { x, y: 1 }])).toThrow()
+  expect(() => daoeditPayload(session, [])).toThrow()
+})
+
+test("each run measures every star picked so far, so the latest run keeps the whole session", () => {
+  const session = daoeditSession(payload, effective)!
+  const request = daoeditPayload(session, [{ x: 31, y: 42 }, { x: 91, y: 31 }, { x: 61, y: 101 }])
+  expect(request.cursorCommands.icommands).toBe("31 42 1 a\n91 31 1 a\n61 101 1 a\n0 0 1 q\n")
 })
 
 test("seven native columns preserve precision, negative magnitudes and INDEF", () => {

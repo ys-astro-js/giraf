@@ -19,9 +19,14 @@ export function daoeditSession(payload: Request, effective: { inputs: Record<str
   return { frame, payload: { ...payload, inputs: effective.inputs, expressions: {} } }
 }
 
-export function daoeditPayload(session: DaoeditSession, x: number, y: number) {
-  if (![x, y].every(v => Number.isFinite(v) && v >= 1)) throw new Error("영상 안의 별을 선택해 주세요.")
-  return { ...session.payload, cursorCommands: { icommands: `${x} ${y} 1 a\n0 0 1 q\n` } }
+/**
+ * One run measures every star picked so far, in the order picked, so the
+ * task's latest run (its output table and value outputs) is the whole session.
+ */
+export function daoeditPayload(session: DaoeditSession, stars: { x: number; y: number }[]) {
+  if (!stars.length || !stars.every(({ x, y }) => [x, y].every(v => Number.isFinite(v) && v >= 1))) throw new Error("영상 안의 별을 선택해 주세요.")
+  const keys = stars.map(({ x, y }) => `${x} ${y} 1 a\n`).join("")
+  return { ...session.payload, cursorCommands: { icommands: `${keys}0 0 1 q\n` } }
 }
 
 export function parseDaoedit(text: string): DaoeditMeasurement[] {

@@ -45,3 +45,31 @@ class DaoeditTests(unittest.TestCase):
                 outputs.append(fields)
                 self.assertEqual(path.read_bytes(), original)
             self.assertEqual(outputs[0], outputs[1])
+
+    def test_one_run_keeps_every_star_and_its_value_outputs_list_them(self):
+        from giraf.values import task_value
+        spec = discover()['tasks']['noao.digiphot.daophot.daoedit']
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            y, x = np.mgrid[:128, :128]
+            stars = [(5000, 30.25, 40.75, 1.5), (3000, 90.5, 30.5, 2.0), (8000, 60, 100, 2.5)]
+            image = 100 + sum(a * np.exp(-((x-cx)**2+(y-cy)**2)/(2*s*s)) for a, cx, cy, s in stars)
+            path = root / 'star.fits'
+            fits.writeto(path, image.astype('float32'))
+            row = dict(id='star', name=path.name, label=path.name, path=str(path), asset='image')
+            keys = ''.join(f'{round(cx) + 1} {round(cy) + 1} 1 a\n' for _, cx, cy, _ in stars)
+            payload = dict(backend='cl', inputs={'image': ['star']}, cursorCommands={'icommands': keys + '0 0 1 q\n'})
+            manifest = validate_generic(spec, payload, lambda _: row)
+            job = root / 'job'
+            job.mkdir()
+            (job / 'manifest.json').write_text(json.dumps(manifest))
+            GenericTaskRun(job).execute()
+            self.assertEqual(json.loads((job / 'status.json').read_text())['state'], 'completed', (job / 'task.log').read_text())
+            products = [dict(p, path=str(job / p['file'])) for p in json.loads((job / 'products.json').read_text())]
+            run = dict(state='completed', manifest=manifest, products=products)
+            fwhm = task_value(run, 'fwhm', lambda _: None, lambda _: {'FILTER': 'V'})
+            self.assertEqual(len(fwhm['values']), 3)
+            # Wider stars measure wider, in the order they were picked.
+            self.assertEqual(fwhm['values'], sorted(fwhm['values']))
+            self.assertEqual(fwhm['labels'], [{'FILTER': 'V'}] * 3)
+            self.assertEqual(len(task_value(run, 'sky', lambda _: None)['values']), 3)
