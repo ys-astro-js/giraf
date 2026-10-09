@@ -174,7 +174,7 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
         if warning not in state.setdefault('warnings', []):
             state['warnings'].append(warning)
 
-    def run_task(id, done, flow=None, iteration=None):
+    def run_task(id, done, flow=None, iteration=None, passes=()):
         node = nodes[id]
         state.update(currentTask=id, message=node['label'])
         payload = deepcopy(node['payload'])
@@ -205,7 +205,7 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
                 raise ValueError(f"{labels[link['source']]}에서 {node['label']}에 전달할 결과가 생성되지 않았습니다.")
             if pass_values and link['source'] not in flow.get('members', []) and link['source'] != flow['id']:
                 # Files from outside the loop that differ in its keywords go to their own pass.
-                products, matched = match_pass(products, pass_values, files)
+                products, matched = match_pass(products, pass_values, files, passes)
                 if matched and not products:
                     warn(id, f"{pass_name(pass_values)} 회차에 맞는 {with_subject(link['role'])} 없습니다.")
                     continue
@@ -249,6 +249,7 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
         steps = iterations(flow, items, files, variables)
         lane = {member: port for port, reached in lanes(flow, graph.get('links', [])).items() for member in reached}
         members = member_order(graph, flow)
+        passes = [step.get('partition') or {} for step in steps]
         collected, merged = [], {}
         for index, iteration in enumerate(steps):
             if cancelled():
@@ -261,7 +262,7 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
                 if (member in lane and not iteration['ports'].get(lane[member])) or upstream & skipped:
                     skipped.add(member)
                     continue
-                done[member] = run_task(member, done, flow, iteration)
+                done[member] = run_task(member, done, flow, iteration, passes)
                 job = merged.setdefault(member, dict(done[member], products=[]))
                 job.update({k: v for k, v in done[member].items() if k != 'products'})
                 group = iteration.get('partition')

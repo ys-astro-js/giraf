@@ -130,9 +130,10 @@ test("the loop input takes several connections, their files once each", () => {
 
 test("outside files that differ in a keyword go to their pass; others reach every pass", () => {
   const frames = new Map(rows.map((r) => [r.id, r]))
-  expect(matchPass(["FlatB", "FlatV"], frames, { SUBSET: "V", EXPTIME: "15" })).toEqual({ ids: ["FlatV"], matched: true })
-  expect(matchPass(["Zero"], frames, { SUBSET: "V" })).toEqual({ ids: ["Zero"], matched: false })
-  expect(matchPass(["coo"], frames, { SUBSET: "V" })).toEqual({ ids: ["coo"], matched: false })
+  const passes = [{ SUBSET: "B", EXPTIME: "30" }, { SUBSET: "V", EXPTIME: "15" }]
+  expect(matchPass(["FlatB", "FlatV"], frames, passes[1], passes)).toEqual({ ids: ["FlatV"], matched: true })
+  expect(matchPass(["Zero"], frames, passes[1], passes)).toEqual({ ids: ["Zero"], matched: false })
+  expect(matchPass(["coo"], frames, passes[1], passes)).toEqual({ ids: ["coo"], matched: false })
 
   const { map } = fixture(["SUBSET", "EXPTIME"])
   const inputs = memberPassInputs(map, catalog, taskOf(map, "proc"), rows)!
@@ -224,4 +225,25 @@ test("older loops keep their keyword on the loop; a split port no longer decides
   const synced = syncContainerItems(split, catalog, rows)
   expect(flowPasses(synced, catalog, taskOf(synced, id), rows).passes).toHaveLength(4)
   expect(flowStatement(synced, catalog, taskOf(synced, id))).toBe("sci 파일마다")
+})
+
+test("outside files match by the keywords whose values the passes have, numbers by value", () => {
+  const frames = new Map([
+    image("FlatB", { SUBSET: "B", EXPTIME: "30.66011" }), image("FlatV", { SUBSET: "V", EXPTIME: "30.75525" }),
+    image("Dark15", { EXPTIME: "15.0" }), image("Dark30", { EXPTIME: "30.0" }),
+    image("Dark15i", { EXPTIME: "15" }), image("Dark30i", { EXPTIME: "30" }), image("Dark60", { EXPTIME: "60" }),
+    image("Zero", { IMAGETYP: "zero" }), image("Ref", { SUBSET: "B", EXPTIME: "30" }), { id: "coo", label: "m67.coo", asset: "text" } as Frame,
+  ].map((f) => [f.id, f]))
+  const passes = [{ SUBSET: "B", EXPTIME: "30.0" }, { SUBSET: "V", EXPTIME: "15.0" }]
+  const each = (ids: string[], all = passes) => all.map((pass) => matchPass(ids, frames, pass, all))
+  // flatcombine changed EXPTIME, which no pass has: the flats match by SUBSET alone.
+  expect(each(["FlatB", "FlatV"])).toEqual([{ ids: ["FlatB"], matched: true }, { ids: ["FlatV"], matched: true }])
+  expect(each(["Dark15", "Dark30"])).toEqual([{ ids: ["Dark30"], matched: true }, { ids: ["Dark15"], matched: true }])
+  // 15 is 15.0.
+  expect(each(["Dark15i", "Dark30i"])).toEqual([{ ids: ["Dark30i"], matched: true }, { ids: ["Dark15i"], matched: true }])
+  for (const ids of [["Zero"], ["Ref"], ["coo"]])
+    expect(each(ids)).toEqual([{ ids, matched: false }, { ids, matched: false }])
+  // Some values the passes have, some not: a pass without a file gets none.
+  const byTime = [{ EXPTIME: "15" }, { EXPTIME: "30" }]
+  expect(each(["Dark15i", "Dark60"], byTime)).toEqual([{ ids: ["Dark15i"], matched: true }, { ids: [], matched: true }])
 })

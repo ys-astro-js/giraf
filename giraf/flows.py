@@ -25,7 +25,7 @@ import math
 from pathlib import Path
 import re
 
-from .values import _scalar, evaluate_expression, expression_names
+from .values import _number, _scalar, evaluate_expression, expression_names
 
 FLOW_RUNS = ('foreach', 'for', 'if')
 INNER_PORTS = {'foreach': ('item',), 'for': (), 'if': ('then', 'else')}
@@ -144,17 +144,30 @@ class Items:
         return value.strip() if isinstance(value, str) else str(value)
 
 
-def match_pass(products, values, files):
+def same_value(a, b):
+    """Header values as the loop compares them: as numbers when both read as
+    one (15 is 15.0), otherwise as trimmed text."""
+    x, y = _number(a), _number(b)
+    return x == y if x is not None and y is not None else a.strip() == b.strip()
+
+
+def match_pass(products, values, files, passes):
     """(products, matched) a pass takes from a connection from outside its loop.
 
-    A connection whose files differ in one of the pass's keywords keeps those
-    whose headers equal the pass's values; any other (one file, files that all
-    agree, files without the keyword such as text) reaches every pass as it is.
+    A loop keyword matches the connection when its files differ in it and at
+    least one of them has a value one of the loop's `passes` has. The pass
+    keeps the files equal to its values in every matching keyword; with none
+    (one file, files that all agree, files without the keyword such as text,
+    values no pass has) the connection reaches every pass as it is.
     """
-    keys = [k for k in values if len({files.text(p, k) for p in products}) > 1]
+    def used(k):
+        found = [files.text(p, k) for p in products]
+        return any(not same_value(v, found[0]) for v in found) and \
+            any(same_value(v, other.get(k, '')) for v in found for other in passes)
+    keys = [k for k in values if used(k)]
     if not keys:
         return products, False
-    return [p for p in products if all(files.text(p, k) == values[k] for k in keys)], True
+    return [p for p in products if all(same_value(files.text(p, k), values[k]) for k in keys)], True
 
 
 def pass_name(values):

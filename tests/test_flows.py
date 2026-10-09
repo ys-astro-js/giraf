@@ -319,6 +319,48 @@ class LoopKeywordTests(unittest.TestCase):
         self.assertEqual([p['inputs'].get('dark') for id, p in runner.calls if id == 'ccdproc'], [['Dark30.fits'], None])
         self.assertEqual(state['warnings'], [{'nodeId': 'ccdproc', 'message': 'V 15 회차에 맞는 dark가 없습니다.'}])
 
+    def test_outside_files_match_by_keywords_whose_values_the_passes_have(self):
+        science = {'b30a': {'SUBSET': 'B', 'EXPTIME': '30.0'}, 'v15a': {'SUBSET': 'V', 'EXPTIME': '15.0'}}
+        sources = {
+            'object': files(*science, headers=science),
+            # flatcombine changed EXPTIME, which no pass has: the flats match by SUBSET alone.
+            'flats': files('FlatB.fits', 'FlatV.fits', headers={'FlatB.fits': {'SUBSET': 'B', 'EXPTIME': 30.66011},
+                                                                'FlatV.fits': {'SUBSET': 'V', 'EXPTIME': 30.75525}}),
+            'darks': files('Dark15.fits', 'Dark30.fits', headers={'Dark15.fits': {'EXPTIME': 15.0}, 'Dark30.fits': {'EXPTIME': 30.0}}),
+            # 15 is 15.0.
+            'ints': files('D15.fits', 'D30.fits', headers={'D15.fits': {'EXPTIME': '15'}, 'D30.fits': {'EXPTIME': '30'}}),
+            'bias': files('Zero.fits', headers={'Zero.fits': {'IMAGETYP': 'zero'}}),
+            'reference': files('Ref.fits', headers={'Ref.fits': {'SUBSET': 'B', 'EXPTIME': '30'}}),
+            'coords': [{'id': 'm67.coo', 'asset': 'text', 'role': 'text'}],
+        }
+        single = dict(multiple=False)
+        graph = self.graph(['SUBSET', 'EXPTIME'], [
+            link('flats', 'ccdproc', 'flat', **single), link('darks', 'ccdproc', 'dark', **single),
+            link('ints', 'ccdproc', 'dark2', **single), link('bias', 'ccdproc', 'zero', **single),
+            link('reference', 'ccdproc', 'reference', **single),
+            dict(link('coords', 'ccdproc', 'coords', **single), kind='text')], nodes=list(sources)[1:])
+        runner = Runner(sources)
+        state, _ = run(graph, runner)
+        self.assertEqual(state['state'], 'completed', state['message'])
+        received = [p['inputs'] for id, p in runner.calls if id == 'ccdproc']
+        self.assertEqual(received, [
+            {'images': ['b30a'], 'flat': ['FlatB.fits'], 'dark': ['Dark30.fits'], 'dark2': ['D30.fits'],
+             'zero': ['Zero.fits'], 'reference': ['Ref.fits'], 'coords': ['m67.coo']},
+            {'images': ['v15a'], 'flat': ['FlatV.fits'], 'dark': ['Dark15.fits'], 'dark2': ['D15.fits'],
+             'zero': ['Zero.fits'], 'reference': ['Ref.fits'], 'coords': ['m67.coo']}])
+        self.assertNotIn('warnings', state)
+
+    def test_darks_some_passes_lack_leave_those_passes_empty(self):
+        science = {'s15': {'EXPTIME': '15'}, 's30': {'EXPTIME': '30'}}
+        sources = {'object': files(*science, headers=science),
+                   'darks': files('Dark15.fits', 'Dark60.fits', headers={'Dark15.fits': {'EXPTIME': '15'}, 'Dark60.fits': {'EXPTIME': '60'}})}
+        graph = self.graph(['EXPTIME'], [link('darks', 'ccdproc', 'dark', multiple=False)], nodes=['darks'])
+        runner = Runner(sources)
+        state, _ = run(graph, runner)
+        self.assertEqual(state['state'], 'completed', state['message'])
+        self.assertEqual([p['inputs'].get('dark') for id, p in runner.calls if id == 'ccdproc'], [['Dark15.fits'], None])
+        self.assertEqual(state['warnings'], [{'nodeId': 'ccdproc', 'message': '30 회차에 맞는 dark가 없습니다.'}])
+
     def test_files_the_editor_resolved_are_matched_too(self):
         import tempfile
         from pathlib import Path

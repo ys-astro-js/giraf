@@ -220,15 +220,30 @@ export function passFilesText(ids: string[], frames: Map<string, Frame>, nameOne
 }
 export const loopFrames = framesOf
 
+/** Header values as a loop compares them: as numbers when both read as one (15 is 15.0), otherwise as trimmed text. */
+function sameValue(a: string, b: string): boolean {
+  const [x, y] = [number(a), number(b)]
+  return x !== undefined && y !== undefined ? x === y : a.trim() === b.trim()
+}
+
 /**
- * The files a pass takes from a connection from outside its loop: those
- * whose headers equal the pass's values in the keywords the files differ in.
- * Files that agree, or lack those headers (text files), reach every pass.
+ * The files a pass takes from a connection from outside its loop
+ * (giraf/flows.py match_pass). A loop keyword matches the connection when its
+ * files differ in it and at least one has a value one of the loop's `passes`
+ * has; the pass keeps the files equal to its values in every matching
+ * keyword. With none (one file, files that agree, text files without the
+ * header, values no pass has) the connection reaches every pass as it is.
  */
-export function matchPass(ids: string[], frames: Map<string, Frame>, values: Record<string, string>): { ids: string[]; matched: boolean } {
-  const keys = Object.keys(values).filter((k) => new Set(ids.map((id) => partitionValue(frames.get(id), k))).size > 1)
+export function matchPass(
+  ids: string[], frames: Map<string, Frame>, values: Record<string, string>, passes: Record<string, string>[],
+): { ids: string[]; matched: boolean } {
+  const used = (k: string) => {
+    const found = ids.map((id) => partitionValue(frames.get(id), k))
+    return found.some((v) => !sameValue(v, found[0])) && found.some((v) => passes.some((other) => sameValue(v, other[k] ?? "")))
+  }
+  const keys = Object.keys(values).filter(used)
   if (!keys.length) return { ids, matched: false }
-  return { ids: ids.filter((id) => keys.every((k) => partitionValue(frames.get(id), k) === values[k])), matched: true }
+  return { ids: ids.filter((id) => keys.every((k) => sameValue(partitionValue(frames.get(id), k), values[k]))), matched: true }
 }
 
 /** Names containers had before they were named for beginners. */
@@ -498,7 +513,7 @@ export function memberPassInputs(map: TaskMap, catalog: Catalog, member: Instanc
       const source = resolvedSource(map, link.source)
       if (source.kind === "pending") { unknown = true; continue }
       passes.forEach((pass, i) => {
-        const matched = matchPass(source.ids, frames, pass.values)
+        const matched = matchPass(source.ids, frames, pass.values, passes.map((p) => p.values))
         if (matched.matched && !matched.ids.length) missing.add(pass.name)
         each[i].push(...matched.ids)
       })
@@ -545,11 +560,12 @@ export function syncContainerItems(map: TaskMap, catalog: Catalog | null, rows: 
   if (!catalog || !map.subflows?.length) return map
   map = syncFlowVariables(migrateFlowKeywords(map, catalog), catalog)
   const frames = framesOf(map, rows)
-  const firsts = new Map<string, FlowPass | undefined>()
-  const firstOf = (container: Instance) => {
-    if (!firsts.has(container.id)) firsts.set(container.id, flowPasses(map, catalog, container, rows).passes[0])
-    return firsts.get(container.id)
+  const known = new Map<string, FlowPass[]>()
+  const passesOf = (container: Instance) => {
+    if (!known.has(container.id)) known.set(container.id, flowPasses(map, catalog, container, rows).passes)
+    return known.get(container.id)!
   }
+  const firstOf = (container: Instance) => passesOf(container)[0]
   let changed = false
   const tasks = map.tasks.map((task) => {
     if (flowRun(map, catalog, task.id) === "foreach") {
@@ -570,7 +586,7 @@ export function syncContainerItems(map: TaskMap, catalog: Catalog | null, rows: 
         if (from && (from.id === container!.id || from.subflowId === container!.id)) continue
         const source = resolvedSource(map, c.source)
         if (source.kind === "pending") continue
-        const match = matchPass(source.ids, frames, first.values)
+        const match = matchPass(source.ids, frames, first.values, passesOf(container!).map((p) => p.values))
         if (match.matched) matched[c.id] = match.ids
       }
     const firstPass = Object.keys(matched).length ? matched : undefined
