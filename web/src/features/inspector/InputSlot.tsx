@@ -4,7 +4,7 @@ import { InspectorFileSource } from "./FileSource"
 import { parsePort, matchesGroup, groupEqual } from "@/lib/calibration-ports"
 import { CursorInput } from "@/components/cursor-input"
 
-import { type Spec, type Frame, type Slot } from "@/lib/workbench"
+import { isGirafNode, type Spec, type Frame, type Slot } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
 
 import type { Source } from "@/lib/task-map"
@@ -96,6 +96,8 @@ export function InspectorInputSlot({
   const field = (
     <InspectorFileSource
       s={s}
+      // GIRAF's own nodes name their inputs in the schema; IRAF keeps its names.
+      label={isGirafNode(spec) && s.label ? s.label : undefined}
       prefix={prefix}
       port={port}
       compact={compact}

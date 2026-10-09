@@ -16,6 +16,7 @@ import type * as React from "react"
 
 export function InspectorFileSource({
   s,
+  label,
   prefix,
   port,
   compact,
@@ -35,6 +36,8 @@ export function InspectorFileSource({
   task,
 }: {
   s: Slot
+  /** Shown instead of the slot name, which then needs no description. */
+  label?: string
   prefix: string
   port: { role: string; group: CalibrationGroup } | undefined
   compact: boolean
@@ -70,7 +73,7 @@ export function InspectorFileSource({
               group={port.group}
             />
           ) : (
-            s.name
+            (label ?? s.name)
           )}
           {s.required && <span aria-hidden="true">*</span>}
         </FieldLabel>
@@ -79,9 +82,9 @@ export function InspectorFileSource({
         id={`${prefix}source-${s.name}`}
         variant="outline"
         className="w-full min-w-0 justify-between"
-        aria-label={`${port ? role + " " + groupLabel(port.group) : s.name} 입력 변경`}
+        aria-label={`${port ? role + " " + groupLabel(port.group) : (label ?? s.name)} 입력 변경`}
         aria-describedby={
-          !port && !compact && s.valueType !== "cursor"
+          !port && !compact && !label && s.valueType !== "cursor"
             ? `${prefix}source-${s.name}-description`
             : undefined
         }
@@ -91,7 +94,7 @@ export function InspectorFileSource({
         <span className="truncate">{summary}</span>
         <ChevronDown />
       </Button>
-      {!port && !compact && s.valueType !== "cursor" && (
+      {!port && !compact && !label && s.valueType !== "cursor" && (
         <ParameterHelp
           p={{ name: s.name, prompt: s.label, min: "", max: "" }}
           id={`${prefix}source-${s.name}-description`}
@@ -205,7 +208,7 @@ export function InspectorFileSource({
           <TabsContent value="expression">
             <Input
               id={`${prefix}expr-${s.name}`}
-              aria-label={`${s.name} 표현식`}
+              aria-label={`${label ?? s.name} 표현식`}
               placeholder="파일명 또는 표현식"
               value={expression}
               onChange={(e) =>
@@ -218,7 +221,7 @@ export function InspectorFileSource({
           </TabsContent>
           <TabsContent value="node">
             <Choice
-              label={`${s.name} 연결할 작업`}
+              label={`${label ?? s.name} 연결할 작업`}
               value={
                 links.length && "taskId" in links[0].source
                   ? links[0].source.taskId || ""

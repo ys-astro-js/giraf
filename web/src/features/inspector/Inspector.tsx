@@ -32,6 +32,7 @@ import {
 
 import { SearchField } from "@/components/search-field"
 import { isFlowSpec } from "@/lib/containers"
+import { inspectorTabs, type InspectorTab } from "@/lib/inspector-tabs"
 import { SidebarHeader } from "@/components/ui/sidebar"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
@@ -90,6 +91,14 @@ type Props = {
   activeTab?: string
   onTabChange?: (value: string) => void
 }
+const TAB_LABELS = {
+  info: { label: "정보", icon: Info },
+  input: { label: "입력", icon: SquareArrowRightEnter },
+  output: { label: "출력", icon: SquareArrowRightExit },
+  dependencies: { label: "의존성", icon: Route },
+  settings: { label: "설정", icon: SlidersVertical },
+} satisfies Record<InspectorTab, { label: string; icon: typeof Info }>
+
 export function TaskInspector({
   catalog,
   map,
@@ -334,6 +343,13 @@ export function TaskInspector({
   const displayGroups = schemaParameterGroups(spec, groups).filter(
     (group) => group.parameters.length > 0 || !(isValueNode(spec) || isFlowSpec(spec))
   )
+  const hasParameters = displayGroups.some((group) => group.parameters.length > 0)
+  // Only the tabs this kind of node has; a hidden tab falls back to the first.
+  const tabs = inspectorTabs(spec, task)
+  const requestedTab = activeTab ?? localTab
+  const currentTab = tabs.includes(requestedTab as InspectorTab)
+    ? requestedTab
+    : tabs[0]
   const valueLinks = valueLinksInto(map, task.id)
   const pinning = {
     pinned: (key: string) => (task.pinned ?? []).includes(key),
@@ -410,7 +426,7 @@ export function TaskInspector({
       <TooltipProvider delay={0}>
         <Tabs
           className="inspector-tabs"
-          value={activeTab ?? localTab}
+          value={currentTab}
           onValueChange={(v) => {
             setLocalTab(String(v))
             onTabChange?.(String(v))
@@ -418,23 +434,20 @@ export function TaskInspector({
         >
           <SidebarHeader className="shrink-0">
             <TabsList variant="line" className="w-full" aria-label="작업 상세">
-              {[
-                { value: "info", label: "정보", icon: Info },
-                { value: "input", label: "입력", icon: SquareArrowRightEnter },
-                { value: "output", label: "출력", icon: SquareArrowRightExit },
-                { value: "dependencies", label: "의존성", icon: Route },
-                { value: "settings", label: "설정", icon: SlidersVertical },
-              ].map(({ value, label, icon: Icon }) => (
-                <Tooltip key={value}>
-                  <TooltipTrigger render={<TabsTrigger value={value} />}>
-                    <Icon />
-                    <span className="sr-only">{label}</span>
-                  </TooltipTrigger>
-                  <TooltipContent>{label}</TooltipContent>
-                </Tooltip>
-              ))}
+              {tabs.map((value) => {
+                const { label, icon: Icon } = TAB_LABELS[value]
+                return (
+                  <Tooltip key={value}>
+                    <TooltipTrigger render={<TabsTrigger value={value} />}>
+                      <Icon />
+                      <span className="sr-only">{label}</span>
+                    </TooltipTrigger>
+                    <TooltipContent>{label}</TooltipContent>
+                  </Tooltip>
+                )
+              })}
             </TabsList>
-            {(activeTab ?? localTab) === "settings" && (
+            {currentTab === "settings" && hasParameters && (
               <>
                 <SearchField
                   id="parameter-search"
@@ -457,14 +470,16 @@ export function TaskInspector({
               <AlertDescription>{spec.reason}</AlertDescription>
             </Alert>
           )}
-          <TabsContent value="dependencies" className="inspector-dependencies">
-            <NodeDependencies
-              map={map}
-              catalog={catalog}
-              task={task}
-              onSelect={onSelectNode}
-            />
-          </TabsContent>
+          {tabs.includes("dependencies") && (
+            <TabsContent value="dependencies" className="inspector-dependencies">
+              <NodeDependencies
+                map={map}
+                catalog={catalog}
+                task={task}
+                onSelect={onSelectNode}
+              />
+            </TabsContent>
+          )}
           <InspectorInfo
             map={map}
             task={task}
@@ -475,7 +490,7 @@ export function TaskInspector({
             onDuplicate={onDuplicate}
             onRemove={onRemove}
           />
-          <InspectorInputs
+          {tabs.includes("input") && <InspectorInputs
             rows={rows}
             changePrep={changePrep}
             slot={slot}
@@ -487,8 +502,8 @@ export function TaskInspector({
             setExpanded={setExpanded}
             catalog={catalog}
             onInputSource={onInputSource}
-          />
-          <InspectorOutputs
+          />}
+          {tabs.includes("output") && <InspectorOutputs
             catalog={catalog}
             rows={rows}
             task={task}
@@ -496,8 +511,8 @@ export function TaskInspector({
             spec={spec}
             edit={edit}
             job={job}
-          />
-          <InspectorSettings
+          />}
+          {tabs.includes("settings") && <InspectorSettings
             groups={displayGroups}
             query={query}
             spec={spec}
@@ -509,7 +524,7 @@ export function TaskInspector({
             bodyRef={settingsBodyRef}
             pinning={pinning}
             actions={psetActions}
-          />
+          />}
         </Tabs>
       </TooltipProvider>
     </section>

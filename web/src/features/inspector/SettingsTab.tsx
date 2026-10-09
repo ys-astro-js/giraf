@@ -167,7 +167,8 @@ export function InspectorSettings({
             )}
           </Accordion>
         )}
-        {!isValueNode(spec) && <div className="inspector-secondary">
+        {/* Saving and resetting act on parameters; without any they do nothing. */}
+        {!isValueNode(spec) && groups.some((g) => g.parameters.length > 0) && <div className="inspector-secondary">
           <Button variant="outline" size="sm" onClick={saveDefaults}>
             기본 설정으로 저장
           </Button>
