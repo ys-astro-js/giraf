@@ -33,4 +33,3 @@
 
 .workflow-node { display:flex; flex-direction:column; }
 .workflow-node .node-footer { margin-top:auto; padding-right:64px; }
-.workflow-node .node-input { padding-right:64px; }

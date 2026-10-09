@@ -60,6 +60,7 @@ import { setSubflowCollapsed, subflowColor } from "@/lib/subflow"
 import { WorkflowClickConnection } from "@/components/workflow-click-connection"
 import { type WorkflowNode } from "@/lib/workflow-flow"
 import { isContainerId } from "@/lib/containers"
+import { clippedTitle } from "@/lib/clipped-title"
 
 const workflowEdgeTypes = { default: WorkflowEdge, smoothstep: WorkflowEdge }
 
@@ -265,6 +266,10 @@ export function TaskMapView({
           className="map-viewport"
           aria-label="워크플로우 캔버스"
           data-group-selecting={selectingGroup}
+          onPointerOver={(e) => {
+            const label = (e.target as Element).closest<HTMLElement>("[data-full-text]")
+            if (label) label.title = clippedTitle(label, label.dataset.fullText ?? "")
+          }}
         >
           <WorkflowContext.Provider
             value={{

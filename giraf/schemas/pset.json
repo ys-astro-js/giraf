@@ -3,5 +3,6 @@
   "task": "giraf.pset",
   "title": "pset",
   "description": "여러 작업이 함께 쓰는 IRAF 파라미터 세트",
+  "icon": "sliders-horizontal",
   "components": [{ "type": "pset" }]
 }

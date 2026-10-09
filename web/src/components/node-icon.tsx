@@ -5,6 +5,7 @@ import {
   FolderDown,
   ListOrdered,
   Repeat,
+  SlidersHorizontal,
   Split,
   Terminal,
   Variable,
@@ -20,6 +21,7 @@ const NODE_ICONS: Record<string, typeof Terminal> = {
   repeat: Repeat,
   "list-ordered": ListOrdered,
   split: Split,
+  "sliders-horizontal": SlidersHorizontal,
 }
 export const NodeIcon = ({ icon }: { icon?: string }) => {
   const Icon = (icon && NODE_ICONS[icon]) || Terminal

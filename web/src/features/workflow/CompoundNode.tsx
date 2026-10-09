@@ -143,8 +143,8 @@ export const CompoundNode = memo(function CompoundNode({
                 aria-label={`${name} ${row.label} 입력 연결`}
               />
               <div className="node-input">
-                <span className="node-input-label">{row.label}</span>
-                <span className="node-input-source" title={row.summary}>
+                <span className="node-input-label" data-full-text={row.label}>{row.label}</span>
+                <span className="node-input-source" data-full-text={row.summary}>
                   {row.summary}
                 </span>
               </div>
@@ -158,7 +158,7 @@ export const CompoundNode = memo(function CompoundNode({
         <div className="node-section node-outputs">
           {outputs.map((row) => (
             <div className="node-output-row" key={row.handleId}>
-              <span className="node-output-name">{row.label}</span>
+              <span className="node-output-name" data-full-text={row.label}>{row.label}</span>
               <Handle
                 type="source"
                 position={Position.Right}

@@ -187,7 +187,7 @@ pset 파라미터는 `datapars.fwhmpsf`처럼 pset 이름을 앞에 붙입니다
 | --- | --- |
 | `title` | 노드 이름. 캔버스와 작업 추가 목록에 표시 |
 | `description` | 노드 설명 |
-| `icon` | 작업 추가 목록의 아이콘. `file-input`, `folder-down`, `variable`, `file-search`, `calculator`, `repeat`, `list-ordered`, `split` 중 하나 |
+| `icon` | 작업 추가 목록과 노드 머리글의 아이콘. `file-input`, `folder-down`, `variable`, `file-search`, `calculator`, `repeat`, `list-ordered`, `split`, `sliders-horizontal` 중 하나 |
 
 GIRAF 노드는 작업 추가 목록에서 IRAF 패키지 위에 타일로 표시하고, Info 탭에 IRAF 실행 명령어와 도움말을 두지 않습니다. `pset` 노드는 목록에 두지 않고 설정 탭의 pset 그룹에서 꺼냅니다. 예: `giraf/schemas/file-input.json`, `file-save.json`, `value.json`, `header.json`, `compute.json`, `pset.json`.
 

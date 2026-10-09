@@ -31,7 +31,7 @@ PORT_FIELDS = {
 # another node's output, text typed in place, recorded cursor commands.
 SOURCES = ('files', 'expression', 'node', 'text', 'cursor')
 # Symbols a GIRAF node shows in the add-task popover.
-NODE_ICONS = ('file-input', 'folder-down', 'variable', 'file-search', 'calculator', 'repeat', 'list-ordered', 'split')
+NODE_ICONS = ('file-input', 'folder-down', 'variable', 'file-search', 'calculator', 'repeat', 'list-ordered', 'split', 'sliders-horizontal')
 PARAMETER_FIELDS = {'label', 'default', 'fixed', 'connectable'}
 # `task` components extend an IRAF task; `run` and `flow` components are what a
 # GIRAF node does: run as a job, or steer the workflow runner.

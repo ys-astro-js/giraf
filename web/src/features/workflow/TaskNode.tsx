@@ -1,7 +1,7 @@
 import { customOutput, customPortHandle } from "@/lib/output-ports"
 import { groupLabel } from "@/lib/calibration-ports"
 import { ccdTasks, calibrationLabels } from "@/lib/calibration"
-import { acceptsSource, taskDisplayName } from "@/lib/workbench"
+import { acceptsSource, isGirafNode, taskDisplayName } from "@/lib/workbench"
 import { Fragment, memo, useContext, useEffect, useRef, useState } from "react"
 import {
   Position,
@@ -19,6 +19,7 @@ import {
   File,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { NodeIcon } from "@/components/node-icon"
 import {
   Tooltip,
   TooltipContent,
@@ -121,6 +122,11 @@ export const TaskNode = memo(function TaskNode({
       ? taskDisplayName(task.task)
       : task.label || taskDisplayName(task.task)
   const description = task.description ?? spec?.description ?? spec?.title
+  // The heading's tooltip names the task, and the label too when it renames the task.
+  const titleHint =
+    title === taskDisplayName(task.task) ? task.task : `${title}\n${task.task}`
+  // GIRAF's own nodes show what they are; IRAF tasks are known by name.
+  const icon = isGirafNode(spec) && <NodeIcon icon={spec?.icon} />
 
   const clickStart = useStore((state) => state.connectionClickStartHandle)
   const connecting = useConnection((state) => state.inProgress)
@@ -266,30 +272,34 @@ export const TaskNode = memo(function TaskNode({
       />
     )
   }
-  const paramText = (row: (typeof params)[number]) => {
+  const taskLabel = (taskId?: string) => map.tasks.find((t) => t.id === taskId)?.label
+  /** The pinned row's value, the node it comes from when it is connected, and that node's id. */
+  const paramText = (row: (typeof params)[number]): { text: string; from?: string; fromId?: string } => {
     const link = paramLink(row.handleId)
     if (row.pset)
       return link && link.source.kind !== "files"
-        ? map.tasks.find((t) => t.id === (link.source.kind !== "files" ? link.source.taskId : ""))?.label ?? ""
-        : ""
+        ? { text: taskLabel(link.source.taskId) ?? "", fromId: link.source.taskId }
+        : { text: "" }
     if (link && link.source.kind !== "files") {
+      const from = taskLabel(link.source.taskId), fromId = link.source.taskId
       const taken = values?.parameters[link.id]
-      if (taken && taken.error === undefined) return formatScalar(taken.value)
-      return formatValue(values?.outputs[`${link.source.taskId}:${link.source.outputRole?.slice(VALUE_HANDLE.length)}`])
+      if (taken && taken.error === undefined) return { text: formatScalar(taken.value), from, fromId }
+      return { text: formatValue(values?.outputs[`${link.source.taskId}:${link.source.outputRole?.slice(VALUE_HANDLE.length)}`]), from, fromId }
     }
     const entry = entries.get(row.key)
-    if (!entry) return ""
+    if (!entry) return { text: "" }
     // A pset fed by a pset node runs with that node's values.
     const shared = entry.owner ? psetSource(map, id, entry.owner) : undefined
-    if (!shared?.draft.pset) return storedValue(task, entry)
+    if (!shared?.draft.pset) return { text: storedValue(task, entry) }
     const held = `${shared.draft.pset.name}.${entry.param.name}`
     const sharedLink = map.connections.find((c) => c.target === shared.id && c.role === PARAM_HANDLE + held)
     if (sharedLink && sharedLink.source.kind !== "files") {
+      const from = taskLabel(sharedLink.source.taskId), fromId = shared.id
       const taken = values?.parameters[`${sharedLink.id}:${id}`]
-      if (taken && taken.error === undefined) return formatScalar(taken.value)
-      return formatValue(values?.outputs[`${sharedLink.source.taskId}:${sharedLink.source.outputRole?.slice(VALUE_HANDLE.length)}`])
+      if (taken && taken.error === undefined) return { text: formatScalar(taken.value), from, fromId }
+      return { text: formatValue(values?.outputs[`${sharedLink.source.taskId}:${sharedLink.source.outputRole?.slice(VALUE_HANDLE.length)}`]), from, fromId }
     }
-    return storedValue(shared, { ...entry, owner: shared.draft.pset.name })
+    return { text: storedValue(shared, { ...entry, owner: shared.draft.pset.name }), from: shared.label, fromId: shared.id }
   }
   const valueHandle = (handleId: string, name: string, stacked = false) => (
     <Handle
@@ -384,7 +394,7 @@ export const TaskNode = memo(function TaskNode({
     if (!bundle || !port)
       return (
         <div className="node-output-row" key={handleId}>
-          <span className="node-output-name" data-unnamed={!name}>
+          <span className="node-output-name" data-unnamed={!name} data-full-text={name || fallback}>
             {name || fallback}
           </span>
           <span className="node-output-count">{count(result)}</span>
@@ -407,11 +417,11 @@ export const TaskNode = memo(function TaskNode({
           >
             {bundle.open ? <ChevronDown /> : <ChevronRight />}
           </button>
-          <span className="node-output-name" data-unnamed={!name}>
+          <span className="node-output-name" data-unnamed={!name} data-full-text={label}>
             {label}
           </span>
           <span className="node-output-keyword">{bundle.keyword}</span>
-          <span className="node-output-chips">
+          <span className="node-output-chips" data-full-text={bundle.values.map(valueLabel).join(" ")}>
             {bundle.values.map((value) => (
               <ValueChip key={value} value={value} />
             ))}
@@ -480,7 +490,8 @@ export const TaskNode = memo(function TaskNode({
             }}
           >
             {status}
-            <strong title={task.task}>{title}</strong>
+            {icon}
+            <strong title={titleHint}>{title}</strong>
             {output.kind === "result" && (
               <span className="node-pill-count">{count(output)}</span>
             )}
@@ -513,8 +524,9 @@ export const TaskNode = memo(function TaskNode({
               onClick={() => choose(id)}
             >
               {status}
+              {icon}
               <span className="node-title">
-                <strong title={task.task}>{title}</strong>
+                <strong title={titleHint}>{title}</strong>
                 <span title={description}>{description}</span>
               </span>
             </button>
@@ -607,6 +619,11 @@ export const TaskNode = memo(function TaskNode({
                 const pending =
                   !fromFiles &&
                   links.some((c) => c.source.kind === "pending" && !isContainerId(map, c.source.taskId))
+                const key = ccdTasks.has(task.task)
+                  ? calibrationLabels[slot.role] || slot.role
+                  : slot.role
+                const about = `${slot.label || slot.name}${slot.group ? ` ${groupLabel(slot.group)}` : ""}`
+                const shown = pending ? `${summary} 출력 대기` : summary
                 return (
                   <div
                     className="node-input-row"
@@ -636,22 +653,15 @@ export const TaskNode = memo(function TaskNode({
                           }
                         }}
                       >
-                        <span className="node-input-label">
-                          {ccdTasks.has(task.task)
-                            ? calibrationLabels[slot.role] || slot.role
-                            : slot.role}
-                        </span>
-                        {fromFiles && (
-                          <File
-                            className="node-input-file"
-                            aria-hidden="true"
-                          />
-                        )}
-                        <span
-                          className="node-input-source"
-                          title={[summary, ...members.map(valueLabel)].join(" ")}
-                        >
-                          {pending ? `${summary} 출력 대기` : summary}
+                        <span className="node-input-label">{key}</span>
+                        <span className="node-input-source">
+                          {fromFiles && (
+                            <File
+                              className="node-input-file"
+                              aria-hidden="true"
+                            />
+                          )}
+                          {shown}
                           {members.map((value, i) => (
                             <ValueChip key={i} value={value} />
                           ))}
@@ -660,9 +670,11 @@ export const TaskNode = memo(function TaskNode({
                           <span className="node-input-flag">비활성</span>
                         )}
                       </TooltipTrigger>
-                      <TooltipContent>
-                        {slot.label || slot.name}
-                        {slot.group ? ` ${groupLabel(slot.group)}` : ""}
+                      {/* The row's tooltip also carries its key and value in full, in case either is cut off. */}
+                      <TooltipContent className="flex-col items-start">
+                        {about !== key && <span>{key}</span>}
+                        <span>{about}</span>
+                        <span>{[shown, ...members.map(valueLabel)].join(" ")}</span>
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -674,7 +686,9 @@ export const TaskNode = memo(function TaskNode({
           </div>}
           {params.length > 0 && (
             <div className="node-section node-params">
-              {params.map((row) => (
+              {params.map((row) => {
+                const { text, from } = paramText(row)
+                return (
                 <div
                   className="node-input-row node-param-row"
                   key={row.handleId}
@@ -684,7 +698,6 @@ export const TaskNode = memo(function TaskNode({
                   <button
                     className="node-input node-param nodrag nopan"
                     aria-label={`${task.label} ${row.key} 설정`}
-                    title={row.key}
                     onClick={(e) => {
                       e.stopPropagation()
                       if (clickStart) {
@@ -699,11 +712,17 @@ export const TaskNode = memo(function TaskNode({
                       }
                     }}
                   >
-                    <span className="node-param-name">{row.key}</span>
-                    <span className="node-param-value">{paramText(row)}</span>
+                    <span className="node-param-name" data-full-text={row.key}>{row.key}</span>
+                    <span
+                      className="node-param-value"
+                      data-full-text={from ? `${text}\n${from}에서 받은 값` : text}
+                    >
+                      {text}
+                    </span>
                   </button>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
           {(geometry.primary || outputSlots.length > 0 || geometry.values.length > 0 || geometry.psetOutput) && (
@@ -713,18 +732,21 @@ export const TaskNode = memo(function TaskNode({
               {outputSlots.map(({ slot, result, name }) =>
                 outputRow(slot.handleId, name, result, "이름 없는 포트")
               )}
-              {geometry.values.map((row) => (
-                <div className="node-output-row" key={row.handleId}>
-                  <span className="node-output-name">{row.name}</span>
-                  <span className="node-output-count node-value-text">
-                    {formatValue(values?.outputs[`${id}:${row.name}`])}
-                  </span>
-                  {valueHandle(row.handleId, row.name)}
-                </div>
-              ))}
+              {geometry.values.map((row) => {
+                const value = formatValue(values?.outputs[`${id}:${row.name}`])
+                return (
+                  <div className="node-output-row" key={row.handleId}>
+                    <span className="node-output-name" data-full-text={row.name}>{row.name}</span>
+                    <span className="node-output-count node-value-text" data-full-text={value}>
+                      {value}
+                    </span>
+                    {valueHandle(row.handleId, row.name)}
+                  </div>
+                )
+              })}
               {geometry.psetOutput && (
                 <div className="node-output-row">
-                  <span className="node-output-name">
+                  <span className="node-output-name" data-full-text={task.draft.pset?.name ?? "pset"}>
                     {task.draft.pset?.name ?? "pset"}
                   </span>
                   {valueHandle(PSET_OUTPUT, task.draft.pset?.name ?? "pset")}
