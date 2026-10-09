@@ -24,6 +24,8 @@ type NodeContext = Pick<
   setCollapsed: (ids: string[], collapsed: boolean) => void
   setPortOpen: (nodeId: string, portId: string, open: boolean) => void
   setGroupCollapsed: (id: string, collapsed: boolean) => void
+  /** Helper nodes hidden by the 노드 보기 menu (lib/helper-nodes), even while shown for the selection. */
+  hiddenNodes: Set<string>
   /** Current values (lib/values); the label of a value connection by its id. */
   values?: import("@/lib/values").ValueResponse
   valueLabel: (connectionId: string) => string

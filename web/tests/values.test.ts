@@ -159,3 +159,17 @@ test("values format compactly for rows and labels", () => {
   expect(formatValue({ values: [3.38, 3.07], groups: { keyword: "FILTER", values: { B: [3.38], V: [3.07] } } })).toBe("B 3.38, V 3.07")
   expect(formatValue({ error: "x" })).toBe("")
 })
+
+test("value and pset edges carry the flag that hides them", () => {
+  let map = fixture()
+  map = addTask(map, make(phot, "find"))
+  map = link(map, "edit", "value:fwhm", "calc", "p:fwhm")
+  map = { ...map, connections: [...map.connections, { id: "file", target: "phot", role: "image", source: { kind: "pending", taskId: "edit", outputRole: "$stdout" } }] }
+  map = takeOutPset(map, catalog, "phot", "datapars")
+  const pset = map.tasks.at(-1)!
+  map = link(map, pset.id, "pset", "find", "pset:datapars")
+  const flags = taskEdges(map, catalog).map((e) => [e.source, e.target, !!e.data?.fromValues])
+  expect(flags).toContainEqual(["edit", "calc", true])
+  expect(flags).toContainEqual([pset.id, "find", true])
+  expect(flags).toContainEqual(["edit", "phot", false])
+})

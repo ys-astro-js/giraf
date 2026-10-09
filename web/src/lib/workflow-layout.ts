@@ -5,6 +5,7 @@ import { compoundPorts } from "./compound"
 import type { TaskMap } from "@/lib/task-map"
 import type { Catalog, Frame } from "./workbench"
 import { containerTask, flowBoundary } from "./containers"
+import { BYPASS_PREFIX, bypassEdges, helperAnchors, hiddenHelpers } from "./helper-nodes"
 
 const options: LayoutOptions = {
   "elk.algorithm": "layered",
@@ -64,8 +65,11 @@ export async function autoLayoutMap(
     nodes.set(group.id, node)
     children.push(node)
   }
+  // Hidden helper nodes stay out; their bypass edges keep the order (lib/helper-nodes).
+  const hidden = hiddenHelpers(map, catalog)
   for (const task of map.tasks) {
     if (task.subflowId && collapsed.has(task.subflowId)) continue
+    if (hidden.has(task.id)) continue
     // A container's task is its group node.
     if (containerTask(map, task.id)) {
       const group = groups.get(task.id)
@@ -109,7 +113,10 @@ export async function autoLayoutMap(
   // Edges between a container and its members stay out: ELK lays out the members inside it.
   const inner = (container: string, other: string) =>
     !!containerTask(map, container) && map.tasks.find(task => task.id === other)?.subflowId === container
-  const edges = flowEdges(map, catalog).filter(edge => !edge.hidden && !inner(edge.source, edge.target) && !inner(edge.target, edge.source))
+  const all = flowEdges(map, catalog)
+  const edges = [...all, ...bypassEdges(all, hidden)].filter(edge =>
+    !edge.hidden && !hidden.has(edge.source) && !hidden.has(edge.target) &&
+    !inner(edge.source, edge.target) && !inner(edge.target, edge.source))
   const graph = await elk.layout({
     id: "root", layoutOptions: options, children,
     edges: edges.map(edge => ({
@@ -143,7 +150,7 @@ export async function autoLayoutMap(
   function collectRoutes(parent: ElkNode, x = 0, y = 0) {
     for (const edge of parent.edges ?? []) {
       const original = originals.get(edge.id)
-      if (!original || !edge.sections?.length) continue
+      if (!original || original.id.startsWith(BYPASS_PREFIX) || !edge.sections?.length) continue
       const container = edge.container ? placed.get(edge.container) : undefined
       const offsetX = container?.x ?? x, offsetY = container?.y ?? y
       const points = edge.sections.flatMap(section =>
@@ -158,6 +165,13 @@ export async function autoLayoutMap(
       collectRoutes(child, x + (child.x ?? 0), y + (child.y ?? 0))
   }
   collectRoutes(graph)
+  // A hidden node moves with the shown node it serves, keeping its place beside it.
+  const anchors = helperAnchors(all, hidden)
+  const moved = (id: string) => {
+    const before = map.subflows?.find(g => g.id === id)?.position ?? map.tasks.find(t => t.id === id)?.position
+    const node = placed.get(taskId(id)) ?? placed.get(groupId(id))
+    return before && node ? { x: node.x! - before.x, y: node.y! - before.y } : undefined
+  }
   return {
     ...map,
     edgeRoutes,
@@ -165,6 +179,10 @@ export async function autoLayoutMap(
       if (task.subflowId && collapsed.has(task.subflowId)) {
         const d = shift(task.subflowId), position = task.position ?? { x: 0, y: 0 }
         return { ...task, position: { x: position.x + d.x, y: position.y + d.y } }
+      }
+      if (hidden.has(task.id)) {
+        const anchor = anchors.get(task.id), d = anchor ? moved(anchor) : undefined
+        return d && task.position ? { ...task, position: { x: task.position.x + d.x, y: task.position.y + d.y } } : task
       }
       const node = placed.get(taskId(task.id)) ?? placed.get(groupId(task.id))!
       return { ...task, position: { x: node.x!, y: node.y! } }

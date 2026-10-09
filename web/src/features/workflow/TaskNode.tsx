@@ -94,6 +94,7 @@ export const TaskNode = memo(function TaskNode({
     currentIssues,
     values,
     onParameter,
+    hiddenNodes,
   } = useContext(WorkflowContext)!
   const { task, geometry } = data
   const nodeIssues = currentIssues.filter((issue) => issue.nodeId === id)
@@ -687,7 +688,7 @@ export const TaskNode = memo(function TaskNode({
           {params.length > 0 && (
             <div className="node-section node-params">
               {params.map((row) => {
-                const { text, from } = paramText(row)
+                const { text, from, fromId: sourceId } = paramText(row)
                 return (
                 <div
                   className="node-input-row node-param-row"
@@ -706,6 +707,9 @@ export const TaskNode = memo(function TaskNode({
                             `[data-node-id="${CSS.escape(id)}"] .react-flow__handle[data-handleid="${CSS.escape(row.handleId)}"]`
                           )
                           ?.click()
+                      } else if (sourceId && hiddenNodes.has(sourceId)) {
+                        // A value from a hidden node opens that node, shown while selected.
+                        choose(sourceId)
                       } else {
                         choose(id)
                         onParameter?.(id, row.key)

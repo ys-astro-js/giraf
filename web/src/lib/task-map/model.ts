@@ -105,8 +105,10 @@ export type TaskMap = {
     selected: string
     coordinateSystem?: "react-flow"
     edgeStyle?: "default" | "smoothstep"
-    /** Edges out of source nodes appear only on hover or selection. */
-    hideFileEdges?: boolean
+    /** File nodes: their edges hidden, or the nodes too (lib/helper-nodes); unset shows all. */
+    fileNodes?: "edges" | "nodes"
+    /** Value and pset nodes, and value connections, likewise. */
+    valueNodes?: "edges" | "nodes"
     mode: "map" | "list"
     zoom: number
     x: number

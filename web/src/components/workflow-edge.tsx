@@ -29,7 +29,8 @@ export function WorkflowEdge(props: EdgeProps) {
     y: p.y === start.y ? props.sourceY : p.y === end.y ? props.targetY : p.y,
   }))) : step
   // A value connection shows its current value at its middle.
-  const value = useContext(WorkflowContext)?.valueLabel(props.id) ?? ""
+  // A bypass edge (lib/helper-nodes) shows the value of the connection that feeds the row.
+  const value = useContext(WorkflowContext)?.valueLabel((props.data?.connection as string | undefined) ?? props.id) ?? ""
   const target = useInternalNode<TaskFlowNode>(props.target)
   const collapsed = target?.type === "task" && target.data.geometry.collapsed
   const label = props.data?.value

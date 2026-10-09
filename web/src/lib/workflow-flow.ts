@@ -18,7 +18,7 @@ import {
 } from "./node-interaction"
 import type { Catalog, Frame, Spec } from "./workbench"
 import { subflowColor } from "./subflow"
-import { isSourceNode } from "./file-nodes"
+import { helperKind } from "./helper-nodes"
 import { compoundEdges, compoundPorts, memberConnection } from "./compound"
 import {
   COLLECT_PORT,
@@ -262,8 +262,10 @@ export function taskEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
           role: connection.role.startsWith(PARAM_HANDLE) ? connection.role.slice(PARAM_HANDLE.length) : connection.role,
           // A value connection is dotted and shows its current value.
           ...(value && connection.source.kind !== "files" && connection.source.outputRole !== PSET_OUTPUT ? { value: true } : {}),
-          // Edges out of a file source can be hidden (view.hideFileEdges).
-          fromFiles: isSourceNode(catalog.tasks.find((s) => s.name === source.task)),
+          // Edges of a file node can be hidden (view.fileNodes, lib/helper-nodes).
+          fromFiles: [source, target].some((t) => helperKind(catalog.tasks.find((s) => s.name === t.task)) === "files"),
+          // Value and pset connections can be hidden (view.valueNodes).
+          fromValues: value,
         },
         source: source.id,
         target: target.id,

@@ -16,7 +16,13 @@ import {
 } from "@/components/toolbar"
 import { SearchField } from "@/components/search-field"
 import { WorkflowEdge } from "@/components/workflow-edge"
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react"
+import {
+  Fragment,
+  useCallback,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react"
 import { useQuery } from "@tanstack/react-query"
 import { displayQueryOptions } from "@/lib/display"
 import {
@@ -45,6 +51,9 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -61,7 +70,18 @@ import { WorkflowClickConnection } from "@/components/workflow-click-connection"
 import { type WorkflowNode } from "@/lib/workflow-flow"
 import { isContainerId } from "@/lib/containers"
 import { clippedTitle } from "@/lib/clipped-title"
+import {
+  bypassEdges,
+  helperLevel,
+  hiddenHelpers,
+  peekedHelpers,
+  type HelperKind,
+} from "@/lib/helper-nodes"
 
+const helperMenus: { kind: HelperKind; label: string }[] = [
+  { kind: "files", label: "파일 노드" },
+  { kind: "values", label: "값 노드" },
+]
 const workflowEdgeTypes = { default: WorkflowEdge, smoothstep: WorkflowEdge }
 
 const nodeTypes = { task: TaskNode, subflow: GroupNode, compound: CompoundNode }
@@ -205,21 +225,47 @@ export function TaskMapView({
     revealNode,
     revealConnection,
   })
-  // Hidden file edges return for the node under the pointer and the selected one.
-  const shownEdges = useMemo(
+  // Hidden helper edges return for the node under the pointer and the selected one;
+  // hidden helper nodes return for the selection (lib/helper-nodes).
+  const { fileNodes, valueNodes, selected } = map.view
+  const hiddenNodes = useMemo(() => hiddenHelpers(map, catalog), [map, catalog])
+  const away = useMemo(() => {
+    const peek = peekedHelpers(edges, hiddenNodes, selected)
+    return new Set([...hiddenNodes].filter((id) => !peek.has(id)))
+  }, [edges, hiddenNodes, selected])
+  const shownNodes = useMemo(
     () =>
-      map.view.hideFileEdges
-        ? edges.map((edge) =>
-            edge.data?.fromFiles &&
-            ![edge.source, edge.target].some(
-              (id) => id === hoveredNode || id === map.view.selected
-            )
-              ? { ...edge, hidden: true }
-              : edge
-          )
-        : edges,
-    [edges, hoveredNode, map.view.hideFileEdges, map.view.selected]
+      away.size
+        ? nodes.map((node) => (away.has(node.id) ? { ...node, hidden: true } : node))
+        : nodes,
+    [nodes, away]
   )
+  const shownEdges = useMemo(() => {
+    if (!fileNodes && !valueNodes) return edges
+    const near = (edge: Edge) =>
+      [edge.source, edge.target].some((id) => id === hoveredNode || id === selected)
+    const shown = edges.map((edge) =>
+      away.has(edge.source) ||
+      away.has(edge.target) ||
+      (((fileNodes === "edges" && edge.data?.fromFiles) ||
+        (valueNodes === "edges" && edge.data?.fromValues)) &&
+        !near(edge))
+        ? { ...edge, hidden: true }
+        : edge
+    )
+    return away.size ? [...shown, ...bypassEdges(edges, away)] : shown
+  }, [edges, hoveredNode, fileNodes, valueNodes, selected, away])
+  const setHelperLevel = (kind: HelperKind, level: string) => {
+    const value = level === "edges" || level === "nodes" ? level : undefined
+    const name = helperMenus.find((m) => m.kind === kind)!.label
+    update(
+      (m) => ({
+        ...m,
+        view: { ...m.view, [kind === "files" ? "fileNodes" : "valueNodes"]: value },
+      }),
+      `${name} ${value === "nodes" ? "숨기기" : value === "edges" ? "연결선 숨기기" : "모두 보기"}`
+    )
+  }
   return (
     <section
       className="map-workspace"
@@ -287,6 +333,7 @@ export function TaskMapView({
               setGroupCollapsed,
               onInput: selectingGroup ? undefined : onInput,
               onParameter: selectingGroup ? undefined : onParameter,
+              hiddenNodes,
               values: values.results,
               valueLabel: values.label,
               selectingGroup,
@@ -307,7 +354,7 @@ export function TaskMapView({
             <ReactFlow<WorkflowNode, Edge>
               connectOnClick={true}
               proOptions={{ hideAttribution: true }}
-              nodes={nodes}
+              nodes={shownNodes}
               edges={shownEdges}
               onNodeMouseEnter={(_, node) => setHoveredNode(node.id)}
               onNodeMouseLeave={() => setHoveredNode("")}
@@ -321,7 +368,8 @@ export function TaskMapView({
                   : ConnectionLineType.Bezier
               }
               onNodesChange={onNodesChange}
-              onEdgeClick={(event) => {
+              onEdgeClick={(event, edge) => {
+                if (edge.data?.bypass) return
                 const bounds = (event.currentTarget as Element)
                   .closest(".react-flow")
                   ?.getBoundingClientRect()
@@ -550,25 +598,28 @@ export function TaskMapView({
                       >
                         축소하면 자동으로 접기
                       </DropdownMenuCheckboxItem>
-                      <DropdownMenuCheckboxItem
-                        checked={!!map.view.hideFileEdges}
-                        onCheckedChange={(hideFileEdges) =>
-                          update(
-                            (m) => ({
-                              ...m,
-                              view: {
-                                ...m.view,
-                                hideFileEdges: hideFileEdges || undefined,
-                              },
-                            }),
-                            hideFileEdges
-                              ? "파일 연결선 숨기기"
-                              : "파일 연결선 보이기"
-                          )
-                        }
-                      >
-                        파일 연결선 숨기기
-                      </DropdownMenuCheckboxItem>
+                      {helperMenus.map(({ kind, label }) => (
+                        <Fragment key={kind}>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuRadioGroup
+                            value={helperLevel(map.view, kind) ?? "all"}
+                            onValueChange={(level: string) =>
+                              setHelperLevel(kind, level)
+                            }
+                          >
+                            <DropdownMenuLabel>{label}</DropdownMenuLabel>
+                            <DropdownMenuRadioItem value="all">
+                              모두 보기
+                            </DropdownMenuRadioItem>
+                            <DropdownMenuRadioItem value="edges">
+                              연결선 숨기기
+                            </DropdownMenuRadioItem>
+                            <DropdownMenuRadioItem value="nodes">
+                              노드도 숨기기
+                            </DropdownMenuRadioItem>
+                          </DropdownMenuRadioGroup>
+                        </Fragment>
+                      ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </ToolbarGroup>

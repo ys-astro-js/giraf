@@ -269,6 +269,8 @@ export function useTaskMapInteraction({
         nodes: [{ id: revealNode.id }],
         padding: 0.35,
         maxZoom: 1,
+        // A hidden helper node is shown once selected; do not wait for it.
+        includeHiddenNodes: true,
       })
     })
     return () => cancelAnimationFrame(frame)
@@ -286,6 +288,7 @@ export function useTaskMapInteraction({
         nodes: [{ id: map.view.selected }],
         padding: 0.35,
         maxZoom: 1,
+        includeHiddenNodes: true,
       })
   }
   const [initialViewport] = useState(() => flowViewport(map.view))
