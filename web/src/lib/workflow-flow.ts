@@ -18,7 +18,8 @@ import {
 import type { Catalog, Frame, Spec } from "./workbench"
 import { subflowColor } from "./subflow"
 import { helperKind } from "./helper-nodes"
-import { compoundEdges, compoundPorts, memberConnection } from "./compound"
+import { compoundEdges, compoundPorts, memberConnection, COMPOUND_HEADER, COMPOUND_WIDTH } from "./compound"
+import { collapsedAround, groupAncestors, groupContents, groupDepth, parentGroup } from "./group-nesting"
 import {
   checkContainerConnection,
   containerTask,
@@ -26,6 +27,10 @@ import {
   flowPorts,
   flowRun,
   flowStatement,
+  crossedRegions,
+  flowLabels,
+  receiveMode,
+  receiveText,
   isContainerId,
   type FlowPort,
   type FlowRun,
@@ -50,6 +55,8 @@ export type TaskFlowNode = Node<
   },
   "task"
 >
+/** Where an edge crosses into a region: its chip's text and menu (components/workflow-edge). */
+export type EdgeCrossing = { region: string; text: string; mode: "split" | "all" | "match"; keys: string[]; labels: string[]; value: boolean }
 /** A loop region drawn on its group (lib/containers). */
 export type FlowView = { run: FlowRun; icon?: string; label: string; statement: string; ports: FlowPort[] }
 export type SubflowNode = Node<
@@ -75,6 +82,8 @@ export function flowNodes(
   const layout = nodeLayout(map, catalog, rows, collapseAll)
   const tasks: TaskFlowNode[] = map.tasks.map((task, i) => {
     const parent = map.subflows?.find((g) => g.id === task.subflowId)
+    // Inside a collapsed group, at any depth, the compound node stands in.
+    const covered = !!collapsedAround(map, task.id)
     const absolute = task.position ?? { x: layout[i].x, y: layout[i].y }
     const geometry = layout[i]
     return {
@@ -102,7 +111,7 @@ export function flowNodes(
           }
         : absolute,
       parentId: parent?.id,
-      hidden: !!parent?.collapsed,
+      hidden: covered,
       initialWidth: geometry.width,
       initialHeight: geometry.height,
       // The node sizes to its markup: collapsed, expanded or opened by a connection.
@@ -134,8 +143,20 @@ export function flowNodes(
     }
   })
   const edges = map.subflows?.some((g) => g.collapsed) ? taskEdges(map, catalog) : []
-  const groups: (SubflowNode | CompoundNode)[] = (map.subflows ?? []).map((group) => {
-    const children = tasks.filter((t) => t.parentId === group.id)
+  // A region inside another is a child node of its group; parents come first.
+  const nested = (map.subflows ?? [])
+    .map((group, i) => ({ group, i, depth: groupDepth(map, group.id) }))
+    .sort((a, b) => a.depth - b.depth || a.i - b.i)
+    .map(({ group }) => group)
+  const groups: (SubflowNode | CompoundNode)[] = nested.map((group) => {
+    const children = tasks.filter((t) => t.parentId === group.id && !isContainerId(map, t.id))
+    const inner = nested.filter((g) => parentGroup(map, g.id)?.id === group.id)
+    const outer = parentGroup(map, group.id)
+    const placed = {
+      position: outer ? { x: group.position.x - outer.position.x, y: group.position.y - outer.position.y } : group.position,
+      ...(outer ? { parentId: outer.id } : {}),
+      hidden: !!collapsedAround(map, group.id),
+    }
     // A container is its group plus a task holding its settings and ports.
     const container = containerTask(map, group.id)
     const run = flowRun(map, catalog, group.id)
@@ -154,8 +175,8 @@ export function flowNodes(
         id: group.id,
         type: "compound",
         zIndex: 2,
-        data: { group, members: children.map((t) => t.id), ...(flow ? { flow } : {}), ...ports },
-        position: group.position,
+        data: { group, members: [...groupContents(map, group.id).tasks].filter((id) => !isContainerId(map, id)), ...(flow ? { flow } : {}), ...ports },
+        ...placed,
         initialWidth: ports.width,
         initialHeight: ports.height,
         style: { opacity: children.some((t) => matches(t.data.task, search)) || (container && matches(container, search)) ? 1 : 0.3 },
@@ -170,21 +191,25 @@ export function flowNodes(
       }
     }
     const view = flow ? { ...flow, ...flowPorts(map, catalog, group) } : undefined
+    // Regions inside it count as its children.
+    const within = (g: Subflow) => ({ x: g.position.x - group.position.x, y: g.position.y - group.position.y })
     const minWidth = Math.max(
       360,
-      ...children.map((t) => t.position.x + (t.initialWidth ?? 248) + 24)
+      ...children.map((t) => t.position.x + (t.initialWidth ?? 248) + 24),
+      ...inner.map((g) => within(g).x + (g.collapsed ? COMPOUND_WIDTH : g.width) + 24)
     )
     const minHeight = Math.max(
       160,
-      ...children.map((t) => t.position.y + t.data.geometry.occupiedHeight + 24)
+      ...children.map((t) => t.position.y + t.data.geometry.occupiedHeight + 24),
+      ...inner.map((g) => within(g).y + (g.collapsed ? COMPOUND_HEADER : g.height) + 24)
     )
     return {
       id: group.id,
       type: "subflow",
       // Above edges (1) by DOM order: the heading covers them, the see-through body does not.
       zIndex: 1,
-      data: { group, count: children.length, minWidth, minHeight, ...(view ? { flow: view } : {}) },
-      position: group.position,
+      data: { group, count: children.length + inner.length, minWidth, minHeight, ...(view ? { flow: view } : {}) },
+      ...placed,
       style: {
         width: group.width,
         height: group.height,
@@ -237,6 +262,13 @@ export function taskEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
     const value = isValueSource(connection.source)
     // A renamed value row or compute input leaves its connection without handles.
     if (value && !valueEnds(catalog, source, target, sourceHandle, connection.role)) return []
+    // A chip where it crosses into a region drawn open (lib/containers receiveMode).
+    const crossings: EdgeCrossing[] = connection.role.startsWith(PSET_INPUT) ? [] : crossedRegions(map, connection)
+      .filter((region) => !collapsedAround(map, region.id) && !map.subflows?.find((g) => g.id === region.id)?.collapsed)
+      .map((region) => {
+        const mode = receiveMode(map, connection, region)
+        return { region: region.id, text: receiveText(mode), mode: mode.mode, keys: mode.mode === "match" ? mode.keys : [], labels: flowLabels(region), value }
+      })
     const targetGroup = map.view.selected === source.id || map.view.selected === target.id
       ? map.subflows?.find(group => group.id === target.subflowId) : undefined
     return [
@@ -255,6 +287,7 @@ export function taskEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
           fromFiles: [source, target].some((t) => helperKind(catalog.tasks.find((s) => s.name === t.task)) === "files"),
           // Value and pset connections can be hidden (view.valueNodes).
           fromValues: value,
+          ...(crossings.length ? { crossings } : {}),
         },
         source: source.id,
         target: target.id,
@@ -363,14 +396,22 @@ export function changeFlowNodes(
       .filter((c) => c.type === "position" && c.position)
       .map((c) => ("id" in c ? c.id : ""))
   )
+  // Node positions are relative to their parent; the map keeps them absolute.
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const absolute = (id: string): { x: number; y: number } => {
+    const node = byId.get(id)!
+    const parent = node.parentId ? absolute(node.parentId) : { x: 0, y: 0 }
+    return { x: parent.x + node.position.x, y: parent.y + node.position.y }
+  }
+  // Moving a group moves everything in it, at any depth.
+  const carried = (id: string) => moved.has(id) || groupAncestors(map, id).some((g) => moved.has(g.id))
   const subflows = map.subflows?.map((g) => {
-    const node = nodes.find((n) => n.id === g.id)!
     const resize = relevant.find(
       (c) => c.type === "dimensions" && c.id === g.id
     )
     return {
       ...g,
-      position: moved.has(g.id) ? node.position : g.position,
+      position: carried(g.id) && byId.has(g.id) ? absolute(g.id) : g.position,
       ...(resize?.type === "dimensions" && resize.dimensions
         ? resize.dimensions
         : {}),
@@ -380,18 +421,12 @@ export function changeFlowNodes(
     ...map,
     subflows,
     tasks: map.tasks.map((task) => {
-      const node = nodes.find((n) => n.id === task.id)!
-      const parent = subflows?.find((g) => g.id === task.subflowId)
-      if (!moved.has(task.id) && !(parent && moved.has(parent.id))) return task
-      return {
-        ...task,
-        position: parent
-          ? {
-              x: parent.position.x + node.position.x,
-              y: parent.position.y + node.position.y,
-            }
-          : node.position,
-      }
+      if (!carried(task.id)) return task
+      // A region's task stands at its group's place.
+      const group = subflows?.find((g) => g.id === task.id)
+      if (group) return { ...task, position: group.position }
+      if (!byId.has(task.id)) return task
+      return { ...task, position: absolute(task.id) }
     }),
     view: {
       ...map.view,

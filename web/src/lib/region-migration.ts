@@ -13,7 +13,8 @@
  * connections from their source to their target, a range becomes `N번`, a
  * condition stays the region's condition (the 거짓 lane's tasks go to a second
  * region with the opposite one), and a connection that took one member of a
- * split or calibration port becomes a plain connection.
+ * split or calibration port becomes a plain connection, marked `widened` so
+ * diagnostics say it now takes the whole output (lib/containers loopIssues).
  */
 import { uid, type Connection, type Instance, type Source, type TaskMap } from "./task-map/model"
 import { EACH_LABEL, TIMES_LABEL, isFlowSpec, labelName, type Criterion, type FlowSettings } from "./containers"
@@ -29,6 +30,8 @@ const LANES = { then: "then", else: "else" }
 type OldFlow = FlowSettings & { variable?: string; keywords?: string[]; partition?: unknown; start?: string; end?: string; step?: string }
 type OldSource = Source & { group?: unknown; partition?: { keyword: string; value: string } }
 
+/** A source that took one value of a split port or one group of a calibration port. */
+const narrow = (source: Source) => "group" in source || "partition" in source
 const sourceId = (source: Source) => (source.kind !== "files" ? source.taskId : undefined)
 const plain = (source: Source): Source => {
   const { group: _g, partition: _p, ...rest } = source as OldSource
@@ -128,6 +131,7 @@ function migrateOne(map: TaskMap, catalog: Catalog, region: Instance): TaskMap {
           const region = role === LANES.else && elseId ? elseId : id
           connections.push({
             id: uid(), target: c.target, role: c.role, source: plain(item.source),
+            ...(narrow(item.source) ? { widened: true as const } : {}),
             ...(other ? { flow: { [region]: keys.length ? { mode: "match" as const, keys } : { mode: "all" as const, keys: [] } } } : {}),
           })
         }
@@ -136,7 +140,7 @@ function migrateOne(map: TaskMap, catalog: Catalog, region: Instance): TaskMap {
       if (role === RESULTS) {
         // Every round's results: each collected member output, straight to the target.
         for (const collect of map.connections.filter((x) => x.target === id && x.role === COLLECT))
-          connections.push({ id: uid(), target: c.target, role: c.role, source: plain(collect.source) })
+          connections.push({ id: uid(), target: c.target, role: c.role, source: plain(collect.source), ...(narrow(collect.source) ? { widened: true as const } : {}) })
         continue
       }
       if (role.startsWith(VALUE_HANDLE) && run === "for") {
@@ -195,9 +199,10 @@ export function migrateRegions(map: TaskMap, catalog: Catalog): TaskMap {
   return {
     ...next,
     connections: next.connections.map((c) => {
-      const { targetGroup: _, ...rest } = c as Connection & { targetGroup?: unknown }
-      void _
-      return { ...rest, source: plain(c.source) }
+      const { targetGroup, ...rest } = c as Connection & { targetGroup?: unknown }
+      // It took one value of a port that is one output now: it warns until its receiving is chosen.
+      const widened = !!targetGroup || narrow(c.source)
+      return { ...rest, source: plain(c.source), ...(widened ? { widened: true as const } : {}) }
     }),
     tasks: next.tasks.map((t) => {
       const { firstPass: _a, firstPassValues: _b, ...rest } = t as Instance & { firstPass?: unknown; firstPassValues?: unknown }

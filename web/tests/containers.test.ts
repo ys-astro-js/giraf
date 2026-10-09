@@ -1,11 +1,12 @@
 import { beforeAll, expect, test } from "bun:test"
 import { emptyMap, makeInstance, addTask, connect, removeTask, duplicateTask, restoreTask, workflowRequest, workflowDiagnosticRequest, migrateMap, payloadFor } from "../src/lib/task-map"
-import { setSubflowCollapsed, autoLayoutMap, moveTaskToSubflow, saveSubflow, updateSubflow, dissolveSubflow } from "../src/lib/subflow"
+import { setSubflowCollapsed, autoLayoutMap, moveTaskToSubflow, moveGroupToGroup, saveSubflow, updateSubflow, dissolveSubflow } from "../src/lib/subflow"
 import {
   addContainer, containerLabel, flowPorts, flowProgress, flowStatement, setGroupRun, syncContainerItems, loopOutputNames,
   loopVariables, memberPassInputs, loopIssues, receiveMode, regionRounds, roundsOf, setReceiveMode, type Criterion,
+  chooseReceive, receiveText, WIDENED_MESSAGE,
 } from "../src/lib/containers"
-import { flowNodes, flowEdges, connectFlow, connectionFeedback } from "../src/lib/workflow-flow"
+import { flowNodes, flowEdges, connectFlow, connectionFeedback, changeFlowNodes } from "../src/lib/workflow-flow"
 import { valueRequest } from "../src/lib/values"
 import { nodeLayout } from "../src/lib/node-interaction"
 import { plannedOutputs, type Catalog, type Frame, type Preferences, type Spec } from "../src/lib/workbench"
@@ -104,7 +105,8 @@ test("the heading says what it repeats by", () => {
   expect(say({ criteria: [{ keyword: "EXPTIME" }, { count: 5, order: "name" }] })).toBe("EXPTIME마다 5장씩")
   expect(say({ criteria: [{ each: true }] })).toBe("파일마다")
   expect(say({ criteria: [{ times: 3 }] })).toBe("3번")
-  expect(say({ criteria: [], condition: "EXPTIME > 30" })).toBe("EXPTIME > 30")
+  expect(say({ criteria: [], condition: "EXPTIME > 30" })).toBe("EXPTIME > 30만")
+  expect(say({ criteria: [{ keyword: "FILTER" }], condition: "EXPTIME > 30" })).toBe("FILTER마다 EXPTIME > 30만")
 })
 
 test("connections go straight to inner tasks; a region has nothing to connect to", () => {
@@ -138,8 +140,12 @@ test("rounds divide by keywords, chunks, files and times, sorted naturally", () 
   expect(names([{ count: 2, order: "name" }])).toEqual([["1", ["b30a", "b30b"]], ["2", ["v15a", "v15b"]], ["3", ["v30"]]])
   expect(names([{ each: true }])[0]).toEqual(["b30a", ["b30a"]])
   expect(roundsOf([], frames, { criteria: [{ times: 2 }] })!.map((r) => r.values)).toEqual([{ 회차: "1" }, { 회차: "2" }])
-  // Expressions and conditions are evaluated by the run.
-  expect(roundsOf(ids, frames, { criteria: [], condition: "EXPTIME > 20" })).toBeUndefined()
+  // Expressions and conditions read the headers the files here hold; others wait for the run.
+  expect(roundsOf(ids, frames, { criteria: [], condition: "EXPTIME > 20" })!.map((r) => r.ids)).toEqual([["b30a", "b30b", "v30"]])
+  expect(names([{ expression: "EXPTIME > 20 && FILTER == \"V\"", name: "긴V" }])).toEqual([
+    ["False", ["b30a", "v15a", "b30b", "v15b"]], ["True", ["v30"]],
+  ])
+  expect(roundsOf(ids, frames, { criteria: [{ expression: "AIRMASS * 2", name: "x" }] })).toBeUndefined()
 })
 
 /** Darks by EXPTIME with chunks of five inside; science by FILTER, EXPTIME. */
@@ -381,4 +387,144 @@ test("a plain group becomes a region in place and back, keeping members and link
   const once = setGroupRun(looped, catalog, prefs, "g", undefined)
   expect(once.tasks.some((t) => t.id === "g")).toBe(false)
   expect(once.connections).toEqual(map.connections)
+})
+
+/** Two regions, one inside the other: outer at (0,0) 800×600 holding inner at (100,100) 400×300 holding proc. */
+function nested() {
+  let map = ["object", "proc", "combine"].reduce(
+    (m, id, i) => addTask(m, { ...makeInstance(spec("ccdproc2"), catalog, prefs, id), label: id, position: { x: -600 + i * 1200, y: 200 } }),
+    emptyMap()
+  )
+  const group = (m: TaskMap, id: string, position: { x: number; y: number }, size: [number, number], parent?: string): TaskMap => {
+    const made = setGroupRun({ ...m, subflows: [...(m.subflows ?? []), { id, name: id, position, width: size[0], height: size[1] }] }, catalog, prefs, id, "foreach")
+    return { ...made, tasks: made.tasks.map((t) => (t.id === id ? { ...t, position, ...(parent ? { subflowId: parent } : {}) } : t)) }
+  }
+  map = group(map, "outer", { x: 0, y: 0 }, [800, 600])
+  map = group(map, "inner", { x: 100, y: 100 }, [400, 300], "outer")
+  map = { ...map, tasks: map.tasks.map((t) => (t.id === "proc" ? { ...t, subflowId: "inner", position: { x: 140, y: 200 } } : t)) }
+  map = setFlow(map, "outer", { criteria: [{ keyword: "FILTER" }], split: { taskId: "object" } })
+  map = setFlow(map, "inner", { criteria: [{ count: 2, order: "name" }], split: { taskId: "object" } })
+  map = wire(map, "object", "output", "proc", "images")
+  return map
+}
+
+test("a region inside another is drawn as a child of its group, parents first", () => {
+  const map = nested()
+  const nodes = flowNodes(map, catalog)
+  const inner = nodes.find((n) => n.id === "inner")!
+  expect(inner).toMatchObject({ type: "subflow", parentId: "outer", position: { x: 100, y: 100 } })
+  expect(nodes.findIndex((n) => n.id === "outer")).toBeLessThan(nodes.findIndex((n) => n.id === "inner"))
+  expect(nodes.find((n) => n.id === "proc")).toMatchObject({ parentId: "inner", position: { x: 40, y: 100 } })
+  // The outer group is at least as big as what it holds.
+  expect((nodes.find((n) => n.id === "outer")!.data as { minWidth: number }).minWidth).toBe(524)
+  // Collapsing the outer region hides everything inside it.
+  const collapsed = flowNodes(setSubflowCollapsed(map, "outer", true), catalog)
+  expect(collapsed.find((n) => n.id === "inner")!.hidden).toBe(true)
+  expect(collapsed.find((n) => n.id === "proc")!.hidden).toBe(true)
+  expect(collapsed.find((n) => n.id === "outer")).toMatchObject({ type: "compound", data: { members: ["proc"] } })
+  // The edge into the inner region now meets the outer compound node.
+  expect(flowEdges(setSubflowCollapsed(map, "outer", true), catalog)[0]).toMatchObject({ target: "outer", targetHandle: "in:proc:images" })
+})
+
+test("moving a region moves what is inside it; a region goes into and out of another", () => {
+  let map = nested()
+  map = changeFlowNodes(map, catalog, [{ id: "outer", type: "position", position: { x: 50, y: 20 } }])
+  expect(map.subflows!.find((g) => g.id === "inner")!.position).toEqual({ x: 150, y: 120 })
+  expect(map.tasks.find((t) => t.id === "proc")!.position).toEqual({ x: 190, y: 220 })
+  // Out to the top: absolute positions stay, members come along.
+  const out = moveGroupToGroup(map, catalog, "inner", undefined, { x: 1000, y: 1000 })
+  expect(out.tasks.find((t) => t.id === "inner")!.subflowId).toBeUndefined()
+  expect(out.tasks.find((t) => t.id === "proc")).toMatchObject({ subflowId: "inner", position: { x: 1040, y: 1100 } })
+  // Back in: the outer group grows to hold it.
+  const back = moveGroupToGroup(out, catalog, "inner", "outer", { x: 600, y: 500 })
+  expect(back.tasks.find((t) => t.id === "inner")!.subflowId).toBe("outer")
+  const outer = back.subflows!.find((g) => g.id === "outer")!
+  expect(outer.position.x + outer.width).toBe(1024)
+  expect(outer.position.y + outer.height).toBe(824)
+  // Never into itself or a region inside it.
+  expect(moveGroupToGroup(map, catalog, "outer", "inner", { x: 0, y: 0 })).toBe(map)
+})
+
+test("a new region goes inside the selected one; removing a region hands what it held to its parent", () => {
+  let map = nested()
+  map = { ...map, view: { ...map.view, selected: "outer" } }
+  map = addContainer(map, catalog, region, prefs, nodeLayout(map, catalog))
+  const added = map.view.selected
+  expect(map.tasks.find((t) => t.id === added)!.subflowId).toBe("outer")
+  expect(map.subflows!.find((g) => g.id === added)!.position).toEqual({ x: 24, y: 424 })
+  const removed = removeTask(nested(), "inner")
+  expect(removed.tasks.find((t) => t.id === "proc")!.subflowId).toBe("outer")
+  const restored = restoreTask(removed, nested(), "inner")
+  expect(restored.tasks.find((t) => t.id === "proc")!.subflowId).toBe("inner")
+})
+
+test("auto layout lays a region inside the one around it", async () => {
+  const laid = await autoLayoutMap(nested(), catalog)
+  const [outer, inner] = ["outer", "inner"].map((id) => laid.subflows!.find((g) => g.id === id)!)
+  expect(inner.position.x).toBeGreaterThan(outer.position.x)
+  expect(inner.position.y).toBeGreaterThan(outer.position.y)
+  expect(inner.position.x + inner.width).toBeLessThanOrEqual(outer.position.x + outer.width)
+  expect(inner.position.y + inner.height).toBeLessThanOrEqual(outer.position.y + outer.height)
+})
+
+test("an edge has a chip for each region border it crosses into, none leaving", () => {
+  let map = nested()
+  map = wire(map, "proc", "output", "combine", "images")
+  const edges = flowEdges(map, catalog)
+  const into = edges.find((e) => e.target === "proc")!
+  expect((into.data!.crossings as { region: string; text: string }[]).map((c) => [c.region, c.text])).toEqual([["outer", "나눠서"], ["inner", "나눠서"]])
+  expect(edges.find((e) => e.target === "combine")!.data!.crossings).toBeUndefined()
+})
+
+test("a chip's menu sets the split, every round, or the keys to pair by", () => {
+  let map = nested()
+  map = addTask(map, { ...makeInstance(spec("ccdproc2"), catalog, prefs, "mflat"), label: "Master Flat", position: { x: -600, y: 600 } })
+  map = wire(map, "mflat", "output", "proc", "flat")
+  const flat = map.connections.find((c) => c.role === "flat")!
+  const outer = () => map.tasks.find((t) => t.id === "outer")!
+  expect(receiveMode(map, flat, outer())).toEqual({ mode: "all" })
+  map = chooseReceive(map, flat.id, "outer", { key: "FILTER" })
+  expect(map.connections.find((c) => c.id === flat.id)!.flow).toEqual({ outer: { mode: "match", keys: ["FILTER"] } })
+  expect(receiveText(receiveMode(map, map.connections.find((c) => c.id === flat.id)!, outer()))).toBe("FILTER로 짝")
+  map = chooseReceive(map, flat.id, "outer", { key: "FILTER" })
+  expect(map.connections.find((c) => c.id === flat.id)!.flow).toEqual({ outer: { mode: "all", keys: [] } })
+  // 나눠서 makes it the split; the old split source then pairs or reaches every round.
+  map = chooseReceive(map, flat.id, "outer", "split")
+  expect(outer().draft.flow!.split).toEqual({ taskId: "mflat", outputRole: "output" })
+  expect(receiveMode(map, map.connections.find((c) => c.id === flat.id)!, outer())).toEqual({ mode: "split" })
+  // Leaving 나눠서 leaves the region without a split.
+  map = chooseReceive(map, flat.id, "outer", "all")
+  expect(outer().draft.flow!.split).toBeUndefined()
+  expect(receiveText({ mode: "match", keys: ["FILTER", "EXPTIME"] })).toBe("FILTER, EXPTIME로 짝")
+})
+
+test("warnings: several files to a one-file input, and connections older documents widened", () => {
+  const one: Spec = { ...task("one"), inputs: [{ name: "images", label: "영상", kind: "image", multiple: true }, { name: "flat", label: "flat", kind: "image", multiple: false }] }
+  const local: Catalog = { ...catalog, tasks: [...catalog.tasks, one] }
+  let map = nested()
+  map = { ...map, tasks: map.tasks.map((t) => (t.id === "proc" ? { ...t, task: "one" } : t)) }
+  map = addTask(map, { ...makeInstance(spec("ccdproc2"), catalog, prefs, "mflat"), label: "Master Flat", position: { x: -600, y: 600 } })
+  map = connect(map, "proc", "flat", { kind: "pending", taskId: "mflat" })
+  map = ran(map, "object", [frame("b1", { FILTER: "B" }), frame("b2", { FILTER: "B" }), frame("v1", { FILTER: "V" })])
+  map = ran(map, "mflat", [frame("FlatB", { FILTER: "B" }), frame("FlatV", { FILTER: "V" })])
+  const flat = map.connections.find((c) => c.role === "flat")!
+  expect(loopIssues(map, local, []).map((i) => [i.message, i.connectionId])).toEqual([["Master Flat가 여러 장입니다. 칩에서 짝을 고르세요.", flat.id]])
+  // Pairing by FILTER answers it.
+  const paired = chooseReceive(map, flat.id, "outer", { key: "FILTER" })
+  expect(loopIssues(paired, local, [])).toEqual([])
+  // A widened connection warns until its receiving is chosen.
+  const widened = { ...map, connections: map.connections.map((c) => (c.id === flat.id ? { ...c, widened: true as const } : c)) }
+  expect(loopIssues(widened, local, []).map((i) => i.message)).toContain(WIDENED_MESSAGE)
+  expect(chooseReceive(widened, flat.id, "outer", "all").connections.find((c) => c.id === flat.id)!.widened).toBeUndefined()
+})
+
+test("older documents mark connections that took one value of a port", () => {
+  let map = ["a", "b"].reduce((m, id) => addTask(m, { ...makeInstance(spec("ccdproc2"), catalog, prefs, id), label: id }), emptyMap())
+  map = { ...map, connections: [
+    { id: "p", target: "b", role: "flat", source: { kind: "pending", taskId: "a", partition: { keyword: "FILTER", value: "B" } } as never },
+    { id: "g", target: "b", role: "dark", source: { kind: "pending", taskId: "a" }, targetGroup: { exptime: "30" } } as never,
+    { id: "x", target: "b", role: "images", source: { kind: "pending", taskId: "a" } },
+  ] }
+  const loaded = migrateMap({ ...prefs, taskMap: map }, catalog)
+  expect(loaded.connections.map((c) => [c.id, c.widened])).toEqual([["p", true], ["g", true], ["x", undefined]])
 })

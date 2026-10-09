@@ -2,6 +2,7 @@ import type { Edge } from "@xyflow/react"
 import type { Instance, Subflow, TaskMap } from "@/lib/task-map"
 import type { Diagnostic } from "./diagnostics"
 import { NODE_METRICS } from "./node-interaction"
+import { collapsedAround, groupContents } from "./group-nesting"
 /** Matches .subflow-heading, so a group looks the same collapsed and expanded. */
 export const COMPOUND_HEADER = 56
 /** Wider than a task node: the group heading carries edit, count, expand and run. */
@@ -20,9 +21,9 @@ function parseHandle(handle: string | null | undefined, prefix: "in" | "out") {
 export type CompoundPort = { handleId: string; member: string; port: string; label: string; summary: string; y: number; value?: boolean }
 type Boundary = { inputs: Omit<CompoundPort, "y">[]; outputs: Omit<CompoundPort, "y">[]; width?: number }
 
+/** The collapsed group drawn in a task's place: the outermost one around it. */
 export function collapsedGroupOf(map: TaskMap, taskId: string): Subflow | undefined {
-  const id = map.tasks.find((t) => t.id === taskId)?.subflowId
-  return id ? map.subflows?.find((g) => g.id === id && g.collapsed) : undefined
+  return collapsedAround(map, taskId)
 }
 
 function outputName(task: Instance | undefined, handle: string): string {
@@ -37,7 +38,8 @@ function outputName(task: Instance | undefined, handle: string): string {
  * A container's own ports (`boundary`, lib/containers) come first.
  */
 export function compoundPorts(map: TaskMap, group: Subflow, edges: Edge[], boundary?: Boundary) {
-  const members = new Set(map.tasks.filter((t) => t.subflowId === group.id).map((t) => t.id))
+  // Regions inside it are inside it too.
+  const members = groupContents(map, group.id).tasks
   const label = (id: string) => map.tasks.find((t) => t.id === id)?.label ?? id
   const inputs = new Map<string, Omit<CompoundPort, "y">>(boundary?.inputs.map((row) => [row.handleId, row]))
   const sources = new Map<string, string[]>()

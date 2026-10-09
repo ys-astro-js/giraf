@@ -35,6 +35,8 @@ export type Connection = {
   source: Source
   /** How it receives at each loop region border it crosses, by region id; unset is the default (lib/containers receiveMode). */
   flow?: Record<string, ReceiveMode>
+  /** Opened from an older document where it took one value of a split or calibration port; now it takes the whole output. Warns until its receive mode is chosen (lib/region-migration). */
+  widened?: true
 }
 
 export type Instance = {

@@ -68,7 +68,8 @@ import { SubflowEditor } from "@/components/subflow-editor"
 import { setSubflowCollapsed, subflowColor } from "@/lib/subflow"
 import { WorkflowClickConnection } from "@/components/workflow-click-connection"
 import { type WorkflowNode } from "@/lib/workflow-flow"
-import { isContainerId } from "@/lib/containers"
+import { chooseReceive, isContainerId } from "@/lib/containers"
+import type { Box } from "@/lib/edge-crossing"
 import { clippedTitle } from "@/lib/clipped-title"
 import {
   bypassEdges,
@@ -126,6 +127,7 @@ export function TaskMapView({
   flowProgress,
 }: TaskMapViewProps) {
   const [hoveredNode, setHoveredNode] = useState("")
+  const [chipBoxes] = useState(() => new Map<string, Box>())
   const values = useValueResults(map, catalog)
   const autoCollapse = useNodeView((state) => state.autoCollapse)
   const setAutoCollapse = useNodeView((state) => state.setAutoCollapse)
@@ -333,6 +335,11 @@ export function TaskMapView({
               runGroup: onRunSubflow,
               groupRunDisabled: workflowBusy || runDisabled,
               flowProgress,
+              chipBoxes,
+              chooseReceive: selectingGroup
+                ? undefined
+                : (connectionId, regionId, choice) =>
+                    update((m) => chooseReceive(m, connectionId, regionId, choice), "받는 방법 변경"),
             }}
           >
             <ReactFlow<WorkflowNode, Edge>

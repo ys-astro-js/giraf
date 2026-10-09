@@ -5,6 +5,7 @@ import { compoundPorts } from "./compound"
 import type { TaskMap } from "@/lib/task-map"
 import type { Catalog, Frame } from "./workbench"
 import { containerTask, flowBoundary } from "./containers"
+import { collapsedAround, groupAncestors, parentGroup } from "./group-nesting"
 import { BYPASS_PREFIX, bypassEdges, helperAnchors, hiddenHelpers } from "./helper-nodes"
 
 const options: LayoutOptions = {
@@ -33,16 +34,32 @@ export async function autoLayoutMap(
 ): Promise<TaskMap> {
   if (!map.tasks.length && !map.subflows?.length) return map
   const { default: ELK } = await import("elkjs/lib/elk.bundled.js")
-  const collapsed = new Map((map.subflows ?? []).filter(group => group.collapsed).map(group => [group.id, group]))
-  const groups = new Map<string, ElkNode>((map.subflows ?? []).filter(group => !group.collapsed).map(group => [group.id, {
+  // A group inside a collapsed one moves with it; the rest are laid out where they sit.
+  const shown = (map.subflows ?? []).filter(group => !collapsedAround(map, group.id))
+  const collapsed = new Map(shown.filter(group => group.collapsed).map(group => [group.id, group]))
+  // A group is at least wide enough for its heading, even with little inside.
+  const minimum = (id: string) => {
+    const container = containerTask(map, id)
+    return { width: container ? flowBoundary(map, catalog, container).width : 360, height: 160 }
+  }
+  const groups = new Map<string, ElkNode>(shown.filter(group => !group.collapsed).map(group => [group.id, {
     id: groupId(group.id),
-    layoutOptions: options,
+    layoutOptions: {
+      ...options,
+      "elk.nodeSize.constraints": "[MINIMUM_SIZE]",
+      "elk.nodeSize.minimum": `(${minimum(group.id).width}, ${minimum(group.id).height})`,
+    },
     children: [],
-    width: 360,
-    height: 160,
+    ...minimum(group.id),
   }]))
   const nodes = new Map<string, ElkNode>()
-  const children: ElkNode[] = [...groups.values()]
+  const children: ElkNode[] = []
+  // A region inside another is a child of its group's node.
+  const place = (id: string, node: ElkNode) => {
+    const parent = parentGroup(map, id)
+    ;((parent && groups.get(parent.id)?.children) ?? children).push(node)
+  }
+  for (const [id, node] of groups) place(id, node)
   // A collapsed group is one node with the compound's ports; its members keep their places.
   const plain = collapsed.size ? taskEdges(map, catalog) : []
   for (const group of collapsed.values()) {
@@ -63,12 +80,12 @@ export async function autoLayoutMap(
       ],
     }
     nodes.set(group.id, node)
-    children.push(node)
+    place(group.id, node)
   }
   // Hidden helper nodes stay out; their bypass edges keep the order (lib/helper-nodes).
   const hidden = hiddenHelpers(map, catalog)
   for (const task of map.tasks) {
-    if (task.subflowId && collapsed.has(task.subflowId)) continue
+    if (collapsedAround(map, task.id)) continue
     if (hidden.has(task.id)) continue
     // A container's task is its group node.
     if (containerTask(map, task.id)) {
@@ -112,7 +129,7 @@ export async function autoLayoutMap(
   const elk = new ELK()
   // Edges between a container and its members stay out: ELK lays out the members inside it.
   const inner = (container: string, other: string) =>
-    !!containerTask(map, container) && map.tasks.find(task => task.id === other)?.subflowId === container
+    !!containerTask(map, container) && groupAncestors(map, other).some(group => group.id === container)
   const all = flowEdges(map, catalog)
   const edges = [...all, ...bypassEdges(all, hidden)].filter(edge =>
     !edge.hidden && !hidden.has(edge.source) && !hidden.has(edge.target) &&
@@ -134,15 +151,17 @@ export async function autoLayoutMap(
     }
   }
   collect(graph)
-  const shift = (id: string) => {
-    const group = collapsed.get(id), node = placed.get(groupId(id))
+  // What is inside a collapsed group moves as it moves.
+  const shift = (id: string | undefined) => {
+    const group = id ? collapsed.get(id) : undefined, node = id ? placed.get(groupId(id)) : undefined
     return group && node ? { x: node.x! - group.position.x, y: node.y! - group.position.y } : { x: 0, y: 0 }
   }
+  const coveredBy = (id: string) => collapsedAround(map, id)?.id
   // Routes inside a collapsed group move with it.
   const edgeRoutes: NonNullable<TaskMap["edgeRoutes"]> = Object.fromEntries(
     Object.entries(map.edgeRoutes ?? {}).flatMap(([id, route]) => {
-      const group = map.tasks.find(task => task.id === route.target)?.subflowId
-      if (!group || !collapsed.has(group) || map.tasks.find(task => task.id === route.source)?.subflowId !== group) return []
+      const group = coveredBy(route.target)
+      if (!group || coveredBy(route.source) !== group) return []
       const d = shift(group)
       return [[id, { ...route, points: route.points.map(p => ({ x: p.x + d.x, y: p.y + d.y })) }]]
     }))
@@ -176,8 +195,9 @@ export async function autoLayoutMap(
     ...map,
     edgeRoutes,
     tasks: map.tasks.map(task => {
-      if (task.subflowId && collapsed.has(task.subflowId)) {
-        const d = shift(task.subflowId), position = task.position ?? { x: 0, y: 0 }
+      const covering = coveredBy(task.id)
+      if (covering) {
+        const d = shift(covering), position = task.position ?? { x: 0, y: 0 }
         return { ...task, position: { x: position.x + d.x, y: position.y + d.y } }
       }
       if (hidden.has(task.id)) {
@@ -188,6 +208,11 @@ export async function autoLayoutMap(
       return { ...task, position: { x: node.x!, y: node.y! } }
     }),
     ...(map.subflows ? { subflows: map.subflows.map(group => {
+      const covering = coveredBy(group.id)
+      if (covering) {
+        const d = shift(covering)
+        return { ...group, position: { x: group.position.x + d.x, y: group.position.y + d.y } }
+      }
       const node = placed.get(groupId(group.id))!
       return group.collapsed
         ? { ...group, position: { x: node.x!, y: node.y! } }

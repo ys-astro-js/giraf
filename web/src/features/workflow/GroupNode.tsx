@@ -4,7 +4,8 @@ import { Play, GripVertical, Pencil, Maximize2, Terminal, ChevronsDownUp } from 
 import { Button } from "@/components/ui/button"
 import { NodeIcon } from "@/components/node-icon"
 import { subflowColor } from "@/lib/subflow"
-import { flowProgress } from "@/lib/containers"
+import { flowProgress, isContainerId } from "@/lib/containers"
+import { groupContents } from "@/lib/group-nesting"
 import { compoundStatus } from "@/lib/compound"
 import { stateLabel } from "@/lib/task-map"
 import { type SubflowNode } from "@/lib/workflow-flow"
@@ -35,7 +36,8 @@ export const GroupNode = memo(function GroupNode({
   const name = flow?.label ?? data.group.name
   const meta = flowProgress(flow?.run, progress?.id === id ? progress : undefined)
   // The same status as the collapsed node: members' runs and diagnostics, and the container's own.
-  const members = map.tasks.filter((t) => t.subflowId === data.group.id).map((t) => t.id)
+  // Regions inside it count with it.
+  const members = [...groupContents(map, data.group.id).tasks].filter((t) => !isContainerId(map, t))
   const status = compoundStatus(map, members, currentIssues, flow ? id : undefined)
   const statusLabel = status.severity
     ? `${status.severity === "error" ? "오류" : "경고"}: ${status.issues.map((issue) => issue.message).join("; ")}`

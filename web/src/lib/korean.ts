@@ -22,3 +22,13 @@ export const withSubject = (word: string) => word + (hasFinalConsonant(word) ? "
 
 /** `datapars를`, `param을`. */
 export const withObject = (word: string) => word + (hasFinalConsonant(word) ? "을" : "를")
+
+/** `EXPTIME로`, `B30으로`, `파일로`: 으로 after a final consonant other than ㄹ. */
+export function withMeans(word: string): string {
+  const text = word.trim()
+  const last = text.at(-1) ?? ""
+  const code = last.charCodeAt(0) - 0xac00
+  // ㄹ is the 8th final consonant; 일, 칠, 팔 and 엘 end in it.
+  const rieul = code >= 0 && code <= 11171 ? code % 28 === 8 : /[178]$/.test(text) || /l$/i.test(text)
+  return word + (hasFinalConsonant(word) && !rieul ? "으로" : "로")
+}

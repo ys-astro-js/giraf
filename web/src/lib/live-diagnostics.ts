@@ -63,7 +63,7 @@ export function createWorkflowDiagnosticsController(
       if (!disposed && inspectedDocument === documentId && inspectedVersion === version) {
         store.replaceCurrent(documentId, [
           ...result.diagnostics,
-          ...inspectedLocal.map(({ id, severity, message, nodeId }) => ({ id, severity, message, nodeId })),
+          ...inspectedLocal.map(({ id, severity, message, nodeId, connectionId }) => ({ id, severity, message, nodeId, ...(connectionId ? { connectionId } : {}) })),
         ], nodeLabels)
         setFailure("")
       }

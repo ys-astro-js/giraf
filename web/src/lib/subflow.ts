@@ -11,6 +11,7 @@ import type { Catalog } from "./workbench"
 import { isValueNode, isValueRole } from "./values"
 import { containerTask } from "./containers"
 import { resolvedSource } from "./task-map/runs"
+import { fitGroups, groupContents } from "./group-nesting"
 
 export function saveSubflow(
   map: TaskMap,
@@ -89,7 +90,9 @@ export function subflowRequest(
   const group = map.subflows?.find((g) => g.id === id)
   // A container runs with its members (lib/containers).
   const container = containerTask(map, id)
-  const tasks = [...map.tasks.filter((t) => t.subflowId === id), ...(container ? [container] : [])]
+  // Regions inside it run with it.
+  const inside = groupContents(map, id).tasks
+  const tasks = [...map.tasks.filter((t) => inside.has(t.id)), ...(container ? [container] : [])]
   if (!group || tasks.length === (container ? 1 : 0)) throw Error("실행할 그룹 작업이 없습니다.")
   const ids = new Set(tasks.map((t) => t.id))
   const connections = map.connections.filter((c) => ids.has(c.target))
@@ -164,7 +167,7 @@ export function updateSubflow(
   }
 }
 export function setSubflowCollapsed(map: TaskMap, id: string, collapsed: boolean): TaskMap {
-  const hidden = collapsed && map.tasks.some((t) => t.id === map.view.selected && t.subflowId === id)
+  const hidden = collapsed && groupContents(map, id).tasks.has(map.view.selected)
   return {
     ...map,
     subflows: map.subflows?.map((g) => (g.id === id ? { ...g, collapsed: collapsed || undefined } : g)),
@@ -205,33 +208,41 @@ export function moveTaskToSubflow(
   }
   if (!groupId) return next
   const layout = nodeLayout(next, catalog)
-  const members = next.tasks.filter((t) => t.subflowId === groupId)
-  return {
-    ...next,
-    subflows: next.subflows?.map((g) => {
-      if (g.id !== groupId) return g
-      const bounds = members.map((t) => ({
-        position: t.position ?? layout[next.tasks.indexOf(t)],
-        size: layout[next.tasks.indexOf(t)],
-      }))
-      const x = Math.min(g.position.x, ...bounds.map((b) => b.position.x - 24))
-      const y = Math.min(g.position.y, ...bounds.map((b) => b.position.y - 72))
-      return {
-        ...g,
-        position: { x, y },
-        width:
-          Math.max(
-            g.position.x + g.width,
-            ...bounds.map((b) => b.position.x + b.size.width + 24)
-          ) - x,
-        height:
-          Math.max(
-            g.position.y + g.height,
-            ...bounds.map((b) => b.position.y + b.size.height + 24)
-          ) - y,
-      }
+  const size = (id: string) => layout[next.tasks.findIndex((t) => t.id === id)]
+  return fitGroups(next, groupId, size)
+}
+
+/**
+ * Move a region into another group (or out, with `groupId` undefined), its
+ * members along: a region nests in the group its task is in. A plain group
+ * has no task and stays at the top.
+ */
+export function moveGroupToGroup(
+  map: TaskMap,
+  catalog: Catalog,
+  id: string,
+  groupId: string | undefined,
+  position: { x: number; y: number }
+): TaskMap {
+  const group = map.subflows?.find((g) => g.id === id)
+  if (!group || !containerTask(map, id)) return map
+  if (groupId && (groupId === id || !map.subflows?.some((g) => g.id === groupId) || groupContents(map, id).groups.has(groupId)))
+    return map
+  const d = { x: position.x - group.position.x, y: position.y - group.position.y }
+  const inside = groupContents(map, id)
+  const shift = (p: { x: number; y: number } | undefined) => (p ? { x: p.x + d.x, y: p.y + d.y } : p)
+  const next: TaskMap = {
+    ...map,
+    subflows: map.subflows!.map((g) => (g.id === id || inside.groups.has(g.id) ? { ...g, position: shift(g.position)! } : g)),
+    tasks: map.tasks.map((t) => {
+      const moved = t.id === id || inside.tasks.has(t.id) ? { ...t, position: shift(t.position) } : t
+      return t.id === id ? { ...moved, subflowId: groupId } : moved
     }),
   }
+  if (!groupId) return next
+  const layout = nodeLayout(next, catalog)
+  const size = (taskId: string) => layout[next.tasks.findIndex((t) => t.id === taskId)]
+  return fitGroups(next, groupId, size)
 }
 
 export { autoLayoutMap } from "./workflow-layout"

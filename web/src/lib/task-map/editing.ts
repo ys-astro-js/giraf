@@ -1,3 +1,4 @@
+import { groupContents } from "../group-nesting"
 import {
   defaults,
   makeDraft,
@@ -34,7 +35,9 @@ export function duplicateTask(
   if (!original) return map
   // A container's copy brings its own group and copies of its members.
   const group = map.subflows?.find((g) => g.id === id)
-  const members = group ? map.tasks.filter((t) => t.subflowId === id) : []
+  // Regions inside it come along with theirs.
+  const inside = group ? groupContents(map, id) : { tasks: new Set<string>(), groups: new Set<string>() }
+  const members = map.tasks.filter((t) => inside.tasks.has(t.id))
   const ids = new Map([original, ...members].map((t) => [t.id, uid()]))
   const newId = ids.get(id)!
   const from = group?.position ?? original.position ?? position
@@ -43,9 +46,11 @@ export function duplicateTask(
   const copies = members.map((t) => ({
     ...clone(t),
     id: ids.get(t.id)!,
-    subflowId: newId,
+    subflowId: ids.get(t.subflowId!) ?? newId,
     ...(t.position ? { position: shift(t.position) } : {}),
   }))
+  const groups = (map.subflows ?? []).filter((g) => inside.groups.has(g.id))
+    .map((g) => ({ ...clone(g), id: ids.get(g.id)!, position: shift(g.position) }))
   // Links into the copies come along; a link between copied nodes waits for the copy's own run.
   const links = map.connections
     .filter((link) => ids.has(link.target))
@@ -72,7 +77,7 @@ export function duplicateTask(
     })
   return {
     ...map,
-    ...(group ? { subflows: [...map.subflows!, { ...clone(group), id: newId, position, collapsed: undefined }] } : {}),
+    ...(group ? { subflows: [...map.subflows!, { ...clone(group), id: newId, position, collapsed: undefined }, ...groups] } : {}),
     tasks: [...map.tasks, task, ...copies],
     connections: [...map.connections, ...links],
     view: { ...map.view, selected: newId },
@@ -229,9 +234,11 @@ export function removeTask(map: TaskMap, id: string): TaskMap {
   if (index < 0) return map
   // Removing a container (lib/containers) keeps its members, as dissolving a group does.
   const container = map.subflows?.some((g) => g.id === id)
+  // A region's members (and regions inside it) go to the group it was in.
+  const parent = map.tasks[index].subflowId
   const tasks = map.tasks
     .filter((t) => t.id !== id)
-    .map((t) => (container && t.subflowId === id ? { ...t, subflowId: undefined } : t))
+    .map((t) => (container && t.subflowId === id ? { ...t, subflowId: parent } : t))
   return {
     ...map,
     ...(container ? { subflows: map.subflows!.filter((g) => g.id !== id) } : {}),
@@ -243,6 +250,13 @@ export function removeTask(map: TaskMap, id: string): TaskMap {
           !(c.source.kind === "pending" && c.source.taskId === id)
       )
       .map((c) => {
+        if (container && c.flow?.[id]) {
+          const { [id]: _, ...flow } = c.flow
+          void _
+          const { flow: _f, ...rest } = c
+          void _f
+          c = Object.keys(flow).length ? { ...rest, flow } : rest
+        }
         if (c.source.kind !== "result" || c.source.taskId !== id) return c
         const { taskId: _, ...source } = c.source
         return { ...c, source }
@@ -308,11 +322,13 @@ export function restoreTask(
   const group = before.subflows?.find((g) => g.id === id)
   if (group && !map.subflows?.some((g) => g.id === id)) {
     const members = new Set(before.tasks.filter((t) => t.subflowId === id).map((t) => t.id))
+    // Receive modes at its border come back on the connections still there.
+    const modes = new Map(before.connections.flatMap((c) => (c.flow?.[id] ? [[c.id, c.flow[id]] as const] : [])))
     return {
       ...map,
       subflows: [...(map.subflows ?? []), clone(group)],
-      tasks: tasks.map((t) => (members.has(t.id) && !t.subflowId ? { ...t, subflowId: id } : t)),
-      connections,
+      tasks: tasks.map((t) => (members.has(t.id) && t.subflowId === task.subflowId ? { ...t, subflowId: id } : t)),
+      connections: connections.map((c) => (modes.has(c.id) && !c.flow?.[id] ? { ...c, flow: { ...c.flow, [id]: clone(modes.get(c.id)!) } } : c)),
       view: { ...map.view, selected: id },
     }
   }

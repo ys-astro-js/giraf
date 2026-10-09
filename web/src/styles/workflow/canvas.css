@@ -182,3 +182,10 @@ div:has(> [data-slot="tooltip-content"] .connection-port-feedback) { pointer-eve
 /* An unconnected value input appears only while a value is being connected. */
 .map-viewport .react-flow__handle[data-hidden="true"] { visibility:hidden; }
 .map-viewport .react-flow__edge.workflow-edge-value .react-flow__edge-path { stroke-dasharray:0 6; stroke-linecap:round; stroke-width:2.5; }
+
+/* Where a connection crosses into a loop region: how it receives there (lib/containers). */
+.region-chip { position:absolute; pointer-events:all; cursor:pointer; display:inline-flex; align-items:center; height:18px; padding:0 6px; border-radius:9px; border:1px solid color-mix(in srgb, var(--foreground) 22%, var(--border)); background:var(--background); color:var(--foreground); font-size:11px; line-height:16px; font-weight:600; white-space:nowrap; z-index:1; }
+.region-chip:hover, .region-chip[data-popup-open] { border-color:var(--foreground); }
+.region-chip:focus-visible { outline:2px solid var(--ring); outline-offset:1px; }
+.region-chip[data-severity="warning"] { border-color:var(--warning); }
+.region-chip[data-severity="error"] { border-color:var(--destructive); }

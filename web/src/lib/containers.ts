@@ -20,8 +20,10 @@
 import { makeInstance, type Connection, type Instance, type Subflow, type TaskMap } from "./task-map/model"
 import { resolvedSource } from "./task-map/runs"
 import { isContainerId } from "./flow-graph"
+import { fitGroups } from "./group-nesting"
+import { evaluateExpression, expressionText } from "./flow-expression"
 import { isValueRole, VALUE_HANDLE } from "./values"
-import { withSubject } from "./korean"
+import { withMeans, withSubject } from "./korean"
 import type { Catalog, Draft, Frame, Preferences, Spec } from "./workbench"
 
 export { isContainerId }
@@ -115,6 +117,63 @@ export function receiveMode(map: TaskMap, connection: Pick<Connection, "source" 
   return keys.length ? { mode: "match", keys } : { mode: "all" }
 }
 
+/** What the chip on a region's border says: `나눠서`, `모두에`, `FILTER, EXPTIME로 짝`. */
+export function receiveText(mode: Receive): string {
+  if (mode.mode === "split") return "나눠서"
+  if (mode.mode === "all") return "모두에"
+  return `${withMeans(mode.keys.join(", "))} 짝`
+}
+
+/**
+ * The regions a connection crosses into, outermost first: those around its
+ * target and not around its source. Leaving a region crosses nothing; a
+ * region's own values start inside it.
+ */
+export function crossedRegions(map: TaskMap, connection: Pick<Connection, "source" | "target">): Instance[] {
+  const from = connection.source.kind !== "files" ? connection.source.taskId : undefined
+  return enclosingRegions(map, connection.target).filter((r) => r.id !== from && !(from && insideRegion(map, from, r.id)))
+}
+
+/** A chip menu's choice: the region's split, every round the same files, or one key to pair by toggled. */
+export type ReceiveChoice = "split" | "all" | { key: string }
+/**
+ * Change how a connection receives at one region's border. `나눠서` makes its
+ * source the region's split; leaving `나눠서` leaves the region without one.
+ * Choosing settles a warning about the connection having been widened.
+ */
+export function chooseReceive(map: TaskMap, connectionId: string, regionId: string, choice: ReceiveChoice): TaskMap {
+  const connection = map.connections.find((c) => c.id === connectionId)
+  const region = map.tasks.find((t) => t.id === regionId)
+  if (!connection || !region || connection.source.kind === "files" || !connection.source.taskId) return map
+  const { taskId, outputRole } = connection.source
+  const current = receiveMode(map, connection, region)
+  const setSplit = (m: TaskMap, split: FlowSplit | undefined): TaskMap => ({
+    ...m,
+    tasks: m.tasks.map((t) => {
+      if (t.id !== regionId) return t
+      const { split: _, ...rest } = flowSettings(t)
+      void _
+      return { ...t, draft: { ...t.draft, flow: split ? { ...rest, split } : rest } }
+    }),
+  })
+  let next: TaskMap = {
+    ...map,
+    connections: map.connections.map((c) => {
+      if (c.id !== connectionId || !c.widened) return c
+      const { widened: _, ...rest } = c
+      void _
+      return rest
+    }),
+  }
+  if (choice === "split")
+    return setReceiveMode(setSplit(next, { taskId, ...(outputRole ? { outputRole } : {}) }), connectionId, regionId, undefined)
+  if (current.mode === "split") next = setSplit(next, undefined)
+  if (choice === "all") return setReceiveMode(next, connectionId, regionId, { mode: "all", keys: [] })
+  const keys = current.mode === "match" ? current.keys : []
+  const toggled = flowLabels(region).filter((k) => (k === choice.key ? !keys.includes(k) : keys.includes(k)))
+  return setReceiveMode(next, connectionId, regionId, toggled.length ? { mode: "match", keys: toggled } : { mode: "all", keys: [] })
+}
+
 const number = (text: string | undefined) => {
   if (text === undefined || text.trim() === "") return undefined
   const value = Number(text)
@@ -157,15 +216,36 @@ function stem(label: string) {
 }
 const labelOf = (frames: Map<string, Frame>, id: string) => frames.get(id)?.label || frames.get(id)?.name || id
 
+/** What an expression reads of a file for a name: its label, else its header (giraf/flows.py variables). */
+const lookupOf = (frame: Frame | undefined) => (name: string) => {
+  const value = frame?.labels?.[name] ?? frame?.headers?.[name]
+  return value === undefined || value === null ? undefined : String(value)
+}
+
 /**
  * The rounds a region makes of `ids` (giraf/flows.py rounds), or undefined
- * when an expression decides them, which only a run evaluates.
+ * when an expression or condition reads what the files here do not hold,
+ * which only a run decides.
  */
 export function roundsOf(ids: string[], frames: Map<string, Frame>, settings: FlowSettings): FlowRound[] | undefined {
   const criteria = settings.criteria ?? []
-  if (settings.condition?.trim() || criteria.some((c) => "expression" in c)) return undefined
+  const condition = settings.condition?.trim()
+  if (condition) {
+    const held = ids.map((id) => evaluateExpression(condition, lookupOf(frames.get(id))))
+    if (held.some((v) => v === undefined)) return undefined
+    ids = ids.filter((_, i) => (typeof held[i] === "string" ? held[i] !== "" : !!held[i]))
+  }
+  const evaluated = new Map<string, string>()
+  for (const [k, criterion] of criteria.entries()) {
+    if (!("expression" in criterion)) continue
+    for (const id of ids) {
+      const value = evaluateExpression(criterion.expression, lookupOf(frames.get(id)))
+      if (value === undefined) return undefined
+      evaluated.set(`${k}:${id}`, expressionText(value))
+    }
+  }
   let groups: [Record<string, string>, string[]][] = ids.length || !splitsFiles(settings) ? [[{}, ids]] : []
-  for (const criterion of criteria) {
+  for (const [k, criterion] of criteria.entries()) {
     const name = labelName(criterion)
     groups = groups.flatMap(([values, members]) => {
       if ("times" in criterion)
@@ -184,7 +264,9 @@ export function roundsOf(ids: string[], frames: Map<string, Frame>, settings: Fl
       }
       const found: [string, string[]][] = []
       for (const id of members) {
-        const value = "keyword" in criterion ? frameValue(frames.get(id), criterion.keyword) : stem(labelOf(frames, id))
+        const value = "keyword" in criterion ? frameValue(frames.get(id), criterion.keyword)
+          : "expression" in criterion ? evaluated.get(`${k}:${id}`)!
+          : stem(labelOf(frames, id))
         // 15 and 15.0 are one round, named as the first file has it.
         const group = found.find(([key]) => sameValue(key, value))
         if (group) group[1].push(id)
@@ -279,8 +361,17 @@ function firstContext(map: TaskMap, regions: Instance[], rows: Frame[]): Context
   return context
 }
 
-export type KeywordChoice = { keyword: string; values: string[] }
-/** Header keywords the split files have, each with its distinct values; chosen ones stay listed. */
+/**
+ * A header keyword the split files have: its distinct values, whether it is
+ * folded away (one value for all, or a different one for each file), and
+ * the keywords that read the same as it on every file.
+ */
+export type KeywordChoice = { keyword: string; values: string[]; counts: number[]; folded: boolean; same: string[] }
+/**
+ * Header keywords the split files have. A keyword of the instrument header
+ * mapping (Instance.mapping: exposure, filter, ...) stands for the others
+ * that read the same on every file, so each meaning is listed once.
+ */
 export function flowKeywordChoices(map: TaskMap, _catalog: Catalog, task: Instance, rows: Frame[]): KeywordChoice[] {
   const frames = framesOf(map, rows)
   const { ids } = splitFiles(map, task)
@@ -288,12 +379,27 @@ export function flowKeywordChoices(map: TaskMap, _catalog: Catalog, task: Instan
   for (const id of ids)
     for (const keyword of [...Object.keys(frames.get(id)?.labels ?? {}), ...Object.keys(frames.get(id)?.headers ?? {})])
       if (!found.includes(keyword)) found.push(keyword)
+  const read = (keyword: string) => ids.map((id) => passValue(frameValue(frames.get(id), keyword)))
+  const mapped = Object.values(task.mapping ?? {}).map(String).filter((k) => found.includes(k))
+  const standsFor = new Map<string, string>()
+  for (const keyword of found) {
+    if (mapped.includes(keyword)) continue
+    const own = JSON.stringify(read(keyword))
+    const same = mapped.find((m) => JSON.stringify(read(m)) === own)
+    if (same) standsFor.set(keyword, same)
+  }
   const chosen = criteriaOf(task).flatMap((c) => ("keyword" in c ? [c.keyword] : []))
-  return [...found, ...chosen.filter((k) => !found.includes(k))].map((keyword) => ({
-    keyword,
-    values: [...new Set(ids.map((id) => frameValue(frames.get(id), keyword)).filter(Boolean).map(passValue))]
-      .sort((a, b) => compareText(a, b)),
-  }))
+  return [...found.filter((k) => !standsFor.has(k) || chosen.includes(k)), ...chosen.filter((k) => !found.includes(k))].map((keyword) => {
+    const each = read(keyword)
+    const values = [...new Set(each.filter(Boolean))].sort((a, b) => compareText(a, b))
+    return {
+      keyword,
+      values,
+      counts: values.map((v) => each.filter((x) => x === v).length),
+      folded: !chosen.includes(keyword) && (values.length <= 1 || (ids.length > 2 && values.length === ids.length)),
+      same: [...standsFor].filter(([, m]) => m === keyword).map(([k]) => k),
+    }
+  })
 }
 
 /** The sources a region may split: outside sources connected into it. */
@@ -328,7 +434,7 @@ function criterionText(criterion: Criterion) {
   if ("each" in criterion) return "파일마다"
   return `${criterion.times}번`
 }
-/** What the region repeats by, beside its name: `FILTER, EXPTIME마다`, `5장씩`, `EXPTIME > 30`. */
+/** What the region repeats by, beside its name: `FILTER, EXPTIME마다`, `5장씩`, `EXPTIME > 30만`. */
 export function flowStatement(_map: TaskMap, catalog: Catalog, task: Instance): string {
   if (!isFlowSpec(specOf(catalog, task))) return task.label
   const settings = flowSettings(task)
@@ -346,7 +452,7 @@ export function flowStatement(_map: TaskMap, catalog: Catalog, task: Instance): 
     }
   }
   flush()
-  if (settings.condition?.trim()) parts.push(settings.condition.trim())
+  if (settings.condition?.trim()) parts.push(`${settings.condition.trim()}만`)
   return parts.join(" ") || "무엇마다 반복할지 정해 주세요"
 }
 
@@ -387,15 +493,28 @@ export function addContainer(map: TaskMap, catalog: Catalog, spec: Spec, prefs: 
   if (!isFlowSpec(spec)) throw Error("반복 노드가 아닙니다.")
   const task = makeInstance(spec, catalog, prefs)
   task.draft = { ...task.draft, flow: defaultFlowSettings() }
-  const right = Math.max(0, ...layout.map((n) => n.x + n.width), ...(map.subflows ?? []).map((g) => g.position.x + g.width))
-  const position = { x: layout.length || map.subflows?.length ? right + 112 : 32, y: 32 }
+  // With a region open and selected, the new one goes inside it, below what it holds.
+  const host = isContainerId(map, map.view.selected) ? map.subflows?.find((g) => g.id === map.view.selected && !g.collapsed) : undefined
+  const size = (id: string) => layout[map.tasks.findIndex((t) => t.id === id)] ?? { width: 0, height: 0 }
+  let position: { x: number; y: number }
+  if (host) {
+    const inside = [
+      ...map.tasks.filter((t) => t.subflowId === host.id && !isContainerId(map, t.id) && t.position).map((t) => t.position!.y + size(t.id).height),
+      ...(map.subflows ?? []).filter((g) => map.tasks.find((t) => t.id === g.id)?.subflowId === host.id).map((g) => g.position.y + g.height),
+    ]
+    position = { x: host.position.x + 24, y: inside.length ? Math.max(...inside) + 24 : host.position.y + 72 }
+  } else {
+    const right = Math.max(0, ...layout.map((n) => n.x + n.width), ...(map.subflows ?? []).map((g) => g.position.x + g.width))
+    position = { x: layout.length || map.subflows?.length ? right + 112 : 32, y: 32 }
+  }
   const group: Subflow = { id: task.id, name: task.label, position, width: 480, height: 240 }
-  return {
+  const next: TaskMap = {
     ...map,
-    tasks: [...map.tasks, { ...task, position }],
+    tasks: [...map.tasks, { ...task, position, ...(host ? { subflowId: host.id } : {}) }],
     subflows: [...(map.subflows ?? []), group],
     view: { ...map.view, selected: task.id },
   }
+  return host ? fitGroups(next, host.id, size) : next
 }
 
 /**
@@ -502,21 +621,58 @@ export function memberPassInputs(map: TaskMap, _catalog: Catalog, member: Instan
   return result
 }
 
-/** Warnings for rounds a connection has no matching file for, where the files are known. */
-export function loopIssues(map: TaskMap, catalog: Catalog, rows: Frame[]) {
-  return map.tasks.flatMap((member) => {
-    if (!enclosingRegions(map, member.id).length) return []
-    return Object.entries(memberPassInputs(map, catalog, member, rows) ?? {}).flatMap(([role, input]) =>
-      input.kind === "passes"
-        ? input.missing.map((pass) => ({
-            id: `loop-match:${member.id}:${role}:${pass}`,
-            severity: "warning" as const,
-            message: `${pass} 회차에 맞는 ${withSubject(role)} 없습니다.`,
-            nodeId: member.id,
-            label: member.label,
-          }))
-        : [])
-  })
+/** Does an input take several files (node schema `multiple`)? Unknown inputs are not judged. */
+function takesMany(catalog: Catalog, task: Instance, role: string) {
+  const spec = specOf(catalog, task)
+  return spec?.inputs.find((s) => s.name === role)?.multiple ?? catalog.ccdproc.inputs.find((s) => s.name === role)?.multiple ?? true
+}
+
+export const WIDENED_MESSAGE = "묶음에서 한 값만 받던 연결이 전체를 받게 되었습니다."
+type LoopIssue = { id: string; severity: "warning"; message: string; nodeId: string; connectionId: string; label: string }
+
+/**
+ * Warnings on connections into regions, where the files are known: a round a
+ * pairing finds nothing for, a `모두에` source giving several files to an
+ * input that takes one, and a connection older documents widened from one
+ * value of a split or calibration port (lib/region-migration).
+ */
+export function loopIssues(map: TaskMap, catalog: Catalog, rows: Frame[]): LoopIssue[] {
+  const frames = framesOf(map, rows)
+  const issues: LoopIssue[] = []
+  const contexts = new Map<string, Context | undefined>()
+  for (const c of map.connections) {
+    const target = map.tasks.find((t) => t.id === c.target)
+    if (!target) continue
+    const issue = (kind: string, message: string) =>
+      issues.push({ id: `${kind}:${c.id}`, severity: "warning", message, nodeId: target.id, connectionId: c.id, label: target.label })
+    if (c.widened) issue("widened", WIDENED_MESSAGE)
+    if (isValueRole(c.role) || c.source.kind === "files" || !crossedRegions(map, c).length) continue
+    const regions = enclosingRegions(map, target.id)
+    const from = c.source.taskId
+    // A source inside the regions makes its files round by round.
+    if (from && regions.some((r) => insideRegion(map, from, r.id))) continue
+    const source = resolvedSource(map, c.source)
+    if (source.kind === "pending") continue
+    const inner = regions.at(-1)!
+    const key = regions.map((r) => r.id).join("/")
+    if (!contexts.has(key)) contexts.set(key, firstContext(map, regions.slice(0, -1), rows))
+    const outer = contexts.get(key)
+    const rounds = outer && regionRounds(map, inner, rows, outer).rounds
+    if (!outer || !rounds?.length) continue
+    const missing = new Set<string>()
+    let many = false
+    for (const round of rounds) {
+      const got = through(map, c, source.ids, [...outer, { region: inner, round }], frames)
+      if (got.missing) missing.add(got.missing)
+      many ||= got.ids.length > 1
+    }
+    for (const round of missing) issue(`loop-match:${round}`, `${round} 회차에 맞는 ${withSubject(c.role)} 없습니다.`)
+    if (many && !takesMany(catalog, target, c.role) && crossedRegions(map, c).some((r) => receiveMode(map, c, r).mode === "all")) {
+      const name = map.tasks.find((t) => t.id === from)?.label || source.label || c.role
+      issue("loop-many", `${withSubject(name)} 여러 장입니다. 칩에서 짝을 고르세요.`)
+    }
+  }
+  return issues
 }
 
 /**
