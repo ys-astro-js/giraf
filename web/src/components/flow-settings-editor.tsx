@@ -11,8 +11,8 @@ const range: { key: "start" | "end" | "step"; label: string }[] = [
 ]
 
 /**
- * A container's statement: the foreach or for variable, the for range, the
- * if condition. The foreach list is its input connection.
+ * What a container repeats over: the 반복 range or the 조건 분기 condition.
+ * 각각 반복 needs nothing here; its list is its input connection.
  */
 export function FlowSettingsEditor({
   spec,
@@ -23,25 +23,13 @@ export function FlowSettingsEditor({
   task: Instance
   edit: (fn: (t: Instance) => Instance) => void
 }) {
-  if (!isFlowSpec(spec)) return null
+  if (!isFlowSpec(spec) || spec.run === "foreach") return null
   const settings = task.draft.flow ?? {}
   const change = (patch: FlowSettings) =>
     edit((t) => ({ ...t, draft: { ...t.draft, flow: { ...t.draft.flow, ...patch } } }))
   return (
-    <section className="inspector-section" aria-label={spec.run}>
+    <section className="inspector-section" aria-label={spec.title}>
       <FieldGroup>
-        {spec.run !== "if" && (
-          <Field data-parameter-key="variable">
-            <FieldLabel htmlFor="flow-variable">변수</FieldLabel>
-            <Input
-              id="flow-variable"
-              className="font-mono"
-              value={settings.variable ?? ""}
-              placeholder={spec.run === "for" ? "i" : "image"}
-              onChange={(e) => change({ variable: e.target.value.trim() })}
-            />
-          </Field>
-        )}
         {spec.run === "for" &&
           range.map(({ key, label }) => (
             <Field key={key} data-parameter-key={key}>

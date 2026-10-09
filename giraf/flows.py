@@ -23,7 +23,8 @@ FLOW_RUNS = ('foreach', 'for', 'if')
 INNER_PORTS = {'foreach': ('item',), 'for': (), 'if': ('then', 'else')}
 COLLECT, RESULTS = 'result', 'results'
 MAX_ITERATIONS = 1000
-NAME = re.compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
+# The container sets it: a header keyword (FILTER, DATE-OBS), 파일 or 숫자.
+NAME = re.compile(r'^[^\W\d][\w-]*$')
 
 
 def flow_range(flow):
@@ -48,9 +49,9 @@ def flow_errors(flow):
     errors = []
     run = flow.get('run')
     if run in ('foreach', 'for') and not NAME.fullmatch(flow.get('variable') or ''):
-        errors.append('변수 이름은 영문자로 시작하는 이름이어야 합니다.')
+        errors.append('반복의 이름표가 올바르지 않습니다. 노드를 다시 추가해 주세요.')
     elif run in ('foreach', 'for') and flow['variable'] == 'name':
-        errors.append('name은 출력 이름의 입력 파일명 자리이므로 변수 이름으로 쓸 수 없습니다.')
+        errors.append('name 키워드로는 나눌 수 없습니다. 출력 이름의 {name}과 겹칩니다.')
     if run == 'for':
         try:
             flow_range(flow)

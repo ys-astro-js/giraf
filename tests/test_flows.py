@@ -85,6 +85,27 @@ class FlowTests(unittest.TestCase):
         # B and V run once each; members get that group's files and value.
         self.assertEqual(member, [(['b1', 'b2'], 3.38), (['v1'], 3.07)])
 
+    def test_a_second_foreach_pairs_the_first_ones_results_by_group(self):
+        headers = {'b1': {'FILTER': 'B'}, 'v1': {'FILTER': 'V'}}
+        runner = Runner({'object': files('b1', 'v1', headers=headers)})
+        graph = {
+            'nodes': [task('object'), task('phot'), task('psf')],
+            'flows': [{'id': 'aperture', 'label': 'aperture', 'run': 'foreach', 'variable': 'image',
+                       'members': ['phot'], 'partition': 'FILTER'},
+                      {'id': 'fit', 'label': 'fit', 'run': 'foreach', 'variable': 'image',
+                       'members': ['psf'], 'partition': 'FILTER'}],
+            'links': [link('object', 'aperture', 'items', sourceRole='image'),
+                      link('object', 'fit', 'items', sourceRole='image'),
+                      link('aperture', 'phot', 'image', sourceRole='item'),
+                      link('fit', 'psf', 'image', sourceRole='item'),
+                      link('phot', 'psf', 'photfile', sourceRole='output', multiple=False)],
+        }
+        self.assertEqual(workflow_order(graph), ['object', 'aperture', 'fit'])
+        state, _ = run(graph, runner)
+        self.assertEqual(state['state'], 'completed', state['message'])
+        fit = [(p['inputs']['image'], p['inputs']['photfile']) for id, p in runner.calls if id == 'psf']
+        self.assertEqual(fit, [(['b1'], ['phot(b1)']), (['v1'], ['phot(v1)'])])
+
     def test_for_feeds_its_variable_into_member_parameters(self):
         self.assertEqual(flow_range({'start': 2, 'end': 10, 'step': 2}), [2, 4, 6, 8, 10])
         self.assertEqual(flow_range({'start': 1.0, 'end': 0.5, 'step': -0.25}), [1.0, 0.75, 0.5])

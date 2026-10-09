@@ -111,9 +111,9 @@ def diagnose_flows(flows, connections, add):
         for message in flow_errors(flow):
             add('error', message, flow['id'])
         if flow.get('run') in ('foreach', 'if') and not flow.get('connected'):
-            add('error', '목록을 받을 입력을 연결해 주세요.' if flow['run'] == 'foreach' else '조건에 따라 보낼 입력을 연결해 주세요.', flow['id'])
+            add('error', '반복할 파일을 연결해 주세요.' if flow['run'] == 'foreach' else '조건에 따라 나눌 파일을 연결해 주세요.', flow['id'])
         if not flow.get('members'):
-            add('warning', '안쪽에 작업이 없습니다. 작업을 컨테이너 안으로 옮겨 주세요.', flow['id'])
+            add('warning', '안에 작업이 없습니다. 반복할 작업을 이 안으로 옮겨 주세요.', flow['id'])
 
 
 def diagnose_loop_outputs(flows, by_id, add):
@@ -127,7 +127,7 @@ def diagnose_loop_outputs(flows, by_id, add):
             payload = by_id.get(member, {}).get('payload', {})
             for role, name in constant_outputs(TASKS.get(payload.get('task'), {}), payload, variable):
                 add('warning', f'{role}: 회차마다 이름이 같아({name}) 앞 회차의 파일을 덮어씁니다. '
-                               f'이름에 {{{variable}}}를 넣어 주세요.', member)
+                               f'출력 이름에 {{{variable}}}를 넣어 주세요.', member)
 
 
 def diagnose_connections(by_id, connections, add, flows=frozenset()):

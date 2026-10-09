@@ -22,8 +22,8 @@ export const CompoundNode = memo(function CompoundNode({
   const { map, currentIssues, runGroup, groupRunDisabled, setGroupCollapsed, editGroup, choose, flowProgress: progress } =
     useContext(WorkflowContext)!
   const { group, members, inputs, outputs, height, flow } = data
-  // A container keeps its statement as the heading, collapsed or not.
-  const name = flow?.statement ?? group.name
+  // A container keeps its name and what it does as the heading, collapsed or not.
+  const name = flow?.label ?? group.name
   const meta = flowProgress(flow?.run, progress?.id === id ? progress : undefined)
   const status = compoundStatus(map, members, currentIssues, flow ? id : undefined)
   const statusLabel = status.severity
@@ -63,7 +63,8 @@ export const CompoundNode = memo(function CompoundNode({
         }}
       >
         <GripVertical aria-hidden="true" />
-        <strong className={flow ? "flow-statement" : undefined} title={name}>{name}</strong>
+        <strong title={name}>{name}</strong>
+        {flow && <span className="flow-statement" title={flow.statement}>{flow.statement}</span>}
         <span
           className="node-state"
           data-severity={status.severity}

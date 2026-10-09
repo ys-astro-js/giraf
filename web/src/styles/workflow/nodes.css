@@ -138,7 +138,7 @@
 /* foreach, for and if containers (lib/containers): a dashed group whose heading is the statement. */
 .subflow-node[data-flow], .workflow-node.compound-node[data-flow] { border-style: dashed; }
 .subflow-node[data-flow][data-selected="true"] { outline: 2px solid var(--foreground); outline-offset: 2px; }
-.subflow-heading .flow-statement { font-family: var(--font-mono, ui-monospace, monospace); font-size: 13px; font-weight: 500; }
+.subflow-heading > span.flow-statement { margin-left:0; min-width:0; overflow:hidden; text-overflow:ellipsis; font-size:13px; }
 /* Progress takes the heading's free space; the count follows it directly. */
 .subflow-heading > .flow-progress { font-variant-numeric: tabular-nums; }
 .subflow-heading > .flow-progress ~ .group-task-count { margin-left: 0; }

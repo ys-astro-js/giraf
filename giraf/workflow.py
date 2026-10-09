@@ -27,6 +27,12 @@ def matches_partition(product, partition):
     return str((headers or {}).get(partition['keyword'], '')).strip() == partition['value']
 
 
+def same_group(product, partition):
+    """A product a partitioned iteration made belongs to that group only."""
+    group = product.get('partition')
+    return not group or group['keyword'] != partition['keyword'] or group['value'] == partition['value']
+
+
 ACTIVE = {'running', 'waiting', 'confirmation', 'cancelling'}
 
 
@@ -47,7 +53,7 @@ def flow_owner(graph):
     for flow in graph.get('flows', []):
         for member in flow.get('members', []):
             if member in owner:
-                raise ValueError('한 작업은 컨테이너 하나에만 들어갈 수 있습니다.')
+                raise ValueError('한 작업은 반복이나 조건 분기 하나에만 들어갈 수 있습니다.')
             owner[member] = flow['id']
     return owner
 
@@ -75,7 +81,7 @@ def workflow_order(graph):
         raise ValueError('실행할 작업을 추가해 주세요. 작업 ID는 중복될 수 없습니다.')
     owner = flow_owner(graph)
     if set(owner) - set(ids):
-        raise ValueError('컨테이너에 없는 작업이 들어 있습니다. 컨테이너를 다시 확인해 주세요.')
+        raise ValueError('반복이나 조건 분기 안에 없는 작업이 들어 있습니다. 다시 확인해 주세요.')
     unit = lambda id: owner.get(id, id)
     incoming = {id: set() for id in ids if id not in owner}
     for link in graph.get('links', []):
@@ -126,9 +132,9 @@ def iteration_values(graph, flow, iteration):
             id=flow['id'], run='value-constant', rows=[dict(name=flow['variable'], value=repr(number))])]
     partition = iteration.get('partition')
     if partition:
-        members = set(flow.get('members', []))
+        # Value nodes outside the container (a shared pset) take the group too.
         for link in values.get('links', []):
-            if link['target'] in members and not link.get('partition'):
+            if not link.get('partition'):
                 link['partition'] = partition
     return {'values': values}
 
@@ -163,6 +169,9 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
                             if 'asset' not in p or accepts_asset(link['kind'], p['asset'])]
             else:
                 products = link_products(done[link['source']], link)
+                if iteration and iteration.get('partition'):
+                    # Another container's results pair by group: B with B.
+                    products = [p for p in products if same_group(p, iteration['partition'])]
             if not products:
                 raise ValueError(f"{labels[link['source']]}에서 {node['label']}에 전달할 결과가 생성되지 않았습니다.")
             bindings.setdefault(link['role'], []).extend(p['id'] for p in products)
@@ -217,11 +226,14 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
                 done[member] = run_task(member, done, flow, iteration)
                 job = merged.setdefault(member, dict(done[member], products=[]))
                 job.update({k: v for k, v in done[member].items() if k != 'products'})
-                job['products'] = job['products'] + done[member].get('products', [])
+                group = iteration.get('partition')
+                job['products'] = job['products'] + [dict(p, partition=group) if group else p
+                                                     for p in done[member].get('products', [])]
             for link in graph.get('links', []):
                 if link['target'] == id and link['role'] == COLLECT and link['source'] in flow.get('members', []) \
                         and link['source'] in done and link['source'] not in skipped:
-                    collected += [dict(p, role=RESULTS) for p in link_products(done[link['source']], link)]
+                    collected += [dict(p, role=RESULTS, **({'partition': iteration['partition']} if iteration.get('partition') else {}))
+                                  for p in link_products(done[link['source']], link)]
             report(deepcopy(state))
         state.pop('flow', None)
         # Members' links out of the container see every iteration's results.

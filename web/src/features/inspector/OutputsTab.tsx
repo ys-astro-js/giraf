@@ -33,7 +33,14 @@ import {
   plannedOutputs,
 } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
-import { loopOutputNames, loopVariable } from "@/lib/containers"
+import { loopOutputNames, loopVariable, memberVariable, variableMeaning } from "@/lib/containers"
+import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
+
+/** `파일 이름이`, `숫자가`: the subject particle after the word's last syllable. */
+const subject = (word: string) => {
+  const code = word.charCodeAt(word.length - 1) - 0xac00
+  return word + (code >= 0 && code <= 11171 && code % 28 === 0 ? "가" : "이")
+}
 
 export function InspectorOutputs({
   task,
@@ -73,38 +80,56 @@ export function InspectorOutputs({
     : spec.output
       ? [{ ...spec.output, kind: spec.kind, label: spec.output.name }]
       : []
+  // Inside a 각각 반복 or 반복, names can take each iteration's value.
+  const variable = memberVariable(map, catalog, task)
   function outputField(output: OutputSlot, prefix = "") {
     const id = `${prefix}generic-output-${output.name}`
+    const value =
+      spec.adapter === "generic"
+        ? (d.outputs?.[output.name] ?? output.default)
+        : d.output.name
+    const change = (next: string) =>
+      edit((t) => ({
+        ...t,
+        draft:
+          spec.adapter === "generic"
+            ? { ...t.draft, outputs: { ...t.draft.outputs, [output.name]: next } }
+            : { ...t.draft, output: { name: next } },
+      }))
+    const props = {
+      id,
+      "aria-describedby": `${id}-help`,
+      placeholder: output.optional ? "비워 두면 생성하지 않습니다" : undefined,
+      value,
+      onChange: (e: React.ChangeEvent<HTMLInputElement>) => change(e.target.value),
+    }
+    // The mark goes where the cursor is, or before the extension.
+    function insertVariable() {
+      const input = document.getElementById(id) as HTMLInputElement | null
+      const mark = `{${variable}}`
+      const dot = value.lastIndexOf(".")
+      const at = input && document.activeElement === input ? (input.selectionStart ?? value.length) : dot > 0 ? dot : value.length
+      change(value.slice(0, at) + mark + value.slice(at))
+      requestAnimationFrame(() => {
+        input?.focus()
+        input?.setSelectionRange(at + mark.length, at + mark.length)
+      })
+    }
     return (
       <Field key={output.name} className="generic-output-field">
         <FieldLabel htmlFor={id}>{output.name}</FieldLabel>
-        <Input
-          id={id}
-          aria-describedby={`${id}-help`}
-          placeholder={
-            output.optional ? "비워 두면 생성하지 않습니다" : undefined
-          }
-          value={
-            spec.adapter === "generic"
-              ? (d.outputs?.[output.name] ?? output.default)
-              : d.output.name
-          }
-          onChange={(e) =>
-            edit((t) => ({
-              ...t,
-              draft:
-                spec.adapter === "generic"
-                  ? {
-                      ...t.draft,
-                      outputs: {
-                        ...t.draft.outputs,
-                        [output.name]: e.target.value,
-                      },
-                    }
-                  : { ...t.draft, output: { name: e.target.value } },
-            }))
-          }
-        />
+        {variable ? (
+          <InputGroup>
+            <InputGroupInput {...props} />
+            <InputGroupAddon align="inline-end">
+              <InputGroupButton onMouseDown={(e) => e.preventDefault()} onClick={insertVariable}>
+                {variableMeaning(variable)} 넣기
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
+        ) : (
+          <Input {...props} />
+        )}
         <ParameterHelp
           p={{
             name: output.name,
@@ -118,6 +143,11 @@ export function InspectorOutputs({
           <FieldDescription>
             {"{name}"} 자리에 입력 파일명이 들어갑니다. 뒤에 확장자를 쓰면
             그대로 쓰고, {"{name}"}이 없으면 접두사로 붙습니다.
+          </FieldDescription>
+        )}
+        {variable && (
+          <FieldDescription>
+            {`{${variable}}`} 자리에는 회차마다 {subject(variableMeaning(variable))} 들어갑니다.
           </FieldDescription>
         )}
       </Field>

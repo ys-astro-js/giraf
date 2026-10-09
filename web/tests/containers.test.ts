@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from "bun:test"
 import { emptyMap, makeInstance, addTask, removeTask, restoreTask, workflowRequest, workflowDiagnosticRequest, migrateMap } from "../src/lib/task-map"
 import { setSubflowCollapsed, autoLayoutMap, moveTaskToSubflow, subflowRequest } from "../src/lib/subflow"
 import { compoundPorts } from "../src/lib/compound"
-import { addContainer, flowPorts, flowStatement, syncContainerItems, loopOutputNames, loopVariable, FLOW_HEADER } from "../src/lib/containers"
+import { addContainer, containerLabel, flowPorts, flowStatement, syncContainerItems, loopOutputNames, loopVariable, FLOW_HEADER } from "../src/lib/containers"
 import { flowNodes, flowEdges, taskEdges, connectFlow, connectionFeedback } from "../src/lib/workflow-flow"
 import { nodeLayout } from "../src/lib/node-interaction"
 import { plannedOutputs, type Catalog, type Preferences, type Spec } from "../src/lib/workbench"
@@ -67,7 +67,7 @@ const wire = (map: TaskMap, source: string, sourceHandle: string, target: string
 
 test("a container is a task and a group with one id, drawn as the group", () => {
   const { map, id } = fixture()
-  expect(map.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "image" })
+  expect(map.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "파일" })
   expect(map.view.selected).toBe(id)
   const nodes = flowNodes(map, catalog)
   expect(nodes.filter((n) => n.id === id).map((n) => n.type)).toEqual(["subflow"])
@@ -88,12 +88,12 @@ test("the heading reads as a statement for each kind", () => {
   const id = made.id
   let map = made.map
   map = wire(map, "object", "output", id, "items")
-  expect(flowStatement(map, catalog, map.tasks.find((t) => t.id === id)!)).toBe("foreach image in object")
+  expect(flowStatement(map, catalog, map.tasks.find((t) => t.id === id)!)).toBe("object 파일마다")
   const loop = fixture("for")
-  expect(flowStatement(loop.map, catalog, loop.map.tasks.find((t) => t.id === loop.id)!)).toBe("for i = 1, 3, 1")
+  expect(flowStatement(loop.map, catalog, loop.map.tasks.find((t) => t.id === loop.id)!)).toBe("1부터 3까지 1씩")
   const branch = fixture("if")
   const withCondition = { ...branch.map, tasks: branch.map.tasks.map((t) => t.id === branch.id ? { ...t, draft: { ...t.draft, flow: { condition: "fwhm > 4.0" } } } : t) }
-  expect(flowStatement(withCondition, catalog, withCondition.tasks.find((t) => t.id === branch.id)!)).toBe("if fwhm > 4.0")
+  expect(flowStatement(withCondition, catalog, withCondition.tasks.find((t) => t.id === branch.id)!)).toBe("fwhm > 4.0")
   // An if: two lanes, a diamond on the heading for each name its condition reads.
   const { ports, lane } = flowPorts(withCondition, catalog, withCondition.subflows![0])
   expect(ports.map((p) => p.handleId)).toEqual(["input", "p:fwhm", "output:then", "output:else", "result", "output:results"])
@@ -114,7 +114,7 @@ test("inner ports reach members only; results and inputs stay outside", () => {
   expect(map.connections.map((c) => [c.target, c.role]).filter(([t]) => t === id)).toEqual([[id, "items"], [id, "result"]])
   const feedback = (source: string, sourceHandle: string, target: string, targetHandle: string) =>
     connectionFeedback(map, catalog, [], { source, sourceHandle, target, targetHandle })
-  expect(feedback(id, "output:item", "combine", "images")).toMatchObject({ valid: false, message: "안쪽 연결점은 컨테이너 안의 작업에만 연결합니다." })
+  expect(feedback(id, "output:item", "combine", "images")).toMatchObject({ valid: false, message: "안쪽 연결점은 이 안의 작업에만 연결합니다." })
   expect(feedback("object", "output", id, "result").valid).toBe(false)
   expect(feedback("proc", "output", id, "items").valid).toBe(false)
   expect(feedback(id, "output:results", "proc", "images").valid).toBe(false)
@@ -131,13 +131,13 @@ test("a for variable is a value port for member parameters", () => {
   const id = made.id
   let map = made.map
   map = { ...map, tasks: map.tasks.map((t) => t.id === "proc" ? { ...t, pinned: ["aperture"] } : t) }
-  map = wire(map, id, "value:i", "proc", "p:aperture")
-  expect(map.connections.find((c) => c.role === "p:aperture")!.source).toMatchObject({ taskId: id, outputRole: "value:i" })
-  expect(connectionFeedback(map, catalog, [], { source: id, sourceHandle: "value:i", target: "combine", targetHandle: "p:aperture" }).valid).toBe(false)
+  map = wire(map, id, "value:숫자", "proc", "p:aperture")
+  expect(map.connections.find((c) => c.role === "p:aperture")!.source).toMatchObject({ taskId: id, outputRole: "value:숫자" })
+  expect(connectionFeedback(map, catalog, [], { source: id, sourceHandle: "value:숫자", target: "combine", targetHandle: "p:aperture" }).valid).toBe(false)
   const request = workflowRequest(map, catalog, "/work")
-  expect(request.flows).toEqual([{ id, label: "for", run: "for", members: ["proc"], variable: "i", files: [], start: 1, end: 3, step: 1, condition: "" }])
-  expect(request.values.nodes).toContainEqual(expect.objectContaining({ id, run: "value-constant", rows: [{ name: "i", value: "1" }] }))
-  expect(request.values.links).toContainEqual(expect.objectContaining({ target: "proc", parameter: "aperture", type: "r", source: { node: id, output: "i" } }))
+  expect(request.flows).toEqual([{ id, label: "for", run: "for", members: ["proc"], variable: "숫자", files: [], start: 1, end: 3, step: 1, condition: "" }])
+  expect(request.values.nodes).toContainEqual(expect.objectContaining({ id, run: "value-constant", rows: [{ name: "숫자", value: "1" }] }))
+  expect(request.values.links).toContainEqual(expect.objectContaining({ target: "proc", parameter: "aperture", type: "r", source: { node: id, output: "숫자" } }))
 })
 
 test("runs send the container with its links; members keep their payloads", () => {
@@ -150,7 +150,7 @@ test("runs send the container with its links; members keep their payloads", () =
   map = wire(map, id, "output:results", "combine", "images")
   const request = workflowRequest(map, catalog, "/work")
   expect(request.nodes.map((n) => n.id)).toEqual(["object", "proc", "combine"])
-  expect(request.flows).toEqual([expect.objectContaining({ id, run: "foreach", members: ["proc"], variable: "image", files: [] })])
+  expect(request.flows).toEqual([expect.objectContaining({ id, run: "foreach", members: ["proc"], variable: "파일", files: [] })])
   expect(request.links.map((l) => [l.source, l.target, l.role, l.sourceRole])).toEqual([
     ["object", id, "items", "output"], [id, "proc", "images", "item"], ["proc", id, "result", "output"], [id, "combine", "images", "results"],
   ])
@@ -176,13 +176,30 @@ test("member output names preview the first iteration's variable", () => {
   map = syncContainerItems(map, catalog, [])
   const proc = map.tasks.find((t) => t.id === "proc")!
   const loop = loopVariable(map, catalog, proc, [])
-  expect(loop).toEqual({ variable: "image", value: "a" })
+  expect(loop).toEqual({ variable: "파일", value: "a" })
   const dump: Spec = { ...task("dump"), outputs: [{ name: "$stdout", kind: "text", default: "dump.txt", mode: "single" }] }
-  const draft = { ...proc.draft, outputs: { $stdout: "M67{image}{other}.dat" } }
+  const draft = { ...proc.draft, outputs: { $stdout: "M67{파일}{other}.dat" } }
   expect(plannedOutputs(dump, loopOutputNames(draft, loop), [])).toEqual([{ input: "dump", output: "M67a{other}.dat" }])
   expect(loopVariable(map, catalog, map.tasks.find((t) => t.id === "combine")!, [])).toBeUndefined()
   const counted = fixture("for")
-  expect(loopVariable(counted.map, catalog, counted.map.tasks.find((t) => t.id === "proc")!, [])).toEqual({ variable: "i", value: "1" })
+  expect(loopVariable(counted.map, catalog, counted.map.tasks.find((t) => t.id === "proc")!, [])).toEqual({ variable: "숫자", value: "1" })
+})
+
+test("a container names its own variable; older names follow it", () => {
+  const made = fixture()
+  const id = made.id
+  let map = wire(made.map, "object", "output", id, "items")
+  // A document from before: the variable typed as image, used in a member's output name.
+  map = {
+    ...map,
+    tasks: map.tasks.map((t) =>
+      t.id === id ? { ...t, draft: { ...t.draft, flow: { variable: "image" } } }
+      : t.id === "proc" ? { ...t, draft: { ...t.draft, outputs: { $stdout: "M67{image}.dat" } } } : t),
+  }
+  map = syncContainerItems(map, catalog, [])
+  expect(map.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "파일" })
+  expect(map.tasks.find((t) => t.id === "proc")!.draft.outputs).toEqual({ $stdout: "M67{파일}.dat" })
+  expect(containerLabel(map, catalog, map.tasks.find((t) => t.id === id)!)).toBe("foreach")
 })
 
 test("collapsed, a container keeps its ports and hides inner edges", () => {
@@ -219,7 +236,7 @@ test("settings survive saving; auto layout places the container as its group", a
   const { map, id } = fixture("for")
   const saved = JSON.parse(JSON.stringify(map))
   const loaded = migrateMap({ ...prefs, taskMap: saved }, catalog)
-  expect(loaded.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "i", start: "1", end: "3", step: "1" })
+  expect(loaded.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "숫자", start: "1", end: "3", step: "1" })
   const laid = await autoLayoutMap(loaded, catalog)
   const group = laid.subflows!.find((g) => g.id === id)!
   expect(laid.tasks.find((t) => t.id === id)!.position).toEqual(group.position)

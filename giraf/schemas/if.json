@@ -1,11 +1,11 @@
 {
   "version": 2,
   "task": "giraf.if",
-  "title": "if",
-  "description": "조건에 맞는 칸으로 입력을 보냄",
+  "title": "조건 분기",
+  "description": "조건에 맞는 파일과 맞지 않는 파일을 나눠 보냄",
   "icon": "split",
   "inputs": {
-    "input": { "kind": "any", "label": "입력", "multiple": true, "required": true, "sources": ["node"] }
+    "input": { "kind": "any", "label": "파일", "multiple": true, "required": true, "sources": ["node"] }
   },
   "components": [{ "type": "if" }]
 }

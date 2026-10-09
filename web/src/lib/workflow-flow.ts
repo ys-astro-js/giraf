@@ -35,6 +35,7 @@ import {
   isFlowSpec,
   type FlowPort,
   type FlowRun,
+  containerLabel,
 } from "./containers"
 import { connectValue, isValueSource, parameterEntries, valueOutputs, PARAM_HANDLE, PSET_INPUT, PSET_OUTPUT, VALUE_HANDLE } from "./values"
 
@@ -56,7 +57,7 @@ export type TaskFlowNode = Node<
   "task"
 >
 /** A foreach, for or if container drawn on its group (lib/containers). */
-export type FlowView = { run: FlowRun; statement: string; ports: FlowPort[]; lane?: number }
+export type FlowView = { run: FlowRun; label: string; statement: string; ports: FlowPort[]; lane?: number }
 export type SubflowNode = Node<
   { group: Subflow; count: number; minWidth: number; minHeight: number; flow?: FlowView },
   "subflow"
@@ -144,8 +145,10 @@ export function flowNodes(
     // A container is its group plus a task holding its settings and ports.
     const container = containerTask(map, group.id)
     const run = flowRun(map, catalog, group.id)
-    const flow = container && run ? { run, statement: flowStatement(map, catalog, container) } : undefined
-    const name = flow?.statement ?? group.name
+    const flow = container && run
+      ? { run, label: containerLabel(map, catalog, container), statement: flowStatement(map, catalog, container) }
+      : undefined
+    const name = flow?.label ?? group.name
     if (group.collapsed) {
       const ports = compoundPorts(map, group, edges, container && flow ? flowBoundary(map, catalog, container) : undefined)
       return {

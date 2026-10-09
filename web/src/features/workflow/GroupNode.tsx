@@ -27,8 +27,8 @@ export const GroupNode = memo(function GroupNode({
     flowProgress: progress,
   } = useContext(WorkflowContext)!
   const { flow } = data
-  // A container's heading is its statement (`foreach image in object`).
-  const name = flow?.statement ?? data.group.name
+  // A container's heading is its name, then what it does (`M67 FILTER별로`).
+  const name = flow?.label ?? data.group.name
   const meta = flowProgress(flow?.run, progress?.id === id ? progress : undefined)
   const updateNodeInternals = useUpdateNodeInternals()
   const handlesKey = flow?.ports.map((port) => `${port.handleId}@${port.x},${port.y}`).join("|")
@@ -62,7 +62,8 @@ export const GroupNode = memo(function GroupNode({
     >
       <header className="subflow-heading">
         <GripVertical aria-hidden="true" />
-        <strong className={flow ? "flow-statement" : undefined} title={name}>{name}</strong>
+        <strong title={name}>{name}</strong>
+        {flow && <span className="flow-statement" title={flow.statement}>{flow.statement}</span>}
         {meta && <span className="flow-progress">{meta}</span>}
         <Button
           className="nodrag nopan"
