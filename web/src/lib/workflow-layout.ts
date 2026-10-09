@@ -4,6 +4,7 @@ import { flowEdges, taskEdges } from "./workflow-flow"
 import { compoundPorts } from "./compound"
 import type { TaskMap } from "@/lib/task-map"
 import type { Catalog, Frame } from "./workbench"
+import { containerTask, flowBoundary } from "./containers"
 
 const options: LayoutOptions = {
   "elk.algorithm": "layered",
@@ -44,7 +45,8 @@ export async function autoLayoutMap(
   // A collapsed group is one node with the compound's ports; its members keep their places.
   const plain = collapsed.size ? taskEdges(map, catalog) : []
   for (const group of collapsed.values()) {
-    const ports = compoundPorts(map, group, plain)
+    const container = containerTask(map, group.id)
+    const ports = compoundPorts(map, group, plain, container ? flowBoundary(map, catalog, container) : undefined)
     const node: ElkNode = {
       id: groupId(group.id), width: ports.width, height: ports.height,
       layoutOptions: { "elk.portConstraints": "FIXED_POS" },
@@ -64,6 +66,12 @@ export async function autoLayoutMap(
   }
   for (const task of map.tasks) {
     if (task.subflowId && collapsed.has(task.subflowId)) continue
+    // A container's task is its group node.
+    if (containerTask(map, task.id)) {
+      const group = groups.get(task.id)
+      if (group) nodes.set(task.id, group)
+      continue
+    }
     const geometry = nodeGeometry(map, task, catalog, rows)
     const node: ElkNode = {
       id: taskId(task.id), width: geometry.width, height: geometry.height,
@@ -98,7 +106,10 @@ export async function autoLayoutMap(
     return routedPort.id
   }
   const elk = new ELK()
-  const edges = flowEdges(map, catalog).filter(edge => !edge.hidden)
+  // Edges between a container and its members stay out: ELK lays out the members inside it.
+  const inner = (container: string, other: string) =>
+    !!containerTask(map, container) && map.tasks.find(task => task.id === other)?.subflowId === container
+  const edges = flowEdges(map, catalog).filter(edge => !edge.hidden && !inner(edge.source, edge.target) && !inner(edge.target, edge.source))
   const graph = await elk.layout({
     id: "root", layoutOptions: options, children,
     edges: edges.map(edge => ({
@@ -155,7 +166,7 @@ export async function autoLayoutMap(
         const d = shift(task.subflowId), position = task.position ?? { x: 0, y: 0 }
         return { ...task, position: { x: position.x + d.x, y: position.y + d.y } }
       }
-      const node = placed.get(taskId(task.id))!
+      const node = placed.get(taskId(task.id)) ?? placed.get(groupId(task.id))!
       return { ...task, position: { x: node.x!, y: node.y! } }
     }),
     ...(map.subflows ? { subflows: map.subflows.map(group => {

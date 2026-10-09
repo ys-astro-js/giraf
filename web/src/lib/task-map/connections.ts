@@ -1,6 +1,7 @@
 import type { CalibrationGroup } from "@/lib/calibration-ports"
 import { type Catalog, type Frame, type Spec } from "@/lib/workbench"
 import { uid, type Source, type TaskMap } from "./model"
+import { closesCycle } from "../flow-graph"
 const clone = <T,>(value: T): T => structuredClone(value)
 
 export function connectionRoles(spec: Spec, catalog: Catalog) {
@@ -25,20 +26,8 @@ export function connect(
   if (!map.tasks.some((t) => t.id === target))
     throw Error("대상 task가 없습니다.")
   const parent = source.kind !== "files" ? source.taskId : undefined
-  if (parent) {
-    const reaches = (id: string, seen = new Set<string>()): boolean => {
-      if (id === parent) return true
-      if (seen.has(id)) return false
-      seen.add(id)
-      return map.connections.some(
-        (c) =>
-          c.source.kind !== "files" &&
-          c.source.taskId === id &&
-          reaches(c.target, seen)
-      )
-    }
-    if (reaches(target)) throw Error("순환 연결은 만들 수 없습니다.")
-  }
+  if (parent && source.kind !== "files" && closesCycle(map, parent, source.outputRole, target, role))
+    throw Error("순환 연결은 만들 수 없습니다.")
   const connections = append
     ? map.connections
     : map.connections.filter((c) => c.target !== target || c.role !== role)

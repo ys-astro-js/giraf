@@ -47,6 +47,7 @@ export function WorkflowPanel() {
             onStraightEdges={() => void w.autoLayout(true)}
             layoutBusy={w.layoutBusy}
             onRunSubflow={w.runWorkflow}
+            flowProgress={w.workflowBusy ? w.workflow?.flow : undefined}
             workflowBusy={w.workflowBusy}
             runDisabled={w.workflowStarting || w.busy || w.running}
             map={w.map}

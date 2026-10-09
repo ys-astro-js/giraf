@@ -233,8 +233,9 @@ export function useTaskMapInteraction({
       const ids = new Set(deletingNodes.map((n) => n.id))
       onEditStart?.()
       try {
+        // A container goes with its task; its members stay (lib/containers).
         deletingNodes
-          .filter((n) => n.type === "task")
+          .filter((n) => n.type === "task" || ("flow" in n.data && !!n.data.flow))
           .forEach((n) => remove(n.id))
         deletingEdges
           .filter((e) => !ids.has(e.source) && !ids.has(e.target))

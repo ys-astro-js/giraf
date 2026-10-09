@@ -7,7 +7,10 @@ import {
   Variable,
   Folder,
   FolderDown,
+  ListOrdered,
   Plus,
+  Repeat,
+  Split,
   Terminal,
 } from "lucide-react"
 import {
@@ -42,6 +45,9 @@ const NODE_ICONS: Record<string, typeof Terminal> = {
   variable: Variable,
   "file-search": FileSearch,
   calculator: Calculator,
+  repeat: Repeat,
+  "list-ordered": ListOrdered,
+  split: Split,
 }
 const NodeIcon = ({ task }: { task: Spec }) => {
   const Icon = (task.icon && NODE_ICONS[task.icon]) || Terminal

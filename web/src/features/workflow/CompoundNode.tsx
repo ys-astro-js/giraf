@@ -3,6 +3,7 @@ import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { ChevronsUpDown, GripVertical, Pencil, Play, Terminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { compoundStatus } from "@/lib/compound"
+import { flowProgress } from "@/lib/containers"
 import { subflowColor } from "@/lib/subflow"
 import { stateLabel } from "@/lib/task-map"
 import { type CompoundNode as CompoundFlowNode } from "@/lib/workflow-flow"
@@ -18,10 +19,13 @@ export const CompoundNode = memo(function CompoundNode({
   dragging,
   isConnectable,
 }: NodeProps<CompoundFlowNode>) {
-  const { map, currentIssues, runGroup, groupRunDisabled, setGroupCollapsed, editGroup } =
+  const { map, currentIssues, runGroup, groupRunDisabled, setGroupCollapsed, editGroup, choose, flowProgress: progress } =
     useContext(WorkflowContext)!
-  const { group, members, inputs, outputs, height } = data
-  const status = compoundStatus(map, members, currentIssues)
+  const { group, members, inputs, outputs, height, flow } = data
+  // A container keeps its statement as the heading, collapsed or not.
+  const name = flow?.statement ?? group.name
+  const meta = flowProgress(flow?.run, progress?.id === id ? progress : undefined)
+  const status = compoundStatus(map, members, currentIssues, flow ? id : undefined)
   const statusLabel = status.severity
     ? `${status.severity === "error" ? "오류" : "경고"}: ${status.issues.map((issue) => issue.message).join("; ")}`
     : status.state
@@ -43,9 +47,10 @@ export const CompoundNode = memo(function CompoundNode({
           "--group-color": subflowColor(group.color),
         } as CSSProperties
       }
-      aria-label={`${group.name} 그룹 노드`}
+      aria-label={`${name} ${flow ? "컨테이너" : "그룹"} 노드`}
       data-selected={selected}
       data-dragging={dragging}
+      data-flow={flow?.run}
       data-running={status.state === "running"}
       data-diagnostic={status.severity}
     >
@@ -58,7 +63,7 @@ export const CompoundNode = memo(function CompoundNode({
         }}
       >
         <GripVertical aria-hidden="true" />
-        <strong title={group.name}>{group.name}</strong>
+        <strong className={flow ? "flow-statement" : undefined} title={name}>{name}</strong>
         <span
           className="node-state"
           data-severity={status.severity}
@@ -69,14 +74,16 @@ export const CompoundNode = memo(function CompoundNode({
         >
           <StatusIcon severity={status.severity} state={status.state} />
         </span>
+        {meta && <span className="flow-progress">{meta}</span>}
         <Button
           className="nodrag nopan"
           variant="ghost"
           size="icon-sm"
-          aria-label={`${group.name} 편집`}
+          aria-label={`${name} 편집`}
           onClick={(e) => {
             e.stopPropagation()
-            editGroup(group.id)
+            if (flow) choose(id)
+            else editGroup(group.id)
           }}
         >
           <Pencil />
@@ -92,7 +99,7 @@ export const CompoundNode = memo(function CompoundNode({
           className="nodrag nopan"
           variant="ghost"
           size="icon-sm"
-          aria-label={`${group.name} 펼치기`}
+          aria-label={`${name} 펼치기`}
           title="펼치기"
           onClick={(e) => {
             e.stopPropagation()
@@ -105,8 +112,8 @@ export const CompoundNode = memo(function CompoundNode({
           className="nodrag nopan subflow-run-button"
           variant="default"
           size="icon"
-          aria-label={`${group.name} 실행`}
-          title={`${group.name} 실행`}
+          aria-label={`${name} 실행`}
+          title={`${name} 실행`}
           disabled={groupRunDisabled || !members.length || !runGroup}
           onClick={(e) => {
             e.stopPropagation()
@@ -125,9 +132,9 @@ export const CompoundNode = memo(function CompoundNode({
                 position={Position.Left}
                 id={row.handleId}
                 isConnectable={isConnectable}
-                className="workflow-input-handle"
-                data-connected={true}
-                aria-label={`${group.name} ${row.label} 입력 연결`}
+                className={`workflow-input-handle${row.value ? " workflow-value-handle" : ""}`}
+                data-connected={map.connections.some((c) => c.target === row.member && c.role === row.port)}
+                aria-label={`${name} ${row.label} 입력 연결`}
               />
               <div className="node-input">
                 <span className="node-input-label">{row.label}</span>
@@ -154,7 +161,7 @@ export const CompoundNode = memo(function CompoundNode({
                 className="workflow-output-handle"
                 data-named={true}
                 data-connected={true}
-                aria-label={`${group.name} ${row.label} 출력 연결`}
+                aria-label={`${name} ${row.label} 출력 연결`}
               />
             </div>
           ))}

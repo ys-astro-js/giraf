@@ -3,6 +3,7 @@ import { type Instance, type TaskMap } from "./model"
 import { connectionRoles } from "./connections"
 import { resolvedSource } from "./runs"
 import { isJobNode, isValueRole, psetValues, valueRequest, withValues, type ValueScalar } from "@/lib/values"
+import { COLLECT_PORT, flowRequests, flowRun, isContainerId } from "@/lib/containers"
 const clone = <T,>(value: T): T => structuredClone(value)
 
 /** `values` are resolved value connections (`name` or `pset.name`), see lib/values. */
@@ -53,6 +54,13 @@ export function payloadFor(map: TaskMap, id: string, catalog: Catalog, values: R
         waiting.source.kind === "pending" ? waiting.source.taskId : ""
       const sourceName =
         map.tasks.find((t) => t.id === sourceId)?.label || "연결한 작업"
+      // A member alone takes the container's first item; lanes are decided by a run.
+      if (isContainerId(map, sourceId))
+        throw Error(
+          flowRun(map, catalog, sourceId) === "if"
+            ? `${slot.name}: ‘${sourceName}’의 참과 거짓 칸은 워크플로우를 실행할 때 정해집니다.`
+            : `${slot.name}: ‘${sourceName}’에 목록이 없습니다. 목록 입력을 연결해 주세요.`
+        )
       throw Error(
         `${slot.name}: 연결한 작업의 사용 가능한 결과가 없습니다. 캔버스에서 ‘${sourceName}’ 작업을 선택하고 실행해 주세요.`
       )
@@ -117,14 +125,19 @@ export function workflowRequest(
 ) {
   // Value and pset nodes are evaluated by the server with the tasks they feed.
   const jobs = map.tasks.filter((t) => isJobNode(catalog.tasks.find((s) => s.name === t.task)))
-  const running = new Set(jobs.map((t) => t.id))
+  const jobIds = new Set(jobs.map((t) => t.id))
+  // foreach, for and if containers run their members (lib/containers).
+  const flows = flowRequests(map, catalog, jobIds).map((flow) => ({ ...flow, members: flow.members.filter((id) => jobIds.has(id)) }))
+  const running = new Set([...jobIds, ...flows.map((f) => f.id)])
   const links = map.connections.flatMap((c) => {
     if (c.source.kind === "files" || !c.source.taskId) return []
     const sourceId = c.source.taskId
     if (!running.has(sourceId) || !running.has(c.target) || isValueRole(c.role)) return []
     const target = map.tasks.find((t) => t.id === c.target)!
     const spec = catalog.tasks.find((s) => s.name === target.task)!
-    const role = connectionRoles(spec, catalog).find((s) => s.name === c.role)
+    const role = c.role === COLLECT_PORT && isContainerId(map, c.target)
+      ? { name: COLLECT_PORT, kind: "any", multiple: true }
+      : connectionRoles(spec, catalog).find((s) => s.name === c.role)
     if (!role || target.expressions[c.role]) return []
     const flag = (
       {
@@ -183,6 +196,8 @@ export function workflowRequest(
     })),
     links,
     values: { ...values, links: values.links.filter((l) => running.has(l.target)) },
+    // `connected` is for diagnostics only.
+    flows: flows.map(({ connected, ...flow }) => (void connected, flow)),
   }
 }
 
@@ -195,7 +210,7 @@ export function workflowDiagnosticRequest(
   const jobs = map.tasks.filter((t) => isJobNode(catalog.tasks.find((s) => s.name === t.task)))
   const checked = new Set(jobs.map((t) => t.id))
   const connections = map.connections.filter((c) => checked.has(c.target) && !isValueRole(c.role) &&
-    (c.source.kind === "files" || !c.source.taskId || checked.has(c.source.taskId) ||
+    (c.source.kind === "files" || !c.source.taskId || checked.has(c.source.taskId) || isContainerId(map, c.source.taskId) ||
       !map.tasks.some((t) => c.source.kind !== "files" && t.id === c.source.taskId))).map((connection) => {
     const task = map.tasks.find((task) => task.id === connection.target)
     const spec = catalog.tasks.find((spec) => spec.name === task?.task)
@@ -235,6 +250,7 @@ export function workflowDiagnosticRequest(
       }
     }),
     connections,
+    flows: flowRequests(map, catalog, checked),
   }
 }
 
@@ -253,5 +269,7 @@ export function workflowDiagnosticSignature(
     }),
     connections: map.connections,
     runs: map.runs,
+    // Container membership decides what each foreach, for and if runs.
+    members: map.tasks.map((task) => (isContainerId(map, task.subflowId) ? task.subflowId : "")),
   })
 }

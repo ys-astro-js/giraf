@@ -68,7 +68,12 @@ def workflow_diagnostics(request, resolve):
                            message=message, nodeId=node_id,
                            **({'connectionId': connection_id} if connection_id else {})))
 
-    pending = diagnose_connections(by_id, connections, add)
+    flows = request.get('flows', [])
+    if not isinstance(flows, list):
+        raise ValueError('컨테이너 목록 형식이 올바르지 않습니다.')
+    pending = diagnose_connections(by_id, connections, add, {flow['id'] for flow in flows})
+    diagnose_flows(flows, connections, add)
+    diagnose_loop_outputs(flows, by_id, add)
 
     def fresh(file_id):
         row = resolve(file_id)
@@ -99,7 +104,33 @@ def workflow_diagnostics(request, resolve):
     return result
 
 
-def diagnose_connections(by_id, connections, add):
+def diagnose_flows(flows, connections, add):
+    """Settings of foreach, for and if containers (giraf/flows.py)."""
+    from .flows import flow_errors
+    for flow in flows:
+        for message in flow_errors(flow):
+            add('error', message, flow['id'])
+        if flow.get('run') in ('foreach', 'if') and not flow.get('connected'):
+            add('error', '목록을 받을 입력을 연결해 주세요.' if flow['run'] == 'foreach' else '조건에 따라 보낼 입력을 연결해 주세요.', flow['id'])
+        if not flow.get('members'):
+            add('warning', '안쪽에 작업이 없습니다. 작업을 컨테이너 안으로 옮겨 주세요.', flow['id'])
+
+
+def diagnose_loop_outputs(flows, by_id, add):
+    """A member output named the same in every iteration is overwritten."""
+    from .flows import NAME, constant_outputs
+    for flow in flows:
+        variable = flow.get('variable') or ''
+        if flow.get('run') not in ('foreach', 'for') or not NAME.fullmatch(variable):
+            continue
+        for member in flow.get('members', []):
+            payload = by_id.get(member, {}).get('payload', {})
+            for role, name in constant_outputs(TASKS.get(payload.get('task'), {}), payload, variable):
+                add('warning', f'{role}: 회차마다 이름이 같아({name}) 앞 회차의 파일을 덮어씁니다. '
+                               f'이름에 {{{variable}}}를 넣어 주세요.', member)
+
+
+def diagnose_connections(by_id, connections, add, flows=frozenset()):
     components = connection_components(connections)
     input_counts = Counter((edge.get('target'), edge.get('role')) for edge in connections)
     pending = {node_id: set() for node_id in by_id}
@@ -138,6 +169,13 @@ def diagnose_connections(by_id, connections, add):
             add('error', '입력 연결은 하나만 선택해 주세요.', target_id, edge_id)
             continue
         parent_id = source.get('taskId')
+        if parent_id in flows:
+            # A container's item, lane or results arrive while the workflow runs.
+            if 'node' not in slot.get('sources', ('node',)):
+                add('error', '다른 노드의 출력을 받지 않는 입력입니다.', target_id, edge_id)
+            elif not target['payload'].get('expressions', {}).get(slot['name']):
+                pending[target_id].add(slot['name'])
+            continue
         if source.get('kind') in ('pending', 'result'):
             parent = by_id.get(parent_id)
             if not parent:

@@ -19,8 +19,8 @@ export function workflowDocument(prefs: Preferences, taskMap: TaskMap) {
   graph.connections = graph.connections.flatMap((connection): Connection[] => {
     const source = connection.source
     if (source.kind === "files" || !source.taskId || !taskIds.has(source.taskId)) return []
-    const { taskId, outputRole, group, port, files } = source
-    return [{ ...connection, source: { kind: "pending", taskId, outputRole, group, port, files } }]
+    const { taskId, outputRole, group, port, files, partition } = source
+    return [{ ...connection, source: { kind: "pending", taskId, outputRole, group, port, files, partition } }]
   })
   graph.runs = []
   graph.view = { ...emptyMap().view, coordinateSystem: graph.view.coordinateSystem }

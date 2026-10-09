@@ -8,6 +8,8 @@ import {
 import { nodeLayout, roleActive } from "./node-interaction"
 import type { Catalog } from "./workbench"
 import { isValueNode, isValueRole } from "./values"
+import { containerTask } from "./containers"
+import { resolvedSource } from "./task-map/runs"
 
 export function saveSubflow(
   map: TaskMap,
@@ -82,8 +84,10 @@ export function subflowRequest(
   id: string
 ) {
   const group = map.subflows?.find((g) => g.id === id)
-  const tasks = map.tasks.filter((t) => t.subflowId === id)
-  if (!group || !tasks.length) throw Error("실행할 그룹 작업이 없습니다.")
+  // A container runs with its members (lib/containers).
+  const container = containerTask(map, id)
+  const tasks = [...map.tasks.filter((t) => t.subflowId === id), ...(container ? [container] : [])]
+  if (!group || tasks.length === (container ? 1 : 0)) throw Error("실행할 그룹 작업이 없습니다.")
   const ids = new Set(tasks.map((t) => t.id))
   const connections = map.connections.filter((c) => ids.has(c.target))
   // Validate external inputs before workflowRequest replaces internal dependencies.
@@ -98,11 +102,12 @@ export function subflowRequest(
     for (const c of external) {
       if (task.expressions[c.role] || !roleActive(task, c.role, catalog))
         continue
+      const resolved = resolvedSource(map, c.source)
       if (
-        c.source.kind === "pending" ||
-        (c.source.kind === "result" && !c.source.ids.length)
+        resolved.kind === "pending" ||
+        (resolved.kind === "result" && !resolved.ids.length)
       ) {
-        const sourceId = c.source.taskId
+        const sourceId = resolved.taskId
         const label =
           map.tasks.find((t) => t.id === sourceId)?.label ?? "연결한 작업"
         throw Error(
@@ -110,7 +115,7 @@ export function subflowRequest(
         )
       }
     }
-    payloadFor({ ...map, connections: external }, task.id, catalog)
+    if (task !== container) payloadFor({ ...map, connections: external }, task.id, catalog)
   }
   // Value and pset nodes stay available to the group's tasks; they never run as jobs.
   const values = map.tasks.filter((t) => !ids.has(t.id) && isValueNode(catalog.tasks.find((s) => s.name === t.task)))

@@ -12,6 +12,7 @@
 import { uid, makeInstance, type Instance, type Source, type TaskMap } from "./task-map/model"
 import { resolvedSource } from "./task-map/runs"
 import type { Catalog, Param, ParameterSet, Spec, ValueRow } from "./workbench"
+import { closesCycle } from "./flow-graph"
 
 export const VALUE_HANDLE = "value:"
 export const PARAM_HANDLE = "p:"
@@ -31,9 +32,12 @@ export type ValueResponse = {
   parameters: Record<string, { value: ValueScalar; error?: undefined } | { error: string; value?: undefined }>
 }
 
+// foreach, for and if containers (lib/containers) are expanded by the runner.
+const FLOW_RUNS = new Set(["foreach", "for", "if"])
+
 /** Value and pset nodes are evaluated with the tasks they feed, never run as jobs. */
 export const isValueNode = (spec: Spec | undefined) => !!spec?.run && VALUE_RUNS.has(spec.run)
-export const isJobNode = (spec: Spec | undefined) => !isValueNode(spec)
+export const isJobNode = (spec: Spec | undefined) => !isValueNode(spec) && !(spec?.run && FLOW_RUNS.has(spec.run))
 export const isValueRole = (role: string) => role.startsWith(PARAM_HANDLE) || role.startsWith(PSET_INPUT)
 export const isValueSource = (source: Source) =>
   source.kind !== "files" && !!source.outputRole &&
@@ -59,6 +63,13 @@ const rowsOf = (task: Instance): ValueRow[] => task.draft.valueRows ?? []
 export function valueOutputs(spec: Spec | undefined, task: Instance): { name: string; kind: string }[] {
   if (!spec) return []
   if (spec.values?.length) return spec.values.map((v) => ({ name: v.name, kind: v.kind || "real" }))
+  if (spec.run === "for") {
+    // A for container's variable: an int when the whole range is.
+    const flow = task.draft.flow ?? {}
+    if (!flow.variable) return []
+    const integer = [flow.start, flow.end, flow.step || "1"].every((v) => v !== undefined && v.trim() !== "" && Number.isInteger(Number(v)))
+    return [{ name: flow.variable, kind: integer ? "int" : "real" }]
+  }
   const named = rowsOf(task).filter((r) => r.name.trim())
   if (spec.run === "value-constant")
     return named.map((r) => {
@@ -92,6 +103,12 @@ export function parameterEntries(catalog: Catalog, task: Instance): Map<string, 
   const spec = specOf(catalog, task)
   const entries = new Map<string, ParameterEntry>()
   if (!spec) return entries
+  if (spec.run === "if") {
+    // An if condition takes a value for each name it reads; other names are header keywords.
+    for (const name of expressionNames(task.draft.flow?.condition ?? ""))
+      entries.set(name, { key: name, owner: "", param: { name, type: "any", default: "", choices: [], prompt: "", min: "", max: "" } })
+    return entries
+  }
   if (spec.run === "value-compute") {
     for (const name of computeVariables(task))
       entries.set(name, { key: name, owner: "", param: { name, type: "any", default: "", choices: [], prompt: "", min: "", max: "" } })
@@ -124,7 +141,9 @@ export const valueLinksInto = (map: TaskMap, id: string) =>
 /** Keys pinned on the node, in order; a connected parameter is always pinned. */
 export function pinnedKeys(map: TaskMap, catalog: Catalog, task: Instance): string[] {
   const entries = parameterEntries(catalog, task)
-  if (specOf(catalog, task)?.run === "value-compute") return [...entries.keys()]
+  const run = specOf(catalog, task)?.run
+  if (run === "value-compute") return [...entries.keys()]
+  if (run && FLOW_RUNS.has(run)) return []
   const connected = valueLinksInto(map, task.id).map((c) => c.role.slice(PARAM_HANDLE.length))
   return [...new Set([...(task.pinned ?? []), ...connected])].filter((key) => entries.has(key))
 }
@@ -156,13 +175,6 @@ const typeNames: Record<string, string> = { r: "real", d: "real", i: "int", b: "
 export const acceptsValue = (kind: string, type: string) =>
   kind === "any" || type === "any" || (accepts[kind] ?? []).includes(type)
 
-function reaches(map: TaskMap, from: string, to: string) {
-  const seen = new Set<string>()
-  const visit = (id: string): boolean =>
-    id === to || (!seen.has(id) && (seen.add(id), map.connections.some(
-      (c) => c.source.kind !== "files" && c.source.taskId === id && visit(c.target))))
-  return visit(from)
-}
 
 /** Connect a value output to a parameter, or a pset node to a task's pset. */
 export function connectValue(
@@ -184,7 +196,7 @@ export function connectValue(
     const name = targetHandle.slice(PSET_INPUT.length)
     const set = specOf(catalog, target)?.parameterSets?.find((s) => s.name === name)
     if (!set || set.task !== pset.task) throw Error(`${pset.name} pset(${pset.task})을 쓰는 입력에만 연결할 수 있습니다.`)
-    if (reaches(base, target.id, source.id)) throw Error("순환 연결은 만들 수 없습니다.")
+    if (closesCycle(base, source.id, PSET_OUTPUT, target.id, PSET_INPUT + name)) throw Error("순환 연결은 만들 수 없습니다.")
     return replaceInto(base, target.id, PSET_INPUT + name, { kind: "pending", taskId: source.id, outputRole: PSET_OUTPUT })
   }
   if (!sourceHandle.startsWith(VALUE_HANDLE) || !targetHandle.startsWith(PARAM_HANDLE))
@@ -198,10 +210,10 @@ export function connectValue(
   if (entry.param.connectable === false) throw Error(`${key}는 값을 연결받지 않는 파라미터입니다.`)
   if (!acceptsValue(output.kind, entry.param.type))
     throw Error(`${key}는 ${typeNames[entry.param.type] ?? entry.param.type} 파라미터입니다. ${name} 값은 ${output.kind}입니다.`)
-  if (reaches(base, target.id, source.id)) throw Error("순환 연결은 만들 수 없습니다.")
+  if (closesCycle(base, source.id, sourceHandle, target.id, targetHandle)) throw Error("순환 연결은 만들 수 없습니다.")
   const next = replaceInto(base, target.id, PARAM_HANDLE + key, { kind: "pending", taskId: source.id, outputRole: VALUE_HANDLE + name })
   // A connected parameter is shown on the node until it is disconnected.
-  return { ...next, tasks: next.tasks.map((t) => t.id === target.id && !(t.pinned ?? []).includes(key) && specOf(catalog, t)?.run !== "value-compute" ? togglePinned(t, key, true) : t) }
+  return { ...next, tasks: next.tasks.map((t) => t.id === target.id && !(t.pinned ?? []).includes(key) && !["value-compute", "if"].includes(specOf(catalog, t)?.run ?? "") ? togglePinned(t, key, true) : t) }
 }
 
 function replaceInto(map: TaskMap, target: string, role: string, source: Source): TaskMap {
@@ -286,6 +298,12 @@ export function valueRequest(map: TaskMap, catalog: Catalog, inRun: Set<string> 
   }
   const nodes = map.tasks.flatMap((task) => {
     const spec = specOf(catalog, task)
+    // A for variable is a constant at its first number; each iteration replaces it.
+    if (spec?.run === "for") {
+      const flow = task.draft.flow ?? {}
+      return flow.variable ? [{ id: task.id, run: "value-constant", rows: [{ name: flow.variable, value: flow.start ?? "" } as ValueRow],
+        partition: null as string | null, files: [] as string[], fileLinks: [] as Record<string, unknown>[], inputs: {} as Record<string, Ref> }] : []
+    }
     if (!spec?.run || !["value-constant", "value-header", "value-compute"].includes(spec.run)) return []
     const files: string[] = []
     const fileLinks: Record<string, unknown>[] = []

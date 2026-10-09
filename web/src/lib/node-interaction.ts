@@ -8,6 +8,7 @@ import {
   type TaskMap,
 } from "@/lib/task-map"
 import { acceptsAsset, acceptsSource, type Catalog, type Frame, type Slot } from "./workbench"
+import { closesCycle, isContainerId } from "./flow-graph"
 import { isValueNode, pinnedKeys, psetLinksInto, valueOutputs, PARAM_HANDLE, PSET_INPUT, PSET_OUTPUT, VALUE_HANDLE } from "./values"
 
 const flags: Record<string, string> = {
@@ -63,17 +64,7 @@ export function connectionChoices(
   if (parent) {
     if (!map.tasks.some((t) => t.id === parent))
       throw Error("출력 작업이 삭제되었습니다.")
-    const reaches = (id: string, seen = new Set<string>()): boolean =>
-      id === parent ||
-      (!seen.has(id) &&
-        (seen.add(id),
-        map.connections.some(
-          (c) =>
-            c.source.kind !== "files" &&
-            c.source.taskId === id &&
-            reaches(c.target, seen)
-        )))
-    if (reaches(target))
+    if (closesCycle(map, parent, source.kind !== "files" ? source.outputRole : undefined, target, targetRole))
       throw Error(
         target === parent
           ? "자기 자신의 출력은 입력으로 연결할 수 없습니다."
@@ -101,6 +92,8 @@ export function connectionChoices(
     kinds = [...new Set(selected.map((p) => p!.asset || "image"))]
     count = selected.length
   }
+  // A container passes on whatever its list holds; the run checks each file.
+  const fits = (slotKind: string, kind: string) => kind === "any" || acceptsAsset(slotKind, kind)
   const inputs = connectionRoles(spec, catalog)
   if (targetRole) {
     const slot = inputs.find(s => s.name === targetRole && acceptsSource(s, "node"))
@@ -108,7 +101,7 @@ export function connectionChoices(
     if (!roleActive(t, slot.name, catalog))
       throw Error(`${slot.name} 입력이 비활성 상태입니다. 설정에서 켜 주세요.`)
     const compatible = source.kind === "pending"
-      ? kinds.some(k => acceptsAsset(slot.kind, k))
+      ? kinds.some(k => fits(slot.kind, k))
       : kinds.every(k => acceptsAsset(slot.kind, k))
     if (!compatible)
       throw Error(`${slot.name}에는 ${slot.kind} 자료가 필요합니다. 이 출력은 ${kinds.join(", ")} 형식입니다.`)
@@ -119,7 +112,7 @@ export function connectionChoices(
     (s) =>
       acceptsSource(s, "node") &&
       roleActive(t, s.name, catalog) &&
-      (source.kind === "pending" ? kinds.some(k => acceptsAsset(s.kind, k)) : kinds.every((k) => acceptsAsset(s.kind, k))) &&
+      (source.kind === "pending" ? kinds.some(k => fits(s.kind, k)) : kinds.every((k) => acceptsAsset(s.kind, k))) &&
       (s.multiple || count === 1)
   )
   if (!roles.length)
@@ -245,10 +238,16 @@ export function nodeLayout(map: TaskMap, catalog: Catalog, rows:Frame[] = [], co
     y: number
     id: string
   })[] = []
+  const containers = (map.subflows ?? []).filter((g) => isContainerId(map, g.id)).map((g) => ({
+    ...g.position, width: g.width, occupiedHeight: g.collapsed ? COLLAPSED_HEIGHT : g.height,
+  }))
   return map.tasks.map((t) => {
     const level = base.find((p) => p.id === t.id)!,
       g = nodeGeometry(map, t, catalog, rows, collapseAll || !!t.collapsed),
       y = bottoms.get(level.x) || 32
+    // A container is drawn by its group; its task takes no place of its own.
+    const container = isContainerId(map, t.id) ? map.subflows!.find((group) => group.id === t.id)! : undefined
+    if (container) return { id: t.id, ...g, x: container.position.x, y: container.position.y, width: 0, height: 0, occupiedHeight: 0 }
     bottoms.set(level.x, y + g.occupiedHeight + 40)
     const node = {
       id: t.id,
@@ -259,9 +258,11 @@ export function nodeLayout(map: TaskMap, catalog: Catalog, rows:Frame[] = [], co
       }),
     }
     // Larger role cards must not collide with positions saved by the compact layout.
+    // A new node also stays clear of containers, which have no task node of their own.
+    const blocked = t.position ? placed : [...placed, ...containers]
     let overlap
     do {
-      overlap = placed.find(
+      overlap = blocked.find(
         (p) =>
           node.x < p.x + p.width + 24 &&
           node.x + node.width + 24 > p.x &&

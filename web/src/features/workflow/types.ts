@@ -28,4 +28,6 @@ export type TaskMapViewProps = {
   workflowBusy?: boolean
   runDisabled?: boolean
   revealConnection?: { id: string; revision: number }
+  /** The running container's iteration (giraf/workflow.py). */
+  flowProgress?: { id: string; index: number; total: number }
 }

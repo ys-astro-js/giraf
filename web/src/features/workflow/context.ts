@@ -6,7 +6,7 @@ import { connectionFeedback } from "@/lib/workflow-flow"
 import type { TaskMapViewProps } from "./types"
 type NodeContext = Pick<
   TaskMapViewProps,
-  "map" | "catalog" | "rows" | "onInput" | "duplicate" | "open"
+  "map" | "catalog" | "rows" | "onInput" | "duplicate" | "open" | "flowProgress"
 > & {
   validateConnection: (
     connection: FlowConnection

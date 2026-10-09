@@ -17,7 +17,8 @@ function parseHandle(handle: string | null | undefined, prefix: "in" | "out") {
   return at < 0 ? undefined : { member: rest.slice(0, at), port: rest.slice(at + 1) }
 }
 
-export type CompoundPort = { handleId: string; member: string; port: string; label: string; summary: string; y: number }
+export type CompoundPort = { handleId: string; member: string; port: string; label: string; summary: string; y: number; value?: boolean }
+type Boundary = { inputs: Omit<CompoundPort, "y">[]; outputs: Omit<CompoundPort, "y">[]; width?: number }
 
 export function collapsedGroupOf(map: TaskMap, taskId: string): Subflow | undefined {
   const id = map.tasks.find((t) => t.id === taskId)?.subflowId
@@ -33,14 +34,19 @@ function outputName(task: Instance | undefined, handle: string): string {
   return `${task?.label ?? ""} 결과`.trim()
 }
 
-/** Rows follow connections that cross the group's boundary; `edges` are task-level edges. */
-export function compoundPorts(map: TaskMap, group: Subflow, edges: Edge[]) {
+/**
+ * Rows follow connections that cross the group's boundary; `edges` are task-level edges.
+ * A container's own ports (`boundary`, lib/containers) come first.
+ */
+export function compoundPorts(map: TaskMap, group: Subflow, edges: Edge[], boundary?: Boundary) {
   const members = new Set(map.tasks.filter((t) => t.subflowId === group.id).map((t) => t.id))
   const label = (id: string) => map.tasks.find((t) => t.id === id)?.label ?? id
-  const inputs = new Map<string, Omit<CompoundPort, "y">>()
+  const inputs = new Map<string, Omit<CompoundPort, "y">>(boundary?.inputs.map((row) => [row.handleId, row]))
   const sources = new Map<string, string[]>()
-  const outputs = new Map<string, Omit<CompoundPort, "y">>()
+  const outputs = new Map<string, Omit<CompoundPort, "y">>(boundary?.outputs.map((row) => [row.handleId, row]))
   for (const edge of edges) {
+    // A container's edges to its own members stay inside it.
+    if (edge.source === group.id || edge.target === group.id) continue
     const inside = members.has(edge.target), from = members.has(edge.source)
     if (inside && !from) {
       const role = edge.targetHandle ?? ""
@@ -63,7 +69,7 @@ export function compoundPorts(map: TaskMap, group: Subflow, edges: Edge[]) {
   const outputsTop = inputsEnd + m.sectionStart
   const height = (outputs.size ? outputsTop + m.row * outputs.size + m.sectionEnd : inputsEnd) + 1
   return {
-    width: COMPOUND_WIDTH,
+    width: boundary?.width ?? COMPOUND_WIDTH,
     height,
     inputs: [...inputs.values()].map((row, i) => ({ ...row, y: inputsTop + m.row / 2 + m.row * i })),
     outputs: [...outputs.values()].map((row, i) => ({ ...row, y: outputsTop + m.row / 2 + m.row * i })),
@@ -74,6 +80,8 @@ export function compoundPorts(map: TaskMap, group: Subflow, edges: Edge[]) {
 export function compoundEdges(map: TaskMap, edges: Edge[]): Edge[] {
   return edges.map((edge) => {
     const from = collapsedGroupOf(map, edge.source), to = collapsedGroupOf(map, edge.target)
+    // A collapsed container hides the edges between its inner ports and its members.
+    if ((from && from.id === edge.target) || (to && to.id === edge.source)) return { ...edge, hidden: true }
     if (!from && !to) return edge
     if (from && from === to) return { ...edge, hidden: true }
     const source = from?.id ?? edge.source
@@ -102,8 +110,9 @@ export function memberConnection<C extends { source: string; target: string; sou
 }
 
 /** Worst diagnostic first, then activity; "completed" only when every member's last run completed. */
-export function compoundStatus(map: TaskMap, members: string[], issues: Diagnostic[]) {
-  const own = issues.filter((issue) => issue.nodeId && members.includes(issue.nodeId))
+export function compoundStatus(map: TaskMap, members: string[], issues: Diagnostic[], container?: string) {
+  // A container's own diagnostics (its settings) count with its members'.
+  const own = issues.filter((issue) => issue.nodeId && (members.includes(issue.nodeId) || issue.nodeId === container))
   const severity = own.some((issue) => issue.severity === "error") ? "error" : own.length ? "warning" : undefined
   const states = members.map((id) => map.runs.filter((r) => r.instanceId === id).at(-1)?.state)
   const state = states.some((s) => s === "running" || s === "queued")

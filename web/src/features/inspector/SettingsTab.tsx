@@ -18,6 +18,8 @@ import { type Instance, resetInstanceParameters } from "@/lib/task-map"
 import { ParameterEditorFields } from "@/components/parameter-editor"
 import { type ParameterPinning } from "@/components/parameter-fields"
 import { ValueRowsEditor } from "@/components/value-rows-editor"
+import { FlowSettingsEditor } from "@/components/flow-settings-editor"
+import { isFlowSpec } from "@/lib/containers"
 import { isValueNode } from "@/lib/values"
 import { type ParameterGroup } from "@/lib/parameter-presentation"
 
@@ -54,7 +56,8 @@ export function InspectorSettings({
     <TabsContent value="settings" className="inspector-settings">
       <div ref={bodyRef} className="parameter-editor-body">
         <ValueRowsEditor spec={spec} task={task} edit={edit} />
-        {(!isValueNode(spec) || groups.length > 0) && (
+        <FlowSettingsEditor spec={spec} task={task} edit={edit} />
+        {(!(isValueNode(spec) || isFlowSpec(spec)) || groups.length > 0) && (
           <ParameterEditorFields
             task={spec.name}
             groups={groups}

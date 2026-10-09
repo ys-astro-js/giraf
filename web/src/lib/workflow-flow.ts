@@ -20,6 +20,22 @@ import type { Catalog, Frame, Spec } from "./workbench"
 import { subflowColor } from "./subflow"
 import { isSourceNode } from "./file-nodes"
 import { compoundEdges, compoundPorts, memberConnection } from "./compound"
+import {
+  COLLECT_PORT,
+  FLOW_HEADER,
+  FLOW_ROW,
+  checkContainerConnection,
+  connectCollect,
+  containerTask,
+  flowBoundary,
+  flowPorts,
+  flowRun,
+  flowStatement,
+  isContainerId,
+  isFlowSpec,
+  type FlowPort,
+  type FlowRun,
+} from "./containers"
 import { connectValue, isValueSource, parameterEntries, valueOutputs, PARAM_HANDLE, PSET_INPUT, PSET_OUTPUT, VALUE_HANDLE } from "./values"
 
 function valueEnds(catalog: Catalog, source: Instance, target: Instance, sourceHandle: string, role: string) {
@@ -39,12 +55,14 @@ export type TaskFlowNode = Node<
   },
   "task"
 >
+/** A foreach, for or if container drawn on its group (lib/containers). */
+export type FlowView = { run: FlowRun; statement: string; ports: FlowPort[]; lane?: number }
 export type SubflowNode = Node<
-  { group: Subflow; count: number; minWidth: number; minHeight: number },
+  { group: Subflow; count: number; minWidth: number; minHeight: number; flow?: FlowView },
   "subflow"
 >
 export type CompoundNode = Node<
-  { group: Subflow; members: string[] } & ReturnType<typeof compoundPorts>,
+  { group: Subflow; members: string[]; flow?: Omit<FlowView, "ports" | "lane"> } & ReturnType<typeof compoundPorts>,
   "compound"
 >
 export type WorkflowNode = TaskFlowNode | SubflowNode | CompoundNode
@@ -123,39 +141,47 @@ export function flowNodes(
   const edges = map.subflows?.some((g) => g.collapsed) ? taskEdges(map, catalog) : []
   const groups: (SubflowNode | CompoundNode)[] = (map.subflows ?? []).map((group) => {
     const children = tasks.filter((t) => t.parentId === group.id)
+    // A container is its group plus a task holding its settings and ports.
+    const container = containerTask(map, group.id)
+    const run = flowRun(map, catalog, group.id)
+    const flow = container && run ? { run, statement: flowStatement(map, catalog, container) } : undefined
+    const name = flow?.statement ?? group.name
     if (group.collapsed) {
-      const ports = compoundPorts(map, group, edges)
+      const ports = compoundPorts(map, group, edges, container && flow ? flowBoundary(map, catalog, container) : undefined)
       return {
         id: group.id,
         type: "compound",
         zIndex: 2,
-        data: { group, members: children.map((t) => t.id), ...ports },
+        data: { group, members: children.map((t) => t.id), ...(flow ? { flow } : {}), ...ports },
         position: group.position,
         initialWidth: ports.width,
         initialHeight: ports.height,
-        style: { opacity: children.some((t) => matches(t.data.task, search)) ? 1 : 0.3 },
+        style: { opacity: children.some((t) => matches(t.data.task, search)) || (container && matches(container, search)) ? 1 : 0.3 },
         handles: [
           ...ports.inputs.map((row) => ({ id: row.handleId, type: "target" as const, position: Position.Left, x: 0, y: row.y })),
           ...ports.outputs.map((row) => ({ id: row.handleId, type: "source" as const, position: Position.Right, x: ports.width, y: row.y })),
         ],
         dragHandle: ".subflow-heading",
-        deletable: false,
-        ariaLabel: `${group.name} 그룹`,
+        deletable: !!flow,
+        ...(flow ? { selected: map.view.selected === group.id } : {}),
+        ariaLabel: `${name} ${flow ? "컨테이너" : "그룹"}`,
       }
     }
+    const view = flow ? { ...flow, ...flowPorts(map, catalog, group) } : undefined
     const minWidth = Math.max(
       360,
       ...children.map((t) => t.position.x + (t.initialWidth ?? 248) + 24)
     )
     const minHeight = Math.max(
-      160,
+      // An if keeps room for both lanes.
+      view?.run === "if" ? FLOW_HEADER + FLOW_ROW * 4 : 160,
       ...children.map((t) => t.position.y + t.data.geometry.occupiedHeight + 24)
     )
     return {
       id: group.id,
       type: "subflow",
       zIndex: 0,
-      data: { group, count: children.length, minWidth, minHeight },
+      data: { group, count: children.length, minWidth, minHeight, ...(view ? { flow: view } : {}) },
       position: group.position,
       style: {
         width: group.width,
@@ -163,16 +189,30 @@ export function flowNodes(
       },
       initialWidth: group.width,
       initialHeight: group.height,
+      ...(view
+        ? {
+            handles: view.ports.map((port) => ({
+              id: port.handleId,
+              type: port.type,
+              position: port.side === "left" ? Position.Left : Position.Right,
+              x: port.x,
+              y: port.y,
+            })),
+            selected: map.view.selected === group.id,
+          }
+        : {}),
       dragHandle: ".subflow-heading",
-      deletable: false,
-      ariaLabel: `${group.name} 그룹`,
+      deletable: !!flow,
+      ariaLabel: `${name} ${flow ? "컨테이너" : "그룹"}`,
     }
   })
-  return [...groups, ...tasks]
+  return [...groups, ...tasks.filter((node) => !isContainerId(map, node.id))]
 }
 export function outputHandle(source: Source, spec: Spec | undefined, task?: Instance): string {
   // Value and pset outputs are named by their handle.
   if (isValueSource(source) && source.kind !== "files") return source.outputRole!
+  // A container's item, lanes and results are its own ports.
+  if (isFlowSpec(spec) && source.kind !== "files" && source.outputRole) return "output:" + source.outputRole
   if (source.kind !== "files" && source.partition)
     return memberHandle(outputHandle({ ...source, partition: undefined }, spec, task), source.partition.value)
   if (source.kind === "files") return "output"
@@ -258,9 +298,12 @@ export function connectFlow(
   replacingId?: string
 ): TaskMap {
   // Values go to pinned parameters, psets to pset inputs (lib/values).
-  if ([drawn.sourceHandle, drawn.targetHandle].some((h) => h && (h.startsWith(VALUE_HANDLE) || h.startsWith(PARAM_HANDLE) || h === PSET_OUTPUT || h.startsWith(PSET_INPUT))))
+  if ([drawn.sourceHandle, drawn.targetHandle].some((h) => h && (h.startsWith(VALUE_HANDLE) || h.startsWith(PARAM_HANDLE) || h === PSET_OUTPUT || h.startsWith(PSET_INPUT)))) {
+    checkContainerConnection(map, drawn)
     return connectValue(map, catalog, drawn, replacingId)
+  }
   const connection = memberConnection(map, drawn)
+  checkContainerConnection(map, connection)
   const sourceTask=map.tasks.find(t=>t.id===connection.source)
   // `<bundle>~<value>` picks one member of a partitioned port.
   const member=parseMemberHandle(connection.sourceHandle)
@@ -286,6 +329,9 @@ export function connectFlow(
     prior.source.outputRole === outputRole && JSON.stringify(prior.source.group) === JSON.stringify(sourcePort?.group)
       ? prior.source
       : customPort ? customOutput(base,connection.source,customPort,undefined,memberPort?member!.value:undefined) : nodeOutput(base, connection.source, outputRole,sourcePort?.group)
+  // A container collects any number of member outputs.
+  if (connection.targetHandle === COLLECT_PORT && isContainerId(map, connection.target))
+    return connectCollect(base, connection.target, source)
   return connectInputPort(base,catalog,rows,connection.target,connection.targetHandle,source,true)
 }
 /** Replace just one partition, retaining the other inputs and their provenance. */
@@ -375,7 +421,7 @@ export function changeFlowNodes(
     view: {
       ...map.view,
       selected:
-        nodes.find((n) => n.type === "task" && n.selected)?.id ??
+        nodes.find((n) => (n.type === "task" || isContainerId(map, n.id)) && n.selected)?.id ??
         "",
     },
   }

@@ -31,8 +31,11 @@ export function duplicateTask(
   const original = map.tasks.find((task) => task.id === id)
   if (!original) return map
   const task = { ...clone(original), id: uid(), position }
+  // A container's copy gets its own empty group.
+  const group = map.subflows?.find((g) => g.id === id)
   return {
     ...map,
+    ...(group ? { subflows: [...map.subflows!, { ...clone(group), id: task.id, position, collapsed: undefined }] } : {}),
     tasks: [...map.tasks, task],
     connections: [
       ...map.connections,
@@ -195,9 +198,14 @@ export function moveTask(
 export function removeTask(map: TaskMap, id: string): TaskMap {
   const index = map.tasks.findIndex((t) => t.id === id)
   if (index < 0) return map
-  const tasks = map.tasks.filter((t) => t.id !== id)
+  // Removing a container (lib/containers) keeps its members, as dissolving a group does.
+  const container = map.subflows?.some((g) => g.id === id)
+  const tasks = map.tasks
+    .filter((t) => t.id !== id)
+    .map((t) => (container && t.subflowId === id ? { ...t, subflowId: undefined } : t))
   return {
     ...map,
+    ...(container ? { subflows: map.subflows!.filter((g) => g.id !== id) } : {}),
     tasks,
     connections: map.connections
       .filter(
@@ -266,6 +274,18 @@ export function restoreTask(
     )
       continue
     connections.push(clone(c))
+  }
+  // A container comes back with its group and the members it held.
+  const group = before.subflows?.find((g) => g.id === id)
+  if (group && !map.subflows?.some((g) => g.id === id)) {
+    const members = new Set(before.tasks.filter((t) => t.subflowId === id).map((t) => t.id))
+    return {
+      ...map,
+      subflows: [...(map.subflows ?? []), clone(group)],
+      tasks: tasks.map((t) => (members.has(t.id) && !t.subflowId ? { ...t, subflowId: id } : t)),
+      connections,
+      view: { ...map.view, selected: id },
+    }
   }
   return { ...map, tasks, connections, view: { ...map.view, selected: id } }
 }

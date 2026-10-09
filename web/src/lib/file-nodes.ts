@@ -3,6 +3,7 @@ import { makeInstance, uid, type Connection, type Instance, type TaskMap } from 
 import { acceptsAsset, acceptsSource, type Catalog, type Frame, type Spec } from "./workbench"
 import { COLLAPSED_WIDTH } from "./node-interaction"
 import { syncPassOutputs } from "./output-ports"
+import { syncContainerItems } from "./containers"
 
 /**
  * A source node takes files only (no node connections) and passes them on
@@ -115,6 +116,7 @@ export function routeFilesThroughNodes(map: TaskMap, catalog: Catalog | null, ro
 /** Every map passes through this on load and on each edit (version 2 form). */
 export function normalizeFileInputs(map: TaskMap, catalog: Catalog | null, rows: Frame[]): TaskMap {
   const routed = routeFilesThroughNodes(map, catalog, rows)
-  const synced = syncPassOutputs(routed, catalog, rows)
+  // A foreach hands its members the first item when they run alone.
+  const synced = syncContainerItems(syncPassOutputs(routed, catalog, rows), catalog, rows)
   return synced.version === 2 ? synced : { ...synced, version: 2 }
 }

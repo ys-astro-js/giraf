@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "task": "giraf.foreach",
+  "title": "foreach",
+  "description": "목록의 항목마다 안쪽 작업을 실행",
+  "icon": "repeat",
+  "inputs": {
+    "items": { "kind": "any", "label": "목록", "multiple": true, "required": true, "sources": ["node"] }
+  },
+  "components": [{ "type": "foreach" }]
+}

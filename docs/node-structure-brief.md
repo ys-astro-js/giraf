@@ -1,6 +1,6 @@
 # 노드 구조 개편 브리프
 
-상태: 설계 확정, 구현 전 (2026-10-09)
+상태: 설계 확정, 구현 중 (2026-10-09)
 모드: **Operate**
 시안: [Claude Design 캔버스](https://claude.ai/artifact/U8zoms2nQBDGuakC9od5K9)의 '구조 시안' 페이지(보드 1–7)
 관련 문서: [워크플로 편집기](workflow-editor.md), [노드 스키마 v2](node-schema.md), [보정 포트](calibration-ports.md)

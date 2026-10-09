@@ -121,8 +121,26 @@ class WorkflowValues(RequestModel):
     runs: dict[str, str] = Field(default_factory=dict)
 
 
+class WorkflowFlow(RequestModel):
+    """A foreach, for or if container (giraf/workflow.py). Links name it as their
+    source (`item`, `then`, `else`, `results`) or target (its input, `result`)."""
+    id: str
+    label: str = ''
+    run: Literal['foreach', 'for', 'if']
+    members: list[str] = Field(default_factory=list)
+    variable: str = ''
+    # Items whose source is not part of this run, resolved by the editor.
+    files: list[str] = Field(default_factory=list)
+    partition: str | None = None
+    start: int | float | None = None
+    end: int | float | None = None
+    step: int | float | None = None
+    condition: str = ''
+
+
 class WorkflowRequest(RequestModel):
     nodes: list[WorkflowNode]
     links: list[WorkflowLink] = Field(default_factory=list)
     values: WorkflowValues | None = None
+    flows: list[WorkflowFlow] = Field(default_factory=list)
 

@@ -13,6 +13,7 @@ import { parsePort } from "@/lib/calibration-ports"
 import { connectInputPort } from "@/lib/workflow-flow"
 import { isSourceNode } from "@/lib/file-nodes"
 import { takeOutPset } from "@/lib/values"
+import { isContainerId } from "@/lib/containers"
 import {
   connect,
   connectionRoles,
@@ -244,7 +245,10 @@ export function InspectorPanel() {
         }
         pick={w.pick}
         onOpen={w.assetViewer.open}
-        onRun={() => w.run(task.id)}
+        // A container runs with its members, like its heading's run button.
+        onRun={() =>
+          isContainerId(w.map, task.id) ? void w.runWorkflow(task.id) : w.run(task.id)
+        }
         busy={w.workflowBusy || w.busy || !!(taskJob && activeJob(taskJob))}
         error={w.taskError}
         onErrorFocus={focusError}

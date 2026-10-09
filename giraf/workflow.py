@@ -41,30 +41,24 @@ def value_graph(graph, completed=None, resolve_file=None):
     return ValueGraph(graph.get('values') or {}, job_of, resolve_file or (lambda id: id))
 
 
-def workflow_order(graph):
-    nodes = graph.get('nodes', [])
-    ids = [n['id'] for n in nodes]
-    if not ids or len(set(ids)) != len(ids):
-        raise ValueError('실행할 작업을 추가해 주세요. 작업 ID는 중복될 수 없습니다.')
-    incoming = {id: set() for id in ids}
-    for link in graph.get('links', []):
-        if link['source'] not in incoming or link['target'] not in incoming:
-            raise ValueError('없는 작업에 연결되어 있습니다. 연결을 다시 설정해 주세요.')
-        incoming[link['target']].add(link['source'])
-    # A value read from a task's run (directly or through value nodes) orders it first.
-    values = value_graph(graph)
-    for link in values.links:
-        if link['target'] not in incoming:
-            raise ValueError('없는 작업에 값이 연결되어 있습니다. 연결을 다시 설정해 주세요.')
-    for id in ids:
-        incoming[id] |= {source for source in values.dependencies(id) if source in incoming}
+def flow_owner(graph):
+    """{member task id: container id} for the foreach, for and if containers."""
+    owner = {}
+    for flow in graph.get('flows', []):
+        for member in flow.get('members', []):
+            if member in owner:
+                raise ValueError('한 작업은 컨테이너 하나에만 들어갈 수 있습니다.')
+            owner[member] = flow['id']
+    return owner
+
+
+def _sorted(incoming, positions):
     sorter = TopologicalSorter(incoming)
     try:
         sorter.prepare()
     except CycleError as exc:
         raise ValueError('순환 연결이 있습니다. 되돌아가는 연결을 해제해 주세요.') from exc
     order = []
-    positions = {id: index for index, id in enumerate(ids)}
     while sorter.is_active():
         # Keep the existing input order within each ready batch.
         ready = sorted(sorter.get_ready(), key=positions.__getitem__)
@@ -73,57 +67,185 @@ def workflow_order(graph):
     return order
 
 
+def workflow_order(graph):
+    """Top-level run order: tasks outside containers and the containers themselves."""
+    nodes = graph.get('nodes', [])
+    ids = [n['id'] for n in nodes] + [f['id'] for f in graph.get('flows', [])]
+    if not ids or len(set(ids)) != len(ids):
+        raise ValueError('실행할 작업을 추가해 주세요. 작업 ID는 중복될 수 없습니다.')
+    owner = flow_owner(graph)
+    if set(owner) - set(ids):
+        raise ValueError('컨테이너에 없는 작업이 들어 있습니다. 컨테이너를 다시 확인해 주세요.')
+    unit = lambda id: owner.get(id, id)
+    incoming = {id: set() for id in ids if id not in owner}
+    for link in graph.get('links', []):
+        if link['source'] not in ids or link['target'] not in ids:
+            raise ValueError('없는 작업에 연결되어 있습니다. 연결을 다시 설정해 주세요.')
+        if unit(link['source']) != unit(link['target']):
+            incoming[unit(link['target'])].add(unit(link['source']))
+    # A value read from a task's run (directly or through value nodes) orders it first.
+    values = value_graph(graph)
+    for link in values.links:
+        if link['target'] not in ids:
+            raise ValueError('없는 작업에 값이 연결되어 있습니다. 연결을 다시 설정해 주세요.')
+    for id in ids:
+        for source in values.dependencies(id):
+            if source in ids and unit(source) != unit(id):
+                incoming[unit(id)].add(unit(source))
+    return _sorted(incoming, {id: index for index, id in enumerate(ids)})
+
+
+def member_order(graph, flow):
+    members = list(flow.get('members', []))
+    inside = set(members)
+    incoming = {id: set() for id in members}
+    for link in graph.get('links', []):
+        if link['source'] in inside and link['target'] in inside:
+            incoming[link['target']].add(link['source'])
+    values = value_graph(graph)
+    for id in members:
+        incoming[id] |= {source for source in values.dependencies(id) if source in inside and source != id}
+    return _sorted(incoming, {id: index for index, id in enumerate(members)})
+
+
+class Cancelled(Exception):
+    pass
+
+
+def link_products(job, link):
+    return [p for p in job.get('products', []) if matches_files(p, link.get('sourceFiles')) and accepts_asset(link['kind'], p.get('asset', 'image')) and p.get('role') != '$log' and (not link.get('sourceGroup') or matches_group(p, link['sourceGroup'])) and (not link.get('sourceRole') or p.get('role') == link['sourceRole']) and matches_partition(p, link.get('sourcePartition'))]
+
+
+def iteration_values(graph, flow, iteration):
+    """The value request of one container iteration: the `for` variable is a
+    constant, and a partition group's members take that group's values."""
+    values = deepcopy(graph.get('values') or {})
+    if 'number' in iteration:
+        number = iteration['number']
+        values['nodes'] = [n for n in values.get('nodes', []) if n['id'] != flow['id']] + [dict(
+            id=flow['id'], run='value-constant', rows=[dict(name=flow['variable'], value=repr(number))])]
+    partition = iteration.get('partition')
+    if partition:
+        members = set(flow.get('members', []))
+        for link in values.get('links', []):
+            if link['target'] in members and not link.get('partition'):
+                link['partition'] = partition
+    return {'values': values}
+
+
 def execute_workflow(graph, run, cancelled, report, resolve_file=None):
+    from .flows import COLLECT, RESULTS, Items, iterations, lanes, loop_names, loop_value
     from .values import apply_parameters
     graph = deepcopy(graph)
     order = workflow_order(graph)
     nodes = {n['id']: n for n in graph['nodes']}
+    flows = {f['id']: f for f in graph.get('flows', [])}
+    labels = {**{id: f.get('label') or f['run'] for id, f in flows.items()}, **{id: n['label'] for id, n in nodes.items()}}
+    files = Items(resolve_file or (lambda id: id))
     completed = {}
     state = dict(state='running', message='', jobs=[], total=len(order), done=0, currentTask='')
+
+    def run_task(id, done, flow=None, iteration=None):
+        node = nodes[id]
+        state.update(currentTask=id, message=node['label'])
+        payload = deepcopy(node['payload'])
+        value = loop_value(flow, iteration, files) if flow and flow.get('variable') else None
+        if value is not None:
+            # Output names may read the iteration: `M67{image}.dat` is M67B.dat, M67V.dat.
+            loop_names(payload, flow['variable'], value)
+        bindings = {}
+        for link in graph.get('links', []):
+            if link['target'] != id:
+                continue
+            if flow and link['source'] == flow['id']:
+                # The container's current item (or lane) goes to the member.
+                products = [p for p in iteration['ports'].get(link.get('sourceRole'), [])
+                            if 'asset' not in p or accepts_asset(link['kind'], p['asset'])]
+            else:
+                products = link_products(done[link['source']], link)
+            if not products:
+                raise ValueError(f"{labels[link['source']]}에서 {node['label']}에 전달할 결과가 생성되지 않았습니다.")
+            bindings.setdefault(link['role'], []).extend(p['id'] for p in products)
+            if not link['multiple'] and len(bindings[link['role']]) > 1:
+                raise ValueError(f"{node['label']}의 {link['role']}에는 파일 한 개가 필요하지만 결과가 여러 개입니다. 입력을 파일로 지정해 주세요.")
+        for role, ids in bindings.items():
+            existing = payload.setdefault('inputs', {}).get(role, [])
+            payload['inputs'][role] = list(dict.fromkeys(existing + ids))
+        # Values are read once their sources finished, so B's group gets B's value.
+        values = value_graph(iteration_values(graph, flow, iteration) if flow else graph, done, resolve_file)
+        links = [link for link in values.links if link['target'] == id]
+        apply_parameters(payload, links, values.parameters(id))
+        report(deepcopy(state))
+        job = run(node, payload)
+        state['jobs'].append(dict(job, instanceId=id))
+        if cancelled() or job['state'] == 'cancelled':
+            raise Cancelled()
+        if job['state'] == 'skipped':
+            raise ValueError(f"{node['label']}에서 처리된 파일이 없습니다. 실행 기록을 확인해 주세요.")
+        if job['state'] != 'completed':
+            raise ValueError(f"{node['label']} 실행이 완료되지 않았습니다. 실행 기록을 확인해 주세요.")
+        return job
+
+    def run_flow(flow):
+        id = flow['id']
+        state.update(currentTask=id, message=labels[id])
+        items = [{'id': file} for file in flow.get('files', [])]
+        for link in graph.get('links', []):
+            if link['target'] == id and link['role'] != COLLECT:
+                items += link_products(completed[link['source']], link)
+        # An `if` condition reads the values connected to its names.
+        values = value_graph(graph, completed, resolve_file)
+        variables = {}
+        for link in values.links:
+            if link['target'] == id:
+                variables[link['parameter']] = values.output(link['source'])['values']
+        steps = iterations(flow, items, files, variables)
+        lane = {member: port for port, reached in lanes(flow, graph.get('links', [])).items() for member in reached}
+        members = member_order(graph, flow)
+        collected, merged = [], {}
+        for index, iteration in enumerate(steps):
+            if cancelled():
+                raise Cancelled()
+            state['flow'] = dict(id=id, index=index + 1, total=len(steps))
+            done, skipped = dict(completed), set()
+            for member in members:
+                upstream = {l['source'] for l in graph.get('links', []) if l['target'] == member}
+                # A lane without files and whatever follows it does not run.
+                if (member in lane and not iteration['ports'].get(lane[member])) or upstream & skipped:
+                    skipped.add(member)
+                    continue
+                done[member] = run_task(member, done, flow, iteration)
+                job = merged.setdefault(member, dict(done[member], products=[]))
+                job.update({k: v for k, v in done[member].items() if k != 'products'})
+                job['products'] = job['products'] + done[member].get('products', [])
+            for link in graph.get('links', []):
+                if link['target'] == id and link['role'] == COLLECT and link['source'] in flow.get('members', []) \
+                        and link['source'] in done and link['source'] not in skipped:
+                    collected += [dict(p, role=RESULTS) for p in link_products(done[link['source']], link)]
+            report(deepcopy(state))
+        state.pop('flow', None)
+        # Members' links out of the container see every iteration's results.
+        completed.update(merged)
+        completed[id] = dict(id=id, state='completed', products=collected)
+
     try:
         for id in order:
             if cancelled():
-                state.update(state='cancelled', message='워크플로우를 중단했습니다.')
-                break
-            node = nodes[id]
-            state.update(currentTask=id, message=node['label'])
-            payload = deepcopy(node['payload'])
-            bindings = {}
-            for link in graph.get('links', []):
-                if link['target'] != id:
-                    continue
-                job = completed[link['source']]
-                products = [p['id'] for p in job.get('products', []) if matches_files(p, link.get('sourceFiles')) and accepts_asset(link['kind'], p.get('asset', 'image')) and p.get('role') != '$log' and (not link.get('sourceGroup') or matches_group(p, link['sourceGroup'])) and (not link.get('sourceRole') or p.get('role') == link['sourceRole']) and matches_partition(p, link.get('sourcePartition'))]
-                if not products:
-                    raise ValueError(f"{nodes[link['source']]['label']}에서 {node['label']}에 전달할 결과가 생성되지 않았습니다.")
-                bindings.setdefault(link['role'], []).extend(products)
-                if not link['multiple'] and len(bindings[link['role']]) > 1:
-                    raise ValueError(f"{node['label']}의 {link['role']}에는 파일 한 개가 필요하지만 결과가 여러 개입니다. 입력을 파일로 지정해 주세요.")
-            for role, ids in bindings.items():
-                existing = payload.setdefault('inputs', {}).get(role, [])
-                payload['inputs'][role] = list(dict.fromkeys(existing + ids))
-            # Values are read once their sources finished, so B's group gets B's value.
-            values = value_graph(graph, completed, resolve_file)
-            links = [link for link in values.links if link['target'] == id]
-            apply_parameters(payload, links, values.parameters(id))
-            report(deepcopy(state))
-            job = run(node, payload)
-            state['jobs'].append(dict(job, instanceId=id))
-            if cancelled() or job['state'] == 'cancelled':
-                state.update(state='cancelled', message='워크플로우를 중단했습니다.')
-                break
-            if job['state'] == 'skipped':
-                raise ValueError(f"{node['label']}에서 처리된 파일이 없습니다. 실행 기록을 확인해 주세요.")
-            if job['state'] != 'completed':
-                raise ValueError(f"{node['label']} 실행이 완료되지 않았습니다. 실행 기록을 확인해 주세요.")
-            completed[id] = job
+                raise Cancelled()
+            if id in flows:
+                run_flow(flows[id])
+            else:
+                completed[id] = run_task(id, completed)
             state['done'] += 1
             report(deepcopy(state))
-        else:
-            state.update(state='completed', message='워크플로우 완료', currentTask='')
+        state.update(state='completed', message='워크플로우 완료', currentTask='')
+    except Cancelled:
+        state.pop('flow', None)
+        state.update(state='cancelled', message='워크플로우를 중단했습니다.')
     except Exception as exc:
+        state.pop('flow', None)
         state.update(state='cancelled' if cancelled() else 'failed',
-                     message='워크플로우를 중단했습니다.' if cancelled() else f"{nodes.get(state['currentTask'], {}).get('label', '')}: {exc}")
+                     message='워크플로우를 중단했습니다.' if cancelled() else f"{labels.get(state['currentTask'], '')}: {exc}")
     report(deepcopy(state))
     return state
 

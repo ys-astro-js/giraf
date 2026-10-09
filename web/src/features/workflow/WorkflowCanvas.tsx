@@ -59,6 +59,7 @@ import { SubflowEditor } from "@/components/subflow-editor"
 import { setSubflowCollapsed, subflowColor } from "@/lib/subflow"
 import { WorkflowClickConnection } from "@/components/workflow-click-connection"
 import { type WorkflowNode } from "@/lib/workflow-flow"
+import { isContainerId } from "@/lib/containers"
 
 const workflowEdgeTypes = { default: WorkflowEdge, smoothstep: WorkflowEdge }
 
@@ -100,6 +101,7 @@ export function TaskMapView({
   runDisabled,
   open,
   add,
+  flowProgress,
 }: TaskMapViewProps) {
   const [hoveredNode, setHoveredNode] = useState("")
   const values = useValueResults(map, catalog)
@@ -292,6 +294,7 @@ export function TaskMapView({
               },
               runGroup: onRunSubflow,
               groupRunDisabled: workflowBusy || runDisabled,
+              flowProgress,
             }}
           >
             <ReactFlow<WorkflowNode, Edge>
@@ -367,7 +370,7 @@ export function TaskMapView({
               }
               onNodeClick={(event, node) => {
                 if (
-                  node.type === "task" &&
+                  (node.type === "task" || isContainerId(map, node.id)) &&
                   !(event.target as Element).closest(".react-flow__handle")
                 )
                   choose(node.id)

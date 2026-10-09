@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "task": "giraf.for",
+  "title": "for",
+  "description": "시작부터 끝까지 간격마다 안쪽 작업을 실행",
+  "icon": "list-ordered",
+  "components": [{ "type": "for" }]
+}

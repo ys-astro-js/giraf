@@ -134,3 +134,16 @@
 .generic-output-field [data-slot="field-description"], .cursor-input [data-slot="field-description"] { overflow-wrap:anywhere; }
 .cursor-input { min-width:0; }
 .cursor-input textarea { min-height:112px; max-height:240px; overflow:auto; }
+
+/* foreach, for and if containers (lib/containers): a dashed group whose heading is the statement. */
+.subflow-node[data-flow], .workflow-node.compound-node[data-flow] { border-style: dashed; }
+.subflow-node[data-flow][data-selected="true"] { outline: 2px solid var(--foreground); outline-offset: 2px; }
+.subflow-heading .flow-statement { font-family: var(--font-mono, ui-monospace, monospace); font-size: 13px; font-weight: 500; }
+/* Progress takes the heading's free space; the count follows it directly. */
+.subflow-heading > .flow-progress { font-variant-numeric: tabular-nums; }
+.subflow-heading > .flow-progress ~ .group-task-count { margin-left: 0; }
+.flow-port-label {
+  position: absolute; transform: translateY(-50%); pointer-events: none; white-space: nowrap;
+  font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; line-height: 16px; color: var(--muted-foreground);
+}
+.flow-lane { position: absolute; left: 0; right: 0; border-top: 1px dashed color-mix(in srgb, var(--group-color) 45%, var(--border)); pointer-events: none; }

@@ -217,6 +217,9 @@ def evaluate_expression(text, variables):
             return run(node.body)
         if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
             return [float(node.value)]
+        # Quoted text compares with header strings (`IMAGETYP == "object"`).
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return [node.value]
         if isinstance(node, ast.Name):
             if node.id not in variables:
                 raise ValueError(f'{node.id}: 연결되지 않은 값입니다.')

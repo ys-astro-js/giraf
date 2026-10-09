@@ -122,7 +122,9 @@ pset 파라미터는 `datapars.fwhmpsf`처럼 pset 이름을 앞에 붙입니다
 | `value-header` | 실행 | 지원 | 입력 파일 헤더에서 행마다 적은 키워드 값을 읽음. 나누기 기준을 정하면 그룹마다 값 |
 | `value-compute` | 실행 | 지원 | `이름 = 식` 행을 IRAF 식으로 계산. 식이 읽는 이름이 값 입력이 됨 |
 | `pset` | 실행 | 지원 | IRAF pset 하나를 노드로 꺼냄. pset 출력(둥근 사각 연결점)을 같은 pset을 쓰는 작업의 pset 입력에 연결 |
-| `loop`, `branch` | 흐름 | 예정 | 반복, 분기 |
+| `foreach` | 흐름 | 지원 | 입력 목록의 항목(또는 나눈 그룹)마다 안쪽 작업을 실행. 입력이 하나 필요 |
+| `for` | 흐름 | 지원 | 시작부터 끝까지 간격마다 안쪽 작업을 실행하고 현재 수를 값으로 내보냄. 입력이 없어야 함 |
+| `if` | 흐름 | 지원 | 조건에 따라 입력을 참과 거짓 칸으로 보냄. 입력이 하나 필요 |
 
 아직 지원하지 않는 종류와 쓰는 곳이 맞지 않는 구성 요소는 오류로 표시합니다.
 
@@ -151,6 +153,30 @@ pset 파라미터는 `datapars.fwhmpsf`처럼 pset 이름을 앞에 붙입니다
 
 연결 형식: 값 연결은 `role: "p:<key>"`, `source: {kind: "pending", taskId, outputRole: "value:<name>"}`이고, pset 연결은 `role: "pset:<pset 이름>"`, `outputRole: "pset"`입니다. pset 노드에 연결한 작업은 실행할 때 그 노드의 pset 값을 씁니다.
 
+### 흐름 노드: 반복과 분기 컨테이너
+
+`foreach`, `for`, `if` 구성 요소를 가진 GIRAF 노드(`giraf/schemas/foreach.json`, `for.json`, `if.json`)는 캔버스에서 그룹과 같은 컨테이너로 그립니다. 노드 작업과 그룹은 같은 ID를 쓰고, 그룹에 들어 있는 작업이 컨테이너의 안쪽 작업입니다. 설정(변수, 범위, 조건)은 작업의 `draft.flow`에 저장하고 인스펙터의 설정 탭에서 편집합니다. 흐름 노드는 출력을 선언하지 않습니다. 경계 출력은 컨테이너가 정합니다.
+
+| 연결점 | 위치 | 뜻 |
+| --- | --- | --- |
+| 스키마 입력(`items`, `input`) | 바깥 왼쪽 | `foreach`의 목록, `if`가 나눌 파일 |
+| `p:<이름>` | 머리 왼쪽(마름모) | `if` 조건이 읽는 이름에 값을 연결. 연결하지 않은 이름은 파일의 헤더 키워드 |
+| `output:item` | 안쪽 왼쪽 | `foreach`의 현재 항목 |
+| `value:<변수>` | 안쪽 왼쪽(마름모) | `for`의 현재 수 |
+| `output:then`, `output:else` | 안쪽 왼쪽 | `if`의 참과 거짓 칸 |
+| `result` | 안쪽 오른쪽 | 모을 안쪽 작업의 출력. 여러 개 연결 가능 |
+| `output:results` | 바깥 오른쪽 | 매 회차 결과를 모은 목록 |
+
+안쪽 연결점은 안쪽 작업에만, 경계 연결점은 바깥 작업에만 연결합니다. 실행은 서버(`giraf/workflow.py`, `giraf/flows.py`)가 맡습니다. 워크플로 실행 요청의 `flows`에 컨테이너를 보내고, 서버는 안쪽 작업을 회차마다 실행합니다.
+
+- `foreach`: 입력이 나눈 묶음(3.5)이면 그룹마다, 아니면 파일마다 한 번 실행합니다. 그룹 회차의 안쪽 작업은 그 그룹의 파일과 그룹별 값을 받습니다.
+- `for`: 시작, 끝, 간격(끝 포함, 최대 1000회)으로 수를 만들고 변수 값으로 파라미터에 넣습니다.
+- `if`: 조건이 헤더 키워드를 읽으면 파일마다 판단하고, 연결한 값만 읽으면 입력 전체를 한 칸으로 보냅니다. 파일이 없는 칸과 그 뒤의 작업은 실행하지 않습니다.
+- 실행 중인 컨테이너는 워크플로 상태의 `flow: {id, index, total}`로 회차를 알리고, 머리에 `24개 중 9번째`처럼 표시합니다.
+- 안쪽 작업의 출력 이름(`draft.outputs`)에 쓴 `{변수}`는 회차마다 바뀝니다. 나눈 묶음의 `foreach`는 그룹 값, 파일의 `foreach`는 확장자를 뺀 파일명, `for`는 그 회차의 수입니다(`M67{image}.dat` → `M67B.dat`, `M67V.dat`). 다른 `{...}`는 그대로 두며, 변수 이름으로 `name`은 쓸 수 없습니다. 출력 이름 미리보기는 첫 회차 값을 보여 줍니다. 회차마다 이름이 같은 출력(변수도 입력별 이름도 아닌 출력)은 그 작업의 경고 진단으로 알립니다.
+- 안쪽 작업을 혼자 실행하면 `foreach`의 첫 항목을 씁니다. `if` 칸은 워크플로를 실행할 때 정해집니다.
+- 잘못된 설정(변수 이름, 범위, 조건 식, 연결하지 않은 입력)은 컨테이너 노드의 진단으로 알립니다.
+
 `save-files` 노드는 출력 탭에서 저장 위치와 같은 이름 처리를 정합니다. 저장 위치는 폴더 선택기로 고르며, 비우면 프로젝트 폴더입니다. 프로젝트 안의 폴더는 상대 경로로 기록하고, 프로젝트 밖 폴더는 워크플로 내보내기에서 제외합니다. 같은 이름이 있으면 첫 점 앞에 번호를 붙이거나(`m67.mag.1` → `m67_1.mag.1`) 덮어씁니다.
 
 ### GIRAF 노드
@@ -161,7 +187,7 @@ pset 파라미터는 `datapars.fwhmpsf`처럼 pset 이름을 앞에 붙입니다
 | --- | --- |
 | `title` | 노드 이름. 캔버스와 작업 추가 목록에 표시 |
 | `description` | 노드 설명 |
-| `icon` | 작업 추가 목록의 아이콘. `file-input`, `folder-down`, `variable`, `file-search`, `calculator` 중 하나 |
+| `icon` | 작업 추가 목록의 아이콘. `file-input`, `folder-down`, `variable`, `file-search`, `calculator`, `repeat`, `list-ordered`, `split` 중 하나 |
 
 GIRAF 노드는 작업 추가 목록에서 IRAF 패키지 위에 타일로 표시하고, Info 탭에 IRAF 실행 명령어와 도움말을 두지 않습니다. `pset` 노드는 목록에 두지 않고 설정 탭의 pset 그룹에서 꺼냅니다. 예: `giraf/schemas/file-input.json`, `file-save.json`, `value.json`, `header.json`, `compute.json`, `pset.json`.
 
@@ -216,6 +242,8 @@ ccdred 계열처럼 전용 어댑터(`task_catalog.py`의 `TASKS`)로 실행하�
 
 - `giraf/node_schema.py`: 계층 읽기, 형식 검증, 병합, 출처 기록, GIRAF 노드 정의(`node_definition`)
 - `giraf/file_nodes.py`: `pass-files`, `save-files` 실행
+- `giraf/flows.py`, `giraf/workflow.py`: 컨테이너 설정 검사와 회차 실행
+- `web/src/lib/containers.ts`, `web/src/lib/flow-graph.ts`: 컨테이너 포트, 연결 규칙, 실행 요청
 - `giraf/values.py`: 값 출력 읽기, 값 노드 계산, 파라미터 값 해석(`/api/values`, 워크플로 실행)
 - `web/src/lib/values.ts`: 고정 파라미터, 값과 pset 연결, 값 요청
 - `giraf/task_discovery/definition.py`: 자동 생성 스키마에 계층 적용

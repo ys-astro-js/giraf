@@ -33,6 +33,7 @@ import {
   plannedOutputs,
 } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
+import { loopOutputNames, loopVariable } from "@/lib/containers"
 
 export function InspectorOutputs({
   task,
@@ -53,15 +54,19 @@ export function InspectorOutputs({
 }) {
   const d = task.draft
   const allRows = [...rows, ...map.runs.flatMap((run) => run.products)]
-  const previewDraft = {
-    ...d,
-    inputs: Object.fromEntries(
-      connectionRoles(spec, catalog).map((s) => [
-        s.name,
-        assigned(map, task, s.name).ids,
-      ])
-    ),
-  }
+  // Inside a foreach or for, names show the first iteration's `{variable}`.
+  const previewDraft = loopOutputNames(
+    {
+      ...d,
+      inputs: Object.fromEntries(
+        connectionRoles(spec, catalog).map((s) => [
+          s.name,
+          assigned(map, task, s.name).ids,
+        ])
+      ),
+    },
+    loopVariable(map, catalog, task, allRows)
+  )
   // Pass-through outputs carry their input files and have no name to edit.
   const outputFields: OutputSlot[] = spec.outputs?.length
     ? spec.outputs.filter((slot) => slot.mode !== "pass")

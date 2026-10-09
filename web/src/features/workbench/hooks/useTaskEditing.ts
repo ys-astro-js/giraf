@@ -1,4 +1,5 @@
 import { nodeLayout } from "@/lib/node-interaction"
+import { addContainer, isFlowSpec } from "@/lib/containers"
 import { autoLayoutMap } from "@/lib/subflow"
 import { updateOutputPort, removeOutputPort } from "@/lib/output-ports"
 import { useState } from "react"
@@ -32,6 +33,14 @@ export function useTaskEditing({
   function add(name: string, ids: string[]) {
     if (!catalog) return false
     const s = catalog.tasks.find((s) => s.name === name)!
+    // foreach, for and if are containers: a task with an empty group of the same id.
+    if (isFlowSpec(s)) {
+      update(
+        (m) => addContainer(m, catalog, s, prefs, nodeLayout(m, catalog, rows)),
+        `${s.taskName || name} 추가`
+      )
+      return true
+    }
     const t = makeInstance(s, catalog, prefs)
     const count = map.tasks.filter((t) => t.task === name).length
     if (count) t.label = (s.taskName || name) + " " + (count + 1)

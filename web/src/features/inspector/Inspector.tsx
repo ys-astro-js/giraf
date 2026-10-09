@@ -31,6 +31,7 @@ import {
 } from "@/lib/values"
 
 import { SearchField } from "@/components/search-field"
+import { isFlowSpec } from "@/lib/containers"
 import { SidebarHeader } from "@/components/ui/sidebar"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
@@ -331,7 +332,7 @@ export function TaskInspector({
       : []),
   ]
   const displayGroups = schemaParameterGroups(spec, groups).filter(
-    (group) => group.parameters.length > 0 || !isValueNode(spec)
+    (group) => group.parameters.length > 0 || !(isValueNode(spec) || isFlowSpec(spec))
   )
   const valueLinks = valueLinksInto(map, task.id)
   const pinning = {

@@ -48,6 +48,7 @@ import {
 } from "@/lib/values"
 import type { Source } from "@/lib/task-map"
 
+import { innerPortLabel, isContainerId } from "@/lib/containers"
 import { WorkflowContext } from "./context"
 import { Handle } from "./Handle"
 import { StatusIcon } from "./StatusIcon"
@@ -581,8 +582,9 @@ export const TaskNode = memo(function TaskNode({
                         .map((c) =>
                           c.source.kind === "files"
                             ? `파일 ${c.source.ids.length}개`
-                            : map.tasks.find((t) => "taskId" in c.source && t.id === c.source.taskId)
-                                ?.label || "실행 결과"
+                            : innerPortLabel(map, c.source) ??
+                              map.tasks.find((t) => "taskId" in c.source && t.id === c.source.taskId)
+                                ?.label ?? "실행 결과"
                         )
                         .join(", ")
                     : a.ids.length === 1
@@ -601,9 +603,10 @@ export const TaskNode = memo(function TaskNode({
                   )
                 })
                 // A file source's files are ready without running it.
+                // A container's item or lane arrives as it runs.
                 const pending =
                   !fromFiles &&
-                  links.some((c) => c.source.kind === "pending")
+                  links.some((c) => c.source.kind === "pending" && !isContainerId(map, c.source.taskId))
                 return (
                   <div
                     className="node-input-row"
