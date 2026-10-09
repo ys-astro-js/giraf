@@ -33,7 +33,7 @@ import {
   plannedOutputs,
 } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
-import { loopOutputNames, loopVariable, memberVariable, variableMeaning } from "@/lib/containers"
+import { loopOutputNames, loopVariables, memberVariables, variableMeaning } from "@/lib/containers"
 import { withSubject } from "@/lib/korean"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
 
@@ -68,7 +68,7 @@ export function InspectorOutputs({
         ])
       ),
     },
-    loopVariable(map, catalog, task, allRows)
+    loopVariables(map, catalog, task, allRows)
   )
   // Pass-through outputs carry their input files and have no name to edit.
   const outputFields: OutputSlot[] = spec.outputs?.length
@@ -76,8 +76,8 @@ export function InspectorOutputs({
     : spec.output
       ? [{ ...spec.output, kind: spec.kind, label: spec.output.name }]
       : []
-  // Inside a 각각 반복 or 반복, names can take each iteration's value.
-  const variable = memberVariable(map, catalog, task)
+  // Inside a 각각 반복 or 반복, names can take each iteration's values.
+  const variables = memberVariables(map, catalog, task)
   function outputField(output: OutputSlot, prefix = "") {
     const id = `${prefix}generic-output-${output.name}`
     const value =
@@ -100,7 +100,7 @@ export function InspectorOutputs({
       onChange: (e: React.ChangeEvent<HTMLInputElement>) => change(e.target.value),
     }
     // The mark goes where the cursor is, or before the extension.
-    function insertVariable() {
+    function insertVariable(variable: string) {
       const input = document.getElementById(id) as HTMLInputElement | null
       const mark = `{${variable}}`
       const dot = value.lastIndexOf(".")
@@ -114,13 +114,21 @@ export function InspectorOutputs({
     return (
       <Field key={output.name} className="generic-output-field">
         <FieldLabel htmlFor={id}>{output.name}</FieldLabel>
-        {variable ? (
+        {variables.length ? (
           <InputGroup>
             <InputGroupInput {...props} />
             <InputGroupAddon align="inline-end">
-              <InputGroupButton onMouseDown={(e) => e.preventDefault()} onClick={insertVariable}>
-                {variableMeaning(variable)} 넣기
-              </InputGroupButton>
+              {variables.map((variable) => (
+                <InputGroupButton
+                  key={variable}
+                  aria-label={`${variableMeaning(variable)} 넣기`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => insertVariable(variable)}
+                >
+                  {/* Several keywords name themselves; one says what it holds. */}
+                  {variables.length > 1 ? variable : `${variableMeaning(variable)} 넣기`}
+                </InputGroupButton>
+              ))}
             </InputGroupAddon>
           </InputGroup>
         ) : (
@@ -141,9 +149,14 @@ export function InspectorOutputs({
             그대로 쓰고, {"{name}"}이 없으면 접두사로 붙습니다.
           </FieldDescription>
         )}
-        {variable && (
+        {variables.length === 1 && (
           <FieldDescription>
-            {`{${variable}}`} 자리에는 회차마다 {withSubject(variableMeaning(variable))} 들어갑니다.
+            {`{${variables[0]}}`} 자리에는 회차마다 {withSubject(variableMeaning(variables[0]))} 들어갑니다.
+          </FieldDescription>
+        )}
+        {variables.length > 1 && (
+          <FieldDescription>
+            {variables.map((v) => `{${v}}`).join(", ")} 자리에는 회차마다 그 키워드의 값이 들어갑니다.
           </FieldDescription>
         )}
       </Field>

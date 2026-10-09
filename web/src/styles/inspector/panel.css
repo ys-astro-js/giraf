@@ -140,6 +140,56 @@
   gap: 4px;
   min-width: 0;
 }
+/* 각각 반복: the keywords it runs by, each with its values. */
+.keyword-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.keyword-list [data-slot="field-label"] {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+}
+.keyword-list .keyword-name {
+  min-width: 76px;
+}
+.keyword-values {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+/* A pass and what it holds, names in one column across the rows. */
+.pass-files {
+  display: grid;
+  grid-template-columns: minmax(64px, max-content) minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pass-files li {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+}
+.pass-files li > :only-child {
+  grid-column: 1 / -1;
+}
+.pass-files .pass-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+.pass-files .pass-value[data-missing] {
+  color: var(--warning);
+}
 .inspector-connection {
   display: flex;
   align-items: center;

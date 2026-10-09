@@ -273,6 +273,7 @@ export function TaskInspector({
         compact={compact}
         prefix={prefix}
         map={map}
+        catalog={catalog}
         task={task}
         spec={spec}
         rows={rows}
@@ -544,6 +545,7 @@ export function TaskInspector({
             bodyRef={settingsBodyRef}
             map={map}
             catalog={catalog}
+            rows={rows}
             pinning={pinning}
             actions={psetActions}
             valueSource={

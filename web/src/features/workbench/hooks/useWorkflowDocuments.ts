@@ -1,5 +1,6 @@
 import type { createDocumentAutosave } from "@/lib/document-autosave"
 import type { createWorkflowDiagnosticsController } from "@/lib/live-diagnostics"
+import { loopIssues } from "@/lib/containers"
 import { initialPreferences } from "@/features/workbench/types"
 import { createEditorStore } from "@/lib/edit-history"
 import { valueIssues } from "@/lib/value-modes"
@@ -89,7 +90,10 @@ export function useWorkflowDocuments({
       next._document?.path || "현재 문서",
       workflowDiagnosticRequest(nextMap, catalog, workspace.folder),
       true,
-      valueIssues(nextMap, catalog)
+      [
+        ...valueIssues(nextMap, catalog),
+        ...loopIssues(nextMap, catalog, [...workspace.files, ...runs.flatMap((j) => j.products || [])]),
+      ]
     )
     replacePreferences(next)
     setMap(nextMap)

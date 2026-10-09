@@ -4,13 +4,17 @@ import { InspectorFileSource } from "./FileSource"
 import { parsePort, matchesGroup, groupEqual } from "@/lib/calibration-ports"
 import { CursorInput } from "@/components/cursor-input"
 
-import { isGirafNode, type Spec, type Frame, type Slot } from "@/lib/workbench"
+import { isGirafNode, type Catalog, type Spec, type Frame, type Slot } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
+import { loopFrames, memberPassInputs, passFilesText, type InputPasses } from "@/lib/containers"
+import { withSubject } from "@/lib/korean"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 import type { Source } from "@/lib/task-map"
 import type * as React from "react"
 export function InspectorInputSlot({
   map,
+  catalog,
   task,
   spec,
   rows,
@@ -26,6 +30,7 @@ export function InspectorInputSlot({
   prefix = "",
 }: {
   map: TaskMap
+  catalog: Catalog
   task: Instance
   spec: Spec
   rows: Frame[]
@@ -93,6 +98,8 @@ export function InspectorInputSlot({
     onInputSource?.(s.name, { kind: "files", ids: next, label: s.label })
     if (!onInputSource) reorderInput(s.name, next)
   }
+  // Inside a 각각 반복: what each pass receives through this input.
+  const passes = port ? undefined : memberPassInputs(map, catalog, task, rows)?.[role]
   const field = (
     <InspectorFileSource
       s={s}
@@ -115,7 +122,9 @@ export function InspectorInputSlot({
       onInputSource={onInputSource}
       map={map}
       task={task}
-    />
+    >
+      {passes && <PassFiles label={slotLabel(s, spec)} role={role} input={passes} frames={loopFrames(map, rows)} />}
+    </InspectorFileSource>
   )
   if (
     spec.name === "images.immatch.imalign" &&
@@ -182,5 +191,37 @@ export function InspectorInputSlot({
         }))
       }}
     />
+  )
+}
+
+const slotLabel = (s: Slot, spec: Spec) => (isGirafNode(spec) && s.label ? s.label : s.name)
+
+/** 회차별 파일: one row when every pass takes the same files, else a row a pass. */
+function PassFiles({ label, role, input, frames }: { label: string; role: string; input: InputPasses; frames: Map<string, Frame> }) {
+  const rows =
+    input.kind === "unknown" ? [{ name: "", text: "실행하면 정해집니다" }]
+    : input.kind === "each" ? [{ name: "회차마다", text: "1장" }]
+    : input.kind === "same" ? [{ name: "모든 회차", text: input.ids.length ? passFilesText(input.ids, frames) : "없음", missing: !input.ids.length }]
+    : input.passes.map((pass) => ({
+        name: pass.name,
+        text: pass.ids.length ? passFilesText(pass.ids, frames) : "없음",
+        missing: !pass.ids.length,
+      }))
+  return (
+    <>
+      <ul className="pass-files" aria-label={`${label} 회차별 파일`}>
+        {rows.map((row) => (
+          <li key={row.name}>
+            {row.name && <span>{row.name}</span>}
+            <span className="pass-value" data-missing={"missing" in row && row.missing ? "" : undefined}>{row.text}</span>
+          </li>
+        ))}
+      </ul>
+      {input.kind === "passes" && input.missing.map((pass) => (
+        <Alert key={pass}>
+          <AlertDescription>{pass} 회차에 맞는 {withSubject(role)} 없습니다.</AlertDescription>
+        </Alert>
+      ))}
+    </>
   )
 }

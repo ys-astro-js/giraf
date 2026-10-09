@@ -14,7 +14,7 @@ export type InspectorTab = (typeof INSPECTOR_TABS)[number]
  * actions. 의존성 always has the node itself. 출력 is for nodes that run and
  * leave files; value nodes hand values on and containers hand on their
  * members' results. 설정 needs parameters or the kind's own settings; a 값
- * node always has its 가져오기 there.
+ * node always has its 가져오기 there, and a container what it repeats by.
  */
 export function inspectorTabs(spec: Spec): InspectorTab[] {
   const settings =
@@ -23,7 +23,7 @@ export function inspectorTabs(spec: Spec): InspectorTab[] {
     !!spec.preprocess ||
     spec.adapter !== "generic" ||
     isValueNode(spec) ||
-    (isFlowSpec(spec) && spec.run !== "foreach")
+    isFlowSpec(spec)
   const shown: Record<InspectorTab, boolean> = {
     info: true,
     input: spec.inputs.length > 0,

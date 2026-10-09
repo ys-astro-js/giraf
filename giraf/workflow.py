@@ -17,20 +17,25 @@ def matches_files(product, patterns):
 
 
 def matches_partition(product, partition):
-    if not partition:
+    """A port member's `{keyword, value}`, or every value of a pass, holds for the product."""
+    from .values import partition_pairs
+    pairs = partition_pairs(partition)
+    if not pairs:
         return True
     headers = product.get('headers')
     if headers is None and product.get('path') and Path(product['path']).is_file():
         from astropy.io import fits
         from .model import header_values
         headers = header_values(fits.getheader(product['path']))
-    return str((headers or {}).get(partition['keyword'], '')).strip() == partition['value']
+    return all(str((headers or {}).get(k, '')).strip() == v for k, v in pairs.items())
 
 
 def same_group(product, partition):
-    """A product a partitioned iteration made belongs to that group only."""
-    group = product.get('partition')
-    return not group or group['keyword'] != partition['keyword'] or group['value'] == partition['value']
+    """A product a partitioned iteration made belongs to that pass only: B 30
+    results go to the B 30 pass, or to the B pass of a loop by SUBSET alone."""
+    from .values import partition_pairs
+    group, pairs = partition_pairs(product.get('partition')), partition_pairs(partition)
+    return all(group[k] == v for k, v in pairs.items() if k in group)
 
 
 ACTIVE = {'running', 'waiting', 'confirmation', 'cancelling'}
@@ -135,7 +140,7 @@ def link_products(job, link):
 
 def iteration_values(graph, flow, iteration):
     """The value request of one container iteration: the `for` variable is a
-    constant, and a partition group's members take that group's values."""
+    constant, and a pass's members take the groups of its values."""
     values = deepcopy(graph.get('values') or {})
     if 'number' in iteration:
         number = iteration['number']
@@ -151,7 +156,8 @@ def iteration_values(graph, flow, iteration):
 
 
 def execute_workflow(graph, run, cancelled, report, resolve_file=None):
-    from .flows import COLLECT, RESULTS, Items, iterations, lanes, loop_names, loop_value
+    from .flows import (COLLECT, RESULTS, Items, iterations, lanes, loop_names, loop_values,
+                        match_pass, pass_name, with_subject)
     from .values import apply_parameters
     graph = deepcopy(graph)
     order = workflow_order(graph)
@@ -162,29 +168,47 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
     completed = {}
     state = dict(state='running', message='', jobs=[], total=len(order), done=0, currentTask='')
 
+    def warn(id, message):
+        """A run-time warning on a node, shown with the editor's diagnostics."""
+        warning = dict(nodeId=id, message=message)
+        if warning not in state.setdefault('warnings', []):
+            state['warnings'].append(warning)
+
     def run_task(id, done, flow=None, iteration=None):
         node = nodes[id]
         state.update(currentTask=id, message=node['label'])
         payload = deepcopy(node['payload'])
-        value = loop_value(flow, iteration, files) if flow and flow.get('variable') else None
-        if value is not None:
-            # Output names may read the iteration: `M67{image}.dat` is M67B.dat, M67V.dat.
-            loop_names(payload, flow['variable'], value)
+        if flow:
+            # Output names may read the iteration: `M67{SUBSET}.dat` is M67B.dat, M67V.dat.
+            loop_names(payload, loop_values(flow, iteration, files))
+        pass_values = (iteration or {}).get('partition') or {}
         bindings = {}
-        for link in graph.get('links', []):
-            if link['target'] != id:
-                continue
-            if flow and link['source'] == flow['id']:
+        incoming = [link for link in graph.get('links', []) if link['target'] == id]
+        # Files the editor resolved for a member, from sources outside this run.
+        incoming += [dict(file_input, source=None) for file_input in (flow or {}).get('fileInputs', [])
+                     if file_input['target'] == id]
+        for link in incoming:
+            if link['source'] is None:
+                products = [{'id': file} for file in link['files']]
+            elif flow and link['source'] == flow['id']:
                 # The container's current item (or lane) goes to the member.
                 products = [p for p in iteration['ports'].get(link.get('sourceRole'), [])
                             if 'asset' not in p or accepts_asset(link['kind'], p['asset'])]
             else:
                 products = link_products(done[link['source']], link)
-                if iteration and iteration.get('partition'):
-                    # Another container's results pair by group: B with B.
-                    products = [p for p in products if same_group(p, iteration['partition'])]
+                if pass_values:
+                    # Another container's results pair by its values: B with B.
+                    products = [p for p in products if same_group(p, pass_values)]
+            if not products and link['source'] is None:
+                continue
             if not products:
                 raise ValueError(f"{labels[link['source']]}에서 {node['label']}에 전달할 결과가 생성되지 않았습니다.")
+            if pass_values and link['source'] not in flow.get('members', []) and link['source'] != flow['id']:
+                # Files from outside the loop that differ in its keywords go to their own pass.
+                products, matched = match_pass(products, pass_values, files)
+                if matched and not products:
+                    warn(id, f"{pass_name(pass_values)} 회차에 맞는 {with_subject(link['role'])} 없습니다.")
+                    continue
             bindings.setdefault(link['role'], []).extend(p['id'] for p in products)
             if not link['multiple'] and len(bindings[link['role']]) > 1:
                 raise ValueError(f"{node['label']}의 {link['role']}에는 파일 한 개가 필요하지만 결과가 여러 개입니다. 입력을 파일로 지정해 주세요.")
@@ -213,6 +237,9 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
         for link in graph.get('links', []):
             if link['target'] == id and link['role'] != COLLECT:
                 items += link_products(completed[link['source']], link)
+        # Several links may hand on the same file; the list holds it once.
+        seen = set()
+        items = [item for item in items if not (item['id'] in seen or seen.add(item['id']))]
         # An `if` condition reads the values connected to its names.
         values = value_graph(graph, completed, resolve_file)
         variables = {}

@@ -123,6 +123,16 @@ class WorkflowValues(RequestModel):
     runs: dict[str, str] = Field(default_factory=dict)
 
 
+class FlowFileInput(RequestModel):
+    """Files the editor resolved for a member from a source outside this run;
+    each pass takes those that match it (giraf/flows.py match_pass)."""
+    target: str
+    role: str
+    kind: str
+    multiple: bool
+    files: list[str] = Field(default_factory=list)
+
+
 class WorkflowFlow(RequestModel):
     """A foreach, for or if container (giraf/workflow.py). Links name it as their
     source (`item`, `then`, `else`, `results`) or target (its input, `result`)."""
@@ -133,7 +143,10 @@ class WorkflowFlow(RequestModel):
     variable: str = ''
     # Items whose source is not part of this run, resolved by the editor.
     files: list[str] = Field(default_factory=list)
+    # The header keywords a foreach runs by; `partition` is an older document's one.
+    keywords: list[str] = Field(default_factory=list)
     partition: str | None = None
+    fileInputs: list[FlowFileInput] = Field(default_factory=list)
     start: int | float | None = None
     end: int | float | None = None
     step: int | float | None = None

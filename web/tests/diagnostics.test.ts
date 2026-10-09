@@ -545,3 +545,18 @@ test("API request recovery clears only that request failure and recurrence remai
     diagnostics.getSnapshot().some((d) => d.message === "request failed")
   ).toBe(true)
 })
+
+test("run-time workflow warnings land on their node once", () => {
+  const store = createDiagnosticStore()
+  const state = {
+    id: "w",
+    state: "running",
+    jobs: [],
+    warnings: [{ nodeId: "proc", message: "V 15 회차에 맞는 dark가 없습니다." }],
+  }
+  collectResponseDiagnostics("workflow", state, store)
+  collectResponseDiagnostics("workflow", state, store)
+  expect(store.getSnapshot().map((d) => [d.severity, d.nodeId, d.message])).toEqual([
+    ["warning", "proc", "V 15 회차에 맞는 dark가 없습니다."],
+  ])
+})

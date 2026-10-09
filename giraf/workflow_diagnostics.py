@@ -118,16 +118,19 @@ def diagnose_flows(flows, connections, add):
 
 def diagnose_loop_outputs(flows, by_id, add):
     """A member output named the same in every iteration is overwritten."""
-    from .flows import NAME, constant_outputs
+    from .flows import NAME, constant_outputs, flow_keywords, loop_variables
     for flow in flows:
         variable = flow.get('variable') or ''
         if flow.get('run') not in ('foreach', 'for') or not NAME.fullmatch(variable):
             continue
+        variables = loop_variables(flow)
+        # A loop by keywords names its passes by them: suggest those.
+        suggested = ', '.join('{' + v + '}' for v in flow_keywords(flow) or [variable])
         for member in flow.get('members', []):
             payload = by_id.get(member, {}).get('payload', {})
-            for role, name in constant_outputs(TASKS.get(payload.get('task'), {}), payload, variable):
+            for role, name in constant_outputs(TASKS.get(payload.get('task'), {}), payload, variables):
                 add('warning', f'{role}: 회차마다 이름이 같아({name}) 앞 회차의 파일을 덮어씁니다. '
-                               f'출력 이름에 {{{variable}}}를 넣어 주세요.', member)
+                               f'출력 이름에 {suggested}를 넣어 주세요.', member)
 
 
 def diagnose_connections(by_id, connections, add, flows=frozenset()):

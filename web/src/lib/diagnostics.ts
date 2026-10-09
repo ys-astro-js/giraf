@@ -362,6 +362,22 @@ export function collectResponseDiagnostics(
       data.currentJob,
     ].filter(record)
     jobs.forEach((job) => collectJob(job, store))
+    // Run-time warnings on nodes, such as a pass with no matching file.
+    if (Array.isArray(data.warnings))
+      for (const warning of data.warnings) {
+        if (!record(warning) || typeof warning.message !== "string") continue
+        const nodeId = typeof warning.nodeId === "string" ? warning.nodeId : undefined
+        store.report({
+          severity: "warning",
+          message: warning.message,
+          source: "워크플로우",
+          nodeId,
+          runId: `workflow:${data.id}`,
+          runCreatedAt:
+            typeof data.updatedAt === "number" ? data.updatedAt : undefined,
+          key: `workflow:${data.id}:warning:${nodeId}:${warning.message}`,
+        })
+      }
     if (
       data.state === "failed" &&
       !jobs.some((job) => job.state === "failed")

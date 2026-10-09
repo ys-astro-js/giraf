@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from "bun:test"
 import { emptyMap, makeInstance, addTask, connect, removeTask, duplicateTask, restoreTask, workflowRequest, workflowDiagnosticRequest, migrateMap } from "../src/lib/task-map"
 import { setSubflowCollapsed, autoLayoutMap, moveTaskToSubflow, saveSubflow, subflowRequest, updateSubflow, dissolveSubflow } from "../src/lib/subflow"
 import { compoundPorts } from "../src/lib/compound"
-import { addContainer, containerLabel, flowPorts, flowProgress, flowStatement, setGroupRun, syncContainerItems, loopOutputNames, loopVariable, FLOW_HEADER } from "../src/lib/containers"
+import { addContainer, containerLabel, flowPorts, flowProgress, flowStatement, setGroupRun, syncContainerItems, loopOutputNames, loopVariables, FLOW_HEADER } from "../src/lib/containers"
 import { flowNodes, flowEdges, taskEdges, connectFlow, connectionFeedback } from "../src/lib/workflow-flow"
 import { nodeLayout } from "../src/lib/node-interaction"
 import { plannedOutputs, type Catalog, type Preferences, type Spec } from "../src/lib/workbench"
@@ -67,7 +67,7 @@ const wire = (map: TaskMap, source: string, sourceHandle: string, target: string
 
 test("a container is a task and a group with one id, drawn as the group", () => {
   const { map, id } = fixture()
-  expect(map.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "파일" })
+  expect(map.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "파일", keywords: [] })
   expect(map.view.selected).toBe(id)
   const nodes = flowNodes(map, catalog)
   expect(nodes.filter((n) => n.id === id).map((n) => n.type)).toEqual(["subflow"])
@@ -178,14 +178,14 @@ test("member output names preview the first iteration's variable", () => {
   map = { ...map, runs: [{ id: "r1", instanceId: "object", state: "completed", products: [{ id: "f1", label: "a.fits", role: "output" }, { id: "f2", label: "b.fits", role: "output" }] }] }
   map = syncContainerItems(map, catalog, [])
   const proc = map.tasks.find((t) => t.id === "proc")!
-  const loop = loopVariable(map, catalog, proc, [])
-  expect(loop).toEqual({ variable: "파일", value: "a" })
+  const loop = loopVariables(map, catalog, proc, [])
+  expect(loop).toEqual([{ variable: "파일", value: "a" }])
   const dump: Spec = { ...task("dump"), outputs: [{ name: "$stdout", kind: "text", default: "dump.txt", mode: "single" }] }
   const draft = { ...proc.draft, outputs: { $stdout: "M67{파일}{other}.dat" } }
   expect(plannedOutputs(dump, loopOutputNames(draft, loop), [])).toEqual([{ input: "dump", output: "M67a{other}.dat" }])
-  expect(loopVariable(map, catalog, map.tasks.find((t) => t.id === "combine")!, [])).toBeUndefined()
+  expect(loopVariables(map, catalog, map.tasks.find((t) => t.id === "combine")!, [])).toBeUndefined()
   const counted = fixture("for")
-  expect(loopVariable(counted.map, catalog, counted.map.tasks.find((t) => t.id === "proc")!, [])).toEqual({ variable: "숫자", value: "1" })
+  expect(loopVariables(counted.map, catalog, counted.map.tasks.find((t) => t.id === "proc")!, [])).toEqual([{ variable: "숫자", value: "1" }])
 })
 
 test("a container names its own variable; older names follow it", () => {
@@ -200,7 +200,7 @@ test("a container names its own variable; older names follow it", () => {
       : t.id === "proc" ? { ...t, draft: { ...t.draft, outputs: { $stdout: "M67{image}.dat" } } } : t),
   }
   map = syncContainerItems(map, catalog, [])
-  expect(map.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "파일" })
+  expect(map.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "파일", keywords: [] })
   expect(map.tasks.find((t) => t.id === "proc")!.draft.outputs).toEqual({ $stdout: "M67{파일}.dat" })
   expect(containerLabel(map, catalog, map.tasks.find((t) => t.id === id)!)).toBe("foreach")
 })
@@ -309,7 +309,7 @@ test("a plain group takes a run in place and keeps its name, members and links",
   const looped = setGroupRun(map, catalog, prefs, "g", "foreach")
   const task = looped.tasks.find((t) => t.id === "g")!
   expect(task).toMatchObject({ task: "giraf.foreach", label: "측광", position: group.position })
-  expect(task.draft.flow).toEqual({ variable: "파일" })
+  expect(task.draft.flow).toEqual({ variable: "파일", keywords: [] })
   expect(looped.subflows).toEqual(map.subflows)
   expect(looped.tasks.filter((t) => t.subflowId === "g").map((t) => t.id)).toEqual(["a", "b"])
   expect(looped.connections).toEqual(map.connections)
@@ -358,5 +358,5 @@ test("changing the run keeps the links its new kind still has", () => {
   expect(branch.connections.map((c) => c.role)).toEqual(["result", "images"])
   expect(branch.subflows!.find((g) => g.id === id)!.height).toBeGreaterThanOrEqual(FLOW_HEADER + 32 * 4)
   const back = setGroupRun(branch, catalog, prefs, id, "foreach")
-  expect(back.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "파일" })
+  expect(back.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "파일", keywords: [] })
 })

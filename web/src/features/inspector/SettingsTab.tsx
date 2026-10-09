@@ -13,7 +13,7 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion"
 import { Choice } from "@/components/workbench-controls"
-import { type Catalog, type Spec, type Slot, type Values } from "@/lib/workbench"
+import { type Catalog, type Frame, type Spec, type Slot, type Values } from "@/lib/workbench"
 import { type Instance, type TaskMap, resetInstanceParameters } from "@/lib/task-map"
 import { ParameterEditorFields } from "@/components/parameter-editor"
 import { type ParameterPinning } from "@/components/parameter-fields"
@@ -39,6 +39,7 @@ export function InspectorSettings({
   valueSource,
   map,
   catalog,
+  rows,
 }: {
   groups: ParameterGroup[]
   query: string
@@ -55,6 +56,7 @@ export function InspectorSettings({
   valueSource?: ReactNode
   map: TaskMap
   catalog: Catalog
+  rows: Frame[]
 }) {
   const [resetValues, setResetValues] = useState<{
     parameters: Values
@@ -69,7 +71,7 @@ export function InspectorSettings({
         ) : (
           <ValueRowsEditor spec={spec} task={task} edit={edit} />
         )}
-        <FlowSettingsEditor spec={spec} task={task} edit={edit} />
+        <FlowSettingsEditor spec={spec} task={task} edit={edit} map={map} catalog={catalog} rows={rows} />
         {(!(isValueNode(spec) || isFlowSpec(spec)) || groups.length > 0) && (
           <ParameterEditorFields
             task={spec.name}

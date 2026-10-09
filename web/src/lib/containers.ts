@@ -15,19 +15,33 @@
  *   `output:then`, `output:else`         if: the true and false lanes
  *   `result`                             member outputs to collect, inner right
  *   `output:results`                     every iteration's results, outer right
+ *
+ * A 각각 반복 runs once per file, or once per combination of the values the
+ * header keywords chosen on it (`draft.flow.keywords`) take in its files. Files
+ * reaching a member from outside the loop go to the passes they match
+ * (matchPass); the server does the same at run time (giraf/flows.py).
  */
 import { makeInstance, type Instance, type Source, type Subflow, type TaskMap } from "./task-map/model"
 import { resolvedSource } from "./task-map/runs"
 import { COLLECT_PORT, RESULTS_PORT, isContainerId } from "./flow-graph"
 import { customPortHandle, partitionValue, partitionValues, portIdForRole } from "./output-ports"
 import { primaryOutputRole } from "./calibration-ports"
-import { expressionNames, PARAM_HANDLE, VALUE_HANDLE } from "./values"
+import { expressionNames, isValueRole, PARAM_HANDLE, VALUE_HANDLE } from "./values"
+import { withSubject } from "./korean"
 import type { Catalog, Draft, Frame, Preferences, Spec } from "./workbench"
 
 export { COLLECT_PORT, RESULTS_PORT, isContainerId }
 export const FLOW_RUNS = ["foreach", "for", "if"] as const
 export type FlowRun = (typeof FLOW_RUNS)[number]
-export type FlowSettings = { variable?: string; start?: string; end?: string; step?: string; condition?: string }
+export type FlowSettings = {
+  variable?: string
+  /** 각각 반복: the header keywords it runs by, once per combination of their values. */
+  keywords?: string[]
+  start?: string
+  end?: string
+  step?: string
+  condition?: string
+}
 export const ITEM_PORT = "item"
 export const THEN_PORT = "then"
 export const ELSE_PORT = "else"
@@ -51,9 +65,11 @@ export function flowRun(map: TaskMap, catalog: Catalog, id: string | undefined):
 }
 export const containerMembers = (map: TaskMap, id: string) => map.tasks.filter((t) => t.subflowId === id)
 export const flowSettings = (task: Instance | undefined): FlowSettings => task?.draft.flow ?? {}
+/** The header keywords a 각각 반복 runs by; none runs it once per file. */
+export const flowKeywords = (task: Instance | undefined): string[] => flowSettings(task).keywords ?? []
 
 export function defaultFlowSettings(run: FlowRun): FlowSettings {
-  if (run === "foreach") return { variable: FILE_VARIABLE }
+  if (run === "foreach") return { variable: FILE_VARIABLE, keywords: [] }
   if (run === "for") return { variable: NUMBER_VARIABLE, start: "1", end: "3", step: "1" }
   return { condition: "" }
 }
@@ -62,13 +78,16 @@ const FILE_VARIABLE = "파일"
 const NUMBER_VARIABLE = "숫자"
 /**
  * The name output names use for the iteration (`{FILTER}`, `{파일}`, `{숫자}`):
- * set by the container, never typed.
+ * set by the container, never typed. A 각각 반복 by several keywords keeps the
+ * one it has while that keyword stays chosen; each keyword is a name too.
  */
 export function flowVariable(map: TaskMap, catalog: Catalog, task: Instance): string | undefined {
   const run = flowRun(map, catalog, task.id)
   if (run === "for") return NUMBER_VARIABLE
-  if (run === "foreach") return flowPartition(map, catalog, task) ?? FILE_VARIABLE
-  return undefined
+  if (run !== "foreach") return undefined
+  const keywords = flowKeywords(task)
+  const current = flowSettings(task).variable
+  return current && keywords.includes(current) ? current : (keywords[0] ?? FILE_VARIABLE)
 }
 /** What the variable holds, for the output name field: `FILTER 값`, `파일 이름`, `숫자`. */
 export function variableMeaning(variable: string): string {
@@ -83,16 +102,21 @@ const number = (text: string | undefined) => {
   return Number.isFinite(value) ? value : undefined
 }
 
-/** The connection that feeds the container's list (foreach) or routed input (if). */
-export function flowInput(map: TaskMap, catalog: Catalog, task: Instance) {
+/** The connections that feed the container's list (foreach, any number) or routed input (if). */
+export function flowInputs(map: TaskMap, catalog: Catalog, task: Instance) {
   const role = specOf(catalog, task)?.inputs[0]?.name
-  return role ? map.connections.find((c) => c.target === task.id && c.role === role) : undefined
+  return role ? map.connections.filter((c) => c.target === task.id && c.role === role) : []
 }
+export const flowInput = (map: TaskMap, catalog: Catalog, task: Instance) => flowInputs(map, catalog, task)[0]
 
-/** A foreach over a partitioned bundle iterates its groups (FILTER: B, V). */
-export function flowPartition(map: TaskMap, catalog: Catalog, task: Instance): string | undefined {
-  const link = flowInput(map, catalog, task)
-  const from = link?.source
+/**
+ * Before keywords were chosen on the loop: one stored as `partition`, or the
+ * keyword of the split port its list came from (FILTER: B, V).
+ */
+function legacyKeyword(map: TaskMap, catalog: Catalog, task: Instance): string | undefined {
+  const stored = (flowSettings(task) as { partition?: unknown }).partition
+  if (typeof stored === "string" && stored) return stored
+  const from = flowInput(map, catalog, task)?.source
   if (!from || from.kind === "files" || from.partition) return undefined
   const source = map.tasks.find((t) => t.id === from.taskId)
   if (!source) return undefined
@@ -100,6 +124,111 @@ export function flowPartition(map: TaskMap, catalog: Catalog, task: Instance): s
   const port = source.outputPorts?.find((p) => p.partition &&
     (customPortHandle(p.id) === from.port || p.id === portIdForRole(from.outputRole, primary)))
   return port?.partition?.keyword
+}
+
+/** Older 각각 반복 nodes take their keyword onto the loop; a split port no longer decides passes. */
+export function migrateFlowKeywords(map: TaskMap, catalog: Catalog): TaskMap {
+  let changed = false
+  const tasks = map.tasks.map((task) => {
+    if (flowRun(map, catalog, task.id) !== "foreach" || task.draft.flow?.keywords) return task
+    const keyword = legacyKeyword(map, catalog, task)
+    const flow: FlowSettings & { partition?: unknown } = { ...task.draft.flow, keywords: keyword ? [keyword] : [] }
+    delete flow.partition
+    changed = true
+    return { ...task, draft: { ...task.draft, flow } }
+  })
+  return changed ? { ...map, tasks } : map
+}
+
+const framesOf = (map: TaskMap, rows: Frame[]) =>
+  new Map([...rows, ...map.runs.flatMap((r) => r.products)].map((f) => [f.id, f]))
+
+/**
+ * The files a container's input holds now: every link's, each file once.
+ * `waiting` while a link's source has not run, so the files are not all known.
+ */
+export function flowFiles(map: TaskMap, catalog: Catalog, task: Instance): { ids: string[]; waiting: boolean } {
+  let waiting = false
+  const ids = flowInputs(map, catalog, task).flatMap((link) => {
+    const source = resolvedSource(map, link.source)
+    if (source.kind !== "pending") return source.ids
+    waiting = true
+    return []
+  })
+  return { ids: [...new Set(ids)], waiting }
+}
+
+export type KeywordChoice = { keyword: string; values: string[] }
+/** Header keywords the loop's files have, each with its distinct values; chosen ones stay listed. */
+export function flowKeywordChoices(map: TaskMap, catalog: Catalog, task: Instance, rows: Frame[]): KeywordChoice[] {
+  const frames = framesOf(map, rows)
+  const { ids } = flowFiles(map, catalog, task)
+  const found: string[] = []
+  for (const id of ids)
+    for (const keyword of Object.keys(frames.get(id)?.headers ?? {}))
+      if (!found.includes(keyword)) found.push(keyword)
+  const keywords = [...found, ...flowKeywords(task).filter((k) => !found.includes(k))]
+  return keywords.map((keyword) => ({
+    keyword,
+    values: partitionValues(ids, [...frames.values()], keyword).filter(Boolean),
+  }))
+}
+
+/** One run of a 각각 반복: `B 30` and its files, or one file by its name. */
+export type FlowPass = { name: string; values: Record<string, string>; ids: string[] }
+const compareText = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true })
+/** Passes by the values of `keywords`, sorted naturally (giraf/flows.py iterations); none, one per file. */
+export function groupPasses(ids: string[], frames: Map<string, Frame>, keywords: string[]): FlowPass[] {
+  if (!keywords.length)
+    return ids.map((id) => {
+      const frame = frames.get(id)
+      return { name: stem(frame?.label || frame?.name || id), values: {}, ids: [id] }
+    })
+  const groups = new Map<string, FlowPass>()
+  for (const id of ids) {
+    const values = keywords.map((k) => partitionValue(frames.get(id), k))
+    const key = JSON.stringify(values)
+    const pass = groups.get(key) ?? {
+      name: values.map((v) => v || "없음").join(" "),
+      values: Object.fromEntries(keywords.map((k, i) => [k, values[i]])),
+      ids: [],
+    }
+    pass.ids.push(id)
+    groups.set(key, pass)
+  }
+  return [...groups.values()].sort((a, b) => {
+    for (const k of keywords) {
+      const order = compareText(a.values[k], b.values[k])
+      if (order) return order
+    }
+    return 0
+  })
+}
+/** The passes a 각각 반복 makes of the files known now. */
+export function flowPasses(map: TaskMap, catalog: Catalog, task: Instance, rows: Frame[]): { passes: FlowPass[]; waiting: boolean } {
+  const { ids, waiting } = flowFiles(map, catalog, task)
+  return { passes: groupPasses(ids, framesOf(map, rows), flowKeywords(task)), waiting }
+}
+
+/** A pass's files in a few words: `Zero.fits` for one file, `5장` for images, `파일 3개` otherwise. */
+export function passFilesText(ids: string[], frames: Map<string, Frame>, nameOne = true): string {
+  if (nameOne && ids.length === 1) {
+    const frame = frames.get(ids[0])
+    return frame?.label || frame?.name || ids[0]
+  }
+  return ids.every((id) => (frames.get(id)?.asset ?? "image") === "image") ? `${ids.length}장` : `파일 ${ids.length}개`
+}
+export const loopFrames = framesOf
+
+/**
+ * The files a pass takes from a connection from outside its loop: those
+ * whose headers equal the pass's values in the keywords the files differ in.
+ * Files that agree, or lack those headers (text files), reach every pass.
+ */
+export function matchPass(ids: string[], frames: Map<string, Frame>, values: Record<string, string>): { ids: string[]; matched: boolean } {
+  const keys = Object.keys(values).filter((k) => new Set(ids.map((id) => partitionValue(frames.get(id), k))).size > 1)
+  if (!keys.length) return { ids, matched: false }
+  return { ids: ids.filter((id) => keys.every((k) => partitionValue(frames.get(id), k) === values[k])), matched: true }
 }
 
 /** Names containers had before they were named for beginners. */
@@ -118,19 +247,25 @@ export function flowStatement(map: TaskMap, catalog: Catalog, task: Instance): s
   const s = flowSettings(task)
   if (!isFlowSpec(spec)) return task.label
   if (spec.run === "foreach") {
-    const link = flowInput(map, catalog, task)
-    const origin = link?.source
-    const from = origin && origin.kind !== "files" ? map.tasks.find((t) => t.id === origin.taskId) : undefined
-    if (!from) return "연결한 파일마다"
-    const name = `${from.label}${link?.source.partition ? " " + link.source.partition.value : ""}`
-    const keyword = flowPartition(map, catalog, task)
-    return keyword ? `${name} ${keyword}별로` : `${name} 파일마다`
+    const names = flowSourceLabels(map, catalog, task)
+    const name = names.length ? names.join(", ") : "연결한 파일"
+    const keywords = flowKeywords(task)
+    return keywords.length ? `${name} ${keywords.join(", ")}별로` : names.length ? `${name} 파일마다` : "연결한 파일마다"
   }
   if (spec.run === "for") {
     const [start, end, step] = [s.start, s.end, s.step].map((v) => v?.trim())
     return start && end ? `${start}부터 ${end}까지 ${step || "1"}씩` : "범위를 정해 주세요"
   }
   return s.condition?.trim() || "조건을 정해 주세요"
+}
+
+/** What feeds the container's input: each source node's name, a split port's member with its value. */
+function flowSourceLabels(map: TaskMap, catalog: Catalog, task: Instance): string[] {
+  return [...new Set(flowInputs(map, catalog, task).flatMap((link) => {
+    const origin = link.source
+    const from = origin.kind !== "files" ? map.tasks.find((t) => t.id === origin.taskId) : undefined
+    return from ? [`${from.label}${origin.partition ? " " + origin.partition.value : ""}`] : []
+  }))]
 }
 
 const ITEM_LABEL = "이번 파일"
@@ -191,11 +326,9 @@ export function flowPorts(map: TaskMap, catalog: Catalog, group: Subflow): { por
 export function flowBoundary(map: TaskMap, catalog: Catalog, task: Instance) {
   const spec = specOf(catalog, task)
   if (!isFlowSpec(spec)) return { inputs: [], outputs: [] }
-  const link = flowInput(map, catalog, task)
-  const origin = link?.source
-  const from = origin && origin.kind !== "files" ? map.tasks.find((t) => t.id === origin.taskId)?.label : undefined
+  const from = flowSourceLabels(map, catalog, task).join(", ")
   const inputs = [
-    ...spec.inputs.map((slot) => ({ handleId: slot.name, member: task.id, port: slot.name, label: slot.label, summary: from ?? "", value: false })),
+    ...spec.inputs.map((slot) => ({ handleId: slot.name, member: task.id, port: slot.name, label: slot.label, summary: from, value: false })),
     ...(spec.run === "if" ? conditionNames(task) : []).map((name) => ({
       handleId: PARAM_HANDLE + name, member: task.id, port: PARAM_HANDLE + name, label: name, summary: "", value: true })),
   ]
@@ -246,7 +379,12 @@ export function setGroupRun(map: TaskMap, catalog: Catalog, prefs: Preferences, 
   const made = current ?? { ...makeInstance(spec, catalog, prefs), id: groupId, label: group.name, position: group.position }
   // The variable keeps its old name so member output names follow it (syncFlowVariables).
   const variable = flowSettings(current).variable
-  const flow = { ...defaultFlowSettings(run), ...(run !== "if" && variable ? { variable } : {}) }
+  const keywords = flowSettings(current).keywords
+  const flow = {
+    ...defaultFlowSettings(run),
+    ...(run !== "if" && variable ? { variable } : {}),
+    ...(run === "foreach" && keywords ? { keywords } : {}),
+  }
   const task = { ...made, task: spec.name, draft: { ...made.draft, flow } }
   // An if keeps room for both lanes.
   const height = run === "if" ? Math.max(group.height, FLOW_HEADER + FLOW_ROW * 4) : group.height
@@ -265,83 +403,180 @@ export function setGroupRun(map: TaskMap, catalog: Catalog, prefs: Preferences, 
   return { ...next, connections: next.connections.filter(kept) }
 }
 
-/** The files the container hands its members first: one file, or the first group. */
+/** The files the container hands its members first: one file, or the first pass's. */
 export function firstItem(map: TaskMap, catalog: Catalog, task: Instance, rows: Frame[]): string[] | undefined {
-  const link = flowInput(map, catalog, task)
-  if (!link) return undefined
-  const source = resolvedSource(map, link.source)
-  if (source.kind === "pending" || !source.ids.length) return undefined
-  const keyword = flowPartition(map, catalog, task)
-  if (!keyword) return source.ids.slice(0, 1)
-  const frames = [...rows, ...map.runs.flatMap((r) => r.products)]
-  const first = partitionValues(source.ids, frames, keyword)[0]
-  return source.ids.filter((id) => partitionValue(frames.find((f) => f.id === id), keyword) === first)
+  return flowPasses(map, catalog, task, rows).passes[0]?.ids
 }
 
 const formatNumber = (value: number) => String(Number.isInteger(value) ? value : Number(value.toFixed(10)))
-const stem = (label: string) => {
+function stem(label: string) {
   const base = label.split("/").at(-1) ?? ""
   const dot = base.lastIndexOf(".")
   return dot > 0 ? base.slice(0, dot) : base
 }
 
-/** The variable a member's output names may use, inside a 각각 반복 or 반복. */
-export function memberVariable(map: TaskMap, catalog: Catalog, member: Instance): string | undefined {
+/** The names a member's output names may use, inside a 각각 반복 (each keyword, or 파일) or 반복 (숫자). */
+export function memberVariables(map: TaskMap, catalog: Catalog, member: Instance): string[] {
   const run = flowRun(map, catalog, member.subflowId)
-  if (run !== "foreach" && run !== "for") return undefined
-  return flowSettings(containerTask(map, member.subflowId)).variable || undefined
+  if (run !== "foreach" && run !== "for") return []
+  const container = containerTask(map, member.subflowId)
+  const keywords = run === "foreach" ? flowKeywords(container) : []
+  if (keywords.length) return keywords
+  const variable = flowSettings(container).variable
+  return variable ? [variable] : []
 }
 
+export type LoopValue = { variable: string; value: string }
 /**
- * What `{variable}` in a member's output names reads in the container's first
- * iteration (giraf/flows.py loop_value): the `for` start, the first partition
- * value, or the first file's stem.
+ * What each `{variable}` in a member's output names reads in the container's
+ * first iteration (giraf/flows.py loop_values): the `for` start, each
+ * keyword's first value, or the first file's stem.
  */
-export function loopVariable(map: TaskMap, catalog: Catalog, member: Instance, rows: Frame[]): { variable: string; value: string } | undefined {
+export function loopVariables(map: TaskMap, catalog: Catalog, member: Instance, rows: Frame[]): LoopValue[] | undefined {
   const container = containerTask(map, member.subflowId)
   const run = flowRun(map, catalog, member.subflowId)
-  const variable = memberVariable(map, catalog, member)
-  if (!container || !variable) return undefined
+  const variables = memberVariables(map, catalog, member)
+  if (!container || !variables.length) return undefined
   if (run === "for") {
     const start = number(flowSettings(container).start)
-    return start === undefined ? undefined : { variable, value: formatNumber(start) }
+    return start === undefined ? undefined : [{ variable: variables[0], value: formatNumber(start) }]
   }
-  const ids = firstItem(map, catalog, container, rows)
-  if (!ids?.length) return undefined
-  const frames = [...rows, ...map.runs.flatMap((r) => r.products)]
-  const keyword = flowPartition(map, catalog, container)
-  if (keyword) return { variable, value: partitionValue(frames.find((f) => f.id === ids[0]), keyword) }
-  const frame = frames.find((f) => f.id === ids[0])
-  return ids.length === 1 ? { variable, value: stem(frame?.label || frame?.name || ids[0]) } : undefined
+  const first = flowPasses(map, catalog, container, rows).passes[0]
+  if (!first) return undefined
+  if (flowKeywords(container).length) return variables.map((variable) => ({ variable, value: first.values[variable] ?? "" }))
+  return [{ variable: variables[0], value: first.name }]
 }
 
-/** Output names with `{variable}` replaced; other `{...}` stay as written. */
-export function loopOutputNames(draft: Draft, loop: { variable: string; value: string } | undefined): Draft {
-  if (!loop) return draft
-  const mark = `{${loop.variable}}`
+/** Output names with each `{variable}` replaced; other `{...}` stay as written. */
+export function loopOutputNames(draft: Draft, loop: LoopValue[] | undefined): Draft {
+  if (!loop?.length) return draft
+  const named = (text: string) => loop.reduce((name, { variable, value }) => name.replaceAll(`{${variable}}`, value), text)
   return {
     ...draft,
-    outputs: draft.outputs && Object.fromEntries(Object.entries(draft.outputs).map(([k, v]) => [k, v.replaceAll(mark, loop.value)])),
-    output: { ...draft.output, name: draft.output.name.replaceAll(mark, loop.value) },
+    outputs: draft.outputs && Object.fromEntries(Object.entries(draft.outputs).map(([k, v]) => [k, named(v)])),
+    output: { ...draft.output, name: named(draft.output.name) },
   }
+}
+
+export type PassFiles = { name: string; ids: string[] }
+/**
+ * What one input of a member receives in each pass: `same` when every pass
+ * takes the same files, `passes` with each pass's files (`missing` names a
+ * pass a matched connection gives nothing), `each` for one file a pass
+ * from a loop by file, or `unknown` until a source runs.
+ */
+export type InputPasses =
+  | { kind: "same"; ids: string[] }
+  | { kind: "passes"; passes: PassFiles[]; missing: string[] }
+  | { kind: "each" }
+  | { kind: "unknown" }
+
+/** Each input of a 각각 반복's member, by role, as the passes receive it. */
+export function memberPassInputs(map: TaskMap, catalog: Catalog, member: Instance, rows: Frame[]): Record<string, InputPasses> | undefined {
+  const container = containerTask(map, member.subflowId)
+  if (!container || flowRun(map, catalog, container.id) !== "foreach") return undefined
+  const frames = framesOf(map, rows)
+  const { passes, waiting } = flowPasses(map, catalog, container, rows)
+  const keywords = flowKeywords(container)
+  const members = new Set(containerMembers(map, container.id).map((t) => t.id))
+  const result: Record<string, InputPasses> = {}
+  const links = map.connections.filter((c) => c.target === member.id && !isValueRole(c.role))
+  for (const role of new Set(links.map((c) => c.role))) {
+    const each = passes.map(() => [] as string[])
+    const missing = new Set<string>()
+    let unknown = false, item = false
+    for (const link of links.filter((c) => c.role === role)) {
+      const from = link.source.kind !== "files" ? link.source.taskId : undefined
+      if (from === container.id) {
+        item = true
+        if (waiting && !passes.length) unknown = true
+        passes.forEach((pass, i) => each[i].push(...pass.ids))
+        continue
+      }
+      // Inside the loop, a member's files are made pass by pass.
+      if (from && members.has(from)) { unknown = true; continue }
+      const source = resolvedSource(map, link.source)
+      if (source.kind === "pending") { unknown = true; continue }
+      passes.forEach((pass, i) => {
+        const matched = matchPass(source.ids, frames, pass.values)
+        if (matched.matched && !matched.ids.length) missing.add(pass.name)
+        each[i].push(...matched.ids)
+      })
+    }
+    if (unknown || !passes.length) result[role] = { kind: "unknown" }
+    else if (item && !keywords.length) result[role] = { kind: "each" }
+    else {
+      const files = each.map((ids) => [...new Set(ids)])
+      const same = !item && files.every((ids) => JSON.stringify(ids) === JSON.stringify(files[0]))
+      result[role] = same
+        ? { kind: "same", ids: files[0] }
+        : { kind: "passes", passes: passes.map((pass, i) => ({ name: pass.name, ids: files[i] })), missing: [...missing] }
+    }
+  }
+  return result
+}
+
+/** Warnings for passes an outside connection has no matching file for, where the files are known. */
+export function loopIssues(map: TaskMap, catalog: Catalog, rows: Frame[]) {
+  return map.tasks.flatMap((member) => {
+    const container = containerTask(map, member.subflowId)
+    if (!container || !flowKeywords(container).length) return []
+    return Object.entries(memberPassInputs(map, catalog, member, rows) ?? {}).flatMap(([role, input]) =>
+      input.kind === "passes"
+        ? input.missing.map((pass) => ({
+            id: `loop-match:${member.id}:${role}:${pass}`,
+            severity: "warning" as const,
+            message: `${pass} 회차에 맞는 ${withSubject(role)} 없습니다.`,
+            nodeId: member.id,
+            label: member.label,
+          }))
+        : [])
+  })
 }
 
 /**
  * A member run on its own takes the container's first item (foreach); `passed`
- * holds it like a pass output, so resolvedSource finds it. Lanes of an if and
- * a for variable's first number are settled at run time or by the value request.
+ * holds it like a pass output, so resolvedSource finds it, and `firstPass` holds
+ * the files the first pass takes from each matched outside connection. Lanes of
+ * an if and a for variable's first number are settled at run time or by the
+ * value request.
  */
 export function syncContainerItems(map: TaskMap, catalog: Catalog | null, rows: Frame[]): TaskMap {
   if (!catalog || !map.subflows?.length) return map
-  map = syncFlowVariables(map, catalog)
+  map = syncFlowVariables(migrateFlowKeywords(map, catalog), catalog)
+  const frames = framesOf(map, rows)
+  const firsts = new Map<string, FlowPass | undefined>()
+  const firstOf = (container: Instance) => {
+    if (!firsts.has(container.id)) firsts.set(container.id, flowPasses(map, catalog, container, rows).passes[0])
+    return firsts.get(container.id)
+  }
   let changed = false
   const tasks = map.tasks.map((task) => {
-    if (flowRun(map, catalog, task.id) !== "foreach") return task
-    const ids = firstItem(map, catalog, task, rows)
-    const passed = ids ? { [ITEM_PORT]: ids } : undefined
-    if (JSON.stringify(passed) === JSON.stringify(task.passed)) return task
+    if (flowRun(map, catalog, task.id) === "foreach") {
+      const ids = firstOf(task)?.ids
+      const passed = ids ? { [ITEM_PORT]: ids } : undefined
+      if (JSON.stringify(passed) === JSON.stringify(task.passed)) return task
+      changed = true
+      return { ...task, passed }
+    }
+    const container = containerTask(map, task.subflowId)
+    const first = container && flowRun(map, catalog, container.id) === "foreach" ? firstOf(container) : undefined
+    const matched: Record<string, string[]> = {}
+    if (first && flowKeywords(container).length)
+      for (const c of map.connections) {
+        if (c.target !== task.id || isValueRole(c.role)) continue
+        const origin = c.source
+        const from = origin.kind !== "files" ? map.tasks.find((t) => t.id === origin.taskId) : undefined
+        if (from && (from.id === container!.id || from.subflowId === container!.id)) continue
+        const source = resolvedSource(map, c.source)
+        if (source.kind === "pending") continue
+        const match = matchPass(source.ids, frames, first.values)
+        if (match.matched) matched[c.id] = match.ids
+      }
+    const firstPass = Object.keys(matched).length ? matched : undefined
+    if (JSON.stringify(firstPass) === JSON.stringify(task.firstPass)) return task
     changed = true
-    return { ...task, passed }
+    return { ...task, firstPass }
   })
   return changed ? { ...map, tasks } : map
 }
@@ -419,7 +654,7 @@ type FlowRequest = {
   members: string[]
   variable: string
   files: string[]
-  partition?: string
+  keywords?: string[]
   start?: number
   end?: number
   step?: number
@@ -432,10 +667,14 @@ export function flowRequests(map: TaskMap, catalog: Catalog, inRun: Set<string>)
     const run = flowRun(map, catalog, task.id)
     if (!run) return []
     const s = flowSettings(task)
-    const link = flowInput(map, catalog, task)
-    const sourceId = link && link.source.kind !== "files" ? link.source.taskId : undefined
-    const resolved = link && !(sourceId && inRun.has(sourceId)) ? resolvedSource(map, link.source) : undefined
-    const partition = run === "foreach" ? flowPartition(map, catalog, task) : undefined
+    const links = run === "foreach" ? flowInputs(map, catalog, task) : [flowInput(map, catalog, task)].filter((c) => !!c)
+    // Sources outside this run give the files they hold now; the rest arrive as links.
+    const files = [...new Set(links.flatMap((link) => {
+      const sourceId = link.source.kind !== "files" ? link.source.taskId : undefined
+      if (sourceId && inRun.has(sourceId)) return []
+      const resolved = resolvedSource(map, link.source)
+      return resolved.kind === "pending" ? [] : resolved.ids
+    }))]
     const range = run === "for" ? { start: number(s.start), end: number(s.end), step: number(s.step) } : {}
     return [{
       id: task.id,
@@ -443,11 +682,11 @@ export function flowRequests(map: TaskMap, catalog: Catalog, inRun: Set<string>)
       run,
       members: containerMembers(map, task.id).map((t) => t.id),
       variable: s.variable ?? "",
-      files: resolved && resolved.kind !== "pending" ? resolved.ids : [],
-      ...(partition ? { partition } : {}),
+      files,
+      ...(run === "foreach" ? { keywords: flowKeywords(task) } : {}),
       ...Object.fromEntries(Object.entries(range).filter(([, v]) => v !== undefined)),
       condition: s.condition ?? "",
-      connected: !!link,
+      connected: links.length > 0,
     }]
   })
 }

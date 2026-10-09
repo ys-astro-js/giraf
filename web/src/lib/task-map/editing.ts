@@ -14,6 +14,7 @@ import {
 } from "./model"
 import type { payloadFor } from "./payload"
 import { migrateHelperView } from "@/lib/helper-nodes"
+import { migrateFlowKeywords } from "@/lib/containers"
 const clone = <T,>(value: T): T => structuredClone(value)
 
 export function addTask(map: TaskMap, task: Instance): TaskMap {
@@ -140,7 +141,7 @@ export function migrateMap(prefs: Preferences, catalog: Catalog): TaskMap {
           }
         : t
     })
-    return map
+    return migrateFlowKeywords(map, catalog)
   }
   let m = emptyMap()
   for (const spec of catalog.tasks)

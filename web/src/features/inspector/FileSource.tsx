@@ -34,6 +34,7 @@ export function InspectorFileSource({
   onInputSource,
   map,
   task,
+  children,
 }: {
   s: Slot
   /** Shown instead of the slot name, which then needs no description. */
@@ -62,6 +63,8 @@ export function InspectorFileSource({
     | undefined
   map: TaskMap
   task: Instance
+  /** Shown under the input: what each pass of a 각각 반복 receives. */
+  children?: React.ReactNode
 }) {
   return (
     <Field key={s.name} className="input-slot">
@@ -100,6 +103,7 @@ export function InspectorFileSource({
           id={`${prefix}source-${s.name}-description`}
         />
       )}
+      {children}
       {limit > 0 && (
         <Tabs
           defaultValue={

@@ -122,8 +122,14 @@ export function subflowRequest(
   }
   // Value and pset nodes stay available to the group's tasks; they never run as jobs.
   const values = map.tasks.filter((t) => !ids.has(t.id) && isValueNode(catalog.tasks.find((s) => s.name === t.task)))
+  // Sources outside the group give the files they hold now: a file node's, or a run's results.
+  const settled = connections.map((c) => {
+    if (c.source.kind === "files" || !c.source.taskId || ids.has(c.source.taskId) || isValueRole(c.role)) return c
+    const source = resolvedSource(map, c.source)
+    return source.kind === "pending" ? c : { ...c, source }
+  })
   return workflowRequest(
-    { ...map, tasks: [...tasks, ...values], connections },
+    { ...map, tasks: [...tasks, ...values], connections: settled },
     catalog,
     workingDirectory,
     map

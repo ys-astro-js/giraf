@@ -60,6 +60,8 @@ export type Instance = {
   pinned?: string[]
   /** Derived: the files each pass output carries now (syncPassOutputs). */
   passed?: Record<string, string[]>
+  /** Derived: inside a 각각 반복, the files its first pass takes from each matched outside connection, by connection id (syncContainerItems). */
+  firstPass?: Record<string, string[]>
   subflowId?: string
 }
 

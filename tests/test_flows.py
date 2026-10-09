@@ -228,5 +228,160 @@ class FlowTests(unittest.TestCase):
         self.assertFalse(node_definition('giraf.for', [bad])['runnable'])
 
 
+
+class LoopKeywordTests(unittest.TestCase):
+    """A foreach by the header keywords chosen on it, and outside files matched to each pass."""
+
+    science = {'b30a': {'SUBSET': 'B', 'EXPTIME': '30'}, 'v15a': {'SUBSET': 'V', 'EXPTIME': '15'},
+               'b30b': {'SUBSET': 'B', 'EXPTIME': '30'}, 'v15b': {'SUBSET': 'V', 'EXPTIME': '15'}}
+
+    def graph(self, keywords, extra_links=(), nodes=()):
+        return {
+            'nodes': [task('object'), task('ccdproc'), *[task(n) for n in nodes]],
+            'flows': [{'id': 'loop', 'label': 'loop', 'run': 'foreach', 'variable': keywords[0] if keywords else '파일',
+                       'keywords': list(keywords), 'members': ['ccdproc']}],
+            'links': [link('object', 'loop', 'items', sourceRole='image'),
+                      link('loop', 'ccdproc', 'images', sourceRole='item'), *extra_links],
+        }
+
+    def test_passes_are_value_combinations_sorted_naturally(self):
+        from giraf.flows import Items, iterations
+        items = files('b30a', 'v15a', 'b30b', 'v15b', 'b15', headers={**self.science, 'b15': {'SUBSET': 'B', 'EXPTIME': '15'}})
+        flow = {'run': 'foreach', 'variable': 'SUBSET', 'keywords': ['SUBSET', 'EXPTIME']}
+        passes = iterations(flow, items, Items(lambda id: id), {})
+        self.assertEqual([p['partition'] for p in passes], [
+            {'SUBSET': 'B', 'EXPTIME': '15'}, {'SUBSET': 'B', 'EXPTIME': '30'}, {'SUBSET': 'V', 'EXPTIME': '15'}])
+        self.assertEqual([[i['id'] for i in p['ports']['item']] for p in passes], [['b15'], ['b30a', 'b30b'], ['v15a', 'v15b']])
+        one = iterations(dict(flow, keywords=['EXPTIME']), items, Items(lambda id: id), {})
+        self.assertEqual([p['partition'] for p in one], [{'EXPTIME': '15'}, {'EXPTIME': '30'}])
+        # No keyword: once per file.
+        self.assertEqual(len(iterations(dict(flow, keywords=[], variable='파일'), items, Items(lambda id: id), {})), 5)
+        # An older document's partition is one keyword.
+        old = iterations({'run': 'foreach', 'variable': 'image', 'partition': 'SUBSET'}, items, Items(lambda id: id), {})
+        self.assertEqual([p['partition'] for p in old], [{'SUBSET': 'B'}, {'SUBSET': 'V'}])
+
+    def test_the_loop_input_takes_several_links_and_each_file_once(self):
+        runner = Runner({'front': files('d1', 'd2'), 'back': files('d2', 'd3')})
+        graph = {'nodes': [task('front'), task('back'), task('combine')],
+                 'flows': [{'id': 'loop', 'run': 'foreach', 'variable': '파일', 'members': ['combine']}],
+                 'links': [link('front', 'loop', 'items'), link('back', 'loop', 'items'),
+                           link('loop', 'combine', 'input', sourceRole='item')]}
+        state, _ = run(graph, runner)
+        self.assertEqual(state['state'], 'completed', state['message'])
+        self.assertEqual([p['inputs']['input'] for id, p in runner.calls if id == 'combine'], [['d1'], ['d2'], ['d3']])
+
+    def test_outside_files_that_differ_in_a_keyword_go_to_their_pass(self):
+        sources = {
+            'object': files(*self.science, headers=self.science),
+            'bias': files('Zero.fits', headers={'Zero.fits': {'IMAGETYP': 'zero'}}),
+            'flats': files('FlatB.fits', 'FlatV.fits', headers={'FlatB.fits': {'SUBSET': 'B'}, 'FlatV.fits': {'SUBSET': 'V'}}),
+            'darks': files('Dark15.fits', 'Dark30.fits', headers={'Dark15.fits': {'EXPTIME': '15'}, 'Dark30.fits': {'EXPTIME': '30'}}),
+            # A reference taken in B, and a coordinate list without any header.
+            'reference': files('pM67_B30_1.fits', headers={'pM67_B30_1.fits': {'SUBSET': 'B', 'EXPTIME': '30'}}),
+            'coords': [{'id': 'm67.coo', 'asset': 'text', 'role': 'text'}],
+        }
+        single = dict(multiple=False)
+        graph = self.graph(['SUBSET', 'EXPTIME'], [
+            link('bias', 'ccdproc', 'zero', **single), link('flats', 'ccdproc', 'flat', **single),
+            link('darks', 'ccdproc', 'dark', **single), link('reference', 'ccdproc', 'reference', **single),
+            dict(link('coords', 'ccdproc', 'coords', **single), kind='text')], nodes=list(sources)[1:])
+        runner = Runner(sources)
+        state, _ = run(graph, runner)
+        self.assertEqual(state['state'], 'completed', state['message'])
+        received = [p['inputs'] for id, p in runner.calls if id == 'ccdproc']
+        self.assertEqual(received, [
+            {'images': ['b30a', 'b30b'], 'zero': ['Zero.fits'], 'flat': ['FlatB.fits'], 'dark': ['Dark30.fits'],
+             'reference': ['pM67_B30_1.fits'], 'coords': ['m67.coo']},
+            {'images': ['v15a', 'v15b'], 'zero': ['Zero.fits'], 'flat': ['FlatV.fits'], 'dark': ['Dark15.fits'],
+             'reference': ['pM67_B30_1.fits'], 'coords': ['m67.coo']}])
+        self.assertNotIn('warnings', state)
+
+    def runner_calls(self, graph, sources):
+        runner = Runner(sources)
+        run(graph, runner)
+        return runner.calls
+
+    def test_hand_picked_lists_inside_a_loop_deliver_that_pass_only(self):
+        mixed = {'a15': {'EXPTIME': '15'}, 'a30': {'EXPTIME': '30'}, 'b15': {'EXPTIME': '15'}, 'b30': {'EXPTIME': '30'}}
+        sources = {'object': files('s15', 's30', headers={'s15': {'EXPTIME': '15'}, 's30': {'EXPTIME': '30'}}),
+                   'front': files('a15', 'a30', headers=mixed), 'back': files('b15', 'b30', headers=mixed)}
+        graph = self.graph(['EXPTIME'], [link('front', 'ccdproc', 'dark'), link('back', 'ccdproc', 'dark')], nodes=['front', 'back'])
+        darks = [p['inputs']['dark'] for id, p in self.runner_calls(graph, sources) if id == 'ccdproc']
+        self.assertEqual(darks, [['a15', 'b15'], ['a30', 'b30']])
+
+    def test_a_pass_without_a_matching_file_warns_and_runs_without_it(self):
+        sources = {'object': files(*self.science, headers=self.science),
+                   'darks': files('Dark30.fits', 'Dark60.fits', headers={'Dark30.fits': {'EXPTIME': '30'}, 'Dark60.fits': {'EXPTIME': '60'}})}
+        graph = self.graph(['SUBSET', 'EXPTIME'], [link('darks', 'ccdproc', 'dark', multiple=False)], nodes=['darks'])
+        runner = Runner(sources)
+        state, reports = run(graph, runner)
+        self.assertEqual(state['state'], 'completed', state['message'])
+        self.assertEqual([p['inputs'].get('dark') for id, p in runner.calls if id == 'ccdproc'], [['Dark30.fits'], None])
+        self.assertEqual(state['warnings'], [{'nodeId': 'ccdproc', 'message': 'V 15 회차에 맞는 dark가 없습니다.'}])
+
+    def test_files_the_editor_resolved_are_matched_too(self):
+        import tempfile
+        from pathlib import Path
+        import numpy as np
+        from astropy.io import fits
+        sources = {'object': files(*self.science, headers=self.science)}
+        graph = self.graph(['SUBSET'])
+        graph['flows'][0]['fileInputs'] = [{'target': 'ccdproc', 'role': 'flat', 'kind': 'image', 'multiple': False,
+                                            'files': ['FlatB.fits', 'FlatV.fits']}]
+        WorkflowRequest.model_validate(graph)
+        runner = Runner(sources)
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, subset in (('FlatB.fits', 'B'), ('FlatV.fits', 'V')):
+                fits.writeto(Path(tmp) / name, np.zeros((2, 2), dtype='float32'), fits.Header({'SUBSET': subset}))
+            state = execute_workflow(graph, runner, lambda: False, lambda s: None, lambda id: str(Path(tmp) / id))
+        self.assertEqual(state['state'], 'completed', state['message'])
+        self.assertEqual([p['inputs']['flat'] for id, p in runner.calls if id == 'ccdproc'], [['FlatB.fits'], ['FlatV.fits']])
+
+    def test_output_names_read_each_keyword_and_old_variables(self):
+        sources = {'object': files(*self.science, headers=self.science)}
+        graph = self.graph(['SUBSET', 'EXPTIME'])
+        graph['nodes'][1]['payload']['outputs'] = {'output': 'p{SUBSET}_{EXPTIME}.fits'}
+        names = [p['outputs']['output'] for id, p in self.runner_calls(graph, sources) if id == 'ccdproc']
+        self.assertEqual(names, ['pB_30.fits', 'pV_15.fits'])
+        from giraf.flows import constant_outputs, loop_values
+        self.assertEqual(loop_values({'run': 'foreach', 'variable': 'image'}, {'partition': {'FILTER': 'B'}, 'ports': {}}, None),
+                         {'FILTER': 'B', 'image': 'B'})
+        spec = {'adapter': 'generic', 'outputs': [{'name': 'output', 'mode': 'single', 'default': 'x.fits'}]}
+        self.assertEqual(constant_outputs(spec, {'outputs': {'output': 'Dark{EXPTIME}.fits'}}, ['SUBSET', 'EXPTIME']), [])
+        self.assertEqual(len(constant_outputs(spec, {'outputs': {'output': 'Dark.fits'}}, ['SUBSET', 'EXPTIME'])), 1)
+
+    def test_a_second_loop_by_the_same_keywords_takes_its_own_pass_results(self):
+        sources = {'object': files(*self.science, headers=self.science)}
+        keywords = ['SUBSET', 'EXPTIME']
+        graph = {
+            'nodes': [task('object'), task('ccdproc'), task('combine')],
+            'flows': [{'id': 'first', 'run': 'foreach', 'variable': 'SUBSET', 'keywords': keywords, 'members': ['ccdproc']},
+                      {'id': 'second', 'run': 'foreach', 'variable': 'SUBSET', 'keywords': keywords, 'members': ['combine']}],
+            'links': [link('object', 'first', 'items', sourceRole='image'), link('first', 'ccdproc', 'images', sourceRole='item'),
+                      link('ccdproc', 'first', 'result', sourceRole='output'),
+                      link('object', 'second', 'items', sourceRole='image'), link('second', 'combine', 'images', sourceRole='item'),
+                      # Results without headers pair by the pass values they carry.
+                      link('first', 'combine', 'processed', sourceRole='results')],
+        }
+        calls = self.runner_calls(graph, sources)
+        self.assertEqual([p['inputs']['processed'] for id, p in calls if id == 'combine'],
+                         [['ccdproc(b30a)', 'ccdproc(b30b)'], ['ccdproc(v15a)', 'ccdproc(v15b)']])
+
+    def test_pass_values_pick_the_group_of_a_value_by_one_keyword(self):
+        from giraf.values import parameter_value
+        result = {'values': [3.38, 3.07], 'groups': {'keyword': 'SUBSET', 'values': {'B': [3.38], 'V': [3.07]}}}
+        self.assertEqual(parameter_value(result, {'SUBSET': 'V', 'EXPTIME': '15'}, 'r'), 3.07)
+        self.assertEqual(parameter_value(result, {'keyword': 'SUBSET', 'value': 'B'}, 'r'), 3.38)
+        from giraf.workflow import same_group
+        self.assertTrue(same_group({'partition': {'keyword': 'SUBSET', 'value': 'B'}}, {'SUBSET': 'B', 'EXPTIME': '30'}))
+        self.assertFalse(same_group({'partition': {'SUBSET': 'B', 'EXPTIME': '15'}}, {'SUBSET': 'B', 'EXPTIME': '30'}))
+        self.assertTrue(same_group({'partition': {'SUBSET': 'B', 'EXPTIME': '15'}}, {'SUBSET': 'B'}))
+
+    def test_the_korean_particle_follows_the_word(self):
+        from giraf.flows import with_subject
+        self.assertEqual([with_subject(w) for w in ('dark', 'flat', 'zero', '영상', '파일', 'm67.coo', 'Bias 1')],
+                         ['dark가', 'flat가', 'zero가', '영상이', '파일이', 'm67.coo가', 'Bias 1이'])
+
+
 if __name__ == '__main__':
     unittest.main()

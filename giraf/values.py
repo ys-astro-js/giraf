@@ -17,6 +17,10 @@ The request shape is shared by the `/api/values` endpoint and workflow runs:
            inputs: {variable: ref}}]
   links: [{id, target, parameter, type, source: ref, partition?: {keyword, value}}]
   ref:   {node, output}
+
+A loop pass sets `partition` to its own values, `{keyword: value}` for each
+keyword it runs by (partition_pairs reads both shapes); a value grouped by one
+of those keywords takes that keyword's group.
 """
 import ast
 import math
@@ -376,14 +380,26 @@ def _kind(values):
     return 'bool' if values and all(isinstance(v, bool) for v in values) else 'real'
 
 
+def partition_pairs(partition):
+    """{keyword: value} of a partition: one port member's `{keyword, value}`,
+    or a loop pass's values by keyword."""
+    if not partition:
+        return {}
+    if set(partition) == {'keyword', 'value'}:
+        return {partition['keyword']: partition['value']}
+    return dict(partition)
+
+
 def parameter_value(result, partition, type_):
     """The one value a parameter takes, converted to its IRAF type."""
     values = result['values']
     groups = result.get('groups')
-    if groups and partition and partition.get('keyword') == groups['keyword']:
-        if partition['value'] not in groups['values']:
-            raise ValueError(f'{groups["keyword"]}={partition["value"]}: 이 그룹의 값이 없습니다.')
-        values = groups['values'][partition['value']]
+    pairs = partition_pairs(partition)
+    if groups and groups['keyword'] in pairs:
+        value = pairs[groups['keyword']]
+        if value not in groups['values']:
+            raise ValueError(f'{groups["keyword"]}={value}: 이 그룹의 값이 없습니다.')
+        values = groups['values'][value]
     if not values:
         raise ValueError('값이 없습니다.')
     distinct = list(dict.fromkeys(values))
