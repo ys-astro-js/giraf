@@ -14,6 +14,7 @@ import {
 import { NodeIcon } from "@/components/node-icon"
 import { SearchField } from "@/components/search-field"
 import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
+import { nodeChunks } from "@/lib/node-chunks"
 import { taskPackageTree, type TaskPackage } from "@/lib/task-tree"
 import { isGirafNode, taskDisplayName, type Spec } from "@/lib/workbench"
 import { useWorkbench } from "@/features/workbench/context"
@@ -52,6 +53,16 @@ function TaskOption({ task, onAdd }: { task: Spec; onAdd: () => void }) {
   )
 }
 
+const valuesOpenKey = "giraf.addTask.valuesOpen"
+
+function storedValuesOpen() {
+  try {
+    return localStorage.getItem(valuesOpenKey) === "true"
+  } catch {
+    return false
+  }
+}
+
 /** A workflow node as a tile above the package tree. */
 function NodeTile({ task, onAdd }: { task: Spec; onAdd: () => void }) {
   return (
@@ -80,6 +91,7 @@ export function AddTaskButton() {
   const w = useWorkbench()
   const [query, setQuery] = useState("")
   const [packageOpen, setPackageOpen] = useState<Record<string, boolean>>({})
+  const [valuesOpen, setValuesOpen] = useState(storedValuesOpen)
   const { refreshing, refresh } = useRefresh(w.refreshCatalog, w.setError)
   const search = useRef<HTMLInputElement>(null)
   const tasks = w.catalog?.tasks ?? []
@@ -94,6 +106,15 @@ export function AddTaskButton() {
     : []
   const found = [...foundNodes, ...foundTasks]
   const add = (task: Spec) => w.add(task.name)
+
+  function openValues(open: boolean) {
+    setValuesOpen(open)
+    try {
+      localStorage.setItem(valuesOpenKey, String(open))
+    } catch {
+      // Private windows may refuse storage; the choice still applies now.
+    }
+  }
 
   function branch(node: TaskPackage) {
     return (
@@ -195,14 +216,47 @@ export function AddTaskButton() {
             ) : (
               <>
                 {!!nodes.length && (
-                  <div className="library-nodes library-tiles">
-                    {nodes.map((task) => (
-                      <NodeTile
-                        key={task.name}
-                        task={task}
-                        onAdd={() => add(task)}
-                      />
-                    ))}
+                  <div className="library-nodes library-chunks">
+                    {nodeChunks(nodes).map((chunk) => {
+                      const tiles = (
+                        <div className="library-tiles">
+                          {chunk.nodes.map((task) => (
+                            <NodeTile
+                              key={task.name}
+                              task={task}
+                              onAdd={() => add(task)}
+                            />
+                          ))}
+                        </div>
+                      )
+                      return chunk.id === "values" ? (
+                        <Collapsible
+                          key={chunk.id}
+                          open={valuesOpen}
+                          onOpenChange={openValues}
+                        >
+                          <CollapsibleTrigger className="library-option library-package library-chunk-toggle">
+                            <span className="library-chunk-label">
+                              {chunk.label}
+                            </span>
+                            <ChevronRight
+                              aria-hidden="true"
+                              className="library-chevron"
+                            />
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>{tiles}</CollapsibleContent>
+                        </Collapsible>
+                      ) : (
+                        <section
+                          key={chunk.id}
+                          aria-label={chunk.label}
+                          className="library-chunk"
+                        >
+                          <h3 className="library-chunk-label">{chunk.label}</h3>
+                          {tiles}
+                        </section>
+                      )
+                    })}
                   </div>
                 )}
                 {taskPackageTree(irafTasks).map(branch)}

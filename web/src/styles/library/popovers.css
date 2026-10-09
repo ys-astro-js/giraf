@@ -93,6 +93,34 @@
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
 }
+/* A labeled chunk of nodes: files, flow, values. */
+.library-chunks {
+  gap: 8px;
+}
+.library-chunk {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.library-chunk-label {
+  padding-inline: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+/* The values toggle keeps its label where the other chunk labels sit; the chevron follows it. */
+.library-chunk-toggle {
+  min-height: 24px;
+  padding-block: 2px;
+  padding-inline: 8px;
+  gap: 4px;
+}
+.library-chunk-toggle > .library-chunk-label {
+  padding-inline: 0;
+}
+.library-chunk-toggle + [data-slot="collapsible-content"] > .library-tiles {
+  margin-top: 4px;
+}
 .library-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));

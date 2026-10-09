@@ -2,9 +2,16 @@ import type { Spec } from './workbench'
 
 export type TaskPackage = { label: string; path: string; children: TaskPackage[]; tasks: Spec[] }
 
+/**
+ * Top-level packages left out of the tree because newer tasks supersede
+ * them. Their tasks are still found by search.
+ */
+export const HIDDEN_PACKAGES = ['obsolete']
+
 export function taskPackageTree(tasks: Spec[]): TaskPackage[] {
   const roots: TaskPackage[] = []
   for (const task of tasks) {
+    if (HIDDEN_PACKAGES.includes(task.package.split('.')[0])) continue
     let siblings = roots
     let path = ''
     let branch: TaskPackage | undefined
