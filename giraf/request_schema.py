@@ -67,9 +67,10 @@ class WorkflowNode(RequestModel):
     payload: TaskRequest
 
 
-class WorkflowPartition(RequestModel):
-    keyword: str
-    value: str
+class ReceiveMode(RequestModel):
+    """How a connection crossing into a loop region receives (giraf/flows.py receive_mode)."""
+    mode: Literal['all', 'match']
+    keys: list[str] = Field(default_factory=list)
 
 
 class WorkflowLink(RequestModel):
@@ -79,9 +80,11 @@ class WorkflowLink(RequestModel):
     kind: str
     multiple: bool
     sourceFiles: list[str] | None = None
-    sourceGroup: dict[str, ParameterValue | None] | None = None
     sourceRole: str | None = None
-    sourcePartition: WorkflowPartition | None = None
+    # By region id; regions without one receive by default.
+    flow: dict[str, ReceiveMode] = Field(default_factory=dict)
+    # The source's files when it is not part of this run, resolved by the editor.
+    files: list[str] | None = None
 
 
 class ValueRef(RequestModel):
@@ -113,7 +116,9 @@ class ValueLink(RequestModel):
     parameter: str
     type: str = 's'
     source: ValueRef
-    partition: WorkflowPartition | None = None
+    flow: dict[str, ReceiveMode] = Field(default_factory=dict)
+    # Round values a value with labels is chosen by (a region member run alone).
+    round: dict[str, str] | None = None
 
 
 class WorkflowValues(RequestModel):
@@ -123,33 +128,31 @@ class WorkflowValues(RequestModel):
     runs: dict[str, str] = Field(default_factory=dict)
 
 
-class FlowFileInput(RequestModel):
-    """Files the editor resolved for a member from a source outside this run;
-    each pass takes those that match it (giraf/flows.py match_pass)."""
-    target: str
-    role: str
-    kind: str
-    multiple: bool
-    files: list[str] = Field(default_factory=list)
+class FlowCriterion(RequestModel):
+    """One of {keyword}, {expression, name}, {count, order}, {each}, {times}."""
+    keyword: str | None = None
+    expression: str | None = None
+    name: str | None = None
+    count: int | None = None
+    order: str | None = None
+    each: bool | None = None
+    times: int | None = None
+
+
+class FlowSplit(RequestModel):
+    taskId: str
+    outputRole: str | None = None
 
 
 class WorkflowFlow(RequestModel):
-    """A foreach, for or if container (giraf/workflow.py). Links name it as their
-    source (`item`, `then`, `else`, `results`) or target (its input, `result`)."""
+    """A loop region (giraf/flows.py). Members are its tasks and inner regions."""
     id: str
     label: str = ''
-    run: Literal['foreach', 'for', 'if']
     members: list[str] = Field(default_factory=list)
-    variable: str = ''
-    # Items whose source is not part of this run, resolved by the editor.
-    files: list[str] = Field(default_factory=list)
-    # The header keywords a foreach runs by; `partition` is an older document's one.
-    keywords: list[str] = Field(default_factory=list)
-    partition: str | None = None
-    fileInputs: list[FlowFileInput] = Field(default_factory=list)
-    start: int | float | None = None
-    end: int | float | None = None
-    step: int | float | None = None
+    criteria: list[FlowCriterion] = Field(default_factory=list)
+    split: FlowSplit | None = None
+    # The split source's files when it is not part of this run, resolved by the editor.
+    splitFiles: list[str] = Field(default_factory=list)
     condition: str = ''
 
 

@@ -1,11 +1,8 @@
 {
   "version": 2,
   "task": "giraf.foreach",
-  "title": "각각 반복",
-  "description": "묶음마다 한 번씩 실행",
+  "title": "반복",
+  "description": "고른 기준의 회차마다 실행",
   "icon": "repeat",
-  "inputs": {
-    "items": { "kind": "any", "label": "파일", "multiple": true, "required": true, "sources": ["node"] }
-  },
   "components": [{ "type": "foreach" }]
 }

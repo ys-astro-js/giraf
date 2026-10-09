@@ -1,105 +1,117 @@
-"""foreach, for and if containers (docs/node-structure-brief.md §3.7).
+"""Loop regions (docs/node-structure-brief.md §3.5, docs/node-schema.md).
 
-A container is a GIRAF node whose flow component (node schema) says how the
-workflow runner expands it; its members and settings are stored in the
-workflow document and sent with a run as `flows`:
+A region is a GIRAF node with the `foreach` flow component, drawn as a group
+around the tasks it repeats; its settings are stored in the workflow document
+and sent with a run as `flows`:
 
-  {id, label, run: foreach|for|if, members: [task id], variable,
-   files: [file id], keywords?: [keyword], fileInputs?: [file input],
-   start?, end?, step?, condition}
-  file input: {target, role, kind, multiple, files: [file id]}
+  {id, label, members: [task or inner region id], criteria: [criterion],
+   split?: {taskId, outputRole?}, splitFiles?: [file id], condition?}
+  criterion: {keyword} | {expression, name} | {count, order} | {each: true} | {times}
 
-Links address a container by its id. Into it: its input (the list, or the
-files an `if` routes; a foreach takes several links and their files once
-each) and `result` (member outputs it collects). Out of it: `item` (foreach),
-`then` and `else` (if) to members, `results` to the rest of the workflow. A
-`for` variable reaches member parameters as the value
-`{node: container id, output: variable}`.
-
-A foreach runs once per file, or once per combination of the values its
-`keywords` take in the files' headers (an older document's `partition` is one
-keyword). Files reaching a member from outside the loop, by a link or as
-`fileInputs` resolved by the editor, are matched to the pass (match_pass).
+A region has no ports. Links go straight from outside sources to member
+inputs; a link crossing a region's border receives files by the mode stored on
+it, `flow: {region id: {mode: all|match, keys}}`, or by default (receive).
+The split source's files are divided into rounds by the criteria; results made
+in a round carry its values as labels `{name: value}`, which later regions
+match and split by. `splitFiles` are the split source's files when that source
+is not part of this run, resolved by the editor.
 """
-import math
 from pathlib import Path
 import re
 
-from .values import _scalar, evaluate_expression, expression_names, pass_value, same_value
+from .values import _number, _scalar, evaluate_expression, expression_names, pass_value, same_value
 
-FLOW_RUNS = ('foreach', 'for', 'if')
-INNER_PORTS = {'foreach': ('item',), 'for': (), 'if': ('then', 'else')}
-COLLECT, RESULTS = 'result', 'results'
-MAX_ITERATIONS = 1000
-# The container sets it: a header keyword (FILTER, DATE-OBS), 파일 or 숫자.
+MAX_ROUNDS = 1000
+# A header keyword (FILTER, DATE-OBS) or a name the region gives (묶음, 파일, 회차).
 NAME = re.compile(r'^[^\W\d][\w-]*$')
+CHUNK, EACH, TIMES = '묶음', '파일', '회차'
 
 
-def flow_range(flow):
-    """The numbers of a `for` container: start to end inclusive by step."""
-    start, end, step = flow.get('start'), flow.get('end'), flow.get('step')
-    if start is None or end is None:
-        raise ValueError('시작과 끝 값을 정해 주세요.')
-    step = 1 if step is None else step
-    if step == 0:
-        raise ValueError('간격은 0이 될 수 없습니다.')
-    if (end - start) * step < 0:
-        raise ValueError('간격의 부호가 시작에서 끝으로 가는 방향과 맞지 않습니다.')
-    count = math.floor((end - start) / step + 1e-9) + 1
-    if count > MAX_ITERATIONS:
-        raise ValueError(f'반복은 {MAX_ITERATIONS}회까지입니다. 지금은 {count}회입니다.')
-    integer = all(float(v).is_integer() for v in (start, end, step))
-    return [int(round(start + k * step)) if integer else round(start + k * step, 10) for k in range(count)]
+def label_name(criterion):
+    """The label a criterion puts on results: its keyword, its expression's name, 묶음, 파일 or 회차."""
+    if 'keyword' in criterion:
+        return criterion['keyword']
+    if 'expression' in criterion:
+        return criterion.get('name') or ''
+    if 'count' in criterion:
+        return CHUNK
+    if criterion.get('each'):
+        return EACH
+    return TIMES
 
 
-def flow_keywords(flow):
-    """The header keywords a foreach runs by; an older document names one as `partition`."""
-    if flow.get('run') != 'foreach':
-        return []
-    return list(flow.get('keywords') or ([flow['partition']] if flow.get('partition') else []))
+def flow_labels(flow):
+    return [label_name(c) for c in flow.get('criteria') or []]
 
 
-def loop_variables(flow):
-    """Names member output names may use: each keyword, and the container's variable."""
-    names = flow_keywords(flow)
-    variable = flow.get('variable')
-    return names + [variable] if variable and variable not in names else names
+def splits(flow):
+    """A region divides files unless it only repeats a number of times."""
+    criteria = flow.get('criteria') or []
+    return bool((flow.get('condition') or '').strip()) or any('times' not in c for c in criteria)
+
+
+def _whole(value, low, high):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and float(value).is_integer() and low <= value <= high
+
+
+def _expression_error(text):
+    try:
+        evaluate_expression(text, {name: [1.0] for name in expression_names(text)})
+    except ValueError as exc:
+        if '읽지 못했습니다' in str(exc) or '지원하지 않는' in str(exc):
+            return str(exc)
+    return None
 
 
 def flow_errors(flow):
-    """Setting problems of a container, as messages for diagnostics and runs."""
+    """Setting problems of a region, as messages for diagnostics and runs."""
     errors = []
-    run = flow.get('run')
-    if run in ('foreach', 'for') and not NAME.fullmatch(flow.get('variable') or ''):
-        errors.append('반복의 이름표가 올바르지 않습니다. 노드를 다시 추가해 주세요.')
-    elif run in ('foreach', 'for') and 'name' in loop_variables(flow):
-        errors.append('name 키워드로는 나눌 수 없습니다. 출력 이름의 {name}과 겹칩니다.')
-    elif any(not NAME.fullmatch(keyword or '') for keyword in flow_keywords(flow)):
-        errors.append('나눌 헤더 키워드 이름이 올바르지 않습니다. 다시 골라 주세요.')
-    if run == 'for':
-        try:
-            flow_range(flow)
-        except ValueError as exc:
-            errors.append(str(exc))
-    if run == 'if':
-        condition = (flow.get('condition') or '').strip()
-        if not condition:
-            errors.append('조건 식을 적어 주세요.')
+    criteria = flow.get('criteria') or []
+    condition = (flow.get('condition') or '').strip()
+    if not criteria and not condition:
+        errors.append('무엇마다 반복할지 정해 주세요.')
+    for criterion in criteria:
+        if 'keyword' in criterion:
+            if not NAME.fullmatch(criterion['keyword'] or ''):
+                errors.append('헤더 키워드 이름이 올바르지 않습니다. 다시 골라 주세요.')
+        elif 'expression' in criterion:
+            if not (criterion.get('expression') or '').strip():
+                errors.append('식을 적어 주세요.')
+            elif problem := _expression_error(criterion['expression']):
+                errors.append(problem)
+            if not NAME.fullmatch(criterion.get('name') or ''):
+                errors.append('식 결과의 이름이 올바르지 않습니다.')
+        elif 'count' in criterion:
+            if not _whole(criterion['count'], 1, MAX_ROUNDS):
+                errors.append('몇 장씩 나눌지 1 이상의 정수로 정해 주세요.')
+            order = criterion.get('order') or 'name'
+            if order != 'name' and not NAME.fullmatch(order):
+                errors.append('순서를 정할 헤더 키워드 이름이 올바르지 않습니다.')
+        elif criterion.get('each'):
+            pass
+        elif 'times' in criterion:
+            if not _whole(criterion['times'], 1, MAX_ROUNDS):
+                errors.append(f'반복 횟수는 1부터 {MAX_ROUNDS}까지의 정수입니다.')
         else:
-            try:
-                evaluate_expression(condition, {name: [1.0] for name in expression_names(condition)})
-            except ValueError as exc:
-                if '읽지 못했습니다' in str(exc) or '지원하지 않는' in str(exc):
-                    errors.append(str(exc))
+            errors.append('알 수 없는 기준입니다. 다시 골라 주세요.')
+    names = flow_labels(flow)
+    if 'name' in names:
+        errors.append('name으로는 나눌 수 없습니다. 출력 이름의 {name}과 겹칩니다.')
+    if len(set(names)) != len(names):
+        errors.append('같은 이름의 기준이 두 번 있습니다.')
+    if condition and (problem := _expression_error(condition)):
+        errors.append(problem)
+    if splits(flow) and not (flow.get('split') or {}).get('taskId'):
+        errors.append('나눌 파일을 골라 주세요.')
     return errors
 
 
 def natural(text):
-    return [int(part) if part.isdigit() else part for part in re.split(r'(\d+)', text)]
+    return [int(part) if part.isdigit() else part for part in re.split(r'(\d+)', str(text))]
 
 
 class Items:
-    """Header access for the files a container receives (products or file ids)."""
+    """Header and label access for the files a region handles (products or file ids)."""
 
     def __init__(self, resolve_file):
         self.resolve_file = resolve_file
@@ -143,67 +155,127 @@ class Items:
             return ''
         return value.strip() if isinstance(value, str) else str(value)
 
+    def value(self, item, name):
+        """What a region reads for a name: the file's label of that name, else its header."""
+        labels = item.get('labels') or {}
+        return str(labels[name]) if name in labels else self.text(item, name)
 
-def match_pass(products, values, files, passes):
-    """(products, matched) a pass takes from a connection from outside its loop.
+    def variables(self, item, names):
+        """Expression variables of one file: labels, then headers."""
+        found = {}
+        for name in names:
+            labels = item.get('labels') or {}
+            value = _scalar(labels[name]) if name in labels else self.header(item, name)
+            if value is None:
+                raise ValueError(f'{self.label(item)}: 헤더에 {name} 키워드가 없습니다.')
+            found[name] = [value]
+        return found
 
-    A loop keyword matches the connection when its files differ in it and at
-    least one of them has a value one of the loop's `passes` has. The pass
-    keeps the files equal to its values in every matching keyword; with none
-    (one file, files that all agree, files without the keyword such as text,
-    values no pass has) the connection reaches every pass as it is.
+
+def _text(value):
+    return str(value).strip() if not isinstance(value, float) else repr(value)
+
+
+def holds(condition, item, files):
+    outcome = evaluate_expression(condition, files.variables(item, expression_names(condition)))
+    return bool(outcome[0])
+
+
+def _order_key(files, order):
+    def key(item):
+        if order == 'name':
+            return (0, natural(files.label(item)))
+        text = files.value(item, order)
+        number = _number(text)
+        return (0, number) if number is not None else (1, natural(text))
+    return key
+
+
+def rounds(flow, items, files):
+    """[{values: {label: value}, items: [item]}] of one region run.
+
+    Criteria refine the rounds in order: by value (keyword, expression, file),
+    in chunks (count), or repeated (times); rounds sort naturally by their
+    values: B 15, B 30, V 15. Values keep the text they were read as.
     """
-    def used(k):
-        found = [files.text(p, k) for p in products]
-        return any(not same_value(v, found[0]) for v in found) and \
-            any(same_value(v, other.get(k, '')) for v in found for other in passes)
-    keys = [k for k in values if used(k)]
-    if not keys:
-        return products, False
-    return [p for p in products if all(same_value(files.text(p, k), values[k]) for k in keys)], True
+    errors = flow_errors(flow)
+    if errors:
+        raise ValueError(' '.join(errors))
+    condition = (flow.get('condition') or '').strip()
+    if condition:
+        items = [item for item in items if holds(condition, item, files)]
+    groups = [({}, list(items))] if items or not splits(flow) else []
+    for criterion in flow.get('criteria') or []:
+        name, refined = label_name(criterion), []
+        for values, members in groups:
+            if 'times' in criterion:
+                refined += [({**values, name: str(n)}, members) for n in range(1, int(criterion['times']) + 1)]
+            elif 'count' in criterion:
+                ordered = sorted(members, key=_order_key(files, criterion.get('order') or 'name'))
+                size = int(criterion['count'])
+                refined += [({**values, name: str(k // size + 1)}, ordered[k:k + size]) for k in range(0, len(ordered), size)]
+            else:
+                found = {}
+                for item in members:
+                    if 'keyword' in criterion:
+                        value = files.value(item, criterion['keyword'])
+                    elif 'expression' in criterion:
+                        value = _text(evaluate_expression(criterion['expression'],
+                                                          files.variables(item, expression_names(criterion['expression'])))[0])
+                    else:
+                        value = Path(files.label(item)).stem
+                    # 15 and 15.0 are one round, named as the first file has it.
+                    key = next((k for k in found if same_value(k, value)), value)
+                    found.setdefault(key, []).append(item)
+                refined += [({**values, name: value}, group) for value, group in found.items()]
+        groups = refined
+        if len(groups) > MAX_ROUNDS:
+            raise ValueError(f'반복은 {MAX_ROUNDS}회까지입니다. 지금은 {len(groups)}회입니다.')
+    names = flow_labels(flow)
+    groups.sort(key=lambda group: [natural(group[0][n]) for n in names])
+    return [dict(values=values, items=members) for values, members in groups]
 
 
 def pass_name(values):
-    """How a pass is named to people: its values in keyword order, `B 30`
+    """How a round is named to people: its values in criteria order, `B 30`
     (pass_value: a header's 30.0 reads 30)."""
-    return ' '.join(pass_value(value) if value.strip() else '없음' for value in values.values())
+    return ' '.join(pass_value(value) if str(value).strip() else '없음' for value in values.values())
 
 
-def with_subject(word):
-    """`파일이`, `dark가` (web/src/lib/korean.ts)."""
+def _final(word):
     text = word.strip()
     last = text[-1:] or ' '
     code = ord(last) - 0xAC00
     if 0 <= code <= 11171:
-        final = code % 28 != 0
-    elif last.isdigit():
-        final = last in '0136780'
-    else:
-        final = bool(re.search(r'([lmn]|ng)$', text, re.IGNORECASE))
-    return word + ('이' if final else '가')
+        return code % 28 != 0
+    if last.isdigit():
+        return last in '0136780'
+    return bool(re.search(r'([lmn]|ng)$', text, re.IGNORECASE))
 
 
-def loop_values(flow, iteration, files):
-    """{variable: value} member output names read in one iteration: the
-    `for` number, each keyword's value, or the foreach file's stem."""
-    variable = flow.get('variable')
-    if 'number' in iteration:
-        return {variable: str(iteration['number'])} if variable else {}
-    # Values as pass names show them: `Dark{EXPTIME}.fits` is Dark15.fits for 15.0.
-    pairs = {k: pass_value(v) for k, v in (iteration.get('partition') or {}).items()}
-    if pairs:
-        # An older document's variable reads its one keyword's value.
-        if variable and variable not in pairs and len(pairs) == 1:
-            pairs[variable] = next(iter(pairs.values()))
-        return pairs
-    items = iteration['ports'].get('item') or []
-    if variable and flow['run'] == 'foreach' and len(items) == 1:
-        return {variable: Path(files.label(items[0])).stem}
-    return {}
+def with_subject(word):
+    """`파일이`, `dark가` (web/src/lib/korean.ts)."""
+    return word + ('이' if _final(word) else '가')
+
+
+def with_object(word):
+    """`datapars를`, `param을`."""
+    return word + ('을' if _final(word) else '를')
+
+
+def with_topic(word):
+    """`Master Dark는`, `영상은`."""
+    return word + ('은' if _final(word) else '는')
+
+
+def loop_values(values):
+    """{label: value} member output names read in one round: `Dark{EXPTIME}.fits`
+    is Dark15.fits for 15.0."""
+    return {name: pass_value(value) for name, value in values.items()}
 
 
 def loop_names(payload, values):
-    """A member payload whose output names have each `{variable}` replaced."""
+    """A member payload whose output names have each `{label}` replaced."""
     def named(name):
         for variable, value in values.items():
             name = name.replace('{' + variable + '}', value)
@@ -217,8 +289,8 @@ def loop_names(payload, values):
 
 
 def constant_outputs(spec, payload, variables):
-    """Output roles whose name is the same in every iteration of a loop: not
-    per input and without any of the loop's `{variable}`s."""
+    """Output roles whose name is the same in every round of a region: not
+    per input and without any of the region's `{label}`s."""
     if spec.get('adapter') != 'generic' or spec.get('run'):
         return []
     variables = [variables] if isinstance(variables, str) else variables
@@ -233,63 +305,34 @@ def constant_outputs(spec, payload, variables):
     return found
 
 
-def iterations(flow, items, files, variables):
-    """[{ports: {port: [item]}, partition?, number?}] for one container run.
+def receive_mode(link, region, labels):
+    """How a link crossing into `region` receives: ('split',), ('match', keys) or ('all',).
 
-    A foreach pass by keywords has `partition`, its values `{keyword: value}`.
-    `variables` are the values connected to an `if` condition, by name.
+    The split source divides; a stored mode wins; otherwise labels the source
+    carries under the region's label names match, and anything else reaches
+    every round as it is.
     """
-    errors = flow_errors(flow)
-    if errors:
-        raise ValueError(' '.join(errors))
-    run = flow['run']
-    if run == 'for':
-        return [dict(ports={}, number=n) for n in flow_range(flow)]
-    if run == 'foreach':
-        keywords = flow_keywords(flow)
-        if not keywords:
-            return [dict(ports={'item': [item]}) for item in items]
-        groups = {}
-        for item in items:
-            groups.setdefault(tuple(files.text(item, k) for k in keywords), []).append(item)
-        # One pass per combination of values, sorted naturally: B 15, B 30, V 15.
-        return [dict(ports={'item': groups[key]}, partition=dict(zip(keywords, key)))
-                for key in sorted(groups, key=lambda key: [natural(v) for v in key])]
-    condition = flow['condition'].strip()
-    keywords = [name for name in expression_names(condition) if name not in variables]
-
-    def holds(values):
-        outcome = evaluate_expression(condition, values)
-        if len(set(outcome)) > 1:
-            raise ValueError('조건 값이 여러 개입니다. 계산 노드에서 하나로 모아 주세요.')
-        return bool(outcome[0])
-    if not keywords:
-        lane = 'then' if holds(variables) else 'else'
-        return [dict(ports={'then': items if lane == 'then' else [], 'else': items if lane == 'else' else []})]
-    lanes = {'then': [], 'else': []}
-    for item in items:
-        local = dict(variables)
-        for keyword in keywords:
-            value = files.header(item, keyword)
-            if value is None:
-                raise ValueError(f'{files.label(item)}: 헤더에 {keyword} 키워드가 없습니다.')
-            local[keyword] = [value]
-        lanes['then' if holds(local) else 'else'].append(item)
-    return [dict(ports=lanes)]
+    split = region.get('split') or {}
+    if split.get('taskId') and link.get('source') == split['taskId'] and \
+            (not split.get('outputRole') or not link.get('sourceRole') or split['outputRole'] == link['sourceRole']):
+        return ('split',)
+    stored = (link.get('flow') or {}).get(region['id'])
+    if stored:
+        return ('match', list(stored.get('keys') or [])) if stored.get('mode') == 'match' else ('all',)
+    keys = [name for name in flow_labels(region) if name in labels]
+    return ('match', keys) if keys else ('all',)
 
 
-def lanes(flow, links):
-    """Members reached from each inner port of an `if`, through other members."""
-    members = set(flow.get('members', []))
+def matching(products, keys, values, files):
+    return [p for p in products if all(same_value(files.value(p, k), values.get(k, '')) for k in keys)]
+
+
+def unmatched_labels(products, region):
+    """Labels the products differ in that the region does not run by."""
+    names = set(flow_labels(region))
     found = {}
-    for port in INNER_PORTS.get(flow['run'], ()):
-        reached, stack = set(), [l['target'] for l in links
-                                 if l['source'] == flow['id'] and l.get('sourceRole') == port and l['target'] in members]
-        while stack:
-            id = stack.pop()
-            if id in reached:
-                continue
-            reached.add(id)
-            stack += [l['target'] for l in links if l['source'] == id and l['target'] in members]
-        found[port] = reached
-    return found
+    for product in products:
+        for name, value in (product.get('labels') or {}).items():
+            if name not in names:
+                found.setdefault(name, set()).add(pass_value(value))
+    return [name for name, values in found.items() if len(values) > 1]

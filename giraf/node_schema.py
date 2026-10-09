@@ -37,22 +37,20 @@ PARAMETER_FIELDS = {'label', 'default', 'fixed', 'connectable'}
 # GIRAF node does: run as a job, or steer the workflow runner.
 COMPONENT_CLASSES = {
     'cursor': 'task', 'image-cursor': 'task', 'value-output': 'task', 'value-input': 'task',
-    'ccd-preprocess': 'task', 'calibration-groups': 'task',
+    'ccd-preprocess': 'task',
     'pass-files': 'run', 'save-files': 'run',
     'value-constant': 'run', 'value-header': 'run', 'value-compute': 'run', 'pset': 'run',
-    'foreach': 'flow', 'for': 'flow', 'if': 'flow',
+    'foreach': 'flow',
 }
 RUN_COMPONENTS = ('pass-files', 'save-files', 'value-constant', 'value-header', 'value-compute', 'pset')
 # Run components evaluated by GIRAF instead of launched as a job: their value
 # outputs (and a pset node's values) feed other nodes' parameters.
 VALUE_RUNS = ('value-constant', 'value-header', 'value-compute', 'pset')
-PLANNED_COMPONENTS = ('image-cursor', 'value-input', 'ccd-preprocess', 'calibration-groups')
-# Flow components make a GIRAF node a container the workflow runner expands
-# (giraf/workflow.py): `foreach` runs its members once per item of its one
-# input, `for` once per number of a range, `if` routes its one input to a
-# true or false lane. Their settings live in the workflow document.
-FLOW_COMPONENTS = ('foreach', 'for', 'if')
-FLOW_INPUTS = {'foreach': 1, 'for': 0, 'if': 1}
+PLANNED_COMPONENTS = ('image-cursor', 'value-input', 'ccd-preprocess')
+# A flow component makes a GIRAF node a region the workflow runner expands
+# (giraf/workflow.py): `foreach` runs the tasks inside it once per round of
+# the criteria set on it. Its settings live in the workflow document.
+FLOW_COMPONENTS = ('foreach',)
 # What a value carries; an IRAF parameter of a matching type can take it.
 VALUE_KINDS = ('real', 'int', 'bool', 'string')
 COMPONENTS = ('cursor',)
@@ -436,12 +434,9 @@ def node_definition(task, layers):
         error('outputs: save-files 노드는 출력이 없습니다.')
     if run == 'pass-files' and not outputs:
         error('outputs: pass-files 노드에는 넘겨줄 출력이 필요합니다.')
-    if run in FLOW_COMPONENTS:
-        # A container's outputs are its boundary (results), not schema ports.
-        if outputs:
-            error(f'outputs: {run} 노드의 출력은 컨테이너 경계에서 정합니다.')
-        if len(inputs) != FLOW_INPUTS[run]:
-            error(f'inputs: {run} 노드에는 입력이 {FLOW_INPUTS[run]}개 필요합니다.')
+    if run in FLOW_COMPONENTS and (inputs or outputs):
+        # A region has no ports: connections go straight to the tasks inside it.
+        error(f'inputs, outputs: {run} 노드에는 입력과 출력이 없습니다.')
     fingerprint = hashlib.sha256(json.dumps(dict(files=files, inputs=inputs, outputs=outputs, run=run),
                                             sort_keys=True).encode()).hexdigest()
     reason = ' '.join(dict.fromkeys(i['message'] for i in issues))

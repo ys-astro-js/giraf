@@ -71,8 +71,8 @@ def workflow_diagnostics(request, resolve):
     flows = request.get('flows', [])
     if not isinstance(flows, list):
         raise ValueError('컨테이너 목록 형식이 올바르지 않습니다.')
-    pending = diagnose_connections(by_id, connections, add, {flow['id'] for flow in flows})
-    diagnose_flows(flows, connections, add)
+    pending = diagnose_connections(by_id, connections, add)
+    diagnose_flows(flows, connections, add, by_id)
     diagnose_loop_outputs(flows, by_id, add)
 
     def fresh(file_id):
@@ -104,36 +104,66 @@ def workflow_diagnostics(request, resolve):
     return result
 
 
-def diagnose_flows(flows, connections, add):
-    """Settings of foreach, for and if containers (giraf/flows.py)."""
-    from .flows import flow_errors
+def diagnose_flows(flows, connections, add, by_id=None):
+    """Settings of loop regions (giraf/flows.py), and connections into them
+    that take every round the same files although their source differs by a
+    label the region does not run by."""
+    from .flows import flow_errors, flow_labels, receive_mode, with_object, with_topic
     for flow in flows:
         for message in flow_errors(flow):
             add('error', message, flow['id'])
-        if flow.get('run') in ('foreach', 'if') and not flow.get('connected'):
-            add('error', '반복할 파일을 연결해 주세요.' if flow['run'] == 'foreach' else '조건에 따라 나눌 파일을 연결해 주세요.', flow['id'])
         if not flow.get('members'):
             add('warning', '안에 작업이 없습니다. 반복할 작업을 이 안으로 옮겨 주세요.', flow['id'])
+    regions = {flow['id']: flow for flow in flows}
+    owner = {member: flow['id'] for flow in flows for member in flow.get('members', [])}
+
+    def enclosing(id):
+        found = []
+        while id in owner and owner[id] not in found:
+            id = owner[id]
+            found.append(id)
+        return found
+    names = {id: node.get('label') or id for id, node in (by_id or {}).items()}
+    for edge in connections:
+        source, target = edge.get('source', {}).get('taskId'), edge.get('target')
+        if not source or not target:
+            continue
+        around = enclosing(source)
+        carried = [name for id in reversed(around) for name in flow_labels(regions[id])]
+        link = dict(source=source, sourceRole=edge['source'].get('outputRole'), flow=edge.get('flow'))
+        for id in reversed(enclosing(target)):
+            if id in around:
+                continue
+            if receive_mode(link, regions[id], set(carried))[0] != 'all':
+                continue
+            for name in [n for n in carried if n not in flow_labels(regions[id])]:
+                add('warning', f'{with_topic(names.get(source, source))} {name}마다 다릅니다. '
+                               f'영역에 {with_object(name)} 더하면 짝을 지을 수 있습니다.', target, edge.get('id'))
 
 
 def diagnose_loop_outputs(flows, by_id, add):
-    """A member output named the same in every iteration is overwritten."""
-    from .flows import NAME, constant_outputs, flow_keywords, loop_variables
-    for flow in flows:
-        variable = flow.get('variable') or ''
-        if flow.get('run') not in ('foreach', 'for') or not NAME.fullmatch(variable):
+    """A member output named the same in every round is overwritten."""
+    from .flows import constant_outputs, flow_errors, flow_labels
+    regions = {flow['id']: flow for flow in flows}
+    owner = {member: flow['id'] for flow in flows for member in flow.get('members', [])}
+    for member, node in by_id.items():
+        variables, id = [], member
+        while id in owner and owner[id] not in variables:
+            id = owner[id]
+            variables.append(id)
+        regions_around = [regions[id] for id in reversed(variables)]
+        # A region of one round (a condition alone) does not overwrite anything.
+        if not any(flow.get('criteria') for flow in regions_around) or any(flow_errors(flow) for flow in regions_around):
             continue
-        variables = loop_variables(flow)
-        # A loop by keywords names its passes by them: suggest those.
-        suggested = ', '.join('{' + v + '}' for v in flow_keywords(flow) or [variable])
-        for member in flow.get('members', []):
-            payload = by_id.get(member, {}).get('payload', {})
-            for role, name in constant_outputs(TASKS.get(payload.get('task'), {}), payload, variables):
-                add('warning', f'{role}: 회차마다 이름이 같아({name}) 앞 회차의 파일을 덮어씁니다. '
-                               f'출력 이름에 {suggested}를 넣어 주세요.', member)
+        labels = [name for flow in regions_around for name in flow_labels(flow)]
+        suggested = ', '.join('{' + v + '}' for v in labels)
+        payload = node.get('payload', {})
+        for role, name in constant_outputs(TASKS.get(payload.get('task'), {}), payload, labels):
+            add('warning', f'{role}: 회차마다 이름이 같아({name}) 앞 회차의 파일을 덮어씁니다. '
+                           f'출력 이름에 {suggested}를 넣어 주세요.', member)
 
 
-def diagnose_connections(by_id, connections, add, flows=frozenset()):
+def diagnose_connections(by_id, connections, add):
     components = connection_components(connections)
     input_counts = Counter((edge.get('target'), edge.get('role')) for edge in connections)
     pending = {node_id: set() for node_id in by_id}
@@ -172,13 +202,6 @@ def diagnose_connections(by_id, connections, add, flows=frozenset()):
             add('error', '입력 연결은 하나만 선택해 주세요.', target_id, edge_id)
             continue
         parent_id = source.get('taskId')
-        if parent_id in flows:
-            # A container's item, lane or results arrive while the workflow runs.
-            if 'node' not in slot.get('sources', ('node',)):
-                add('error', '다른 노드의 출력을 받지 않는 입력입니다.', target_id, edge_id)
-            elif not target['payload'].get('expressions', {}).get(slot['name']):
-                pending[target_id].add(slot['name'])
-            continue
         if source.get('kind') in ('pending', 'result'):
             parent = by_id.get(parent_id)
             if not parent:

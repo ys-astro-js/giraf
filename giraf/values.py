@@ -1,27 +1,24 @@
 """Values that flow along value connections into task parameters (docs/node-schema.md).
 
-A value is a list of numbers or strings, optionally split by a header keyword
-(`groups`). It comes from a task's `value-output` component (a text column
-or a header keyword of its output), or a GIRAF value node (`value-constant`,
-`value-header`, `value-compute`, or a `pset` node's parameter). Values reach a
-task parameter as one scalar; a partitioned target picks its own group's value.
-A compute node with a partition splits its inputs by that keyword
-(partition_input); values read from files carry their files (`sources`) so
-they can be split by each file's header. A table's rows are traced to the
-input image its product was made from (`source` or `sourceInput`).
+A value is a list of numbers or strings. It comes from a task's `value-output`
+component (a text column or a header keyword of its output), or a GIRAF value
+node (`value-constant`, `value-header`, `value-compute`, or a `pset` node's
+parameter). Values read from files carry those files' labels (`labels`, one
+`{name: value}` per value) that loop regions put on results
+(giraf/flows.py); a compute node computes once per label combination. Values
+reach a task parameter as one scalar; inside a region a value with labels
+takes the round's own (`round`). A table's rows are traced to the input image
+its product was made from (`source` or `sourceInput`).
 
 The request shape is shared by the `/api/values` endpoint and workflow runs:
 
   nodes: [{id, run, rows: [{name, value, groups?, type?}], partition?, files: [file id],
-           fileLinks: [{source, sourceRole?, sourceFiles?, sourcePartition?}],
-           inputs: {variable: ref}}]
-  links: [{id, target, parameter, type, source: ref, partition?: {keyword, value}}]
+           fileLinks: [{source, sourceRole?, sourceFiles?}], inputs: {variable: ref}}]
+  links: [{id, target, parameter, type, source: ref, round?: {label: value}}]
   ref:   {node, output}
 
-A loop pass sets `partition` to its own values, `{keyword: value}` for each
-keyword it runs by (partition_pairs reads both shapes); a value grouped by one
-of those keywords takes that keyword's group, found by same_value. The editor
-sends a loop member run alone with its loop's first pass.
+A constant's `groups` give one value per value of the label `partition`. The
+editor sends a region member run alone with the region's first round.
 """
 import ast
 import math
@@ -134,8 +131,14 @@ def _product_path(product, resolve_file):
     return Path(resolve_file(product['id']))
 
 
-def task_value(job, name, resolve_file):
-    """A `value-output` of a finished task run, read from its products."""
+def task_value(job, name, resolve_file, labels_of=None):
+    """A `value-output` of a finished task run, read from its products.
+
+    Each value carries labels: a header value its output image's; a table row
+    also those of the input image the table was made from, when the run
+    recorded one (a per-image output's `source`, a run over one image's
+    `sourceInput`), else those every input of the run shares.
+    """
     if not job or job.get('state') != 'completed':
         raise ValueError('작업을 먼저 실행해 주세요.')
     definition = (job.get('manifest') or {}).get('definition') or {}
@@ -144,59 +147,45 @@ def task_value(job, name, resolve_file):
         raise ValueError(f'{name}: 작업 스키마에 없는 값입니다.')
     products = [p for p in job.get('products', []) if p.get('role') == spec['from']]
     kind = spec.get('kind', 'real')
-    inputs = {r['id']: r.get('path') for r in (job.get('manifest') or {}).get('rows', [])}
-    values, sources, traced = [], [], True
+    labels_of = labels_of or (lambda id: {})
+    inputs = [labels_of(r['id']) for r in (job.get('manifest') or {}).get('rows', [])]
+    shared = {k: v for k, v in (inputs[0] if inputs else {}).items() if all(i.get(k) == v for i in inputs)}
+    values, labels = [], []
     for product in products:
+        own = dict(product.get('labels') or {})
         path = _product_path(product, resolve_file)
         if 'keyword' in spec:
             value = header_value(path, spec['keyword'])
             if value is not None:
                 values.append(value)
-                sources.append(str(path))
+                labels.append(own)
             continue
         column = column_values(path.read_text(errors='replace'), spec['column'], kind)
+        source = product.get('source') or product.get('sourceInput')
+        tag = {**(labels_of(source) if source else shared), **own}
         values += column
-        # A table's rows come from the input image it was made from, when the run
-        # recorded one: a per-image output (`source`) or a run over one image.
-        source = _input_path(product.get('source') or product.get('sourceInput'), inputs, resolve_file)
-        traced = traced and source is not None
-        sources += [source] * len(column)
-    trace = dict(sources=sources) if traced else {}
-    return dict(kind=kind, values=values, origin=definition.get('taskName') or None, **trace)
+        labels += [tag] * len(column)
+    return dict(kind=kind, values=values, origin=definition.get('taskName') or None, **_labelled(labels))
 
 
-def _input_path(id, inputs, resolve_file):
-    """The input file a run read as `id`, or None when it is not known."""
-    if not id:
-        return None
-    path = inputs.get(id)
-    if path and Path(path).is_file():
-        return str(path)
-    try:
-        return str(resolve_file(id))
-    except (ValueError, OSError, KeyError):
-        return None
-
-
-def _group_by(keyed, keyword):
-    groups = {}
-    for key, value in keyed:
-        groups.setdefault(key, []).append(value)
-    return dict(keyword=keyword, values=groups)
+def _labelled(labels):
+    """`labels` of a value when any of its values has one."""
+    return dict(labels=labels) if any(labels) else {}
 
 
 def constant_value(node, row):
-    """A user-typed value; with a partition keyword, one value per group."""
+    """A user-typed value; a table by the label `partition` gives each label value its own."""
     def typed(text):
         number = _number(text)
         return number if number is not None else str(text).strip()
     result = dict(kind='real' if _number(row.get('value')) is not None else 'string',
                   values=[typed(row.get('value', ''))] if str(row.get('value', '')).strip() else [], constant=True)
-    groups = {k: [typed(v)] for k, v in (row.get('groups') or {}).items() if str(v).strip()}
+    groups = {k: typed(v) for k, v in (row.get('groups') or {}).items() if str(v).strip()}
     if node.get('partition') and groups:
-        result['groups'] = dict(keyword=node['partition'], values=groups)
-        result['values'] = [v for vs in groups.values() for v in vs]
+        result['values'] = list(groups.values())
+        result['labels'] = [{node['partition']: k} for k in groups]
         result['kind'] = 'real' if all(isinstance(v, float) for v in result['values']) else 'string'
+        del result['constant']
     return result
 
 
@@ -225,22 +214,17 @@ def pset_value(row):
     return dict(kind=kind, values=[value], constant=True)
 
 
-def header_values(paths, keyword, partition=None):
-    values, keyed, sources = [], [], []
-    for path in paths:
+def header_values(files, keyword):
+    """A keyword of each file, `(path, labels)`; values keep their file's labels."""
+    values, labels = [], []
+    for path, label in files:
         value = header_value(path, keyword)
         if value is None:
             continue
         values.append(value)
-        sources.append(str(path))
-        if partition:
-            group = header_value(path, partition)
-            keyed.append((str(group if group is not None else '').strip(), value))
-    result = dict(kind='real' if values and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values) else 'any',
-                  values=values, sources=sources)
-    if partition:
-        result['groups'] = _group_by(keyed, partition)
-    return result
+        labels.append(dict(label or {}))
+    return dict(kind='real' if values and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values) else 'any',
+                values=values, **_labelled(labels))
 
 
 # IRAF expressions (hselect's expr) use C operators; Python's grammar reads the rest.
@@ -345,79 +329,62 @@ def expression_names(text):
     return list(dict.fromkeys(n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id not in called))
 
 
-MIXED_PARTITIONS = '나누기 기준이 다른 값은 함께 계산할 수 없습니다.'
-
-
-def partition_input(result, keyword, read_header=header_value):
-    """An input of a compute node split by `keyword` (the node's 나누기 기준).
-
-    Values already split by it pass; one typed constant applies to every
-    group; values read from files are split by each file's header. Values
-    whose files are unknown (a table column) cannot be split.
-    """
-    groups = result.get('groups')
-    if groups:
-        if groups['keyword'] != keyword:
-            raise ValueError(MIXED_PARTITIONS)
-        return result
-    if result.get('constant'):
-        return result
-    sources = result.get('sources')
-    if sources is None or len(sources) != len(result['values']):
-        origin = result.get('origin') or '받은'
-        raise ValueError(f'{origin} 값은 어느 파일에서 나왔는지 알 수 없어 {keyword}별로 나눌 수 없습니다.')
-    keyed = []
-    for path, value in zip(sources, result['values']):
-        group = read_header(path, keyword)
-        keyed.append((str(group if group is not None else '').strip(), value))
-    return {**result, 'groups': _group_by(keyed, keyword)}
+def agrees(labels, other):
+    """Two label sets agree on every name they share (15 is 15.0)."""
+    return all(same_value(value, other[name]) for name, value in labels.items() if name in other)
 
 
 def compute_value(row, inputs):
-    """One `name = expression` row of a compute node, per group when any input is grouped."""
-    keyword = next((v['groups']['keyword'] for v in inputs.values() if v.get('groups')), None)
-    if keyword and any(v.get('groups') and v['groups']['keyword'] != keyword for v in inputs.values()):
-        raise ValueError(MIXED_PARTITIONS)
-    # Typed constants alone give a constant; it applies to every group downstream.
+    """One `name = expression` row of a compute node, once per label combination of its inputs.
+
+    Values without labels (typed constants, files outside regions) take part
+    in every combination; a combination takes the values whose labels agree
+    with it. A less specific combination is left out when a more specific one
+    covers it (FILTER B within FILTER B, EXPTIME 15).
+    """
     constant = all(v.get('constant') for v in inputs.values())
-    if not keyword:
+    combinations = []
+    for value in inputs.values():
+        for labels in value.get('labels') or []:
+            if labels and labels not in combinations:
+                combinations.append(labels)
+    combinations = [c for c in combinations if not any(c != o and c.items() <= o.items() for o in combinations)]
+    if not combinations:
         values = evaluate_expression(row['value'], {k: v['values'] for k, v in inputs.items()})
         return dict(kind=_kind(values), values=values, **({'constant': True} if constant else {}))
-    keys = list(dict.fromkeys(k for v in inputs.values() if v.get('groups') for k in v['groups']['values']))
-    groups = {}
-    for key in keys:
-        groups[key] = evaluate_expression(row['value'], {
-            name: (v['groups']['values'].get(key, []) if v.get('groups') else v['values']) for name, v in inputs.items()})
-    values = [v for vs in groups.values() for v in vs]
-    return dict(kind=_kind(values), values=values, groups=dict(keyword=keyword, values=groups))
+    values, labels = [], []
+    for combination in combinations:
+        variables = {}
+        for name, value in inputs.items():
+            tags = value.get('labels') or [{}] * len(value['values'])
+            variables[name] = [v for v, tag in zip(value['values'], tags) if agrees(tag, combination)]
+        found = evaluate_expression(row['value'], variables)
+        values += found
+        labels += [dict(combination) for _ in found]
+    return dict(kind=_kind(values), values=values, labels=labels)
 
 
 def _kind(values):
     return 'bool' if values and all(isinstance(v, bool) for v in values) else 'real'
 
 
-def partition_pairs(partition):
-    """{keyword: value} of a partition: one port member's `{keyword, value}`,
-    or a loop pass's values by keyword."""
-    if not partition:
-        return {}
-    if set(partition) == {'keyword', 'value'}:
-        return {partition['keyword']: partition['value']}
-    return dict(partition)
+def round_values(result, match):
+    """The values of `result` a round takes: those labelled with its values `match`."""
+    values, labels = result['values'], result.get('labels')
+    if not match or not labels:
+        return values
+    chosen = [v for v, tag in zip(values, labels) if all(name in tag and same_value(tag[name], value)
+                                                          for name, value in match.items())]
+    if not chosen:
+        shown = ' '.join(pass_value(v) for v in match.values())
+        raise ValueError(f'{shown} 회차에 맞는 값이 없습니다.')
+    return chosen
 
 
-def parameter_value(result, partition, type_):
-    """The one value a parameter takes, converted to its IRAF type."""
-    values = result['values']
-    groups = result.get('groups')
-    pairs = partition_pairs(partition)
-    if groups and groups['keyword'] in pairs:
-        # Groups are keyed by header text, so a pass value 15 finds the group 15.0.
-        value = pairs[groups['keyword']]
-        key = next((k for k in groups['values'] if same_value(k, value)), None)
-        if key is None:
-            raise ValueError(f'{groups["keyword"]}={pass_value(value)}: 이 그룹의 값이 없습니다.')
-        values = groups['values'][key]
+def parameter_value(result, match, type_):
+    """The one value a parameter takes, converted to its IRAF type; `match` is
+    the round values a value with labels is chosen by."""
+    values = round_values(result, match)
     if not values:
         raise ValueError('값이 없습니다.')
     distinct = list(dict.fromkeys(values))
@@ -449,13 +416,14 @@ class ValueGraph:
     """Evaluate value refs of one request with memoization.
 
     `job_of(node_id)` returns the finished job of a task node (or None);
-    `resolve_file(id)` returns the path of a library file or product.
+    `resolve_file(id)` returns the path of a library file or product;
+    `labels_of(id)` the labels a workflow run put on a product.
     """
 
-    def __init__(self, request, job_of, resolve_file):
+    def __init__(self, request, job_of, resolve_file, labels_of=None):
         self.nodes = {n['id']: n for n in request.get('nodes', [])}
         self.links = list(request.get('links', []))
-        self.job_of, self.resolve_file = job_of, resolve_file
+        self.job_of, self.resolve_file, self.labels_of = job_of, resolve_file, labels_of
         self.cache = {}
 
     def output(self, ref, seen=()):
@@ -467,7 +435,7 @@ class ValueGraph:
             raise ValueError('값 연결이 순환합니다.')
         node = self.nodes.get(ref['node'])
         if node is None:
-            result = task_value(self.job_of(ref['node']), ref['output'], self.resolve_file)
+            result = task_value(self.job_of(ref['node']), ref['output'], self.resolve_file, self.labels_of)
         else:
             result = self._node_output(node, ref['output'], (*seen, key))
         self.cache[key] = result
@@ -483,7 +451,7 @@ class ValueGraph:
         if run == 'value-constant':
             return constant_value(node, rows[name])
         if run == 'value-header':
-            return header_values(self.files(node), name, node.get('partition') or None)
+            return header_values(self.files(node), name)
         if run == 'value-compute':
             used = [v for v in expression_names(rows[name]['value']) if v not in rows or v == name]
             local = {v: self._node_output(node, v, (*seen, (node['id'], v)), (*rows_seen, name))
@@ -494,8 +462,6 @@ class ValueGraph:
                 if not ref:
                     raise ValueError(f'{variable}: 연결되지 않은 값입니다.')
                 inputs[variable] = self.output(ref, seen)
-            if node.get('partition'):
-                inputs = {k: partition_input(v, node['partition']) for k, v in inputs.items()}
             return compute_value(rows[name], {**inputs, **local})
         if run == 'pset':
             # A value connected into the parameter replaces the stored one.
@@ -530,8 +496,9 @@ class ValueGraph:
         return list(node.get('inputs', {}).values())
 
     def files(self, node):
-        from .workflow import matches_files, matches_partition
-        paths = [Path(self.resolve_file(id)) for id in node.get('files', [])]
+        """(path, labels) of each file a header node reads."""
+        from .workflow import matches_files
+        paths = [(Path(self.resolve_file(id)), {}) for id in node.get('files', [])]
         for link in node.get('fileLinks', []):
             job = self.job_of(link['source'])
             if not job or job.get('state') != 'completed':
@@ -539,9 +506,8 @@ class ValueGraph:
             for product in job.get('products', []):
                 if (product.get('role') != '$log' and product.get('asset', 'image') == 'image'
                         and (not link.get('sourceRole') or product.get('role') == link['sourceRole'])
-                        and matches_files(product, link.get('sourceFiles'))
-                        and matches_partition(product, link.get('sourcePartition'))):
-                    paths.append(_product_path(product, self.resolve_file))
+                        and matches_files(product, link.get('sourceFiles'))):
+                    paths.append((_product_path(product, self.resolve_file), product.get('labels') or {}))
         return paths
 
     def parameters(self, target=None):
@@ -551,7 +517,7 @@ class ValueGraph:
             if target is not None and link['target'] != target:
                 continue
             try:
-                value = parameter_value(self.output(link['source']), link.get('partition'), link.get('type', 's'))
+                value = parameter_value(self.output(link['source']), link.get('round'), link.get('type', 's'))
                 result[link['id']] = dict(value=value)
             except (ValueError, OSError, KeyError) as exc:
                 result[link['id']] = dict(error=str(exc))
@@ -589,7 +555,7 @@ class ValueGraph:
         return found
 
 
-INTERNAL = ('sources', 'origin', 'constant')
+INTERNAL = ('origin', 'constant')
 
 
 def public(result):

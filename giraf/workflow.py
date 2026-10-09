@@ -8,34 +8,11 @@ import threading
 import time
 from uuid import uuid4
 from .image_lists import accepts_asset
-from .calibration import matches_group
 
 def matches_files(product, patterns):
     if patterns is None:
         return True
     return any(re.fullmatch(''.join('.*' if c == '*' else '.' if c == '?' else re.escape(c) for c in pattern), product.get('label', ''), flags=re.DOTALL) for pattern in patterns)
-
-
-def matches_partition(product, partition):
-    """A port member's `{keyword, value}`, or every value of a pass, holds for the product."""
-    from .values import partition_pairs
-    pairs = partition_pairs(partition)
-    if not pairs:
-        return True
-    headers = product.get('headers')
-    if headers is None and product.get('path') and Path(product['path']).is_file():
-        from astropy.io import fits
-        from .model import header_values
-        headers = header_values(fits.getheader(product['path']))
-    return all(str((headers or {}).get(k, '')).strip() == v for k, v in pairs.items())
-
-
-def same_group(product, partition):
-    """A product a partitioned iteration made belongs to that pass only: B 30
-    results go to the B 30 pass, or to the B pass of a loop by SUBSET alone."""
-    from .values import partition_pairs
-    group, pairs = partition_pairs(product.get('partition')), partition_pairs(partition)
-    return all(group[k] == v for k, v in pairs.items() if k in group)
 
 
 ACTIVE = {'running', 'waiting', 'confirmation', 'cancelling'}
@@ -49,18 +26,47 @@ def value_graph(graph, completed=None, resolve_file=None):
             return completed[id]
         # A value from a task outside this run reads its latest run, sent by the client.
         return runs.get(id) if isinstance(runs.get(id), dict) else None
-    return ValueGraph(graph.get('values') or {}, job_of, resolve_file or (lambda id: id))
+    # Products a run made inside regions carry their round's labels.
+    labels = {p['id']: p['labels'] for job in (completed or {}).values()
+              for p in job.get('products', []) if p.get('labels')}
+    return ValueGraph(graph.get('values') or {}, job_of, resolve_file or (lambda id: id), lambda id: labels.get(id, {}))
 
 
 def flow_owner(graph):
-    """{member task id: container id} for the foreach, for and if containers."""
+    """{member id: region id} for loop regions; a member may be an inner region."""
     owner = {}
     for flow in graph.get('flows', []):
         for member in flow.get('members', []):
             if member in owner:
-                raise ValueError('한 작업은 반복이나 조건 분기 하나에만 들어갈 수 있습니다.')
+                raise ValueError('한 작업은 반복 영역 하나에만 바로 들어갈 수 있습니다.')
             owner[member] = flow['id']
+    seen = set()
+    for id in owner:
+        # Regions nest like indented loops; one inside itself never ends.
+        path, current = set(), id
+        while current in owner and current not in seen:
+            if current in path:
+                raise ValueError('반복 영역이 서로를 감싸고 있습니다. 영역을 다시 확인해 주세요.')
+            path.add(current)
+            current = owner[current]
+        seen |= path
     return owner
+
+
+def inside(owner, id, region):
+    """Is `id` within `region`, directly or in an inner region?"""
+    while id in owner:
+        id = owner[id]
+        if id == region:
+            return True
+    return False
+
+
+def _unit(owner, id, scope):
+    """The member of `scope` (None: the top level) that holds `id`, or None outside it."""
+    while id is not None and owner.get(id) != scope:
+        id = owner.get(id)
+    return id
 
 
 CYCLE = '순환 연결이 있습니다. 되돌아가는 연결을 해제해 주세요.'
@@ -81,32 +87,47 @@ def _sorted(incoming, positions):
     return order
 
 
+def _order(graph, scope, units):
+    """Run order of `units`, the members of `scope`: links, split sources and
+    values between what they hold order them."""
+    owner = flow_owner(graph)
+    incoming = {id: set() for id in units}
+
+    def depend(target, source):
+        a, b = _unit(owner, target, scope), _unit(owner, source, scope)
+        if a in incoming and b in incoming and a != b:
+            incoming[a].add(b)
+    for link in graph.get('links', []):
+        if link.get('files') is None:
+            depend(link['target'], link['source'])
+    for flow in graph.get('flows', []):
+        if (flow.get('split') or {}).get('taskId'):
+            depend(flow['id'], flow['split']['taskId'])
+    # A value read from a task's run (directly or through value nodes) orders it first.
+    values = value_graph(graph)
+    for node in graph.get('nodes', []):
+        for source in _value_sources(values, node['id']):
+            depend(node['id'], source)
+    return _sorted(incoming, {id: index for index, id in enumerate(units)})
+
+
 def workflow_order(graph):
-    """Top-level run order: tasks outside containers and the containers themselves."""
+    """Top-level run order: tasks outside regions and the outermost regions."""
     nodes = graph.get('nodes', [])
     ids = [n['id'] for n in nodes] + [f['id'] for f in graph.get('flows', [])]
     if not ids or len(set(ids)) != len(ids):
         raise ValueError('실행할 작업을 추가해 주세요. 작업 ID는 중복될 수 없습니다.')
     owner = flow_owner(graph)
     if set(owner) - set(ids):
-        raise ValueError('반복이나 조건 분기 안에 없는 작업이 들어 있습니다. 다시 확인해 주세요.')
-    unit = lambda id: owner.get(id, id)
-    incoming = {id: set() for id in ids if id not in owner}
+        raise ValueError('반복 영역 안에 없는 작업이 들어 있습니다. 다시 확인해 주세요.')
     for link in graph.get('links', []):
-        if link['source'] not in ids or link['target'] not in ids:
+        # A link with `files` comes from a task outside this run, resolved by the editor.
+        if link['target'] not in ids or (link.get('files') is None and link['source'] not in ids):
             raise ValueError('없는 작업에 연결되어 있습니다. 연결을 다시 설정해 주세요.')
-        if unit(link['source']) != unit(link['target']):
-            incoming[unit(link['target'])].add(unit(link['source']))
-    # A value read from a task's run (directly or through value nodes) orders it first.
-    values = value_graph(graph)
-    for link in values.links:
+    for link in value_graph(graph).links:
         if link['target'] not in ids:
             raise ValueError('없는 작업에 값이 연결되어 있습니다. 연결을 다시 설정해 주세요.')
-    for id in ids:
-        for source in _value_sources(values, id):
-            if source in ids and unit(source) != unit(id):
-                incoming[unit(id)].add(unit(source))
-    return _sorted(incoming, {id: index for index, id in enumerate(ids)})
+    return _order(graph, None, [id for id in ids if id not in owner])
 
 
 def _value_sources(values, id):
@@ -118,16 +139,7 @@ def _value_sources(values, id):
 
 
 def member_order(graph, flow):
-    members = list(flow.get('members', []))
-    inside = set(members)
-    incoming = {id: set() for id in members}
-    for link in graph.get('links', []):
-        if link['source'] in inside and link['target'] in inside:
-            incoming[link['target']].add(link['source'])
-    values = value_graph(graph)
-    for id in members:
-        incoming[id] |= {source for source in _value_sources(values, id) if source in inside}
-    return _sorted(incoming, {id: index for index, id in enumerate(members)})
+    return _order(graph, flow['id'], list(flow.get('members', [])))
 
 
 class Cancelled(Exception):
@@ -135,37 +147,32 @@ class Cancelled(Exception):
 
 
 def link_products(job, link):
-    return [p for p in job.get('products', []) if matches_files(p, link.get('sourceFiles')) and accepts_asset(link['kind'], p.get('asset', 'image')) and p.get('role') != '$log' and (not link.get('sourceGroup') or matches_group(p, link['sourceGroup'])) and (not link.get('sourceRole') or p.get('role') == link['sourceRole']) and matches_partition(p, link.get('sourcePartition'))]
+    return [p for p in (job or {}).get('products', []) if matches_files(p, link.get('sourceFiles')) and accepts_asset(link['kind'], p.get('asset', 'image')) and p.get('role') != '$log' and (not link.get('sourceRole') or p.get('role') == link['sourceRole'])]
 
 
-def iteration_values(graph, flow, iteration):
-    """The value request of one container iteration: the `for` variable is a
-    constant, and a pass's members take the groups of its values."""
+def round_values(graph, ctx):
+    """The value request inside rounds: each region's values are a constant
+    node under its id, read by its `value:<label>` outputs."""
     values = deepcopy(graph.get('values') or {})
-    if 'number' in iteration:
-        number = iteration['number']
-        values['nodes'] = [n for n in values.get('nodes', []) if n['id'] != flow['id']] + [dict(
-            id=flow['id'], run='value-constant', rows=[dict(name=flow['variable'], value=repr(number))])]
-    partition = iteration.get('partition')
-    if partition:
-        # Value nodes outside the container (a shared pset) take the group too.
-        for link in values.get('links', []):
-            if not link.get('partition'):
-                link['partition'] = partition
-    return {'values': values}
+    regions = {region['id'] for region, _ in ctx}
+    values['nodes'] = [n for n in values.get('nodes', []) if n['id'] not in regions] + [
+        dict(id=region['id'], run='value-constant', rows=[dict(name=k, value=v) for k, v in current['values'].items()])
+        for region, current in ctx]
+    return {**graph, 'values': values}
 
 
 def execute_workflow(graph, run, cancelled, report, resolve_file=None):
-    from .flows import (COLLECT, RESULTS, Items, iterations, lanes, loop_names, loop_values,
-                        match_pass, pass_name, with_subject)
+    from .flows import (Items, flow_labels, loop_names, loop_values, matching, pass_name, receive_mode,
+                        rounds, unmatched_labels, with_object, with_subject, with_topic)
     from .values import apply_parameters
     graph = deepcopy(graph)
     order = workflow_order(graph)
+    owner = flow_owner(graph)
     nodes = {n['id']: n for n in graph['nodes']}
     flows = {f['id']: f for f in graph.get('flows', [])}
-    labels = {**{id: f.get('label') or f['run'] for id, f in flows.items()}, **{id: n['label'] for id, n in nodes.items()}}
+    links = graph.get('links', [])
+    labels = {**{id: f.get('label') or '반복' for id, f in flows.items()}, **{id: n['label'] for id, n in nodes.items()}}
     files = Items(resolve_file or (lambda id: id))
-    completed = {}
     state = dict(state='running', message='', jobs=[], total=len(order), done=0, currentTask='')
 
     def warn(id, message):
@@ -174,51 +181,81 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
         if warning not in state.setdefault('warnings', []):
             state['warnings'].append(warning)
 
-    def run_task(id, done, flow=None, iteration=None, passes=()):
+    def crossed(source, ctx):
+        """The rounds a connection from `source` enters: regions around its
+        target that do not hold its source, outermost first."""
+        return [(region, current) for region, current in ctx if source is None or not inside(owner, source, region['id'])]
+
+    def receive(link, products, ctx, target):
+        """The products a link delivers in the current rounds, or None when a
+        round has nothing that matches (a warning; the target runs without it)."""
+        for region, current in crossed(link.get('source'), ctx):
+            present = {name for p in products for name in (p.get('labels') or {})}
+            mode = receive_mode(link, region, present)
+            if mode[0] == 'split':
+                # In the round's own order: N장씩 sorts its files.
+                order = {item['id']: k for k, item in enumerate(current['items'])}
+                products = sorted((p for p in products if p['id'] in order), key=lambda p: order[p['id']])
+            elif mode[0] == 'match':
+                products = matching(products, mode[1], current['values'], files)
+                if not products:
+                    warn(target, f"{pass_name(current['values'])} 회차에 맞는 {with_subject(link['role'])} 없습니다.")
+                    return None
+            else:
+                source = labels.get(link.get('source')) or link['role']
+                for name in unmatched_labels(products, region):
+                    warn(target, f'{with_topic(source)} {name}마다 다릅니다. 영역에 {with_object(name)} 더하면 짝을 지을 수 있습니다.')
+        return products
+
+    def value_rounds(values, link, ctx):
+        """The round values a value link chooses by, as its files would."""
+        try:
+            result = values.output(link['source'])
+        except (ValueError, OSError, KeyError):
+            return {}  # values.parameters reports the error.
+        present = {name for tag in result.get('labels') or [] for name in tag}
+        match = {}
+        for region, current in crossed(link['source']['node'], ctx):
+            mode = receive_mode(dict(source=link['source']['node'], flow=link.get('flow')), region, present)
+            if mode[0] == 'split':
+                mode = ('match', [name for name in flow_labels(region) if name in present])
+            if mode[0] == 'match':
+                match.update({name: current['values'].get(name, '') for name in mode[1]})
+        return match
+
+    def run_task(id, done, ctx):
         node = nodes[id]
         state.update(currentTask=id, message=node['label'])
         payload = deepcopy(node['payload'])
-        if flow:
-            # Output names may read the iteration: `M67{SUBSET}.dat` is M67B.dat, M67V.dat.
-            loop_names(payload, loop_values(flow, iteration, files))
-        pass_values = (iteration or {}).get('partition') or {}
+        current = {name: value for _, step in ctx for name, value in step['values'].items()}
+        if ctx:
+            # Output names may read the round: `Dark{EXPTIME}_{묶음}.fits` is Dark15_1.fits.
+            loop_names(payload, loop_values(current))
         bindings = {}
-        incoming = [link for link in graph.get('links', []) if link['target'] == id]
-        # Files the editor resolved for a member, from sources outside this run.
-        incoming += [dict(file_input, source=None) for file_input in (flow or {}).get('fileInputs', [])
-                     if file_input['target'] == id]
-        for link in incoming:
-            if link['source'] is None:
+        for link in [l for l in links if l['target'] == id]:
+            if link.get('files') is not None:
                 products = [{'id': file} for file in link['files']]
-            elif flow and link['source'] == flow['id']:
-                # The container's current item (or lane) goes to the member.
-                products = [p for p in iteration['ports'].get(link.get('sourceRole'), [])
-                            if 'asset' not in p or accepts_asset(link['kind'], p['asset'])]
-            else:
-                products = link_products(done[link['source']], link)
-                if pass_values:
-                    # Another container's results pair by its values: B with B.
-                    products = [p for p in products if same_group(p, pass_values)]
-            if not products and link['source'] is None:
-                continue
-            if not products:
-                raise ValueError(f"{labels[link['source']]}에서 {node['label']}에 전달할 결과가 생성되지 않았습니다.")
-            if pass_values and link['source'] not in flow.get('members', []) and link['source'] != flow['id']:
-                # Files from outside the loop that differ in its keywords go to their own pass.
-                products, matched = match_pass(products, pass_values, files, passes)
-                if matched and not products:
-                    warn(id, f"{pass_name(pass_values)} 회차에 맞는 {with_subject(link['role'])} 없습니다.")
+                if not products:
                     continue
+            else:
+                products = link_products(done.get(link['source']), link)
+                if not products:
+                    raise ValueError(f"{labels[link['source']]}에서 {node['label']}에 전달할 결과가 생성되지 않았습니다.")
+            products = receive(link, products, ctx, id)
+            if not products:
+                continue
             bindings.setdefault(link['role'], []).extend(p['id'] for p in products)
             if not link['multiple'] and len(bindings[link['role']]) > 1:
                 raise ValueError(f"{node['label']}의 {link['role']}에는 파일 한 개가 필요하지만 결과가 여러 개입니다. 입력을 파일로 지정해 주세요.")
         for role, ids in bindings.items():
             existing = payload.setdefault('inputs', {}).get(role, [])
             payload['inputs'][role] = list(dict.fromkeys(existing + ids))
-        # Values are read once their sources finished, so B's group gets B's value.
-        values = value_graph(iteration_values(graph, flow, iteration) if flow else graph, done, resolve_file)
-        links = [link for link in values.links if link['target'] == id]
-        apply_parameters(payload, links, values.parameters(id))
+        # Values are read once their sources finished, so B's round gets B's value.
+        values = value_graph(round_values(graph, ctx) if ctx else graph, done, resolve_file)
+        incoming = [link for link in values.links if link['target'] == id]
+        for link in incoming if ctx else ():
+            link['round'] = value_rounds(values, link, ctx)
+        apply_parameters(payload, incoming, values.parameters(id))
         report(deepcopy(state))
         job = run(node, payload)
         state['jobs'].append(dict(job, instanceId=id))
@@ -228,67 +265,59 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
             raise ValueError(f"{node['label']}에서 처리된 파일이 없습니다. 실행 기록을 확인해 주세요.")
         if job['state'] != 'completed':
             raise ValueError(f"{node['label']} 실행이 완료되지 않았습니다. 실행 기록을 확인해 주세요.")
-        return job
+        # Results carry the round they were made in.
+        return dict(job, products=[dict(p, labels={**(p.get('labels') or {}), **current})
+                                   for p in job.get('products', [])]) if ctx else job
 
-    def run_flow(flow):
+    def run_region(flow, done, ctx):
         id = flow['id']
         state.update(currentTask=id, message=labels[id])
-        items = [{'id': file} for file in flow.get('files', [])]
-        for link in graph.get('links', []):
-            if link['target'] == id and link['role'] != COLLECT:
-                items += link_products(completed[link['source']], link)
-        # Several links may hand on the same file; the list holds it once.
-        seen = set()
-        items = [item for item in items if not (item['id'] in seen or seen.add(item['id']))]
-        # An `if` condition reads the values connected to its names.
-        values = value_graph(graph, completed, resolve_file)
-        variables = {}
-        for link in values.links:
-            if link['target'] == id:
-                variables[link['parameter']] = values.output(link['source'])['values']
-        steps = iterations(flow, items, files, variables)
-        lane = {member: port for port, reached in lanes(flow, graph.get('links', [])).items() for member in reached}
-        members = member_order(graph, flow)
-        passes = [step.get('partition') or {} for step in steps]
-        collected, merged = [], {}
-        for index, iteration in enumerate(steps):
-            if cancelled():
-                raise Cancelled()
+        split = flow.get('split') or {}
+        source = split.get('taskId')
+        if source in done:
+            items = [p for p in done[source].get('products', []) if p.get('role') != '$log'
+                     and (not split.get('outputRole') or p.get('role') == split['outputRole'])]
+        else:
+            items = [{'id': file} for file in flow.get('splitFiles', [])]
+        if source:
+            # Through outer regions the split source arrives as its links into this one do.
+            probe = next((l for l in links if l['source'] == source and inside(owner, l['target'], id)),
+                         dict(source=source, sourceRole=split.get('outputRole'), role=labels.get(source, '')))
+            items = receive(probe, items, ctx, id) or []
+        steps = rounds(flow, items, files)
+        held = [n for n in nodes if inside(owner, n, id)]
+        outer, merged = state.get('flow'), {}
+        for index, current in enumerate(steps):
             state['flow'] = dict(id=id, index=index + 1, total=len(steps))
-            done, skipped = dict(completed), set()
-            for member in members:
-                upstream = {l['source'] for l in graph.get('links', []) if l['target'] == member}
-                # A lane without files and whatever follows it does not run.
-                if (member in lane and not iteration['ports'].get(lane[member])) or upstream & skipped:
-                    skipped.add(member)
-                    continue
-                done[member] = run_task(member, done, flow, iteration, passes)
-                job = merged.setdefault(member, dict(done[member], products=[]))
-                job.update({k: v for k, v in done[member].items() if k != 'products'})
-                group = iteration.get('partition')
-                job['products'] = job['products'] + [dict(p, partition=group) if group else p
-                                                     for p in done[member].get('products', [])]
-            for link in graph.get('links', []):
-                if link['target'] == id and link['role'] == COLLECT and link['source'] in flow.get('members', []) \
-                        and link['source'] in done and link['source'] not in skipped:
-                    collected += [dict(p, role=RESULTS, **({'partition': iteration['partition']} if iteration.get('partition') else {}))
-                                  for p in link_products(done[link['source']], link)]
+            local = dict(done)
+            run_units(member_order(graph, flow), local, [*ctx, (flow, current)])
+            # Leaving the region, every round's results are one list.
+            for member in held:
+                if member in local and local[member] is not done.get(member):
+                    job = merged.setdefault(member, dict(local[member], products=[]))
+                    job.update({k: v for k, v in local[member].items() if k != 'products'})
+                    job['products'] = job['products'] + local[member].get('products', [])
             report(deepcopy(state))
-        state.pop('flow', None)
-        # Members' links out of the container see every iteration's results.
-        completed.update(merged)
-        completed[id] = dict(id=id, state='completed', products=collected)
+        if outer:
+            state['flow'] = outer
+        else:
+            state.pop('flow', None)
+        done.update(merged)
 
-    try:
-        for id in order:
+    def run_units(units, done, ctx):
+        for id in units:
             if cancelled():
                 raise Cancelled()
             if id in flows:
-                run_flow(flows[id])
+                run_region(flows[id], done, ctx)
             else:
-                completed[id] = run_task(id, completed)
-            state['done'] += 1
-            report(deepcopy(state))
+                done[id] = run_task(id, done, ctx)
+            if not ctx:
+                state['done'] += 1
+                report(deepcopy(state))
+
+    try:
+        run_units(order, {}, [])
         state.update(state='completed', message='워크플로우 완료', currentTask='')
     except Cancelled:
         state.pop('flow', None)
