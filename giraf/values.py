@@ -428,13 +428,14 @@ class ValueGraph:
         key = (ref['node'], ref['output'])
         if key in self.cache:
             return self.cache[key]
-        if ref['node'] in seen:
+        # A value that comes to read itself is a cycle; one node's other values may feed it.
+        if key in seen:
             raise ValueError('값 연결이 순환합니다.')
         node = self.nodes.get(ref['node'])
         if node is None:
             result = task_value(self.job_of(ref['node']), ref['output'], self.resolve_file)
         else:
-            result = self._node_output(node, ref['output'], (*seen, ref['node']))
+            result = self._node_output(node, ref['output'], (*seen, key))
         self.cache[key] = result
         return result
 
@@ -451,8 +452,8 @@ class ValueGraph:
             return header_values(self.files(node), name, node.get('partition') or None)
         if run == 'value-compute':
             used = [v for v in expression_names(rows[name]['value']) if v not in rows or v == name]
-            local = {v: self._node_output(node, v, seen, (*rows_seen, name)) for v in expression_names(rows[name]['value'])
-                     if v in rows and v != name}
+            local = {v: self._node_output(node, v, (*seen, (node['id'], v)), (*rows_seen, name))
+                     for v in expression_names(rows[name]['value']) if v in rows and v != name}
             inputs = {}
             for variable in used:
                 ref = node.get('inputs', {}).get(variable)
@@ -469,6 +470,30 @@ class ValueGraph:
                 return self.output(ref, seen)
             return pset_value(rows[name])
         raise ValueError(f'{run}: 값을 계산할 수 없는 노드입니다.')
+
+    def reads(self, node, name):
+        """The refs one value of a value node reads: a pset parameter's connected value,
+        or the inputs a compute row's expression names, through the rows it reads."""
+        run = node.get('run')
+        if run == 'pset':
+            ref = node.get('inputs', {}).get(name)
+            return [ref] if ref else []
+        if run == 'value-compute':
+            rows = {r['name']: r for r in node.get('rows', [])}
+            names, pending, done = [], [name], set()
+            while pending:
+                row = pending.pop()
+                if row in done or row not in rows:
+                    continue
+                done.add(row)
+                for v in expression_names(rows[row]['value']):
+                    if v in rows and v != row:
+                        pending.append(v)
+                    elif v not in names:
+                        names.append(v)
+            inputs = node.get('inputs', {})
+            return [inputs[v] for v in names if v in inputs]
+        return list(node.get('inputs', {}).values())
 
     def files(self, node):
         from .workflow import matches_files, matches_partition
@@ -516,12 +541,13 @@ class ValueGraph:
             if node is None:
                 found.add(ref['node'])
                 return
-            if ref['node'] in seen:
+            key = (ref['node'], ref['output'])
+            if key in seen:
                 return
-            seen = seen | {ref['node']}
+            seen = seen | {key}
             for link in node.get('fileLinks', []):
                 found.add(link['source'])
-            for inner in node.get('inputs', {}).values():
+            for inner in self.reads(node, ref['output']):
                 visit(inner, seen)
         for link in self.links:
             if link['target'] == target:

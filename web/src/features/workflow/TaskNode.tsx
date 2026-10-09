@@ -321,6 +321,8 @@ export const TaskNode = memo(function TaskNode({
     />
   )
 
+  // Value outputs with a row of their own; a pset node's sit on their parameter rows.
+  const rowValues = geometry.values.filter((row) => !row.param)
   const outputSlots = geometry.outputs.map((slot) => {
     const custom = task.outputPorts?.find(
       (p) => customPortHandle(p.id) === slot.handleId
@@ -691,6 +693,9 @@ export const TaskNode = memo(function TaskNode({
             <div className="node-section node-params">
               {params.map((row) => {
                 const { text, from, fromId: sourceId } = paramText(row)
+                // A pset node's parameter row also offers its value, named without the pset.
+                const offered = geometry.values.find((v) => v.param === row.handleId)
+                const name = offered?.name ?? row.key
                 return (
                 <div
                   className="node-input-row node-param-row"
@@ -718,7 +723,7 @@ export const TaskNode = memo(function TaskNode({
                       }
                     }}
                   >
-                    <span className="node-param-name" data-full-text={row.key}>{row.key}</span>
+                    <span className="node-param-name" data-full-text={name}>{name}</span>
                     <span
                       className="node-param-value"
                       data-full-text={from ? `${text}\n${from}에서 받은 값` : text}
@@ -726,19 +731,20 @@ export const TaskNode = memo(function TaskNode({
                       {text}
                     </span>
                   </button>
+                  {offered && valueHandle(offered.handleId, offered.name)}
                 </div>
                 )
               })}
             </div>
           )}
-          {(geometry.primary || outputSlots.length > 0 || geometry.values.length > 0 || geometry.psetOutput) && (
+          {(geometry.primary || outputSlots.length > 0 || rowValues.length > 0 || geometry.psetOutput) && (
             <div className="node-section node-outputs">
               {geometry.primary &&
                 outputRow("output", primaryName, output, "결과")}
               {outputSlots.map(({ slot, result, name }) =>
                 outputRow(slot.handleId, name, result, "이름 없는 포트")
               )}
-              {geometry.values.map((row) => {
+              {rowValues.map((row) => {
                 const value = formatValue(values?.outputs[`${id}:${row.name}`])
                 return (
                   <div className="node-output-row" key={row.handleId}>

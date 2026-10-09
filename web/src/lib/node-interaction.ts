@@ -9,7 +9,7 @@ import {
 } from "@/lib/task-map"
 import { acceptsAsset, acceptsSource, type Catalog, type Frame, type Slot } from "./workbench"
 import { closesCycle, isContainerId } from "./flow-graph"
-import { isValueNode, pinnedKeys, psetLinksInto, valueOutputs, PARAM_HANDLE, PSET_INPUT, PSET_OUTPUT, VALUE_HANDLE } from "./values"
+import { isValueNode, pinnedKeys, psetLinksInto, psetOutputName, valueOutputs, PARAM_HANDLE, PSET_INPUT, PSET_OUTPUT, VALUE_HANDLE } from "./values"
 
 const flags: Record<string, string> = {
   zero: "zerocor",
@@ -153,8 +153,12 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
     ...psetLinksInto(map, t.id).map((c) => ({ key: c.role.slice(PSET_INPUT.length), handleId: c.role, pset: true })),
     ...(spec ? pinnedKeys(map, catalog, t) : []).map((key) => ({ key, handleId: PARAM_HANDLE + key, pset: false })),
   ]
-  const values = valueOutputs(spec, t, catalog).map((o) => ({ ...o, handleId: VALUE_HANDLE + o.name }))
   const psetOutput = spec?.run === "pset"
+  // A pset node's parameter takes a value on the left and offers it on the right of one row.
+  const values = valueOutputs(spec, t, catalog).map((o) => {
+    const row = psetOutput ? params.find((p) => psetOutputName(t, p.key) === o.name) : undefined
+    return { ...o, handleId: VALUE_HANDLE + o.name, param: row?.handleId }
+  })
   // A partitioned port is a bundle; its members are `~value` handles listed under it when open.
   const bundle = (handleId: string) => {
     const port = t.outputPorts?.find(p => customPortHandle(p.id) === handleId)
@@ -194,7 +198,7 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
   // Pinned parameters sit between inputs and outputs.
   const paramsTop = inputsEnd + m.sectionStart
   const paramsEnd = params.length ? paramsTop + m.row * params.length + m.sectionEnd : inputsEnd
-  const outputRows = [...(primary ? ["output"] : []), ...outputs.map(slot => slot.handleId), ...values.map(row => row.handleId), ...(psetOutput ? [PSET_OUTPUT] : [])]
+  const outputRows = [...(primary ? ["output"] : []), ...outputs.map(slot => slot.handleId), ...values.filter(row => !row.param).map(row => row.handleId), ...(psetOutput ? [PSET_OUTPUT] : [])]
   const outputsTop = paramsEnd + m.sectionStart
   // Each row's top; an open bundle's member rows follow it.
   const tops: Record<string, number> = {}
@@ -208,6 +212,7 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
   const height = outputsEnd + (preview ? m.preview : 0) + 1
   const outputY = outputsTop + m.row / 2
   const rowY = (handleId: string) => tops[handleId] + m.row / 2
+  const paramY = (index: number) => paramsTop + m.row / 2 + m.row * index
   return {
     ...base,
     preview,
@@ -217,8 +222,8 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
     occupiedHeight: height,
     outputY,
     outputs: outputs.map((slot) => ({ ...slot, x: NODE_WIDTH, y: rowY(slot.handleId) })),
-    params: params.map((row, index) => ({ ...row, y: paramsTop + m.row / 2 + m.row * index })),
-    values: values.map((row) => ({ ...row, x: NODE_WIDTH, y: rowY(row.handleId) })),
+    params: params.map((row, index) => ({ ...row, y: paramY(index) })),
+    values: values.map((row) => ({ ...row, x: NODE_WIDTH, y: row.param ? paramY(params.findIndex((p) => p.handleId === row.param)) : rowY(row.handleId) })),
     psetOutputY: psetOutput ? rowY(PSET_OUTPUT) : 0,
     // A closed bundle stacks its members on the bundle handle so their edges stay attached.
     members: Object.keys(bundles).flatMap(handleId => members(handleId, index => bundles[handleId].open

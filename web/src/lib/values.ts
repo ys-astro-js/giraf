@@ -13,7 +13,7 @@
 import { uid, makeInstance, type Instance, type Source, type TaskMap } from "./task-map/model"
 import { resolvedSource } from "./task-map/runs"
 import type { Catalog, Param, ParameterSet, Spec, ValueRow } from "./workbench"
-import { closesCycle } from "./flow-graph"
+import { closesCycle, type ValuePorts } from "./flow-graph"
 
 export const VALUE_HANDLE = "value:"
 export const PARAM_HANDLE = "p:"
@@ -209,6 +209,41 @@ export const acceptsValue = (kind: string, type: string) =>
   kind === "any" || type === "any" || (accepts[kind] ?? []).includes(type)
 
 
+/** The names a compute row reads from its inputs, through the rows it reads (giraf/values.py). */
+function rowInputs(rows: ValueRow[], name: string, through: string[] = []): string[] {
+  const row = rows.find((r) => r.name === name)
+  if (!row || through.includes(name)) return []
+  return expressionNames(row.value).flatMap((n) =>
+    n !== name && rows.some((r) => r.name === n) ? rowInputs(rows, n, [...through, name]) : [n])
+}
+
+/**
+ * What each value of a value node reads, for cycle checks: a pset node's
+ * parameter feeds its own value and the whole pset, a compute row reads the
+ * names in its expression, a header row reads the node's files. A constant
+ * reads nothing.
+ */
+export function valuePorts(map: TaskMap, catalog: Catalog): ValuePorts {
+  return (id) => {
+    const task = map.tasks.find((t) => t.id === id)
+    const spec = specOf(catalog, task)
+    if (!task || !isValueNode(spec)) return undefined
+    const outputs = valueOutputs(spec, task, catalog).map((o) => VALUE_HANDLE + o.name)
+    if (spec!.run === "pset") return (role) => {
+      const name = role.startsWith(PARAM_HANDLE) ? psetOutputName(task, role.slice(PARAM_HANDLE.length)) : undefined
+      return name ? [VALUE_HANDLE + name, PSET_OUTPUT] : [PSET_OUTPUT]
+    }
+    if (spec!.run === "value-compute") {
+      const rows = rowsOf(task).filter((r) => r.name.trim())
+      return (role) => role.startsWith(PARAM_HANDLE)
+        ? rows.filter((r) => rowInputs(rows, r.name).includes(role.slice(PARAM_HANDLE.length))).map((r) => VALUE_HANDLE + r.name)
+        : []
+    }
+    if (spec!.run === "value-constant") return () => []
+    return () => outputs
+  }
+}
+
 /** Connect a value output to a parameter, or a pset node to a task's pset. */
 export function connectValue(
   map: TaskMap,
@@ -229,7 +264,7 @@ export function connectValue(
     const name = targetHandle.slice(PSET_INPUT.length)
     const set = specOf(catalog, target)?.parameterSets?.find((s) => s.name === name)
     if (!set || set.task !== pset.task) throw Error(`${pset.name} pset(${pset.task})을 쓰는 입력에만 연결할 수 있습니다.`)
-    if (closesCycle(base, source.id, PSET_OUTPUT, target.id, PSET_INPUT + name)) throw Error("순환 연결은 만들 수 없습니다.")
+    if (closesCycle(base, source.id, PSET_OUTPUT, target.id, PSET_INPUT + name, valuePorts(base, catalog))) throw Error("순환 연결은 만들 수 없습니다.")
     return replaceInto(base, target.id, PSET_INPUT + name, { kind: "pending", taskId: source.id, outputRole: PSET_OUTPUT })
   }
   if (!sourceHandle.startsWith(VALUE_HANDLE) || !targetHandle.startsWith(PARAM_HANDLE))
@@ -243,7 +278,7 @@ export function connectValue(
   if (entry.param.connectable === false) throw Error(`${key}는 값을 연결받지 않는 파라미터입니다.`)
   if (!acceptsValue(output.kind, entry.param.type))
     throw Error(`${key}는 ${typeNames[entry.param.type] ?? entry.param.type} 파라미터입니다. ${name} 값은 ${output.kind}입니다.`)
-  if (closesCycle(base, source.id, sourceHandle, target.id, targetHandle)) throw Error("순환 연결은 만들 수 없습니다.")
+  if (closesCycle(base, source.id, sourceHandle, target.id, targetHandle, valuePorts(base, catalog))) throw Error("순환 연결은 만들 수 없습니다.")
   const next = replaceInto(base, target.id, PARAM_HANDLE + key, { kind: "pending", taskId: source.id, outputRole: VALUE_HANDLE + name })
   // A connected parameter is shown on the node until it is disconnected.
   return { ...next, tasks: next.tasks.map((t) => t.id === target.id && !(t.pinned ?? []).includes(key) && !["value-compute", "if"].includes(specOf(catalog, t)?.run ?? "") ? togglePinned(t, key, true) : t) }
@@ -293,7 +328,7 @@ export function holdPset(map: TaskMap, catalog: Catalog, nodeId: string, taskId:
   const node = map.tasks.find((t) => t.id === nodeId)
   const set = specOf(catalog, task)?.parameterSets?.find((s) => s.name === name)
   if (!task || !node || !set || specOf(catalog, node)?.run !== "pset") throw Error("pset 노드를 만들 수 없습니다.")
-  if (closesCycle(map, nodeId, PSET_OUTPUT, taskId, PSET_INPUT + name)) throw Error("순환 연결은 만들 수 없습니다.")
+  if (closesCycle(map, nodeId, PSET_OUTPUT, taskId, PSET_INPUT + name, valuePorts(map, catalog))) throw Error("순환 연결은 만들 수 없습니다.")
   const prefix = name + "."
   const held: Instance = {
     ...node,

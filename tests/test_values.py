@@ -196,6 +196,11 @@ class GraphTests(unittest.TestCase):
         loop = dict(calc, inputs={'fwhm': dict(node='datapars', output='fwhmpsf')})
         error = ValueGraph(dict(nodes=[pset, loop], links=links), lambda id: None, str).parameters('imcombine')['fw']['error']
         self.assertEqual(error, '값 연결이 순환합니다.')
+        # Another row of the same pset may feed it: no value reads itself.
+        across = dict(calc, rows=[dict(name='m', value='readnoise * 2')], inputs={'readnoise': dict(node='datapars', output='readnoise')})
+        crossed = ValueGraph(dict(nodes=[pset, across], links=links), lambda id: None, str)
+        self.assertEqual(crossed.parameters('imcombine')['fw'], dict(value=10.4))
+        self.assertEqual(crossed.dependencies('imcombine'), set())
         # Workflow runs accept pset nodes and their typed rows.
         from giraf.request_schema import WorkflowValues
         checked = WorkflowValues.model_validate(dict(nodes=[pset, calc], links=links)).model_dump(exclude_unset=True)
@@ -221,6 +226,22 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(state['state'], 'completed', state['message'])
         self.assertAlmostEqual(seen['phot']['parameterSets']['datapars']['fwhmpsf'], 8.14)
 
+
+    def test_workflow_rejects_a_task_whose_values_read_its_own_run(self):
+        # phot's whole datapars comes from the pset node; a row of it reads phot's own result.
+        pset = dict(id='datapars', run='pset', rows=[dict(name='readnoise', value='5', type='r'),
+                                                     dict(name='fwhmpsf', value='2.5', type='r')],
+                    inputs={'fwhmpsf': dict(node='calc', output='m')})
+        calc = dict(id='calc', run='value-compute', rows=[dict(name='m', value='mean(mag)')],
+                    inputs={'mag': dict(node='phot', output='mag')})
+        graph = dict(nodes=[dict(id='phot', label='phot', payload=dict(task='phot'))], links=[],
+                     values=dict(nodes=[pset, calc], links=[
+                         dict(id='l', target='phot', parameter='datapars.fwhmpsf', type='r', source=dict(node='calc', output='m'))]))
+        with self.assertRaisesRegex(ValueError, '순환'):
+            workflow_order(graph)
+        # Reading only the unfed row is no loop.
+        graph['values']['links'][0].update(parameter='datapars.readnoise', source=dict(node='datapars', output='readnoise'))
+        self.assertEqual(workflow_order(graph), ['phot'])
 
 class SchemaTests(unittest.TestCase):
     def setUp(self):

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { addTask, emptyMap, makeInstance, payloadFor, workflowRequest, workflowDiagnosticRequest, type Instance, type TaskMap } from "../src/lib/task-map"
-import { nodeGeometry, NODE_METRICS } from "../src/lib/node-interaction"
+import { nodeGeometry, NODE_METRICS, NODE_WIDTH } from "../src/lib/node-interaction"
 import { connectFlow, connectionFeedback, flowNodes, taskEdges } from "../src/lib/workflow-flow"
 import {
   computeVariables,
@@ -162,7 +162,20 @@ test("a pset node offers its pinned parameters as values", () => {
   map = takeOutPset(map, catalog, "phot", "datapars")
   const pset = map.tasks.at(-1)!
   expect(valueOutputs(catalog.tasks[4], pset, catalog)).toEqual([{ name: "fwhmpsf", kind: "real" }, { name: "emission", kind: "bool" }])
-  expect(nodeGeometry(map, pset, catalog).values.map((v) => v.handleId)).toEqual(["value:fwhmpsf", "value:emission"])
+  // Each parameter is one row: its value comes in on the left and goes out on the right.
+  const geometry = nodeGeometry(map, pset, catalog)
+  const m = NODE_METRICS
+  expect(geometry.params.map((p) => p.handleId)).toEqual(["p:datapars.fwhmpsf", "p:datapars.emission"])
+  expect(geometry.values.map((v) => [v.handleId, v.param, v.x, v.y])).toEqual(geometry.params.map((p) => [`value:${p.key.slice("datapars.".length)}`, p.handleId, NODE_WIDTH, p.y]))
+  // The whole-set pset output is the only output row.
+  const paramsEnd = 1 + m.header + m.sectionStart + m.row * 2 + m.sectionEnd
+  expect(geometry.psetOutputY).toBe(paramsEnd + m.sectionStart + m.row / 2)
+  expect(geometry.height).toBe(paramsEnd + m.sectionStart + m.row + m.sectionEnd + 1)
+  const handles = flowNodes(map, catalog).find((n) => n.id === pset.id)!.handles!
+  expect(handles.find((h) => h.id === "value:emission")!.y).toBe(handles.find((h) => h.id === "p:datapars.emission")!.y)
+  // Collapsed, every handle sits on the capsule's middle.
+  const pill = nodeGeometry(map, pset, catalog, [], true)
+  expect(new Set([...pill.params, ...pill.values].map((r) => r.y))).toEqual(new Set([pill.psetOutputY]))
   // One row feeds another task's parameter beside the whole-set pset output; types must fit.
   map = link(map, pset.id, "value:fwhmpsf", "find", "p:photpars.apertures")
   expect(connectionFeedback(map, catalog, [], { source: pset.id, sourceHandle: "value:emission", target: "find", targetHandle: "p:datapars.fwhmpsf" }).valid).toBe(false)
@@ -175,6 +188,23 @@ test("a pset node offers its pinned parameters as values", () => {
   request = valueRequest(map, catalog)
   expect(request.nodes.find((n) => n.id === pset.id)?.inputs).toEqual({ fwhmpsf: { node: "gain", output: "gain" } })
   expect(valueRefs(map, catalog)).toContainEqual({ node: pset.id, output: "emission" })
+})
+
+test("a value loops only when it comes to read itself", () => {
+  let map = fixture()
+  map = { ...map, tasks: map.tasks.map((t) => t.id === "phot" ? { ...t, pinned: ["datapars.fwhmpsf", "datapars.emission"] } : t) }
+  map = takeOutPset(map, catalog, "phot", "datapars")
+  const pset = map.tasks.at(-1)!.id
+  map = { ...map, tasks: map.tasks.map((t) => t.id === "calc" ? { ...t, draft: { ...t.draft, valueRows: [{ name: "m", value: "x * 2" }] } } : t) }
+  map = link(map, pset, "value:emission", "calc", "p:x")
+  // emission feeds calc, calc feeds fwhmpsf: no value reads itself.
+  map = link(map, "calc", "value:m", pset, "p:datapars.fwhmpsf")
+  expect(map.connections.some((c) => c.target === pset && c.role === "p:datapars.fwhmpsf")).toBe(true)
+  // fwhmpsf through calc back into fwhmpsf is a cycle.
+  expect(() => link(map, pset, "value:fwhmpsf", "calc", "p:x")).toThrow("순환")
+  // So is phot's result reaching, through calc and fwhmpsf, the whole pset phot runs with.
+  const measured: Catalog = { ...catalog, tasks: catalog.tasks.map((s) => s === phot ? { ...phot, values: [{ name: "mag", kind: "real", from: "output", column: "MAG" }] } : s) }
+  expect(() => connectFlow(map, measured, [], { source: "phot", sourceHandle: "value:mag", target: "calc", targetHandle: "p:x" })).toThrow("순환")
 })
 
 test("values format compactly for rows and labels", () => {

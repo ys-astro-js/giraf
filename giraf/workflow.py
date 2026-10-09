@@ -58,12 +58,15 @@ def flow_owner(graph):
     return owner
 
 
+CYCLE = '순환 연결이 있습니다. 되돌아가는 연결을 해제해 주세요.'
+
+
 def _sorted(incoming, positions):
     sorter = TopologicalSorter(incoming)
     try:
         sorter.prepare()
     except CycleError as exc:
-        raise ValueError('순환 연결이 있습니다. 되돌아가는 연결을 해제해 주세요.') from exc
+        raise ValueError(CYCLE) from exc
     order = []
     while sorter.is_active():
         # Keep the existing input order within each ready batch.
@@ -95,10 +98,18 @@ def workflow_order(graph):
         if link['target'] not in ids:
             raise ValueError('없는 작업에 값이 연결되어 있습니다. 연결을 다시 설정해 주세요.')
     for id in ids:
-        for source in values.dependencies(id):
+        for source in _value_sources(values, id):
             if source in ids and unit(source) != unit(id):
                 incoming[unit(id)].add(unit(source))
     return _sorted(incoming, {id: index for index, id in enumerate(ids)})
+
+
+def _value_sources(values, id):
+    """Tasks whose runs the values of `id`'s parameters read; reading its own run is a cycle."""
+    sources = values.dependencies(id)
+    if id in sources:
+        raise ValueError(CYCLE)
+    return sources
 
 
 def member_order(graph, flow):
@@ -110,7 +121,7 @@ def member_order(graph, flow):
             incoming[link['target']].add(link['source'])
     values = value_graph(graph)
     for id in members:
-        incoming[id] |= {source for source in values.dependencies(id) if source in inside and source != id}
+        incoming[id] |= {source for source in _value_sources(values, id) if source in inside}
     return _sorted(incoming, {id: index for index, id in enumerate(members)})
 
 
