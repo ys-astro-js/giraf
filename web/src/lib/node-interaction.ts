@@ -1,5 +1,5 @@
-import {customPortHandle,customOutput,memberHandle,portMembers} from "./output-ports"
-import {inputPorts,outputPorts,primaryOutputRole,matchesGroup,portHandle,type CalibrationGroup} from "./calibration-ports"
+import {customPortHandle,customOutput,outputPorts,primaryOutputRole} from "./output-ports"
+import {correctionFlags,correctionRoles} from "./calibration"
 import {
   connectionRoles,
   layoutMap,
@@ -32,19 +32,19 @@ export function roleActive(t: Instance, role: string, catalog: Catalog) {
     (t.task === "ccdproc" ? t.draft : t.preprocess).parameters[flag] === "yes"
   )
 }
-export function nodeOutput(map: TaskMap, id: string, outputRole?: string, group?:CalibrationGroup): Source {
+export function nodeOutput(map: TaskMap, id: string, outputRole?: string): Source {
   const configured = map.tasks.find(t=>t.id===id)?.outputPorts?.find(p=>p.id===(outputRole?'$role:'+outputRole:'$default'))
-  if(configured) return customOutput(map,id,configured,group)
+  if(configured) return customOutput(map,id,configured)
   const run = map.runs.filter((r) => r.instanceId === id).at(-1)
-  if (!run || run.state !== "completed") return { kind: "pending", taskId: id, ...(outputRole ? {outputRole} : {}),...(group?{group,port:portHandle("output",outputRole||"$primary",group)}:{}) }
-  const products = run.products.filter(p => p.role !== "$log" && (!group || matchesGroup(p,group)))
+  if (!run || run.state !== "completed") return { kind: "pending", taskId: id, ...(outputRole ? {outputRole} : {}) }
+  const products = run.products.filter(p => p.role !== "$log")
   const kind = products.some(p => (p.asset || "image") === "image")
     ? "image" : products[0]?.asset || "text"
   const ids = products.filter(p => outputRole
     ? p.role === outputRole : (p.asset || "image") === kind).map(p => p.id)
   return ids.length
-    ? { kind: "result", taskId: id, runId: run.id, ids, ...(outputRole ? {outputRole} : {}),...(group?{group,port:portHandle("output",outputRole||"$primary",group)}:{}) }
-    : { kind: "pending", taskId: id, ...(outputRole ? {outputRole} : {}),...(group?{group,port:portHandle("output",outputRole||"$primary",group)}:{}) }
+    ? { kind: "result", taskId: id, runId: run.id, ids, ...(outputRole ? {outputRole} : {}) }
+    : { kind: "pending", taskId: id, ...(outputRole ? {outputRole} : {}) }
 }
 export function connectionChoices(
   map: TaskMap,
@@ -92,7 +92,7 @@ export function connectionChoices(
     kinds = [...new Set(selected.map((p) => p!.asset || "image"))]
     count = selected.length
   }
-  // A container passes on whatever its list holds; the run checks each file.
+  // A pass output carries whatever its input holds; the run checks each file.
   const fits = (slotKind: string, kind: string) => kind === "any" || acceptsAsset(slotKind, kind)
   const inputs = connectionRoles(spec, catalog)
   if (targetRole) {
@@ -132,17 +132,26 @@ export function nodePreviewIds(map: TaskMap, id: string) {
   if (!run || run.state !== "completed") return []
   return run.products.filter((p) => p.role !== "$log" && (p.asset || "image") === "image").map((p) => p.id)
 }
-export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:Frame[] = [], collapsed = !!t.collapsed) {
+/** A task's input rows: its inputs, and the ccdproc corrections its preprocessing uses. */
+export function inputSlots(t: Instance, catalog: Catalog) {
   const spec = catalog.tasks.find((s) => s.name === t.task)
-  const roles = (spec ? inputPorts(map,t,catalog,rows) : []).filter(
-    (s) => !s.group && (
+  if (!spec) return []
+  return connectionRoles(spec, catalog)
+    .filter((slot) => !(slot.name in correctionFlags) || correctionRoles(t.task).includes(slot.name))
+    .map((slot) => ({ ...slot, role: slot.name }))
+}
+export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:Frame[] = [], collapsed = !!t.collapsed) {
+  void rows
+  const spec = catalog.tasks.find((s) => s.name === t.task)
+  const roles = inputSlots(t, catalog).filter(
+    (s) => (
       roleActive(t, s.role, catalog) ||
       map.connections.some((c) => c.target === t.id && c.role === s.role) ||
       t.expressions[s.role] ||
       t.draft.inputs[s.role]?.length ||
       t.preprocess.inputs[s.role]?.length)
   )
-  const outputs = [...outputPorts(map,t,catalog,rows).filter(slot => !slot.group).map(slot=>({...slot,name:t.outputPorts?.find(p=>customPortHandle(p.id)===slot.handleId)?.name ?? slot.name})), ...(t.outputPorts || []).filter(p=>!p.id.startsWith('$')).map(port=>({name:port.name,kind:"",default:"",handleId:customPortHandle(port.id),outputRole:port.outputRole,group:undefined,customId:port.id}))]
+  const outputs = [...outputPorts(map,t,catalog).map(slot=>({...slot,name:t.outputPorts?.find(p=>customPortHandle(p.id)===slot.handleId)?.name ?? slot.name})), ...(t.outputPorts || []).filter(p=>!p.id.startsWith('$')).map(port=>({name:port.name,kind:"",default:"",handleId:customPortHandle(port.id),outputRole:port.outputRole,customId:port.id}))]
   // A save-files node (node schema) ends the flow: it has no primary output.
   // Value and pset nodes only carry values, so they have no file output either.
   const valueNode = isValueNode(spec)
@@ -159,16 +168,7 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
     const row = psetOutput ? params.find((p) => psetOutputName(t, p.key) === o.name) : undefined
     return { ...o, handleId: VALUE_HANDLE + o.name, param: row?.handleId }
   })
-  // A partitioned port is a bundle; its members are `~value` handles listed under it when open.
-  const bundle = (handleId: string) => {
-    const port = t.outputPorts?.find(p => customPortHandle(p.id) === handleId)
-    return port?.partition ? { keyword: port.partition.keyword, values: portMembers(map, t, port, rows), open: !!port.open } : undefined
-  }
-  const bundles = Object.fromEntries([...(primary ? ["output"] : []), ...outputs.map(slot => slot.handleId)]
-    .flatMap(handleId => { const b = bundle(handleId); return b ? [[handleId, b]] : [] })) as Record<string, { keyword: string; values: string[]; open: boolean }>
-  const base = { primaryOutputRole: primaryOutputRole(spec, t), roles, primary, collapsed, bundles, showInputs, psetOutput }
-  const members = (handleId: string, y: (index: number) => number) =>
-    (bundles[handleId]?.values ?? []).map((value, index) => ({ handleId: memberHandle(handleId, value), base: handleId, value, y: y(index) }))
+  const base = { primaryOutputRole: primaryOutputRole(spec, t), roles, primary, collapsed, showInputs, psetOutput }
   if (collapsed) {
     const middle = COLLAPSED_HEIGHT / 2
     return {
@@ -183,7 +183,6 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
       params: params.map((row) => ({ ...row, y: middle })),
       values: values.map((row) => ({ ...row, x: COLLAPSED_WIDTH, y: middle })),
       psetOutputY: middle,
-      members: Object.keys(bundles).flatMap(handleId => members(handleId, () => middle)).map(m => ({ ...m, x: COLLAPSED_WIDTH })),
       // Every role shares the capsule's single visible port.
       inputY: (role: string) => {
         void role
@@ -200,12 +199,12 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
   const paramsEnd = params.length ? paramsTop + m.row * params.length + m.sectionEnd : inputsEnd
   const outputRows = [...(primary ? ["output"] : []), ...outputs.map(slot => slot.handleId), ...values.filter(row => !row.param).map(row => row.handleId), ...(psetOutput ? [PSET_OUTPUT] : [])]
   const outputsTop = paramsEnd + m.sectionStart
-  // Each row's top; an open bundle's member rows follow it.
+  // Each row's top.
   const tops: Record<string, number> = {}
   let bottom = outputsTop
   for (const handleId of outputRows) {
     tops[handleId] = bottom
-    bottom += m.row + (bundles[handleId]?.open ? bundles[handleId].values.length * m.member : 0)
+    bottom += m.row
   }
   const outputsEnd = outputRows.length ? bottom + m.sectionEnd : paramsEnd
   const preview = nodePreviewIds(map, t.id).length > 0
@@ -225,9 +224,6 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
     params: params.map((row, index) => ({ ...row, y: paramY(index) })),
     values: values.map((row) => ({ ...row, x: NODE_WIDTH, y: row.param ? paramY(params.findIndex((p) => p.handleId === row.param)) : rowY(row.handleId) })),
     psetOutputY: psetOutput ? rowY(PSET_OUTPUT) : 0,
-    // A closed bundle stacks its members on the bundle handle so their edges stay attached.
-    members: Object.keys(bundles).flatMap(handleId => members(handleId, index => bundles[handleId].open
-      ? tops[handleId] + m.row + m.member * index + m.member / 2 : rowY(handleId))).map(member => ({ ...member, x: NODE_WIDTH })),
     inputY: (role: string) => inputsTop + m.row / 2 + m.row * Math.max(0, roles.findIndex((slot) => slot.name === role)),
   }
 }

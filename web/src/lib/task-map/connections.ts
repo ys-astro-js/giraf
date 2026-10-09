@@ -1,4 +1,3 @@
-import type { CalibrationGroup } from "@/lib/calibration-ports"
 import { type Catalog, type Frame, type Spec } from "@/lib/workbench"
 import { uid, type Source, type TaskMap } from "./model"
 import { closesCycle } from "../flow-graph"
@@ -20,8 +19,7 @@ export function connect(
   target: string,
   role: string,
   source: Source,
-  append = true,
-  targetGroup?: CalibrationGroup
+  append = true
 ): TaskMap {
   if (!map.tasks.some((t) => t.id === target))
     throw Error("대상 task가 없습니다.")
@@ -51,7 +49,6 @@ export function connect(
               target,
               role,
               source: clone(source),
-              ...(targetGroup ? { targetGroup } : {}),
             },
           ]),
     ],

@@ -150,21 +150,6 @@ div:has(> [data-slot="tooltip-content"] .connection-port-feedback) { pointer-eve
 .node-output-name[data-unnamed="true"] { font-weight:400; color:var(--muted-foreground); }
 .node-output-count { font-size:12px; line-height:16px; color:var(--muted-foreground); font-variant-numeric:tabular-nums; }
 .node-output-count:empty { display:none; }
-/* A partitioned output: one bundle row, then a member row per header value when open. */
-.node-output-row[data-bundle="true"] { justify-content:flex-start; gap:6px; padding-left:4px; }
-.node-bundle-toggle { flex-shrink:0; width:20px; height:20px; display:flex; align-items:center; justify-content:center; border-radius:4px; color:var(--muted-foreground); }
-.node-bundle-toggle:hover { background:var(--muted); color:var(--foreground); }
-.node-bundle-toggle:focus-visible { outline:2px solid var(--ring); outline-offset:1px; }
-.node-bundle-toggle svg { width:14px; height:14px; }
-.node-output-keyword { flex-shrink:0; font-family:var(--font-mono, ui-monospace, monospace); font-size:11px; line-height:16px; color:var(--muted-foreground); }
-.node-output-chips { display:flex; gap:4px; min-width:0; margin-left:auto; overflow:hidden; }
-.partition-chip { flex-shrink:0; display:inline-flex; align-items:center; height:18px; padding:0 6px; border-radius:9px; border:1px solid var(--filter-border,var(--border)); background:var(--filter-bg,var(--muted)); color:var(--filter-fg,var(--muted-foreground)); font-size:11px; line-height:16px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
-.node-input-source .partition-chip { margin-left:6px; vertical-align:middle; }
-.node-member-row { position:relative; height:28px; display:flex; align-items:center; justify-content:flex-end; padding:0 44px 0 12px; }
-.map-viewport .workflow-bundle-handle { width:18px; height:18px; border-radius:4px; font-size:10px; font-weight:600; font-variant-numeric:tabular-nums; box-shadow:3px -3px 0 -1px var(--background), 3px -3px 0 0 var(--foreground); }
-.map-viewport .workflow-member-handle { width:auto; min-width:24px; max-width:72px; height:20px; padding:0 6px; border-radius:10px; border-width:1px; font-size:11px; font-weight:600; background:var(--filter-bg,var(--background)); color:var(--filter-fg,var(--foreground)); border-color:var(--filter-border,var(--foreground)); }
-.map-viewport .workflow-member-handle[data-connected="true"] { background:var(--filter-bg,var(--foreground)); color:var(--filter-fg,var(--background)); box-shadow:inset 0 0 0 1px var(--filter-border,var(--foreground)); }
-.workflow-bundle-handle > span, .workflow-member-handle > span { pointer-events:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .node-preview { display:flex; align-items:center; gap:6px; height:77px; box-sizing:border-box; padding:8px 12px; }
 .node-thumb { width:52px; height:52px; flex-shrink:0; overflow:hidden; border-radius:6px; background:var(--muted); }
 .node-thumb img { width:100%; height:100%; object-fit:cover; display:block; }

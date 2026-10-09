@@ -1,5 +1,5 @@
 import { type CustomOutputPort } from "@/lib/output-ports"
-import type { CalibrationGroup } from "@/lib/calibration-ports"
+import type { ReceiveMode } from "@/lib/containers"
 import {
   defaults,
   makeDraft,
@@ -14,10 +14,7 @@ const clone = <T,>(value: T): T => structuredClone(value)
 
 export type Source = {
   files?: string[]
-  group?: CalibrationGroup
   port?: string
-  /** One member of a partitioned port: the files whose header keyword has this value. */
-  partition?: { keyword: string; value: string }
 } & (
   | { kind: "files"; ids: string[]; label: string }
   | {
@@ -32,11 +29,12 @@ export type Source = {
 )
 
 export type Connection = {
-  targetGroup?: CalibrationGroup
   id: string
   target: string
   role: string
   source: Source
+  /** How it receives at each loop region border it crosses, by region id; unset is the default (lib/containers receiveMode). */
+  flow?: Record<string, ReceiveMode>
 }
 
 export type Instance = {
@@ -60,10 +58,10 @@ export type Instance = {
   pinned?: string[]
   /** Derived: the files each pass output carries now (syncPassOutputs). */
   passed?: Record<string, string[]>
-  /** Derived: inside a 각각 반복, the files its first pass takes from each matched outside connection, by connection id (syncContainerItems). */
-  firstPass?: Record<string, string[]>
-  /** Derived: inside a 각각 반복 by keywords, its first pass's values by keyword, which a run of this member alone takes (syncContainerItems). */
-  firstPassValues?: Record<string, string>
+  /** Derived: inside loop regions, the files their first rounds take from each connection crossing into them, by connection id (syncContainerItems). */
+  firstRound?: Record<string, string[]>
+  /** Derived: inside loop regions, their first rounds' values by label, which a run of this member alone takes (syncContainerItems). */
+  roundValues?: Record<string, string>
   subflowId?: string
 }
 

@@ -1,11 +1,14 @@
 import { beforeAll, expect, test } from "bun:test"
-import { emptyMap, makeInstance, addTask, connect, removeTask, duplicateTask, restoreTask, workflowRequest, workflowDiagnosticRequest, migrateMap } from "../src/lib/task-map"
-import { setSubflowCollapsed, autoLayoutMap, moveTaskToSubflow, saveSubflow, subflowRequest, updateSubflow, dissolveSubflow } from "../src/lib/subflow"
-import { compoundPorts } from "../src/lib/compound"
-import { addContainer, containerLabel, flowPorts, flowProgress, flowStatement, setGroupRun, syncContainerItems, loopOutputNames, loopVariables, FLOW_HEADER } from "../src/lib/containers"
-import { flowNodes, flowEdges, taskEdges, connectFlow, connectionFeedback } from "../src/lib/workflow-flow"
+import { emptyMap, makeInstance, addTask, connect, removeTask, duplicateTask, restoreTask, workflowRequest, workflowDiagnosticRequest, migrateMap, payloadFor } from "../src/lib/task-map"
+import { setSubflowCollapsed, autoLayoutMap, moveTaskToSubflow, saveSubflow, updateSubflow, dissolveSubflow } from "../src/lib/subflow"
+import {
+  addContainer, containerLabel, flowPorts, flowProgress, flowStatement, setGroupRun, syncContainerItems, loopOutputNames,
+  loopVariables, memberPassInputs, loopIssues, receiveMode, regionRounds, roundsOf, setReceiveMode, type Criterion,
+} from "../src/lib/containers"
+import { flowNodes, flowEdges, connectFlow, connectionFeedback } from "../src/lib/workflow-flow"
+import { valueRequest } from "../src/lib/values"
 import { nodeLayout } from "../src/lib/node-interaction"
-import { plannedOutputs, type Catalog, type Preferences, type Spec } from "../src/lib/workbench"
+import { plannedOutputs, type Catalog, type Frame, type Preferences, type Spec } from "../src/lib/workbench"
 import type { TaskMap } from "../src/lib/task-map"
 
 beforeAll(async () => {
@@ -22,41 +25,51 @@ const task = (name: string): Spec => ({
   package: "images",
   adapter: "generic",
   parameters: [param("aperture", "r")],
-  inputs: [{ name: "images", label: "영상", kind: "image", multiple: true }],
+  inputs: [
+    { name: "images", label: "영상", kind: "image", multiple: true },
+    { name: "dark", label: "dark", kind: "image", multiple: true },
+    { name: "flat", label: "flat", kind: "image", multiple: true },
+  ],
   outputs: [{ name: "output", kind: "image", default: "p_", mode: "each" }],
   output: null,
   kind: "image",
 })
-const flow = (run: "foreach" | "for" | "if", input?: string): Spec => ({
-  name: "giraf." + run,
-  title: run,
-  taskName: run,
+const region: Spec = {
+  name: "giraf.foreach",
+  title: "반복",
+  taskName: "반복",
   package: "giraf",
   adapter: "generic",
-  run,
+  run: "foreach",
   parameters: [],
-  inputs: input ? [{ name: input, label: input === "items" ? "목록" : "입력", kind: "any", multiple: true, sources: ["node"] }] : [],
+  inputs: [],
   outputs: [],
   output: null,
   kind: "any",
-})
+}
 const catalog: Catalog = {
   version: "test",
-  tasks: [task("ccdproc2"), flow("foreach", "items"), flow("for"), flow("if", "input")],
+  tasks: [task("ccdproc2"), region],
   ccdproc: { parameters: [], inputs: [] },
   ccdred: [],
   exam: {},
 }
 const prefs: Preferences = { drafts: {}, backend: "cl", mapping: {}, instrument: [], packageValues: {} }
 const spec = (name: string) => catalog.tasks.find((s) => s.name === name)!
+const frame = (id: string, headers: Record<string, string> = {}, extra: Partial<Frame> = {}): Frame =>
+  ({ id, label: id + ".fits", asset: "image", role: "output", headers, ...extra })
+const ran = (map: TaskMap, id: string, products: Frame[]): TaskMap =>
+  ({ ...map, runs: [...map.runs, { id: "run-" + id, instanceId: id, state: "completed", products }] })
+const setFlow = (map: TaskMap, id: string, flow: { criteria?: Criterion[]; split?: { taskId: string; outputRole?: string }; condition?: string }) =>
+  ({ ...map, tasks: map.tasks.map((t) => (t.id === id ? { ...t, draft: { ...t.draft, flow } } : t)) })
 
-/** object → [foreach: proc] → combine; the container's id is its group's. */
-function fixture(run: "foreach" | "for" | "if" = "foreach") {
+/** object → [region: proc] → combine; the region's id is its group's. */
+function fixture() {
   let map = ["object", "proc", "combine"].reduce(
     (m, id, i) => addTask(m, { ...makeInstance(spec("ccdproc2"), catalog, prefs, id), label: id, position: { x: i * 800, y: 100 } }),
     emptyMap()
   )
-  map = addContainer(map, catalog, spec("giraf." + run), prefs, nodeLayout(map, catalog))
+  map = addContainer(map, catalog, region, prefs, nodeLayout(map, catalog))
   const id = map.subflows![0].id
   map = { ...map, subflows: map.subflows!.map((g) => ({ ...g, position: { x: 360, y: 40 }, width: 400, height: 280 })) }
   map = moveTaskToSubflow(map, catalog, "proc", id, { x: 440, y: 140 })
@@ -65,167 +78,242 @@ function fixture(run: "foreach" | "for" | "if" = "foreach") {
 const wire = (map: TaskMap, source: string, sourceHandle: string, target: string, targetHandle: string) =>
   connectFlow(map, catalog, [], { source, sourceHandle, target, targetHandle })
 
-test("a container is a task and a group with one id, drawn as the group", () => {
+test("a region is a task and a group with one id, drawn as the group without boundary ports", () => {
   const { map, id } = fixture()
-  expect(map.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "파일", keywords: [] })
-  expect(map.view.selected).toBe(id)
+  expect(map.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ criteria: [] })
   const nodes = flowNodes(map, catalog)
   expect(nodes.filter((n) => n.id === id).map((n) => n.type)).toEqual(["subflow"])
   const group = nodes.find((n) => n.id === id)!
-  expect(group.selected).toBe(true)
-  expect(group.deletable).toBe(true)
-  expect(group.handles!.map((h) => [h.id, h.type])).toEqual([
-    ["items", "target"], ["output:item", "source"], ["result", "target"], ["output:results", "source"],
+  expect(group.handles).toEqual([])
+  expect(nodeLayout(map, catalog).find((n) => n.id === id)).toMatchObject({ width: 0, height: 0 })
+  // Each criterion's label is a value output inside the region.
+  const keyed = setFlow(map, id, { criteria: [{ keyword: "EXPTIME" }, { count: 5, order: "name" }], split: { taskId: "object" } })
+  expect(flowPorts(keyed, catalog, keyed.subflows![0]).ports.map((p) => [p.handleId, p.type])).toEqual([
+    ["value:EXPTIME", "source"], ["value:묶음", "source"],
   ])
-  // The container's task never takes a place among the task nodes.
-  const layout = nodeLayout(map, catalog)
-  expect(layout.find((n) => n.id === id)).toMatchObject({ width: 0, height: 0 })
-  expect(layout.find((n) => n.id === "combine")!.y).toBe(100)
 })
 
-test("the heading reads as a statement for each kind", () => {
-  const made = fixture()
-  const id = made.id
-  let map = made.map
-  map = wire(map, "object", "output", id, "items")
-  expect(flowStatement(map, catalog, map.tasks.find((t) => t.id === id)!)).toBe("object 파일마다")
-  const loop = fixture("for")
-  expect(flowStatement(loop.map, catalog, loop.map.tasks.find((t) => t.id === loop.id)!)).toBe("1부터 3까지 1씩")
-  const branch = fixture("if")
-  const withCondition = { ...branch.map, tasks: branch.map.tasks.map((t) => t.id === branch.id ? { ...t, draft: { ...t.draft, flow: { condition: "fwhm > 4.0" } } } : t) }
-  expect(flowStatement(withCondition, catalog, withCondition.tasks.find((t) => t.id === branch.id)!)).toBe("fwhm > 4.0")
-  // An if: 참 above 거짓, a diamond on the heading for each name its condition reads.
-  const result = flowPorts(withCondition, catalog, withCondition.subflows![0])
-  const { ports } = result
-  expect(result).not.toHaveProperty("lane")
-  expect(ports.map((p) => p.handleId)).toEqual(["input", "p:fwhm", "output:then", "output:else", "result", "output:results"])
-  expect(ports.find((p) => p.handleId === "p:fwhm")!.y).toBeLessThan(FLOW_HEADER)
-  // 거짓 sits in the body's lower half.
-  expect(ports.find((p) => p.handleId === "output:else")!.y).toBeGreaterThan(FLOW_HEADER + (280 - FLOW_HEADER) / 2)
-})
-
-test("inner ports reach members only; results and inputs stay outside", () => {
-  const made = fixture()
-  const id = made.id
-  let map = made.map
-  map = wire(map, "object", "output", id, "items")
-  map = wire(map, id, "output:item", "proc", "images")
-  expect(map.connections.find((c) => c.target === "proc")!.source).toMatchObject({ kind: "pending", taskId: id, outputRole: "item" })
-  // Collecting a member's output is not a loop through the container.
-  map = wire(map, "proc", "output", id, "result")
-  map = wire(map, id, "output:results", "combine", "images")
-  expect(map.connections.map((c) => [c.target, c.role]).filter(([t]) => t === id)).toEqual([[id, "items"], [id, "result"]])
-  const feedback = (source: string, sourceHandle: string, target: string, targetHandle: string) =>
-    connectionFeedback(map, catalog, [], { source, sourceHandle, target, targetHandle })
-  expect(feedback(id, "output:item", "combine", "images")).toMatchObject({ valid: false, message: "안쪽 연결점은 이 안의 작업에만 연결합니다." })
-  expect(feedback("object", "output", id, "result").valid).toBe(false)
-  expect(feedback("proc", "output", id, "items").valid).toBe(false)
-  expect(feedback(id, "output:results", "proc", "images").valid).toBe(false)
-  // What uses the results cannot feed the list.
-  expect(feedback("combine", "output", id, "items")).toMatchObject({ valid: false })
-  // Inner edges start at the container's own handles.
-  const edges = flowEdges(map, catalog)
-  expect(edges.find((e) => e.target === "proc")).toMatchObject({ source: id, sourceHandle: "output:item", targetHandle: "images" })
-  expect(edges.find((e) => e.target === "combine")).toMatchObject({ source: id, sourceHandle: "output:results" })
-})
-
-test("a for variable is a value port for member parameters", () => {
-  const made = fixture("for")
-  const id = made.id
-  let map = made.map
-  map = { ...map, tasks: map.tasks.map((t) => t.id === "proc" ? { ...t, pinned: ["aperture"] } : t) }
-  map = wire(map, id, "value:숫자", "proc", "p:aperture")
-  expect(map.connections.find((c) => c.role === "p:aperture")!.source).toMatchObject({ taskId: id, outputRole: "value:숫자" })
-  expect(connectionFeedback(map, catalog, [], { source: id, sourceHandle: "value:숫자", target: "combine", targetHandle: "p:aperture" }).valid).toBe(false)
-  const request = workflowRequest(map, catalog, "/work")
-  expect(request.flows).toEqual([{ id, label: "for", run: "for", members: ["proc"], variable: "숫자", files: [], start: 1, end: 3, step: 1, condition: "" }])
-  expect(request.values.nodes).toContainEqual(expect.objectContaining({ id, run: "value-constant", rows: [{ name: "숫자", value: "1" }] }))
-  expect(request.values.links).toContainEqual(expect.objectContaining({ target: "proc", parameter: "aperture", type: "r", source: { node: id, output: "숫자" } }))
-})
-
-test("runs send the container with its links; members keep their payloads", () => {
-  const made = fixture()
-  const id = made.id
-  let map = made.map
-  map = wire(map, "object", "output", id, "items")
-  map = wire(map, id, "output:item", "proc", "images")
-  map = wire(map, "proc", "output", id, "result")
-  map = wire(map, id, "output:results", "combine", "images")
-  const request = workflowRequest(map, catalog, "/work")
-  expect(request.nodes.map((n) => n.id)).toEqual(["object", "proc", "combine"])
-  expect(request.flows).toEqual([expect.objectContaining({ id, run: "foreach", members: ["proc"], variable: "파일", files: [] })])
-  expect(request.links.map((l) => [l.source, l.target, l.role, l.sourceRole])).toEqual([
-    ["object", id, "items", "output"], [id, "proc", "images", "item"], ["proc", id, "result", "output"], [id, "combine", "images", "results"],
-  ])
-  expect(request.nodes.find((n) => n.id === "proc")!.payload.inputs.images).toEqual([])
-  // Diagnostics see the container's settings and its inner links as pending inputs.
-  const checked = workflowDiagnosticRequest(map, catalog, "/work")
-  expect(checked.flows[0]).toMatchObject({ id, connected: true })
-  expect(checked.connections.some((c) => c.target === "proc")).toBe(true)
-  // Running the container alone resolves an outside list to files.
-  const done = { ...map, runs: [{ id: "r1", instanceId: "object", state: "completed", products: [{ id: "f1", label: "a.fits", role: "output" }, { id: "f2", label: "b.fits", role: "output" }] }] }
-  const alone = subflowRequest(done, catalog, "/work", id)
-  expect(alone.flows[0].files).toEqual(["f1", "f2"])
-  // A member run on its own takes the first item.
-  expect(syncContainerItems(done, catalog, []).tasks.find((t) => t.id === id)!.passed).toEqual({ item: ["f1"] })
-})
-
-test("member output names preview the first iteration's variable", () => {
-  const made = fixture()
-  const id = made.id
-  let map = wire(made.map, "object", "output", id, "items")
-  map = wire(map, id, "output:item", "proc", "images")
-  map = { ...map, runs: [{ id: "r1", instanceId: "object", state: "completed", products: [{ id: "f1", label: "a.fits", role: "output" }, { id: "f2", label: "b.fits", role: "output" }] }] }
-  map = syncContainerItems(map, catalog, [])
-  const proc = map.tasks.find((t) => t.id === "proc")!
-  const loop = loopVariables(map, catalog, proc, [])
-  expect(loop).toEqual([{ variable: "파일", value: "a" }])
-  const dump: Spec = { ...task("dump"), outputs: [{ name: "$stdout", kind: "text", default: "dump.txt", mode: "single" }] }
-  const draft = { ...proc.draft, outputs: { $stdout: "M67{파일}{other}.dat" } }
-  expect(plannedOutputs(dump, loopOutputNames(draft, loop), [])).toEqual([{ input: "dump", output: "M67a{other}.dat" }])
-  expect(loopVariables(map, catalog, map.tasks.find((t) => t.id === "combine")!, [])).toBeUndefined()
-  const counted = fixture("for")
-  expect(loopVariables(counted.map, catalog, counted.map.tasks.find((t) => t.id === "proc")!, [])).toEqual([{ variable: "숫자", value: "1" }])
-})
-
-test("a container names its own variable; older names follow it", () => {
-  const made = fixture()
-  const id = made.id
-  let map = wire(made.map, "object", "output", id, "items")
-  // A document from before: the variable typed as image, used in a member's output name.
-  map = {
-    ...map,
-    tasks: map.tasks.map((t) =>
-      t.id === id ? { ...t, draft: { ...t.draft, flow: { variable: "image" } } }
-      : t.id === "proc" ? { ...t, draft: { ...t.draft, outputs: { $stdout: "M67{image}.dat" } } } : t),
+test("the heading says what it repeats by", () => {
+  const { map, id } = fixture()
+  const say = (flow: Parameters<typeof setFlow>[2]) => {
+    const next = setFlow(map, id, flow)
+    return flowStatement(next, catalog, next.tasks.find((t) => t.id === id)!)
   }
-  map = syncContainerItems(map, catalog, [])
-  expect(map.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "파일", keywords: [] })
-  expect(map.tasks.find((t) => t.id === "proc")!.draft.outputs).toEqual({ $stdout: "M67{파일}.dat" })
-  expect(containerLabel(map, catalog, map.tasks.find((t) => t.id === id)!)).toBe("foreach")
+  expect(say({ criteria: [] })).toBe("무엇마다 반복할지 정해 주세요")
+  expect(say({ criteria: [{ keyword: "FILTER" }, { keyword: "EXPTIME" }] })).toBe("FILTER, EXPTIME마다")
+  expect(say({ criteria: [{ keyword: "EXPTIME" }, { count: 5, order: "name" }] })).toBe("EXPTIME마다 5장씩")
+  expect(say({ criteria: [{ each: true }] })).toBe("파일마다")
+  expect(say({ criteria: [{ times: 3 }] })).toBe("3번")
+  expect(say({ criteria: [], condition: "EXPTIME > 30" })).toBe("EXPTIME > 30")
 })
 
-test("collapsed, a container keeps its ports and hides inner edges", () => {
+test("connections go straight to inner tasks; a region has nothing to connect to", () => {
   const made = fixture()
   const id = made.id
-  let map = made.map
-  map = wire(map, "object", "output", id, "items")
-  map = wire(map, id, "output:item", "proc", "images")
-  map = wire(map, "proc", "output", id, "result")
-  map = wire(map, id, "output:results", "combine", "images")
+  let map = wire(made.map, "object", "output", "proc", "images")
+  map = wire(map, "proc", "output", "combine", "images")
+  expect(map.connections.map((c) => [c.source.kind !== "files" && c.source.taskId, c.target])).toEqual([["object", "proc"], ["proc", "combine"]])
+  expect(connectionFeedback(map, catalog, [], { source: "object", sourceHandle: "output", target: id, targetHandle: "items" }).valid).toBe(false)
+  // A region's round value reaches tasks inside it only.
+  map = setFlow(map, id, { criteria: [{ times: 3 }] })
+  map = { ...map, tasks: map.tasks.map((t) => (t.id === "proc" || t.id === "combine" ? { ...t, pinned: ["aperture"] } : t)) }
+  map = wire(map, id, "value:회차", "proc", "p:aperture")
+  expect(map.connections.at(-1)!.source).toMatchObject({ taskId: id, outputRole: "value:회차" })
+  expect(connectionFeedback(map, catalog, [], { source: id, sourceHandle: "value:회차", target: "combine", targetHandle: "p:aperture" }))
+    .toMatchObject({ valid: false, message: "회차 값은 이 영역 안의 작업에만 연결합니다." })
+  // Edges stay between the tasks.
+  expect(flowEdges(map, catalog).find((e) => e.target === "proc" && e.targetHandle === "images")).toMatchObject({ source: "object" })
+})
+
+test("rounds divide by keywords, chunks, files and times, sorted naturally", () => {
+  const frames = new Map([
+    frame("b30a", { FILTER: "B", EXPTIME: "30" }), frame("v15a", { FILTER: "V", EXPTIME: "15" }),
+    frame("b30b", { FILTER: "B", EXPTIME: "30.0" }), frame("v15b", { FILTER: "V", EXPTIME: "15" }), frame("v30", { FILTER: "V", EXPTIME: "30" }),
+  ].map((f) => [f.id, f]))
+  const ids = [...frames.keys()]
+  const names = (criteria: Criterion[]) => roundsOf(ids, frames, { criteria })!.map((r) => [r.name, r.ids])
+  expect(names([{ keyword: "FILTER" }, { keyword: "EXPTIME" }])).toEqual([
+    ["B 30", ["b30a", "b30b"]], ["V 15", ["v15a", "v15b"]], ["V 30", ["v30"]],
+  ])
+  expect(names([{ count: 2, order: "name" }])).toEqual([["1", ["b30a", "b30b"]], ["2", ["v15a", "v15b"]], ["3", ["v30"]]])
+  expect(names([{ each: true }])[0]).toEqual(["b30a", ["b30a"]])
+  expect(roundsOf([], frames, { criteria: [{ times: 2 }] })!.map((r) => r.values)).toEqual([{ 회차: "1" }, { 회차: "2" }])
+  // Expressions and conditions are evaluated by the run.
+  expect(roundsOf(ids, frames, { criteria: [], condition: "EXPTIME > 20" })).toBeUndefined()
+})
+
+/** Darks by EXPTIME with chunks of five inside; science by FILTER, EXPTIME. */
+function reduction() {
+  let map = ["darks", "median", "average", "science", "mflat", "ccdproc"].reduce(
+    (m, id, i) => addTask(m, { ...makeInstance(spec("ccdproc2"), catalog, prefs, id), label: id, position: { x: i * 400, y: 100 } }),
+    emptyMap()
+  )
+  // Groups drawn by hand: the inner region sits in the outer one, as nested loops.
+  const group = (m: TaskMap, id: string, name: string, members: string[], parent?: string): TaskMap => {
+    const made = setGroupRun({ ...m, subflows: [...(m.subflows ?? []), { id, name, position: { x: 0, y: 0 }, width: 400, height: 240 }] }, catalog, prefs, id, "foreach")
+    return { ...made, tasks: made.tasks.map((t) => (members.includes(t.id) ? { ...t, subflowId: id } : t.id === id && parent ? { ...t, subflowId: parent } : t)) }
+  }
+  map = group(map, "exp", "다크", ["average"])
+  map = group(map, "chunk", "5장씩", ["median"], "exp")
+  map = group(map, "proc", "과학", ["ccdproc"])
+  map = setFlow(map, "exp", { criteria: [{ keyword: "EXPTIME" }], split: { taskId: "darks" } })
+  map = setFlow(map, "chunk", { criteria: [{ count: 5, order: "name" }], split: { taskId: "darks" } })
+  map = setFlow(map, "proc", { criteria: [{ keyword: "FILTER" }, { keyword: "EXPTIME" }], split: { taskId: "science" } })
+  map = connect(map, "median", "images", { kind: "pending", taskId: "darks" })
+  map = connect(map, "average", "images", { kind: "pending", taskId: "median" })
+  map = connect(map, "ccdproc", "images", { kind: "pending", taskId: "science" })
+  map = connect(map, "ccdproc", "dark", { kind: "pending", taskId: "average" })
+  map = connect(map, "ccdproc", "flat", { kind: "pending", taskId: "mflat" })
+  const flat = map.connections.find((c) => c.role === "flat")!
+  map = setReceiveMode(map, flat.id, "proc", { mode: "match", keys: ["FILTER"] })
+  const darks = Array.from({ length: 7 }, (_, n) => frame(`d15_${n + 1}`, { EXPTIME: "15" }))
+    .concat(Array.from({ length: 3 }, (_, n) => frame(`d30_${n + 1}`, { EXPTIME: "30" })))
+  map = ran(map, "darks", darks)
+  map = ran(map, "science", [frame("b30", { FILTER: "B", EXPTIME: "30" }), frame("v15", { FILTER: "V", EXPTIME: "15" })])
+  map = ran(map, "mflat", [frame("FlatB", { FILTER: "B" }), frame("FlatV", { FILTER: "V" })])
+  return map
+}
+
+test("connections crossing a region receive by its split, by labels or for every round", () => {
+  const map = reduction()
+  const ccd = map.tasks.find((t) => t.id === "proc")!
+  const into = (role: string) => map.connections.find((c) => c.target === "ccdproc" && c.role === role)!
+  expect(receiveMode(map, into("images"), ccd)).toEqual({ mode: "split" })
+  // The master dark is made inside the EXPTIME region: it pairs by its label.
+  expect(receiveMode(map, into("dark"), ccd)).toEqual({ mode: "match", keys: ["EXPTIME"] })
+  // The flat file node has no labels; the stored mode pairs it by its FILTER header.
+  expect(receiveMode(map, into("flat"), ccd)).toEqual({ mode: "match", keys: ["FILTER"] })
+  expect(regionRounds(map, ccd, []).rounds!.map((r) => r.name)).toEqual(["B 30", "V 15"])
+  // Nested: the chunks of the first EXPTIME round.
+  const chunk = map.tasks.find((t) => t.id === "chunk")!
+  expect(regionRounds(map, chunk, []).rounds!.map((r) => r.ids)).toEqual([
+    ["d15_1", "d15_2", "d15_3", "d15_4", "d15_5"], ["d15_6", "d15_7"],
+  ])
+  const inputs = memberPassInputs(map, catalog, map.tasks.find((t) => t.id === "ccdproc")!, [])!
+  expect(inputs.flat).toEqual({ kind: "passes", passes: [{ name: "B 30", ids: ["FlatB"] }, { name: "V 15", ids: ["FlatV"] }], missing: [] })
+  // The master dark is made round by round: known once it runs.
+  expect(inputs.dark).toEqual({ kind: "unknown" })
+})
+
+test("a member run alone takes the first rounds; output names read their labels", () => {
+  let map = syncContainerItems(reduction(), catalog, [])
+  const median = map.tasks.find((t) => t.id === "median")!
+  expect(median.roundValues).toEqual({ EXPTIME: "15", 묶음: "1" })
+  expect(payloadFor(map, "median", catalog).inputs.images).toEqual(["d15_1", "d15_2", "d15_3", "d15_4", "d15_5"])
+  const flat = map.connections.find((c) => c.role === "flat")!
+  expect(map.tasks.find((t) => t.id === "ccdproc")!.firstRound).toEqual({ [flat.id]: ["FlatB"], [map.connections.find((c) => c.target === "ccdproc" && c.role === "images")!.id]: ["b30"] })
+  const loop = loopVariables(map, catalog, median, [])
+  expect(loop).toEqual([{ variable: "EXPTIME", value: "15" }, { variable: "묶음", value: "1" }])
+  const dump: Spec = { ...task("dump"), outputs: [{ name: "$stdout", kind: "text", default: "dump.txt", mode: "single" }] }
+  const draft = { ...median.draft, outputs: { $stdout: "Dark{EXPTIME}_{묶음}{other}.fits" } }
+  expect(plannedOutputs(dump, loopOutputNames(draft, loop), [])).toEqual([{ input: "dump", output: "Dark15_1{other}.fits" }])
+  // A round with no matching flat is a warning.
+  map = ran(map, "mflat", [frame("FlatB", { FILTER: "B" })])
+  expect(loopIssues(map, catalog, []).map((i) => i.message)).toEqual(["V 15 회차에 맞는 flat가 없습니다."])
+})
+
+test("runs send each region with its criteria, split and members; crossing links carry their modes", () => {
+  const map = reduction()
+  const request = workflowRequest(map, catalog, "/work")
+  expect(request.flows).toEqual([
+    { id: "exp", label: "다크", members: ["average", "chunk"], criteria: [{ keyword: "EXPTIME" }], split: { taskId: "darks" }, condition: "" },
+    { id: "chunk", label: "5장씩", members: ["median"], criteria: [{ count: 5, order: "name" }], split: { taskId: "darks" }, condition: "" },
+    { id: "proc", label: "과학", members: ["ccdproc"], criteria: [{ keyword: "FILTER" }, { keyword: "EXPTIME" }], split: { taskId: "science" }, condition: "" },
+  ])
+  expect(request.links.find((l) => l.role === "flat")).toMatchObject({ source: "mflat", target: "ccdproc", flow: { proc: { mode: "match", keys: ["FILTER"] } } })
+  expect(request.links.find((l) => l.role === "dark")).toMatchObject({ source: "average", target: "ccdproc" })
+  expect(request.nodes.find((n) => n.id === "ccdproc")!.payload.inputs.images).toEqual([])
+  // Diagnostics get the regions and every connection with its modes.
+  const checked = workflowDiagnosticRequest(map, catalog, "/work")
+  expect(checked.flows.map((f) => f.id)).toEqual(["exp", "chunk", "proc"])
+  expect(checked.connections.find((c) => c.role === "flat")!.flow).toEqual({ proc: { mode: "match", keys: ["FILTER"] } })
+})
+
+test("a split source outside the run goes with the region as files", () => {
+  const map = reduction()
+  const only = { ...map, tasks: map.tasks.filter((t) => !["darks", "science", "mflat"].includes(t.id)) }
+  const request = workflowRequest(only, catalog, "/work", map)
+  expect(request.flows.find((f) => f.id === "proc")!.splitFiles).toEqual(["b30", "v15"])
+  expect(request.links.find((l) => l.role === "flat")).toMatchObject({ source: "mflat", files: ["FlatB", "FlatV"] })
+  expect(request.links.find((l) => l.role === "images" && l.target === "ccdproc")).toMatchObject({ source: "science", files: ["b30", "v15"] })
+})
+
+test("a region's value is its first round's when a member runs alone, and each round's in a run", () => {
+  let map = reduction()
+  map = { ...map, tasks: map.tasks.map((t) => (t.id === "median" ? { ...t, pinned: ["aperture"] } : t)) }
+  map = wire(map, "exp", "value:EXPTIME", "median", "p:aperture")
+  map = syncContainerItems(map, catalog, [])
+  const alone = valueRequest(map, catalog)
+  expect(alone.nodes).toContainEqual(expect.objectContaining({ id: "exp", run: "value-constant", rows: [{ name: "EXPTIME", value: "15" }] }))
+  expect(alone.links).toContainEqual(expect.objectContaining({ target: "median", parameter: "aperture", source: { node: "exp", output: "EXPTIME" } }))
+  // In a run the server gives each round its own; the request carries no first round.
+  const run = workflowRequest(map, catalog, "/work")
+  expect(run.values.links.find((l) => l.target === "median")).not.toHaveProperty("round")
+})
+
+test("older documents open as regions", () => {
+  let map = ["object", "proc", "combine", "flats"].reduce(
+    (m, id, i) => addTask(m, { ...makeInstance(spec("ccdproc2"), catalog, prefs, id), label: id, position: { x: i * 400, y: 100 } }),
+    emptyMap()
+  )
+  const old = (id: string, taskName: string, flow: Record<string, unknown>, members: string[]): TaskMap => ({
+    ...map,
+    subflows: [...(map.subflows ?? []), { id, name: id, position: { x: 0, y: 0 }, width: 400, height: 240 }],
+    tasks: [...map.tasks.map((t) => (members.includes(t.id) ? { ...t, subflowId: id } : t)),
+      { ...makeInstance(region, catalog, prefs, id), task: taskName, draft: { ...makeInstance(region, catalog, prefs, id).draft, flow: flow as never } }],
+  })
+  const c = (id: string, source: string, outputRole: string | undefined, target: string, role: string, extra: object = {}) =>
+    ({ id, target, role, source: { kind: "pending" as const, taskId: source, ...(outputRole ? { outputRole } : {}), ...extra } })
+  // 각각 반복 by SUBSET: list from object and flats, item to proc, results to combine.
+  map = old("loop", "giraf.foreach", { variable: "SUBSET", keywords: ["SUBSET"] }, ["proc"])
+  map = { ...map, connections: [
+    c("a", "object", "image", "loop", "items"), c("b", "flats", undefined, "loop", "items"),
+    c("c", "loop", "item", "proc", "images"), c("d", "proc", "output", "loop", "result"), c("e", "loop", "results", "combine", "images"),
+    c("f", "flats", "image", "combine", "flat", { partition: { keyword: "SUBSET", value: "B" }, group: { filter: "B" } }),
+  ] }
+  map.tasks = map.tasks.map((t) => (t.id === "proc" ? { ...t, draft: { ...t.draft, outputs: { output: "p{SUBSET}" } } } : t))
+  const loaded = migrateMap({ ...prefs, taskMap: JSON.parse(JSON.stringify(map)) }, catalog)
+  expect(loaded.tasks.find((t) => t.id === "loop")!.draft.flow).toEqual({ criteria: [{ keyword: "SUBSET" }], split: { taskId: "object", outputRole: "image" } })
+  expect(loaded.connections.map((x) => [x.source.kind !== "files" && x.source.taskId, x.target, x.role, x.flow])).toEqual([
+    ["object", "proc", "images", undefined],
+    ["flats", "proc", "images", { loop: { mode: "match", keys: ["SUBSET"] } }],
+    ["proc", "combine", "images", undefined],
+    ["flats", "combine", "flat", undefined],
+  ])
+  expect(loaded.connections.at(-1)!.source).toEqual({ kind: "pending", taskId: "flats", outputRole: "image" })
+  // 반복 by numbers: N번, its number is 회차.
+  map = old("range", "giraf.for", { variable: "숫자", start: "2", end: "10", step: "2" }, ["proc"])
+  map = { ...map, connections: [c("v", "range", "value:숫자", "proc", "p:aperture")] }
+  map.tasks = map.tasks.map((t) => (t.id === "proc" ? { ...t, draft: { ...t.draft, outputs: { output: "ap{숫자}" } } } : t))
+  const counted = migrateMap({ ...prefs, taskMap: map }, catalog)
+  expect(counted.tasks.find((t) => t.id === "range")).toMatchObject({ task: "giraf.foreach", draft: { flow: { criteria: [{ times: 5 }] } } })
+  expect(counted.connections[0].source).toMatchObject({ taskId: "range", outputRole: "value:회차" })
+  expect(counted.tasks.find((t) => t.id === "proc")!.draft.outputs).toEqual({ output: "ap{회차}" })
+  // 조건 분기: 참 stays with the condition, 거짓 goes to a region with the opposite one.
+  map = old("branch", "giraf.if", { condition: "EXPTIME > 30" }, ["proc", "combine"])
+  map = { ...map, connections: [
+    c("i", "object", undefined, "branch", "input"), c("t", "branch", "then", "proc", "images"), c("e", "branch", "else", "combine", "images"),
+  ] }
+  const branched = migrateMap({ ...prefs, taskMap: map }, catalog)
+  const opposite = branched.tasks.find((t) => t.id === branched.tasks.find((x) => x.id === "combine")!.subflowId)!
+  expect(branched.tasks.find((t) => t.id === "branch")!.draft.flow).toEqual({ criteria: [], split: { taskId: "object" }, condition: "EXPTIME > 30" })
+  expect(opposite.draft.flow).toEqual({ criteria: [], split: { taskId: "object" }, condition: "!(EXPTIME > 30)" })
+  expect(branched.subflows!.map((g) => g.id)).toContain(opposite.id)
+  expect(branched.connections.map((x) => [x.source.kind !== "files" && x.source.taskId, x.target])).toEqual([["object", "proc"], ["object", "combine"]])
+})
+
+test("collapsed, a region's rows are the connections crossing it", () => {
+  const made = fixture()
+  const id = made.id
+  let map = wire(made.map, "object", "output", "proc", "images")
+  map = wire(map, "proc", "output", "combine", "images")
   const collapsed = setSubflowCollapsed(map, id, true)
   const node = flowNodes(collapsed, catalog).find((n) => n.id === id)!
   expect(node.type).toBe("compound")
-  expect(node.handles!.map((h) => h.id)).toEqual(["items", "output:results"])
-  const ports = compoundPorts(collapsed, collapsed.subflows![0], taskEdges(collapsed, catalog))
-  expect(ports.inputs).toEqual([])
-  const edges = flowEdges(collapsed, catalog)
-  expect(edges.filter((e) => e.hidden).map((e) => e.target).sort()).toEqual([id, "proc"].sort())
-  expect(edges.find((e) => e.target === "combine")).toMatchObject({ source: id, sourceHandle: "output:results" })
-  expect(edges.find((e) => e.target === "combine")!.hidden).toBeFalsy()
+  expect(node.handles!.map((h) => h.id)).toEqual(["in:proc:images", "out:proc:output"])
 })
 
-test("removing a container keeps its members; undo brings both back", () => {
+test("removing a region keeps its members; undo brings both back", () => {
   const { map, id } = fixture()
   const removed = removeTask(map, id)
   expect(removed.subflows).toEqual([])
@@ -235,128 +323,62 @@ test("removing a container keeps its members; undo brings both back", () => {
   expect(restored.tasks.find((t) => t.id === "proc")!.subflowId).toBe(id)
 })
 
-test("settings survive saving; auto layout places the container as its group", async () => {
-  const { map, id } = fixture("for")
-  const saved = JSON.parse(JSON.stringify(map))
-  const loaded = migrateMap({ ...prefs, taskMap: saved }, catalog)
-  expect(loaded.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "숫자", start: "1", end: "3", step: "1" })
+test("settings survive saving; auto layout places the region as its group", async () => {
+  const made = fixture()
+  const map = setFlow(made.map, made.id, { criteria: [{ times: 3 }] })
+  const loaded = migrateMap({ ...prefs, taskMap: JSON.parse(JSON.stringify(map)) }, catalog)
+  expect(loaded.tasks.find((t) => t.id === made.id)!.draft.flow).toEqual({ criteria: [{ times: 3 }] })
   const laid = await autoLayoutMap(loaded, catalog)
-  const group = laid.subflows!.find((g) => g.id === id)!
-  expect(laid.tasks.find((t) => t.id === id)!.position).toEqual(group.position)
+  const group = laid.subflows!.find((g) => g.id === made.id)!
+  expect(laid.tasks.find((t) => t.id === made.id)!.position).toEqual(group.position)
 })
 
-test("a container is named and colored like a group; one name for canvas and inspector", () => {
+test("a region is named and colored like a group; one name for canvas and inspector", () => {
   const { map, id } = fixture()
   const edited = updateSubflow(map, id, { name: "필터별 측광", color: "rose" })
   const task = edited.tasks.find((t) => t.id === id)!
-  expect(task.label).toBe("필터별 측광")
   expect(containerLabel(edited, catalog, task)).toBe("필터별 측광")
   expect(edited.subflows!.find((g) => g.id === id)!.color).toBe("rose")
-  // Renaming in the inspector edits the label alone; the canvas follows.
-  const renamed = { ...edited, tasks: edited.tasks.map((t) => (t.id === id ? { ...t, label: "다시" } : t)) }
-  expect(containerLabel(renamed, catalog, renamed.tasks.find((t) => t.id === id)!)).toBe("다시")
 })
 
-test("dissolving a container removes it and keeps its members", () => {
+test("dissolving a region removes it and keeps its members", () => {
   const { map, id } = fixture()
   const dissolved = dissolveSubflow(map, id)
   expect(dissolved.tasks.some((t) => t.id === id)).toBe(false)
-  expect(dissolved.subflows!.some((g) => g.id === id)).toBe(false)
   expect(dissolved.tasks.find((t) => t.id === "proc")!.subflowId).toBeUndefined()
 })
 
-test("a duplicated container brings copies of its members and their links", () => {
+test("a duplicated region brings copies of its members, links and receive modes", () => {
   const made = fixture()
   const id = made.id
-  let map = wire(made.map, "object", "output", id, "items")
-  map = wire(map, id, "output:item", "proc", "images")
-  map = wire(map, "proc", "output", id, "result")
+  let map = wire(made.map, "object", "output", "proc", "images")
+  map = setReceiveMode(map, map.connections[0].id, id, { mode: "all", keys: [] })
   const copy = duplicateTask(map, id, { x: 1000, y: 40 })
   const newId = copy.view.selected
-  expect(newId).not.toBe(id)
-  expect(copy.subflows!.find((g) => g.id === newId)!.position).toEqual({ x: 1000, y: 40 })
-  const members = copy.tasks.filter((t) => t.subflowId === newId)
-  expect(members).toHaveLength(1)
-  const member = members[0]
-  expect(member.id).not.toBe("proc")
+  const member = copy.tasks.find((t) => t.subflowId === newId)!
   expect(member.position).toEqual({ x: 1080, y: 140 })
-  // Outside input, inner item and collected result all point at the copies.
-  expect(copy.connections.find((c) => c.target === newId && c.role === "items")!.source).toMatchObject({ taskId: "object" })
-  expect(copy.connections.find((c) => c.target === member.id)!.source).toMatchObject({ kind: "pending", taskId: newId, outputRole: "item" })
-  expect(copy.connections.find((c) => c.target === newId && c.role === "result")!.source).toMatchObject({ kind: "pending", taskId: member.id })
-  // The original keeps its member.
-  expect(copy.tasks.find((t) => t.id === "proc")!.subflowId).toBe(id)
+  expect(copy.connections.find((c) => c.target === member.id)).toMatchObject({ source: { taskId: "object" }, flow: { [newId]: { mode: "all", keys: [] } } })
 })
 
 test("progress reads as x/y and aloud as a sentence", () => {
-  expect(flowProgress("foreach", { index: 9, total: 24 })).toEqual({ text: "9/24", label: "24개 중 9번째" })
-  expect(flowProgress("for", { index: 2, total: 5 })).toEqual({ text: "2/5", label: "5회 중 2번째" })
-  expect(flowProgress("if", { index: 1, total: 1 })).toBeUndefined()
+  expect(flowProgress("foreach", { index: 2, total: 4 })).toEqual({ text: "2/4", label: "4회 중 2번째" })
   expect(flowProgress("foreach", undefined)).toBeUndefined()
 })
 
-test("a plain group takes a run in place and keeps its name, members and links", () => {
-  let map = ["object", "a", "b", "combine"].reduce(
+test("a plain group becomes a region in place and back, keeping members and links", () => {
+  let map = ["object", "a", "b"].reduce(
     (m, id, i) => addTask(m, { ...makeInstance(spec("ccdproc2"), catalog, prefs, id), label: id, position: { x: i * 400, y: 100 } }),
     emptyMap()
   )
   map = saveSubflow(map, catalog, { id: "g", name: "측광", taskIds: ["a", "b"] })
   map = connect(map, "a", "images", { kind: "pending", taskId: "object" })
-  map = connect(map, "b", "images", { kind: "pending", taskId: "a" })
-  const group = map.subflows![0]
-  // 한 번 stays a plain group.
   expect(setGroupRun(map, catalog, prefs, "g", undefined)).toBe(map)
   const looped = setGroupRun(map, catalog, prefs, "g", "foreach")
   const task = looped.tasks.find((t) => t.id === "g")!
-  expect(task).toMatchObject({ task: "giraf.foreach", label: "측광", position: group.position })
-  expect(task.draft.flow).toEqual({ variable: "파일", keywords: [] })
-  expect(looped.subflows).toEqual(map.subflows)
-  expect(looped.tasks.filter((t) => t.subflowId === "g").map((t) => t.id)).toEqual(["a", "b"])
+  expect(task).toMatchObject({ task: "giraf.foreach", label: "측광" })
+  expect(task.draft.flow).toEqual({ criteria: [] })
   expect(looped.connections).toEqual(map.connections)
-  expect(containerLabel(looped, catalog, task)).toBe("측광")
-})
-
-test("a run back to once removes the container's own links and keeps the group", () => {
-  const made = fixture()
-  const id = made.id
-  let map = wire(made.map, "object", "output", id, "items")
-  map = wire(map, id, "output:item", "proc", "images")
-  map = wire(map, "proc", "output", id, "result")
-  map = wire(map, id, "output:results", "combine", "images")
-  map = moveTaskToSubflow(map, catalog, "combine", id, { x: 600, y: 140 })
-  map = connect(map, "combine", "images", { kind: "pending", taskId: "proc" })
-  map = connect(map, "proc", "images", { kind: "pending", taskId: "object" })
-  const once = setGroupRun(map, catalog, prefs, id, undefined)
-  expect(once.tasks.some((t) => t.id === id)).toBe(false)
-  expect(once.subflows!.map((g) => g.id)).toEqual([id])
-  expect(once.tasks.filter((t) => t.subflowId === id).map((t) => t.id)).toEqual(["proc", "combine"])
-  // Member to member and outside to member stay; the container's own go.
-  expect(once.connections.map((c) => [c.source.kind !== "files" && c.source.taskId, c.target])).toEqual([
-    ["proc", "combine"], ["object", "proc"],
-  ])
-  expect(once.view.selected).toBe("")
-})
-
-test("changing the run keeps the links its new kind still has", () => {
-  const made = fixture()
-  const id = made.id
-  let map = wire(made.map, "object", "output", id, "items")
-  map = wire(map, id, "output:item", "proc", "images")
-  map = wire(map, "proc", "output", id, "result")
-  map = wire(map, id, "output:results", "combine", "images")
-  const loop = setGroupRun(map, catalog, prefs, id, "for")
-  const task = loop.tasks.find((t) => t.id === id)!
-  expect(task.task).toBe("giraf.for")
-  expect(task.draft.flow).toMatchObject({ start: "1", end: "3", step: "1" })
-  // A for has no list input or item; results are collected and handed on in every kind.
-  expect(loop.connections.map((c) => c.role)).toEqual(["result", "images"])
-  expect(loop.connections.find((c) => c.target === "combine")!.source).toMatchObject({ taskId: id })
-  // The variable follows its kind once synced; member names follow it.
-  expect(syncContainerItems(loop, catalog, []).tasks.find((t) => t.id === id)!.draft.flow!.variable).toBe("숫자")
-  const branch = setGroupRun(loop, catalog, prefs, id, "if")
-  expect(branch.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ condition: "" })
-  expect(branch.connections.map((c) => c.role)).toEqual(["result", "images"])
-  expect(branch.subflows!.find((g) => g.id === id)!.height).toBeGreaterThanOrEqual(FLOW_HEADER + 32 * 4)
-  const back = setGroupRun(branch, catalog, prefs, id, "foreach")
-  expect(back.tasks.find((t) => t.id === id)!.draft.flow).toEqual({ variable: "파일", keywords: [] })
+  const once = setGroupRun(looped, catalog, prefs, "g", undefined)
+  expect(once.tasks.some((t) => t.id === "g")).toBe(false)
+  expect(once.connections).toEqual(map.connections)
 })

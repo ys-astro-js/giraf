@@ -11,7 +11,7 @@ const columns: Record<string, { name: string; value?: string }> = {
   "value-header": { name: "키워드" },
 }
 
-/** 나누기 기준: the header keyword a value node splits its values by. */
+/** 나누기 기준: the label a constant's table gives one value per value of (a region's keyword). */
 export function PartitionField({ task, edit }: { task: Instance; edit: (fn: (t: Instance) => Instance) => void }) {
   return (
     <Field>
@@ -30,9 +30,9 @@ export function PartitionField({ task, edit }: { task: Instance; edit: (fn: (t: 
 }
 
 /**
- * The rows of a value node: `name = value` constants or header keywords.
- * Either can split its values by a header keyword; a constant then holds
- * one value per group.
+ * The rows of a value node: `name = value` constants or header keywords. A
+ * constant can hold one value per value of a label; header values take the
+ * labels of their files.
  */
 export function ValueRowsEditor({
   spec,
@@ -55,7 +55,7 @@ export function ValueRowsEditor({
   return (
     <section className="inspector-section" aria-label="값">
       <FieldGroup>
-        <PartitionField task={task} edit={edit} />
+        {spec.run === "value-constant" && <PartitionField task={task} edit={edit} />}
         {spec.run === "value-constant" && partition && (
           <Field>
             <FieldLabel htmlFor="value-groups">그룹</FieldLabel>

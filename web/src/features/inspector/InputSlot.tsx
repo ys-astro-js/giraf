@@ -1,7 +1,6 @@
 import { assigned } from "@/lib/task-map/inputs"
 import { InspectorAlignmentSource } from "./AlignmentSource"
 import { InspectorFileSource } from "./FileSource"
-import { parsePort, matchesGroup, groupEqual } from "@/lib/calibration-ports"
 import { CursorInput } from "@/components/cursor-input"
 
 import { isGirafNode, type Catalog, type Spec, type Frame, type Slot } from "@/lib/workbench"
@@ -48,29 +47,14 @@ export function InspectorInputSlot({
   compact?: boolean
   prefix?: string
 }) {
-  const allRows = [...rows, ...map.runs.flatMap((r) => r.products)]
   const d = task.draft
 
-  const port = parsePort(s.name, "input"),
-    role = port?.role || s.name
-  const assignedIds = assigned(map, task, role).ids
-  const ids = port
-    ? assignedIds.filter((id) => {
-        const frame = allRows.find((r) => r.id === id)
-        return (
-          frame &&
-          (frame.asset === "image-list" || matchesGroup(frame, port.group))
-        )
-      })
-    : assignedIds
+  const role = s.name
+  const ids = assigned(map, task, role).ids
   const limit = expanded[s.name] || 0
-  const expression = port ? "" : task.expressions[role] || ""
+  const expression = task.expressions[role] || ""
   const links = map.connections.filter(
-    (c) =>
-      c.target === task.id &&
-      c.role === role &&
-      c.source.kind !== "files" &&
-      (!port || !c.targetGroup || groupEqual(c.targetGroup, port.group))
+    (c) => c.target === task.id && c.role === role && c.source.kind !== "files"
   )
   const sources = links.map(
     (c) =>
@@ -98,17 +82,15 @@ export function InspectorInputSlot({
     onInputSource?.(s.name, { kind: "files", ids: next, label: s.label })
     if (!onInputSource) reorderInput(s.name, next)
   }
-  // Inside a 각각 반복: what each pass receives through this input.
-  const passes = port ? undefined : memberPassInputs(map, catalog, task, rows)?.[role]
+  // Inside a loop region: what each round receives through this input.
+  const passes = memberPassInputs(map, catalog, task, rows)?.[role]
   const field = (
     <InspectorFileSource
       s={s}
       // GIRAF's own nodes name their inputs in the schema; IRAF keeps its names.
       label={isGirafNode(spec) && s.label ? s.label : undefined}
       prefix={prefix}
-      port={port}
       compact={compact}
-      role={role}
       limit={limit}
       setExpanded={setExpanded}
       summary={summary}

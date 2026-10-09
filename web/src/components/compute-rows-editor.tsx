@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Choice } from "@/components/workbench-controls"
-import { PartitionField } from "@/components/value-rows-editor"
 import { useValueResults } from "@/features/workflow/useValueResults"
 import {
   COMPUTE_METHODS,
@@ -64,7 +63,6 @@ export function ComputeRowsEditor({
   return (
     <section className="inspector-section" aria-label="값">
       <FieldGroup>
-        <PartitionField task={task} edit={edit} />
         {rows.map((row, index) => {
           const name = row.name || `${index + 1}행`
           const id = `compute-${task.id}-${index}`

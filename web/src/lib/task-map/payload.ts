@@ -3,7 +3,7 @@ import { type Instance, type TaskMap } from "./model"
 import { connectionRoles } from "./connections"
 import { resolvedSource } from "./runs"
 import { isJobNode, isValueRole, psetValues, valueRequest, withValues, type ValueScalar } from "@/lib/values"
-import { COLLECT_PORT, containerTask, flowKeywords, flowRequests, flowRun, isContainerId } from "@/lib/containers"
+import { enclosingRegions, flowRequests, isContainerId } from "@/lib/containers"
 const clone = <T,>(value: T): T => structuredClone(value)
 
 /** `values` are resolved value connections (`name` or `pset.name`), see lib/values. */
@@ -54,21 +54,14 @@ export function payloadFor(map: TaskMap, id: string, catalog: Catalog, values: R
         waiting.source.kind === "pending" ? waiting.source.taskId : ""
       const sourceName =
         map.tasks.find((t) => t.id === sourceId)?.label || "연결한 작업"
-      // A member alone takes the container's first item; lanes are decided by a run.
-      if (isContainerId(map, sourceId))
-        throw Error(
-          flowRun(map, catalog, sourceId) === "if"
-            ? `${slot.name}: ‘${sourceName}’의 참과 거짓 칸은 워크플로우를 실행할 때 정해집니다.`
-            : `${slot.name}: ‘${sourceName}’에 목록이 없습니다. 목록 입력을 연결해 주세요.`
-        )
       throw Error(
         `${slot.name}: 연결한 작업의 사용 가능한 결과가 없습니다. 캔버스에서 ‘${sourceName}’ 작업을 선택하고 실행해 주세요.`
       )
     }
     if (links.length) {
-      // Inside a 각각 반복, a matched outside connection gives the first pass's files.
+      // Inside loop regions, a connection crossing into them gives the first round's files.
       inputs[slot.name] = links.flatMap((c) =>
-        c.source.kind !== "pending" ? (t.firstPass?.[c.id] ?? c.source.ids) : []
+        c.source.kind !== "pending" ? (t.firstRound?.[c.id] ?? c.source.ids) : []
       )
       if (
         requiredNow &&
@@ -127,17 +120,16 @@ export function workflowRequest(
   // Value and pset nodes are evaluated by the server with the tasks they feed.
   const jobs = map.tasks.filter((t) => isJobNode(catalog.tasks.find((s) => s.name === t.task)))
   const jobIds = new Set(jobs.map((t) => t.id))
-  // foreach, for and if containers run their members (lib/containers).
-  const flows = flowRequests(map, catalog, jobIds).map((flow) => ({ ...flow, members: flow.members.filter((id) => jobIds.has(id)) }))
+  // Loop regions run their members, tasks and inner regions (lib/containers).
+  const regionIds = new Set(flowRequests(map, catalog, jobIds).map((f) => f.id))
+  const flows = flowRequests(map, catalog, jobIds).map((flow) => ({ ...flow, members: flow.members.filter((id) => jobIds.has(id) || regionIds.has(id)) }))
   const running = new Set([...jobIds, ...flows.map((f) => f.id)])
   /** The input a connection fills when it carries files, or undefined when it is inactive. */
   const fileRole = (c: TaskMap["connections"][number]) => {
     if (isValueRole(c.role)) return undefined
     const target = map.tasks.find((t) => t.id === c.target)!
     const spec = catalog.tasks.find((s) => s.name === target.task)!
-    const role = c.role === COLLECT_PORT && isContainerId(map, c.target)
-      ? { name: COLLECT_PORT, kind: "any", multiple: true }
-      : connectionRoles(spec, catalog).find((s) => s.name === c.role)
+    const role = connectionRoles(spec, catalog).find((s) => s.name === c.role)
     if (!role || target.expressions[c.role]) return undefined
     const flag = (
       {
@@ -165,56 +157,39 @@ export function workflowRequest(
     return role
   }
   const links = map.connections.flatMap((c) => {
-    if (c.source.kind === "files" || !c.source.taskId) return []
-    const sourceId = c.source.taskId
-    if (!running.has(sourceId) || !running.has(c.target)) return []
+    if (!jobIds.has(c.target)) return []
     const role = fileRole(c)
     if (!role) return []
-    return [
-      {
-        source: c.source.taskId,
-        ...(c.source.files !== undefined
-          ? { sourceFiles: c.source.files }
-          : {}),
-        ...(c.source.group ? { sourceGroup: c.source.group } : {}),
-        ...(c.source.partition ? { sourcePartition: c.source.partition } : {}),
-        ...(c.source.outputRole ? { sourceRole: c.source.outputRole } : {}),
-        target: c.target,
-        role: c.role,
-        kind: role.kind,
-        multiple: role.multiple,
-      },
-    ]
-  })
-  // A 각각 반복 by keywords matches files from outside it to each pass, also
-  // those whose source is not in this run: they go with the loop, resolved.
-  const fileInputs = map.connections.flatMap((c) => {
-    const container = containerTask(map, map.tasks.find((t) => t.id === c.target)?.subflowId)
-    if (!container || !jobIds.has(c.target) || !flows.some((f) => f.id === container.id && f.run === "foreach") ||
-      !flowKeywords(container).length)
-      return []
     const sourceId = c.source.kind !== "files" ? c.source.taskId : undefined
-    if (sourceId && (running.has(sourceId) || sourceId === container.id)) return []
+    const crossing = { target: c.target, role: c.role, kind: role.kind, multiple: role.multiple, ...(c.flow ? { flow: c.flow } : {}) }
+    if (sourceId && running.has(sourceId))
+      return [{
+        source: sourceId,
+        ...(c.source.kind !== "files" && c.source.files !== undefined ? { sourceFiles: c.source.files } : {}),
+        ...(c.source.kind !== "files" && c.source.outputRole ? { sourceRole: c.source.outputRole } : {}),
+        ...crossing,
+      }]
+    // Inside regions, files from a source outside this run go with the run, resolved,
+    // so each round receives them as the connection says.
+    if (!enclosingRegions(map, c.target).length) return []
     const source = resolvedSource(map, c.source)
-    const role = fileRole(c)
-    if (!role || source.kind === "pending" || !source.ids.length) return []
-    return [{ id: c.id, flow: container.id, input: { target: c.target, role: c.role, kind: role.kind, multiple: role.multiple, files: source.ids } }]
+    if (source.kind === "pending" || !source.ids.length) return []
+    return [{ source: sourceId ?? "", ...(c.source.kind !== "files" && c.source.outputRole ? { sourceRole: c.source.outputRole } : {}),
+      ...crossing, files: source.ids }]
   })
   const prepared = {
     ...map,
-    // The run, not the first pass, decides what each pass takes.
-    tasks: map.tasks.map((t) => (t.firstPass ? { ...t, firstPass: undefined } : t)),
+    // The run, not the first round, decides what each round takes.
+    tasks: map.tasks.map((t) => (t.firstRound ? { ...t, firstRound: undefined } : t)),
     connections: map.connections.map((c) =>
-      c.source.kind === "pending" ||
-      links.some((l) => l.target === c.target && l.role === c.role) ||
-      fileInputs.some((f) => f.id === c.id)
+      c.source.kind === "pending" || links.some((l) => l.target === c.target && l.role === c.role)
         ? { ...c, source: { kind: "files" as const, ids: [], label: "" } }
         : c
     ),
   }
-  // Each pass gives a member's value links its own values (giraf/workflow.py iteration_values).
+  // Each round gives a member's value links its own values (giraf/workflow.py value_rounds).
   const values = valueRequest(
-    { ...valueMap, tasks: valueMap.tasks.map((t) => (t.firstPassValues ? { ...t, firstPassValues: undefined } : t)) },
+    { ...valueMap, tasks: valueMap.tasks.map((t) => (t.roundValues ? { ...t, roundValues: undefined } : t)) },
     catalog,
     running
   )
@@ -226,12 +201,7 @@ export function workflowRequest(
     })),
     links,
     values: { ...values, links: values.links.filter((l) => running.has(l.target)) },
-    // `connected` is for diagnostics only.
-    flows: flows.map(({ connected, ...flow }) => {
-      void connected
-      const inputs = fileInputs.filter((f) => f.flow === flow.id).map((f) => f.input)
-      return inputs.length ? { ...flow, fileInputs: inputs } : flow
-    }),
+    flows,
   }
 }
 
@@ -244,7 +214,7 @@ export function workflowDiagnosticRequest(
   const jobs = map.tasks.filter((t) => isJobNode(catalog.tasks.find((s) => s.name === t.task)))
   const checked = new Set(jobs.map((t) => t.id))
   const connections = map.connections.filter((c) => checked.has(c.target) && !isValueRole(c.role) &&
-    (c.source.kind === "files" || !c.source.taskId || checked.has(c.source.taskId) || isContainerId(map, c.source.taskId) ||
+    (c.source.kind === "files" || !c.source.taskId || checked.has(c.source.taskId) ||
       !map.tasks.some((t) => c.source.kind !== "files" && t.id === c.source.taskId))).map((connection) => {
     const task = map.tasks.find((task) => task.id === connection.target)
     const spec = catalog.tasks.find((spec) => spec.name === task?.task)
@@ -254,11 +224,11 @@ export function workflowDiagnosticRequest(
         (role) => role.name === connection.role
       )
     const source = resolvedSource(map, connection.source, role?.kind)
-    // Inside a 각각 반복 a matched outside connection is checked with its first pass's files.
-    const first = task?.firstPass?.[connection.id]
+    // Inside regions a connection crossing into them is checked with the first round's files.
+    const first = task?.firstRound?.[connection.id]
     return {
       ...connection,
-      // A first pass with no match waits like a source not yet run; the warning names the pass.
+      // A first round with no match waits like a source not yet run; the warning names the round.
       source: !first || source.kind === "pending"
         ? source
         : first.length || source.kind !== "result" || !source.taskId
@@ -311,7 +281,7 @@ export function workflowDiagnosticSignature(
     }),
     connections: map.connections,
     runs: map.runs,
-    // Container membership decides what each foreach, for and if runs.
+    // Region membership decides what each region runs.
     members: map.tasks.map((task) => (isContainerId(map, task.subflowId) ? task.subflowId : "")),
   })
 }

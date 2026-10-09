@@ -1,7 +1,6 @@
 import { ccdTasks } from "@/lib/calibration"
-import { inputPorts, portFrames } from "@/lib/calibration-ports"
 import { assigned } from "@/lib/task-map/inputs"
-import { outputPorts, groupEqual } from "@/lib/calibration-ports"
+import { inputSlots } from "@/lib/node-interaction"
 import { CalibrationControls } from "@/components/calibration-controls"
 import { correctionFlags } from "@/lib/calibration"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -50,14 +49,8 @@ export function InspectorInputs({
     assigned(map, task, role)
       .ids.map((id) => allRows.find((r) => r.id === id))
       .filter((r): r is Frame => !!r && r.asset !== "image-list")
-  const displayPorts = inputPorts(map, task, catalog, allRows)
-  const mainFrames = portFrames(
-    map,
-    task,
-    spec.inputs[0]?.name || "input",
-    catalog,
-    allRows
-  )
+  const displayPorts = inputSlots(task, catalog)
+  const mainFrames = selectedFrames(spec.inputs[0]?.name || "input")
   const corrections =
     spec.name === "ccdproc" ? d.parameters : task.preprocess.parameters
   const changeCorrection = spec.name === "ccdproc" ? change : changePrep
@@ -69,7 +62,6 @@ export function InspectorInputs({
     specialized && spec.adapter !== "generic"
       ? displayPorts.filter(
           (s) =>
-            !s.group &&
             spec.inputs.some((input) => input.name === s.role) &&
             !correctionFlags[s.role] &&
             (!(s.role in { fixfile: 1, illum: 1, fringe: 1 }) ||
@@ -183,7 +175,7 @@ export function InspectorInputs({
           slot={(role) => (
             <FieldGroup>
               {displayPorts
-                .filter((s) => s.role === role && !s.group)
+                .filter((s) => s.role === role)
                 .map((input) => slot(input, true))}
             </FieldGroup>
           )}
@@ -202,29 +194,7 @@ export function InspectorInputs({
               ),
             ])
           )}
-          connectMaster={(role, id) => {
-            const parent = map.tasks.find((t) => t.id === id)!
-            const outputs = outputPorts(map, parent, catalog, allRows)
-            const ports = displayPorts.filter(
-              (p) => p.role === role && !p.group
-            )
-            for (const input of ports) {
-              const output = outputs.find((p) =>
-                groupEqual(p.group, input.group)
-              )
-              onInputSource?.(input.name, {
-                kind: "pending",
-                taskId: id,
-                ...(input.group
-                  ? {
-                      group: input.group,
-                      port: output?.handleId,
-                      outputRole: output?.outputRole,
-                    }
-                  : {}),
-              })
-            }
-          }}
+          connectMaster={(role, id) => onInputSource?.(role, { kind: "pending", taskId: id })}
         />
       )}
       {["imheader", "imstatistics"].includes(spec.name) && (

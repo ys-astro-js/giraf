@@ -1,7 +1,4 @@
-import type { CalibrationGroup } from "@/lib/calibration-ports"
 import type { Connection } from "@/lib/task-map"
-import { groupLabel } from "@/lib/calibration-ports"
-import { CalibrationPortLabel } from "@/components/calibration-controls"
 import { ParameterHelp } from "@/components/workbench-controls"
 import { FolderOpen, X, ArrowUp, ArrowDown, ChevronDown } from "lucide-react"
 import { CountBadge } from "@/components/count-badge"
@@ -18,9 +15,7 @@ export function InspectorFileSource({
   s,
   label,
   prefix,
-  port,
   compact,
-  role,
   limit,
   setExpanded,
   summary,
@@ -40,9 +35,7 @@ export function InspectorFileSource({
   /** Shown instead of the slot name, which then needs no description. */
   label?: string
   prefix: string
-  port: { role: string; group: CalibrationGroup } | undefined
   compact: boolean
-  role: string
   limit: number
   setExpanded: React.Dispatch<React.SetStateAction<Record<string, number>>>
   summary: string
@@ -63,21 +56,14 @@ export function InspectorFileSource({
     | undefined
   map: TaskMap
   task: Instance
-  /** Shown under the input: what each pass of a 각각 반복 receives. */
+  /** Shown under the input: what each round of a loop region receives. */
   children?: React.ReactNode
 }) {
   return (
     <Field key={s.name} className="input-slot">
       {s.valueType !== "cursor" && (
         <FieldLabel htmlFor={`${prefix}source-${s.name}`}>
-          {port ? (
-            <CalibrationPortLabel
-              role={compact ? undefined : role}
-              group={port.group}
-            />
-          ) : (
-            (label ?? s.name)
-          )}
+          {label ?? s.name}
           {s.required && <span aria-hidden="true">*</span>}
         </FieldLabel>
       )}
@@ -85,9 +71,9 @@ export function InspectorFileSource({
         id={`${prefix}source-${s.name}`}
         variant="outline"
         className="w-full min-w-0 justify-between"
-        aria-label={`${port ? role + " " + groupLabel(port.group) : (label ?? s.name)} 입력 변경`}
+        aria-label={`${label ?? s.name} 입력 변경`}
         aria-describedby={
-          !port && !compact && !label && s.valueType !== "cursor"
+          !compact && !label && s.valueType !== "cursor"
             ? `${prefix}source-${s.name}-description`
             : undefined
         }
@@ -97,7 +83,7 @@ export function InspectorFileSource({
         <span className="truncate">{summary}</span>
         <ChevronDown />
       </Button>
-      {!port && !compact && !label && s.valueType !== "cursor" && (
+      {!compact && !label && s.valueType !== "cursor" && (
         <ParameterHelp
           p={{ name: s.name, prompt: s.label, min: "", max: "" }}
           id={`${prefix}source-${s.name}-description`}
@@ -123,7 +109,7 @@ export function InspectorFileSource({
           <TabsList className="w-full">
             <TabsTrigger value="files">파일</TabsTrigger>
             {/* A port may limit where its files come from (node schema `sources`). */}
-            {!port && acceptsSource(s, "expression") && (
+            {acceptsSource(s, "expression") && (
               <TabsTrigger value="expression">표현식</TabsTrigger>
             )}
             {acceptsSource(s, "node") && (

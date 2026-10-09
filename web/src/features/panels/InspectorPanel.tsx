@@ -9,8 +9,6 @@ import { useLayout } from "@/features/workbench/layout-store"
 import { usePanel } from "@/features/dock/context"
 import { registerLockTarget } from "@/features/dock/store"
 import { activeJob } from "@/lib/queries"
-import { parsePort } from "@/lib/calibration-ports"
-import { connectInputPort } from "@/lib/workflow-flow"
 import { isSourceNode } from "@/lib/file-nodes"
 import { holdPset, takeOutPset } from "@/lib/values"
 import { setValueMode } from "@/lib/value-modes"
@@ -134,7 +132,7 @@ export function InspectorPanel() {
     try {
       const m = w.editor.getMap()
       // Files chosen for an input edit the source node that already feeds it alone.
-      if (source.kind === "files" && !parsePort(role, "input")) {
+      if (source.kind === "files") {
         const fed = m.connections.filter(
           (c) => c.target === task.id && c.role === role
         )
@@ -163,18 +161,7 @@ export function InspectorPanel() {
         }
       }
       const value = source.kind === "expression" ? source.value : ""
-      const connected =
-        parsePort(role, "input") && source.kind !== "expression"
-          ? connectInputPort(
-              m,
-              catalog,
-              w.rows,
-              task.id,
-              role,
-              source,
-              source.kind !== "files"
-            )
-          : connect(
+      const connected = connect(
               m,
               task.id,
               role,
@@ -195,7 +182,7 @@ export function InspectorPanel() {
                 ...t,
                 expressions: {
                   ...t.expressions,
-                  [parsePort(role, "input")?.role || role]: value,
+                  [role]: value,
                 },
               }
             : t

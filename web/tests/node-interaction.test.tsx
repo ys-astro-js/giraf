@@ -18,7 +18,7 @@ import {
 } from "../src/lib/node-interaction"
 import { plannedOutputs } from "../src/lib/workbench"
 import { editableOutputPorts } from "../src/lib/output-ports"
-import { outputPorts } from "../src/lib/calibration-ports"
+import { outputPorts } from "../src/lib/output-ports"
 import { connectFlow, flowEdges, connectionFeedback } from "../src/lib/workflow-flow"
 import type { Catalog, Preferences, Spec, Frame } from "../src/lib/workbench"
 const image: Spec = {
@@ -282,7 +282,7 @@ test('generic inputs stay visible while unused optional outputs stay compact aft
   expect(compact.outputs.map(s=>s.name)).toEqual([])
   expect(compact.primaryOutputRole).toBe("output")
   expect(editableOutputPorts(task,spec,map).map(p=>p.id)).toEqual(['$default'])
-  expect(outputPorts(map,task,cat,[]).map(p=>p.outputRole)).toEqual([])
+  expect(outputPorts(map,task,cat).map(p=>p.outputRole)).toEqual([])
   spec.outputs![0].mode = 'single'
   spec.outputs![0].eachWhen = 'project'
   task.draft.inputs.input = ['a','b']

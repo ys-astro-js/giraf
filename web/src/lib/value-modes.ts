@@ -89,7 +89,7 @@ export function valueDescription(map: TaskMap, catalog: Catalog, task: Instance)
     case "value-header":
       return "파일 헤더의 키워드 값을 전달"
     case "value-compute":
-      return `받은 값을 ${by(partition)}계산해 전달`
+      return "받은 값을 계산해 전달"
     case "pset": {
       const pset = task.draft.pset
       if (!pset) return "작업 설정을 여러 작업에 전달"

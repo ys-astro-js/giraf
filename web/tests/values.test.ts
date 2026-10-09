@@ -210,7 +210,7 @@ test("a value loops only when it comes to read itself", () => {
 test("values format compactly for rows and labels", () => {
   expect(formatValue({ values: [3.2149] })).toBe("3.215")
   expect(formatValue({ values: [8.28, 8, 7.5, 9] })).toBe("8.28, 8 외 2개")
-  expect(formatValue({ values: [3.38, 3.07], groups: { keyword: "FILTER", values: { B: [3.38], V: [3.07] } } })).toBe("B 3.38, V 3.07")
+  expect(formatValue({ values: [3.38, 3.07], labels: [{ FILTER: "B" }, { FILTER: "V" }] })).toBe("B 3.38, V 3.07")
   expect(formatValue({ error: "x" })).toBe("")
 })
 

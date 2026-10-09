@@ -33,18 +33,9 @@ test("an IRAF task shows every tab", () => {
   expect(tabsOf(imstat)).toEqual(["info", "input", "output", "dependencies", "settings"])
 })
 
-test("containers show only what they hold", () => {
-  // 각각 반복: its list is its input; 설정 holds the keywords it runs by.
-  expect(tabsOf(giraf("foreach", files))).toEqual(["info", "input", "dependencies", "settings"])
-  // 반복: a number range, no input.
-  expect(tabsOf(giraf("for"))).toEqual(["info", "dependencies", "settings"])
-  // 조건 분기: routed files and a condition.
-  expect(tabsOf(giraf("if", [{ ...files[0], name: "input" }]))).toEqual([
-    "info",
-    "input",
-    "dependencies",
-    "settings",
-  ])
+test("a loop region shows what it repeats by", () => {
+  // No ports: its tasks take their files; 설정 holds what it repeats by.
+  expect(tabsOf(giraf("foreach"))).toEqual(["info", "dependencies", "settings"])
 })
 
 test("value and pset nodes hand on values, not files", () => {

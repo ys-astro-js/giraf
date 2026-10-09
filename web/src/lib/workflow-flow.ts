@@ -1,5 +1,4 @@
-import {customOutput, customPortHandle, memberHandle, parseMemberHandle} from "./output-ports"
-import {parsePort,sourceForGroup,targetGroupFor,matchesGroup,groupEqual,inputPorts,primaryOutputRole} from "./calibration-ports"
+import {customOutput, customPortHandle, primaryOutputRole} from "./output-ports"
 import {
   applyNodeChanges,
   Position,
@@ -21,18 +20,13 @@ import { subflowColor } from "./subflow"
 import { helperKind } from "./helper-nodes"
 import { compoundEdges, compoundPorts, memberConnection } from "./compound"
 import {
-  COLLECT_PORT,
-  FLOW_HEADER,
-  FLOW_ROW,
   checkContainerConnection,
-  connectCollect,
   containerTask,
   flowBoundary,
   flowPorts,
   flowRun,
   flowStatement,
   isContainerId,
-  isFlowSpec,
   type FlowPort,
   type FlowRun,
   containerLabel,
@@ -56,7 +50,7 @@ export type TaskFlowNode = Node<
   },
   "task"
 >
-/** A foreach, for or if container drawn on its group (lib/containers). */
+/** A loop region drawn on its group (lib/containers). */
 export type FlowView = { run: FlowRun; icon?: string; label: string; statement: string; ports: FlowPort[] }
 export type SubflowNode = Node<
   { group: Subflow; count: number; minWidth: number; minHeight: number; flow?: FlowView },
@@ -121,7 +115,7 @@ export function flowNodes(
           x: geometry.outputX,
           y: geometry.outputY,
         },
-        ...[...geometry.outputs.filter(slot=>slot.handleId!=="output"),...geometry.members].map((slot)=>({id:slot.handleId,type:"source" as const,position:Position.Right,x:slot.x,y:slot.y})),
+        ...geometry.outputs.filter(slot=>slot.handleId!=="output").map((slot)=>({id:slot.handleId,type:"source" as const,position:Position.Right,x:slot.x,y:slot.y})),
         ...geometry.roles.map((role) => ({
           id: role.name,
           type: "target" as const,
@@ -181,8 +175,7 @@ export function flowNodes(
       ...children.map((t) => t.position.x + (t.initialWidth ?? 248) + 24)
     )
     const minHeight = Math.max(
-      // An if keeps room for both lanes.
-      view?.run === "if" ? FLOW_HEADER + FLOW_ROW * 4 : 160,
+      160,
       ...children.map((t) => t.position.y + t.data.geometry.occupiedHeight + 24)
     )
     return {
@@ -220,15 +213,11 @@ export function flowNodes(
 export function outputHandle(source: Source, spec: Spec | undefined, task?: Instance): string {
   // Value and pset outputs are named by their handle.
   if (isValueSource(source) && source.kind !== "files") return source.outputRole!
-  // A container's item, lanes and results are its own ports.
-  if (isFlowSpec(spec) && source.kind !== "files" && source.outputRole) return "output:" + source.outputRole
-  if (source.kind !== "files" && source.partition)
-    return memberHandle(outputHandle({ ...source, partition: undefined }, spec, task), source.partition.value)
   if (source.kind === "files") return "output"
   const primary = primaryOutputRole(spec, task)
   if (primary && source.outputRole === primary && (!source.port || source.port === "output:" + primary)) return "output"
+  // Ports of older documents' calibration groups are plain outputs now.
   if (source.port && !source.port.startsWith("output-group:")) return source.port
-  if (source.group) return "output"
   return source.outputRole && (spec?.outputs?.length || 0)>1 ? "output:" + source.outputRole : "output"
 }
 export function flowEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
@@ -316,12 +305,8 @@ export function connectFlow(
   const connection = memberConnection(map, drawn)
   checkContainerConnection(map, connection)
   const sourceTask=map.tasks.find(t=>t.id===connection.source)
-  // `<bundle>~<value>` picks one member of a partitioned port.
-  const member=parseMemberHandle(connection.sourceHandle)
-  const memberPort=member&&sourceTask?.outputPorts?.find(p=>p.partition&&customPortHandle(p.id)===member.base)
-  const customPort=memberPort||sourceTask?.outputPorts?.find(p=>customPortHandle(p.id)===connection.sourceHandle)
-  const sourcePort=memberPort?undefined:parsePort(connection.sourceHandle,"output")
-  if (!(customPort || sourcePort || connection.sourceHandle === "output" || connection.sourceHandle?.startsWith("output:")) || !connection.targetHandle)
+  const customPort=sourceTask?.outputPorts?.find(p=>customPortHandle(p.id)===connection.sourceHandle)
+  if (!(customPort || connection.sourceHandle === "output" || connection.sourceHandle?.startsWith("output:")) || !connection.targetHandle)
     throw Error("출력과 입력 포트를 선택해 주세요.")
   const base = replacingId
     ? {
@@ -331,52 +316,31 @@ export function connectFlow(
     : map
   // Keep a frozen result version when only the target of an existing edge changes.
   const prior = map.connections.find((c) => c.id === replacingId)
-  const outputRole=customPort ? customPort.outputRole : sourcePort ? (sourcePort.role === "$primary" ? undefined : sourcePort.role) : connection.sourceHandle?.startsWith("output:") ? connection.sourceHandle.slice(7) : primaryOutputRole(catalog.tasks.find(s=>s.name===sourceTask?.task),sourceTask)
+  const outputRole=customPort ? customPort.outputRole : connection.sourceHandle?.startsWith("output:") ? connection.sourceHandle.slice(7) : primaryOutputRole(catalog.tasks.find(s=>s.name===sourceTask?.task),sourceTask)
   const source =
     prior &&
     prior.source.kind !== "files" &&
     prior.source.taskId === connection.source &&
     outputHandle(prior.source,catalog.tasks.find(s=>s.name===sourceTask?.task),sourceTask) === connection.sourceHandle &&
-    prior.source.outputRole === outputRole && JSON.stringify(prior.source.group) === JSON.stringify(sourcePort?.group)
+    prior.source.outputRole === outputRole
       ? prior.source
-      : customPort ? customOutput(base,connection.source,customPort,undefined,memberPort?member!.value:undefined) : nodeOutput(base, connection.source, outputRole,sourcePort?.group)
-  // A container collects any number of member outputs.
-  if (connection.targetHandle === COLLECT_PORT && isContainerId(map, connection.target))
-    return connectCollect(base, connection.target, source)
-  return connectInputPort(base,catalog,rows,connection.target,connection.targetHandle,source,true)
+      : customPort ? customOutput(base,connection.source,customPort) : nodeOutput(base, connection.source, outputRole)
+  const connected = connectInputPort(base,catalog,rows,connection.target,connection.targetHandle,source)
+  // A replaced edge keeps how it receives at region borders.
+  if (!prior?.flow) return connected
+  const added = connected.connections.at(-1)
+  return added && !map.connections.some((c) => c.id === added.id)
+    ? { ...connected, connections: connected.connections.map((c) => (c.id === added.id ? { ...c, flow: prior.flow } : c)) }
+    : connected
 }
-/** Replace just one partition, retaining the other inputs and their provenance. */
-export function connectInputPort(map:TaskMap,catalog:Catalog,rows:Frame[],targetId:string,handle:string,incoming:Source,append=false):TaskMap {
- const target=map.tasks.find(t=>t.id===targetId)
- if(!target)throw Error('대상 작업이 없습니다.')
- const parsed=parsePort(handle,'input'),roleName=parsed?.role||handle
- const group=parsed?.group||targetGroupFor(target,roleName,incoming)
- const all=[...rows,...map.runs.flatMap(r=>r.products)]
- const source=group && !(incoming.kind==='files'&&!incoming.ids.length)?sourceForGroup(incoming,group,all):incoming
- if(!(source.kind==='files'&&!source.ids.length) && !connectionChoices(map,catalog,source,targetId,rows,roleName).some(s=>s.name===roleName))throw Error('이 입력에는 연결할 수 없습니다.')
- const spec=catalog.tasks.find(s=>s.name===target.task)!
- const multiple=spec.inputs.find(s=>s.name===roleName)?.multiple ?? catalog.ccdproc.inputs.find(s=>s.name===roleName)?.multiple ?? false
- if(group&&append&&multiple){
-  const ids=target.draft.inputs[roleName]||target.preprocess.inputs[roleName]||[]
-  const base=ids.length?connect(map,targetId,roleName,{kind:'files',ids,label:roleName},true):map
-  return connect(base,targetId,roleName,source,true,group)
- }
- if(!group)return connect(map,targetId,roleName,source,multiple || target.task==='ccdproc'&&['zero','dark','flat'].includes(roleName))
- const keep=(ids:string[])=>ids.filter(id=>{const frame=all.find(r=>r.id===id);return !frame||!matchesGroup(frame,group)})
- const otherGroups=inputPorts(map,target,catalog,rows).filter(p=>p.role===roleName&&p.group&&!groupEqual(p.group,group)).map(p=>p.group!)
- const connections=map.connections.flatMap(c=>{
-  if(c.target!==targetId||c.role!==roleName)return [c]
-  if(c.targetGroup)return groupEqual(c.targetGroup,group)?[]:[c]
-  if(c.source.kind==='pending')return otherGroups.map(g=>({...c,id:crypto.randomUUID(),source:sourceForGroup(c.source,g,all),targetGroup:g}))
-  const ids=keep(c.source.ids)
-  return ids.length?[{...c,source:{...c.source,ids}}]:[]
- })
- const draftIds=target.draft.inputs[roleName]||target.preprocess.inputs[roleName]||[]
- const remaining=keep(draftIds)
- if(remaining.length)connections.push({id:crypto.randomUUID(),target:targetId,role:roleName,source:{kind:'files',ids:remaining,label:roleName}})
- const base={...map,connections}
- return connect(base,targetId,roleName,source,true,group)
-
+/** Connect a source to one input of a task. */
+export function connectInputPort(map:TaskMap,catalog:Catalog,rows:Frame[],targetId:string,role:string,source:Source):TaskMap {
+  const target=map.tasks.find(t=>t.id===targetId)
+  if(!target)throw Error('대상 작업이 없습니다.')
+  if(!(source.kind==='files'&&!source.ids.length) && !connectionChoices(map,catalog,source,targetId,rows,role).some(s=>s.name===role))throw Error('이 입력에는 연결할 수 없습니다.')
+  const spec=catalog.tasks.find(s=>s.name===target.task)!
+  const multiple=spec.inputs.find(s=>s.name===role)?.multiple ?? catalog.ccdproc.inputs.find(s=>s.name===role)?.multiple ?? false
+  return connect(map,targetId,role,source,multiple || target.task==='ccdproc'&&['zero','dark','flat'].includes(role))
 }
 export function changeFlowNodes(
   map: TaskMap,

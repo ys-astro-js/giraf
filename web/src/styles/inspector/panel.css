@@ -140,7 +140,7 @@
   gap: 4px;
   min-width: 0;
 }
-/* 각각 반복: the keywords it runs by, each with its values. */
+/* A loop region: the keywords it runs by, each with its values. */
 .keyword-list {
   display: flex;
   flex-direction: column;

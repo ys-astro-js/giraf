@@ -1,5 +1,4 @@
-import { matchesFiles, partitionValue } from "@/lib/output-ports"
-import { matchesGroup } from "@/lib/calibration-ports"
+import { matchesFiles } from "@/lib/output-ports"
 import { acceptsAsset } from "@/lib/workbench"
 import { type Catalog, type Job } from "@/lib/workbench"
 import { type Source, type TaskMap } from "./model"
@@ -192,8 +191,7 @@ export function bindWorkflowOutputs(
           p.role !== "$log" &&
           matchesFiles(p, source.files) &&
           acceptsAsset(slot.kind, p.asset) &&
-          (!source.outputRole || p.role === source.outputRole) &&
-          (!source.group || matchesGroup(p, source.group))
+          (!source.outputRole || p.role === source.outputRole)
       )
       if (!products.length || (!slot.multiple && products.length > 1)) {
         if (source.files !== undefined) {
@@ -204,7 +202,6 @@ export function bindWorkflowOutputs(
               taskId: instanceId,
               port: source.port,
               files: source.files,
-              ...(source.group ? { group: source.group } : {}),
               ...(source.outputRole ? { outputRole: source.outputRole } : {}),
             },
           }
@@ -233,10 +230,8 @@ export function resolvedSource(
 ): Source {
   if (source.kind !== "pending") return source
   // A pass output carries its input files as they are now, without a run.
-  const { partition } = source
   const passed = source.outputRole
-    ? map.tasks.find((t) => t.id === source.taskId)?.passed?.[
-        source.outputRole + (partition ? "~" + partition.value : "")]
+    ? map.tasks.find((t) => t.id === source.taskId)?.passed?.[source.outputRole]
     : undefined
   // A port's file filter matches labels the run publishes, so it waits for that run.
   if (passed && (!source.files || source.files.every((f) => f === "*")))
@@ -248,8 +243,6 @@ export function resolvedSource(
       p.role !== "$log" &&
       matchesFiles(p, source.files) &&
       (!source.outputRole || p.role === source.outputRole) &&
-      (!source.group || matchesGroup(p, source.group)) &&
-      (!partition || partitionValue(p, partition.keyword) === partition.value) &&
       (!kind || acceptsAsset(kind, p.asset))
   )
   return products.length

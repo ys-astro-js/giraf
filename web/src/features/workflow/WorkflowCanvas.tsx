@@ -142,21 +142,6 @@ export function TaskMapView({
       ),
     [update]
   )
-  const setPortOpen = useCallback(
-    (nodeId: string, portId: string, open: boolean) =>
-      update(
-        (m) => ({
-          ...m,
-          tasks: m.tasks.map((t) =>
-            t.id === nodeId
-              ? { ...t, outputPorts: t.outputPorts?.map((p) => (p.id === portId ? { ...p, open: open || undefined } : p)) }
-              : t
-          ),
-        }),
-        open ? "출력 묶음 펼치기" : "출력 묶음 접기"
-      ),
-    [update]
-  )
   const setGroupCollapsed = useCallback(
     (id: string, collapsed: boolean) =>
       update(
@@ -329,7 +314,6 @@ export function TaskMapView({
               duplicate,
               open,
               setCollapsed,
-              setPortOpen,
               setGroupCollapsed,
               onInput: selectingGroup ? undefined : onInput,
               onParameter: selectingGroup ? undefined : onParameter,

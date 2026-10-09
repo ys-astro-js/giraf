@@ -1,5 +1,3 @@
-import {Badge} from "@/components/ui/badge"
-import type {CalibrationGroup} from "@/lib/calibration-ports"
 import type {ReactNode} from 'react'
 import type {Frame,Values} from '@/lib/workbench'
 import {metadataItems,type MetadataMode,correctionFlags,correctionRoles,type CalibrationOptions} from '@/lib/calibration'
@@ -21,13 +19,6 @@ export function CalibrationOverview({frames,mode='science'}:{frames:Frame[];mode
    <TableCell className="text-right">{g.count}개</TableCell>
   </TableRow>)}</TableBody></Table>:<p className="text-muted-foreground text-sm">입력 영상을 연결해 주세요.</p>}
  </div>
-}
-export function CalibrationPortLabel({role,group}:{role?:string;group:CalibrationGroup}) {
- return <span className="calibration-port-label">
-  {role&&<span className="calibration-port-role">{role}</span>}
-  {'filter' in group&&<Badge variant="filter" data-filter={group.filter || undefined} aria-label="Filter">{group.filter||'미확인'}</Badge>}
-  {'exposure' in group&&<span className="calibration-value" aria-label="Exposure time">{group.exposure===null?'미확인':<><span>{group.exposure}</span><span>s</span></>}</span>}
- </span>
 }
 export function CalibrationControls({task,parameters,changeParameter,slot}:{
  task:string;options:CalibrationOptions|undefined;parameters:Values;frames:Frame[];candidates:Record<string,Frame[]>;pending:Record<string,boolean>;change:(value:CalibrationOptions)=>void;changeParameter:(key:string,value:string)=>void;slot:(role:string)=>ReactNode;connectMaster:(role:string,id:string)=>void;masters:Record<string,{id:string;label:string}[]>;customMapping:boolean;repair?:(role:string)=>void

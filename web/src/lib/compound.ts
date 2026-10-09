@@ -6,7 +6,7 @@ import { NODE_METRICS } from "./node-interaction"
 export const COMPOUND_HEADER = 56
 /** Wider than a task node: the group heading carries edit, count, expand and run. */
 export const COMPOUND_WIDTH = 320
-import { customPortHandle, parseMemberHandle } from "./output-ports"
+import { customPortHandle } from "./output-ports"
 
 /** A collapsed group's boundary handles name the member port they stand for. */
 export const compoundInputHandle = (member: string, role: string) => `in:${member}:${role}`
@@ -26,8 +26,6 @@ export function collapsedGroupOf(map: TaskMap, taskId: string): Subflow | undefi
 }
 
 function outputName(task: Instance | undefined, handle: string): string {
-  const member = parseMemberHandle(handle)
-  if (member) return `${outputName(task, member.base)} ${member.value || "값 없음"}`
   const named = task?.outputPorts?.find((p) => customPortHandle(p.id) === handle)?.name.trim()
   if (named) return named
   if (handle.startsWith("output:")) return handle.slice(7)

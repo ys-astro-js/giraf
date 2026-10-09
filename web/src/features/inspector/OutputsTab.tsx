@@ -76,7 +76,7 @@ export function InspectorOutputs({
     : spec.output
       ? [{ ...spec.output, kind: spec.kind, label: spec.output.name }]
       : []
-  // Inside a 각각 반복 or 반복, names can take each iteration's values.
+  // Inside loop regions, names can take each round's values.
   const variables = memberVariables(map, catalog, task)
   function outputField(output: OutputSlot, prefix = "") {
     const id = `${prefix}generic-output-${output.name}`

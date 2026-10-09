@@ -1,8 +1,7 @@
 import { customOutput, customPortHandle } from "@/lib/output-ports"
-import { groupLabel } from "@/lib/calibration-ports"
 import { ccdTasks, calibrationLabels } from "@/lib/calibration"
 import { acceptsSource, isGirafNode, taskDisplayName } from "@/lib/workbench"
-import { Fragment, memo, useContext, useEffect, useRef, useState } from "react"
+import { memo, useContext, useEffect, useRef, useState } from "react"
 import {
   Position,
   useConnection,
@@ -12,8 +11,6 @@ import {
 } from "@xyflow/react"
 import {
   ArrowRight,
-  ChevronDown,
-  ChevronRight,
   ChevronsDownUp,
   Copy,
   File,
@@ -50,22 +47,13 @@ import {
 import type { Source } from "@/lib/task-map"
 import { valueDescription } from "@/lib/value-modes"
 
-import { innerPortLabel, isContainerId } from "@/lib/containers"
+import { isContainerId } from "@/lib/containers"
 import { WorkflowContext } from "./context"
 import { Handle } from "./Handle"
 import { StatusIcon } from "./StatusIcon"
 
 const count = (source: Source) =>
   source.kind === "result" ? `${source.ids.length}개` : ""
-const valueLabel = (value: string) => value || "값 없음"
-/** Filter letters carry their color; any other header value is neutral. */
-function ValueChip({ value }: { value: string }) {
-  return (
-    <span className="partition-chip" data-filter={value || undefined}>
-      {valueLabel(value)}
-    </span>
-  )
-}
 
 const activate = (e: React.KeyboardEvent<HTMLElement>) => {
   if (e.key === "Enter" || e.key === " ") {
@@ -91,7 +79,6 @@ export const TaskNode = memo(function TaskNode({
     onInput,
     open,
     setCollapsed,
-    setPortOpen,
     currentIssues,
     values,
     onParameter,
@@ -198,7 +185,6 @@ export const TaskNode = memo(function TaskNode({
     String(geometry.preview),
     ...geometry.roles.map((s) => s.name),
     ...geometry.outputs.map((s) => s.handleId + ":" + s.name),
-    ...geometry.members.map((s) => s.handleId + ":" + s.y),
     ...params.map((s) => s.handleId),
     ...geometry.values.map((s) => s.handleId),
   ].join("|")
@@ -329,7 +315,7 @@ export const TaskNode = memo(function TaskNode({
     )
     const result = custom
       ? customOutput(map, id, custom)
-      : nodeOutput(map, id, slot.outputRole, slot.group)
+      : nodeOutput(map, id, slot.outputRole)
     return { slot, result, name: slot.name.trim() }
   })
 
@@ -359,107 +345,20 @@ export const TaskNode = memo(function TaskNode({
     </Handle>
   )
 
-  const portFor = (handleId: string) =>
-    task.outputPorts?.find((p) => customPortHandle(p.id) === handleId)
-  const memberHandleElement = (
-    member: (typeof geometry.members)[number],
-    stacked = false
-  ) => {
-    const port = portFor(member.base)
-    const result = port ? customOutput(map, id, port, undefined, member.value) : output
-    return (
-      <Handle
-        key={member.handleId}
-        type="source"
-        position={Position.Right}
-        id={member.handleId}
-        role="button"
-        tabIndex={isConnectable && !stacked ? 0 : -1}
-        isConnectable={isConnectable}
-        className="workflow-output-handle workflow-member-handle"
-        data-filter={member.value || undefined}
-        data-stacked={stacked || undefined}
-        data-connected={isOutputConnected(member.handleId)}
-        aria-label={`${task.label} ${valueLabel(member.value)} 출력 연결`}
-        title={`${valueLabel(member.value)} ${result.kind === "result" ? result.ids.length + "개" : "출력 대기"}`}
-        onKeyDown={activate}
-      >
-        {!stacked && <span>{valueLabel(member.value)}</span>}
-      </Handle>
-    )
-  }
   const outputRow = (
     handleId: string,
     name: string,
     result: Source,
     fallback: string
-  ) => {
-    const bundle = geometry.bundles[handleId]
-    const port = portFor(handleId)
-    if (!bundle || !port)
-      return (
-        <div className="node-output-row" key={handleId}>
-          <span className="node-output-name" data-unnamed={!name} data-full-text={name || fallback}>
-            {name || fallback}
-          </span>
-          <span className="node-output-count">{count(result)}</span>
-          {outputHandleElement(handleId, name, result)}
-        </div>
-      )
-    const label = name || fallback
-    const members = geometry.members.filter((m) => m.base === handleId)
-    return (
-      <Fragment key={handleId}>
-        <div className="node-output-row" data-bundle="true">
-          <button
-            className="node-bundle-toggle nodrag nopan"
-            aria-label={`${label} ${bundle.open ? "접기" : "펼치기"}`}
-            aria-expanded={bundle.open}
-            onClick={(e) => {
-              e.stopPropagation()
-              setPortOpen(id, port.id, !bundle.open)
-            }}
-          >
-            {bundle.open ? <ChevronDown /> : <ChevronRight />}
-          </button>
-          <span className="node-output-name" data-unnamed={!name} data-full-text={label}>
-            {label}
-          </span>
-          <span className="node-output-keyword">{bundle.keyword}</span>
-          <span className="node-output-chips" data-full-text={bundle.values.map(valueLabel).join(" ")}>
-            {bundle.values.map((value) => (
-              <ValueChip key={value} value={value} />
-            ))}
-          </span>
-          <Handle
-            type="source"
-            position={Position.Right}
-            id={handleId}
-            role="button"
-            tabIndex={isConnectable ? 0 : -1}
-            isConnectable={isConnectable}
-            className="workflow-output-handle workflow-bundle-handle"
-            data-connected={isOutputConnected(handleId)}
-            aria-label={`${task.label} ${label} 묶음 출력 연결`}
-            title={`${label} ${bundle.keyword} ${bundle.values.length}개 묶음`}
-            onKeyDown={activate}
-          >
-            <span>{bundle.values.length}</span>
-          </Handle>
-          {!bundle.open && members.map((m) => memberHandleElement(m, true))}
-        </div>
-        {bundle.open &&
-          members.map((m) => (
-            <div className="node-member-row" key={m.handleId}>
-              <span className="node-output-count">
-                {count(customOutput(map, id, port, undefined, m.value))}
-              </span>
-              {memberHandleElement(m)}
-            </div>
-          ))}
-      </Fragment>
-    )
-  }
+  ) => (
+    <div className="node-output-row" key={handleId}>
+      <span className="node-output-name" data-unnamed={!name} data-full-text={name || fallback}>
+        {name || fallback}
+      </span>
+      <span className="node-output-count">{count(result)}</span>
+      {outputHandleElement(handleId, name, result)}
+    </div>
+  )
 
   const preview = geometry.preview ? nodePreviewIds(map, id) : []
   const frames = map.runs.flatMap((r) => r.products)
@@ -512,7 +411,6 @@ export const TaskNode = memo(function TaskNode({
               geometry.primary || i > 0
             )
           )}
-          {geometry.members.map((m) => memberHandleElement(m, true))}
           {params.map((row, i) => paramHandle(row, geometry.roles.length > 0 || i > 0))}
           {geometry.values.map((row, i) =>
             valueHandle(row.handleId, row.name, geometry.primary || outputSlots.length > 0 || i > 0)
@@ -574,12 +472,6 @@ export const TaskNode = memo(function TaskNode({
                     c.role === slot.role &&
                     (c.source.kind !== "files" || c.source.ids.length > 0)
                 )
-                // A link from one member of a bundle names its value.
-                const members = links.flatMap((c) =>
-                  c.source.kind !== "files" && c.source.partition
-                    ? [c.source.partition.value]
-                    : []
-                )
                 const summary =
                   (task.draft.textInputs?.[slot.name]?.trim()
                     ? "직접 입력 " +
@@ -599,8 +491,7 @@ export const TaskNode = memo(function TaskNode({
                         .map((c) =>
                           c.source.kind === "files"
                             ? `파일 ${c.source.ids.length}개`
-                            : innerPortLabel(map, c.source) ??
-                              map.tasks.find((t) => "taskId" in c.source && t.id === c.source.taskId)
+                            : map.tasks.find((t) => "taskId" in c.source && t.id === c.source.taskId)
                                 ?.label ?? "실행 결과"
                         )
                         .join(", ")
@@ -620,14 +511,13 @@ export const TaskNode = memo(function TaskNode({
                   )
                 })
                 // A file source's files are ready without running it.
-                // A container's item or lane arrives as it runs.
                 const pending =
                   !fromFiles &&
                   links.some((c) => c.source.kind === "pending" && !isContainerId(map, c.source.taskId))
                 const key = ccdTasks.has(task.task)
                   ? calibrationLabels[slot.role] || slot.role
                   : slot.role
-                const about = `${slot.label || slot.name}${slot.group ? ` ${groupLabel(slot.group)}` : ""}`
+                const about = slot.label || slot.name
                 const shown = pending ? `${summary} 출력 대기` : summary
                 return (
                   <div
@@ -667,9 +557,6 @@ export const TaskNode = memo(function TaskNode({
                             />
                           )}
                           {shown}
-                          {members.map((value, i) => (
-                            <ValueChip key={i} value={value} />
-                          ))}
                         </span>
                         {!enabled && (
                           <span className="node-input-flag">비활성</span>
@@ -679,7 +566,7 @@ export const TaskNode = memo(function TaskNode({
                       <TooltipContent className="flex-col items-start">
                         {about !== key && <span>{key}</span>}
                         <span>{about}</span>
-                        <span>{[shown, ...members.map(valueLabel)].join(" ")}</span>
+                        <span>{shown}</span>
                       </TooltipContent>
                     </Tooltip>
                   </div>

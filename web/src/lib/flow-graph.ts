@@ -1,25 +1,15 @@
 import type { TaskMap } from "./task-map/model"
 
 /**
- * A foreach, for or if container is a GIRAF node whose task id is also the id
- * of its group (lib/containers). Its boundary has two sides: what enters from
- * outside (its input, condition values) feeds the members through its inner
- * ports, and what the members hand back (`result`) leaves as `results`. Cycle
- * checks treat the two sides as separate vertices, so an inner connection
- * never looks like a loop through the container.
+ * A loop region is a GIRAF node whose task id is also the id of its group
+ * (lib/containers). It has no file ports; only its value outputs
+ * (`value:<label>`) start connections, to tasks inside it.
  */
-export const COLLECT_PORT = "result"
-export const RESULTS_PORT = "results"
-
 export const isContainerId = (map: TaskMap, id: string | undefined) =>
   !!id && !!map.subflows?.some((g) => g.id === id) && map.tasks.some((t) => t.id === id)
 
-function sourceVertex(map: TaskMap, ports: ValuePorts, id: string, outputRole?: string) {
-  if (ports(id)) return `${id}>${outputRole ?? ""}`
-  return isContainerId(map, id) ? (outputRole === RESULTS_PORT ? `out:${id}` : `in:${id}`) : id
-}
-function targetVertex(map: TaskMap, id: string, role?: string) {
-  return isContainerId(map, id) ? (role === COLLECT_PORT ? `out:${id}` : `in:${id}`) : id
+function sourceVertex(ports: ValuePorts, id: string, outputRole?: string) {
+  return ports(id) ? `${id}>${outputRole ?? ""}` : id
 }
 
 /**
@@ -39,16 +29,14 @@ function reaches(map: TaskMap, ports: ValuePorts | undefined, target: string, ro
   }
   const into = (id: string, role: string | undefined) => {
     const fed = portsOf(id)
-    if (!fed) return targetVertex(map, id, role)
+    if (!fed) return id
     const vertex = `${id}<${role ?? ""}`
     for (const output of fed(role ?? "")) add(vertex, `${id}>${output}`)
     return vertex
   }
   for (const c of map.connections)
     if (c.source.kind !== "files" && c.source.taskId)
-      add(sourceVertex(map, portsOf, c.source.taskId, c.source.outputRole), into(c.target, c.role))
-  for (const group of map.subflows ?? [])
-    if (isContainerId(map, group.id)) add(`in:${group.id}`, `out:${group.id}`)
+      add(sourceVertex(portsOf, c.source.taskId, c.source.outputRole), into(c.target, c.role))
   const seen = new Set<string>()
   const stack = [into(target, role)]
   while (stack.length) {
@@ -68,5 +56,5 @@ function reaches(map: TaskMap, ports: ValuePorts | undefined, target: string, ro
  */
 export function closesCycle(map: TaskMap, source: string, outputRole: string | undefined, target: string, role?: string, ports?: ValuePorts) {
   const portsOf = (id: string) => ports?.(id)
-  return reaches(map, ports, target, role, sourceVertex(map, portsOf, source, outputRole))
+  return reaches(map, ports, target, role, sourceVertex(portsOf, source, outputRole))
 }

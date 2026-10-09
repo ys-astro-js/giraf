@@ -22,7 +22,7 @@ const CHUNKS: { id: NodeChunk["id"]; label: string; runs: Run[] }[] = [
   {
     id: "script",
     label: "스크립트하기",
-    runs: ["foreach", "for", "if", VALUE_MODES[0].run],
+    runs: ["foreach", VALUE_MODES[0].run],
   },
 ]
 

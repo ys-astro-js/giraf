@@ -14,7 +14,7 @@ import {
 } from "./model"
 import type { payloadFor } from "./payload"
 import { migrateHelperView } from "@/lib/helper-nodes"
-import { migrateFlowKeywords } from "@/lib/containers"
+import { migrateRegions } from "@/lib/region-migration"
 const clone = <T,>(value: T): T => structuredClone(value)
 
 export function addTask(map: TaskMap, task: Instance): TaskMap {
@@ -56,11 +56,12 @@ export function duplicateTask(
         ...clone(link),
         id: uid(),
         target: ids.get(link.target)!,
+        // Receive modes follow the copied region.
+        ...(link.flow ? { flow: Object.fromEntries(Object.entries(link.flow).map(([region, mode]) => [ids.get(region) ?? region, clone(mode)])) } : {}),
         ...(copied && source.kind !== "files"
           ? {
               source: {
                 ...(source.port ? { port: source.port } : {}),
-                ...(source.partition ? { partition: clone(source.partition) } : {}),
                 kind: "pending" as const,
                 taskId: copied,
                 ...(source.outputRole ? { outputRole: source.outputRole } : {}),
@@ -141,7 +142,7 @@ export function migrateMap(prefs: Preferences, catalog: Catalog): TaskMap {
           }
         : t
     })
-    return migrateFlowKeywords(map, catalog)
+    return migrateRegions(map, catalog)
   }
   let m = emptyMap()
   for (const spec of catalog.tasks)

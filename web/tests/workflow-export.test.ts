@@ -54,7 +54,7 @@ test("internal result connections become future outputs while external file and 
   map.connections = [
     { id: "internal", target: "target", role: "input", targetGroup: { filter: "R" }, source: {
       kind: "result", taskId: "source", runId: "private-run", ids: ["private-output"], label: "private label",
-      outputRole: "output", group: { filter: "R" }, port: "output-custom:filtered", files: ["*_R.fits"],
+      outputRole: "output", port: "output-custom:filtered", files: ["*_R.fits"],
     } },
     { id: "future", target: "target", role: "zero", source: { kind: "pending", taskId: "source", outputRole: "output" } },
     { id: "file", target: "source", role: "input", source: { kind: "files", ids: ["private-file"], label: "private" } },
@@ -64,7 +64,7 @@ test("internal result connections become future outputs while external file and 
   const before = structuredClone(map)
   const result = workflowDocument(prefs, map).taskMap
   expect(result.connections).toEqual([
-    { ...map.connections[0], source: { kind: "pending", taskId: "source", outputRole: "output", group: { filter: "R" }, port: "output-custom:filtered", files: ["*_R.fits"] } },
+    { ...map.connections[0], source: { kind: "pending", taskId: "source", outputRole: "output", port: "output-custom:filtered", files: ["*_R.fits"] } },
     map.connections[1],
   ])
   expect(map).toEqual(before)
