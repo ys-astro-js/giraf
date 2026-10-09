@@ -34,13 +34,9 @@ import {
 } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
 import { loopOutputNames, loopVariable, memberVariable, variableMeaning } from "@/lib/containers"
+import { withSubject } from "@/lib/korean"
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
 
-/** `파일 이름이`, `숫자가`: the subject particle after the word's last syllable. */
-const subject = (word: string) => {
-  const code = word.charCodeAt(word.length - 1) - 0xac00
-  return word + (code >= 0 && code <= 11171 && code % 28 === 0 ? "가" : "이")
-}
 
 export function InspectorOutputs({
   task,
@@ -147,7 +143,7 @@ export function InspectorOutputs({
         )}
         {variable && (
           <FieldDescription>
-            {`{${variable}}`} 자리에는 회차마다 {subject(variableMeaning(variable))} 들어갑니다.
+            {`{${variable}}`} 자리에는 회차마다 {withSubject(variableMeaning(variable))} 들어갑니다.
           </FieldDescription>
         )}
       </Field>

@@ -26,10 +26,13 @@ export function InspectorHeading({
   checking,
   busy,
   onRun,
+  description: kindDescription,
 }: {
   task: Instance
   edit: (fn: (task: Instance) => Instance) => void
   spec: Spec
+  /** The line this node shows when it has none of its own: a 값 node's 가져오기. */
+  description?: string
   checking?: boolean
   busy: boolean
   onRun: () => void
@@ -44,7 +47,11 @@ export function InspectorHeading({
       edit((t) => ({
         ...t,
         label: identityDraft.label.trim() || t.task,
-        description: identityDraft.description,
+        // Left as shown, the line keeps following the node's kind.
+        description:
+          identityDraft.description === fallback && t.description === undefined
+            ? undefined
+            : identityDraft.description,
       }))
     setIdentityDraft(null)
     requestAnimationFrame(() => identityButton.current?.focus())
@@ -55,7 +62,8 @@ export function InspectorHeading({
     : task.label === task.task
       ? taskDisplayName(task.task)
       : task.label || taskDisplayName(task.task)
-  const description = task.description ?? spec.description ?? spec.title
+  const fallback = kindDescription ?? spec.description ?? spec.title
+  const description = task.description ?? fallback
   const bars = (
     <>
       <WindowTitle

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { inspectorTabs } from "../src/lib/inspector-tabs"
-import { makeDraft, type Spec } from "../src/lib/workbench"
+import type { Spec } from "../src/lib/workbench"
 
 const param = (name: string) => ({ name, type: "r", default: "", choices: [], prompt: "", min: "", max: "" })
 const giraf = (run: Spec["run"], inputs: Spec["inputs"] = [], extra: Partial<Spec> = {}): Spec => ({
@@ -17,7 +17,7 @@ const giraf = (run: Spec["run"], inputs: Spec["inputs"] = [], extra: Partial<Spe
   ...extra,
 })
 const files = [{ name: "items", label: "파일", kind: "any", multiple: true, required: true }]
-const tabsOf = (spec: Spec, draft = makeDraft(spec)) => inspectorTabs(spec, { draft })
+const tabsOf = (spec: Spec) => inspectorTabs(spec)
 
 test("an IRAF task shows every tab", () => {
   const imstat: Spec = {
@@ -51,12 +51,8 @@ test("value and pset nodes hand on values, not files", () => {
   expect(tabsOf(giraf("value-constant"))).toEqual(["info", "dependencies", "settings"])
   expect(tabsOf(giraf("value-header", files))).toEqual(["info", "input", "dependencies", "settings"])
   expect(tabsOf(giraf("value-compute"))).toEqual(["info", "dependencies", "settings"])
-  const pset = giraf("pset")
-  expect(tabsOf(pset, { ...makeDraft(pset), pset: { name: "datapars", task: "daophot" } })).toEqual([
-    "info",
-    "dependencies",
-    "settings",
-  ])
+  // 설정 holds 가져오기, so it shows before a 작업 설정 node holds a pset.
+  expect(tabsOf(giraf("pset"))).toEqual(["info", "dependencies", "settings"])
 })
 
 test("file nodes have no settings", () => {

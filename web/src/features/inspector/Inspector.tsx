@@ -21,6 +21,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
+  isJobNode,
   isValueNode,
   psetDefinition,
   psetSource,
@@ -29,8 +30,11 @@ import {
   PARAM_HANDLE,
   VALUE_HANDLE,
 } from "@/lib/values"
+import { parameterLink } from "@/lib/value-take"
 
 import { SearchField } from "@/components/search-field"
+import { ValueSourceEditor } from "@/components/value-source-editor"
+import { PACKAGE_SET, valueDescription } from "@/lib/value-modes"
 import { isFlowSpec } from "@/lib/containers"
 import { inspectorTabs, type InspectorTab } from "@/lib/inspector-tabs"
 import { SidebarHeader } from "@/components/ui/sidebar"
@@ -87,6 +91,12 @@ type Props = {
   /** Edits another node: a pset node this task's pset is connected to. */
   editNode?: (id: string, fn: (t: Instance) => Instance) => void
   onTakeOutPset?: (name: string) => void
+  /** 다른 값에서 가져오기 for a parameter key (lib/value-take). */
+  onTakeValue?: (key: string) => void
+  /** Switches a 값 node's 가져오기 (lib/value-modes). */
+  onValueMode?: (run: NonNullable<Spec["run"]>) => void
+  /** Has a 작업 설정 node take a task's pset. */
+  onPsetSource?: (taskId: string, name: string) => void
   onSelectNode?: (id: string) => void
   activeTab?: string
   onTabChange?: (value: string) => void
@@ -120,6 +130,9 @@ export function TaskInspector({
   parameterRequest,
   editNode,
   onTakeOutPset,
+  onTakeValue,
+  onValueMode,
+  onPsetSource,
   activeTab,
   onSelectNode,
   onTabChange,
@@ -306,7 +319,7 @@ export function TaskInspector({
       const editOwner = owner === task ? edit : (fn: (t: Instance) => Instance) => editNode?.(owner.id, fn)
       return {
         id: `set-${group.name}`,
-        label: group.name === "$package" ? spec.package : group.name,
+        label: group.name === PACKAGE_SET ? spec.package : group.name,
         parameters: group.parameters,
         values: owner.parameterSets?.[held] || defaults(group.parameters),
         keyPrefix: `${group.name}.`,
@@ -345,7 +358,7 @@ export function TaskInspector({
   )
   const hasParameters = displayGroups.some((group) => group.parameters.length > 0)
   // Only the tabs this kind of node has; a hidden tab falls back to the first.
-  const tabs = inspectorTabs(spec, task)
+  const tabs = inspectorTabs(spec)
   const requestedTab = activeTab ?? localTab
   const currentTab = tabs.includes(requestedTab as InspectorTab)
     ? requestedTab
@@ -356,28 +369,28 @@ export function TaskInspector({
     locked: (key: string) =>
       valueLinks.some((c) => c.role === PARAM_HANDLE + key),
     // A connected parameter names its source and cannot be edited or unpinned.
+    // A pset fed by a pset node takes the values connected to that node.
     linked: (key: string) => {
-      // A pset fed by a pset node takes the values connected to that node.
-      const owner = key.includes(".") ? key.slice(0, key.lastIndexOf(".")) : ""
-      const shared = owner ? psetSource(map, task.id, owner) : undefined
-      const held = shared?.draft.pset
-        ? `${shared.draft.pset.name}.${key.slice(owner.length + 1)}`
-        : key
-      const link = (shared?.draft.pset ? valueLinksInto(map, shared.id) : valueLinks).find(
-        (c) => c.role === PARAM_HANDLE + held
-      )
-      if (!link || link.source.kind === "files") return undefined
-      const from = link.source
+      const from = parameterLink(map, task.id, key)?.source
+      if (!from || from.kind === "files") return undefined
       const node = map.tasks.find((t) => t.id === from.taskId)
       return `${node?.label ?? "삭제된 노드"} ${from.outputRole?.slice(VALUE_HANDLE.length) ?? ""}`
     },
+    source: (key: string) => {
+      const from = parameterLink(map, task.id, key)?.source
+      const node = from && from.kind !== "files" ? map.tasks.find((t) => t.id === from.taskId) : undefined
+      return node && { id: node.id, label: node.label }
+    },
+    // Task parameters and a 작업 설정 node's pset, not a 값 node's own rows.
+    take: isJobNode(spec) || spec.run === "pset" ? onTakeValue : undefined,
+    select: onSelectNode,
     toggle: (key: string) =>
       edit((t) => togglePinned(t, key, !(t.pinned ?? []).includes(key))),
   }
   const psetActions = (group: ParameterGroup) => {
     if (!group.id.startsWith("set-") || spec.run === "pset") return null
     const name = group.id.slice(4)
-    if (name === "$package") return null
+    if (name === PACKAGE_SET) return null
     const shared = psetSource(map, task.id, name)
     return shared ? (
       <Button
@@ -393,8 +406,8 @@ export function TaskInspector({
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label={`${name} pset 노드로 꺼내기`}
-        title="pset 노드로 꺼내기"
+        aria-label={`${name} 값 노드로 꺼내기`}
+        title="값 노드로 꺼내기"
         onClick={() => onTakeOutPset(name)}
       >
         <SquareArrowOutUpRight />
@@ -419,6 +432,7 @@ export function TaskInspector({
         edit={edit}
         task={task}
         spec={spec}
+        description={valueDescription(map, catalog, task)}
         checking={checking}
         busy={busy}
         onRun={onRun}
@@ -522,8 +536,22 @@ export function TaskInspector({
             edit={edit}
             saveDefaults={saveDefaults}
             bodyRef={settingsBodyRef}
+            map={map}
+            catalog={catalog}
             pinning={pinning}
             actions={psetActions}
+            valueSource={
+              isValueNode(spec) && onValueMode && onPsetSource && (
+                <ValueSourceEditor
+                  map={map}
+                  catalog={catalog}
+                  spec={spec}
+                  task={task}
+                  onMode={onValueMode}
+                  onPset={onPsetSource}
+                />
+              )
+            }
           />}
         </Tabs>
       </TooltipProvider>

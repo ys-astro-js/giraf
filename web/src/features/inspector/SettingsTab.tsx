@@ -13,11 +13,12 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion"
 import { Choice } from "@/components/workbench-controls"
-import { type Spec, type Slot, type Values } from "@/lib/workbench"
-import { type Instance, resetInstanceParameters } from "@/lib/task-map"
+import { type Catalog, type Spec, type Slot, type Values } from "@/lib/workbench"
+import { type Instance, type TaskMap, resetInstanceParameters } from "@/lib/task-map"
 import { ParameterEditorFields } from "@/components/parameter-editor"
 import { type ParameterPinning } from "@/components/parameter-fields"
 import { ValueRowsEditor } from "@/components/value-rows-editor"
+import { ComputeRowsEditor } from "@/components/compute-rows-editor"
 import { FlowSettingsEditor } from "@/components/flow-settings-editor"
 import { isFlowSpec } from "@/lib/containers"
 import { isValueNode } from "@/lib/values"
@@ -35,6 +36,9 @@ export function InspectorSettings({
   bodyRef,
   pinning,
   actions,
+  valueSource,
+  map,
+  catalog,
 }: {
   groups: ParameterGroup[]
   query: string
@@ -47,6 +51,10 @@ export function InspectorSettings({
   bodyRef: RefObject<HTMLDivElement | null>
   pinning?: ParameterPinning
   actions?: (group: ParameterGroup) => ReactNode
+  /** A 값 node's 가져오기, above what that kind holds. */
+  valueSource?: ReactNode
+  map: TaskMap
+  catalog: Catalog
 }) {
   const [resetValues, setResetValues] = useState<{
     parameters: Values
@@ -55,7 +63,12 @@ export function InspectorSettings({
   return (
     <TabsContent value="settings" className="inspector-settings">
       <div ref={bodyRef} className="parameter-editor-body">
-        <ValueRowsEditor spec={spec} task={task} edit={edit} />
+        {valueSource}
+        {spec.run === "value-compute" ? (
+          <ComputeRowsEditor map={map} catalog={catalog} task={task} edit={edit} />
+        ) : (
+          <ValueRowsEditor spec={spec} task={task} edit={edit} />
+        )}
         <FlowSettingsEditor spec={spec} task={task} edit={edit} />
         {(!(isValueNode(spec) || isFlowSpec(spec)) || groups.length > 0) && (
           <ParameterEditorFields

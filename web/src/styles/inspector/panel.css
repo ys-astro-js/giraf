@@ -211,3 +211,56 @@
   flex-shrink: 0;
   gap: 2px;
 }
+/* 작업 설정's task and pset side by side under 가져오기. */
+.value-source-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+/* A 계산 row: name, 받은 값 and 계산 방법, then × + and the result. */
+.value-compute-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.value-compute-row + .value-compute-row {
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.value-compute-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+.value-compute-scale {
+  display: grid;
+  grid-template-columns: 96px 96px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.value-compute-expression {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.value-result {
+  display: block;
+  height: 36px;
+  line-height: 36px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.value-result:empty {
+  display: none;
+}
+.value-expert-toggle {
+  align-self: flex-start;
+  padding-left: 8px;
+  color: var(--muted-foreground);
+}

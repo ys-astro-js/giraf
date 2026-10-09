@@ -38,7 +38,7 @@ function TaskOption({ task, onAdd }: { task: Spec; onAdd: () => void }) {
       aria-label={`${name} 추가`}
       onClick={onAdd}
     >
-      <NodeIcon icon={task.icon} />
+      <NodeIcon icon={task.icon} run={task.run} />
       <span className="library-option-text">
         <span className="library-option-name">{name}</span>
         <span className="library-option-detail">
@@ -53,16 +53,6 @@ function TaskOption({ task, onAdd }: { task: Spec; onAdd: () => void }) {
   )
 }
 
-const valuesOpenKey = "giraf.addTask.valuesOpen"
-
-function storedValuesOpen() {
-  try {
-    return localStorage.getItem(valuesOpenKey) === "true"
-  } catch {
-    return false
-  }
-}
-
 /** A workflow node as a tile above the package tree. */
 function NodeTile({ task, onAdd }: { task: Spec; onAdd: () => void }) {
   return (
@@ -73,7 +63,7 @@ function NodeTile({ task, onAdd }: { task: Spec; onAdd: () => void }) {
       title={task.description}
       onClick={onAdd}
     >
-      <NodeIcon icon={task.icon} />
+      <NodeIcon icon={task.icon} run={task.run} />
       <span className="library-option-text">
         <span className="library-option-name">{task.title}</span>
         <span className="library-option-detail">{task.description}</span>
@@ -91,11 +81,11 @@ export function AddTaskButton() {
   const w = useWorkbench()
   const [query, setQuery] = useState("")
   const [packageOpen, setPackageOpen] = useState<Record<string, boolean>>({})
-  const [valuesOpen, setValuesOpen] = useState(storedValuesOpen)
   const { refreshing, refresh } = useRefresh(w.refreshCatalog, w.setError)
   const search = useRef<HTMLInputElement>(null)
   const tasks = w.catalog?.tasks ?? []
   // A pset node is taken out of a task's pset (inspector), not added empty.
+  // The 값 node's other 가져오기 runs have no tile but are found by search.
   const nodes = tasks.filter((task) => isGirafNode(task) && task.run !== "pset")
   const irafTasks = tasks.filter((task) => !isGirafNode(task))
   const foundNodes = query.trim()
@@ -106,15 +96,6 @@ export function AddTaskButton() {
     : []
   const found = [...foundNodes, ...foundTasks]
   const add = (task: Spec) => w.add(task.name)
-
-  function openValues(open: boolean) {
-    setValuesOpen(open)
-    try {
-      localStorage.setItem(valuesOpenKey, String(open))
-    } catch {
-      // Private windows may refuse storage; the choice still applies now.
-    }
-  }
 
   function branch(node: TaskPackage) {
     return (
@@ -217,8 +198,13 @@ export function AddTaskButton() {
               <>
                 {!!nodes.length && (
                   <div className="library-nodes library-chunks">
-                    {nodeChunks(nodes).map((chunk) => {
-                      const tiles = (
+                    {nodeChunks(nodes).map((chunk) => (
+                      <section
+                        key={chunk.id}
+                        aria-label={chunk.label}
+                        className="library-chunk"
+                      >
+                        <h3 className="library-chunk-label">{chunk.label}</h3>
                         <div className="library-tiles">
                           {chunk.nodes.map((task) => (
                             <NodeTile
@@ -228,35 +214,8 @@ export function AddTaskButton() {
                             />
                           ))}
                         </div>
-                      )
-                      return chunk.id === "values" ? (
-                        <Collapsible
-                          key={chunk.id}
-                          open={valuesOpen}
-                          onOpenChange={openValues}
-                        >
-                          <CollapsibleTrigger className="library-option library-package library-chunk-toggle">
-                            <span className="library-chunk-label">
-                              {chunk.label}
-                            </span>
-                            <ChevronRight
-                              aria-hidden="true"
-                              className="library-chevron"
-                            />
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>{tiles}</CollapsibleContent>
-                        </Collapsible>
-                      ) : (
-                        <section
-                          key={chunk.id}
-                          aria-label={chunk.label}
-                          className="library-chunk"
-                        >
-                          <h3 className="library-chunk-label">{chunk.label}</h3>
-                          {tiles}
-                        </section>
-                      )
-                    })}
+                      </section>
+                    ))}
                   </div>
                 )}
                 {taskPackageTree(irafTasks).map(branch)}

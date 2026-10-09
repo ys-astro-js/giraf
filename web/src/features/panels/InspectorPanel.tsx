@@ -12,7 +12,9 @@ import { activeJob } from "@/lib/queries"
 import { parsePort } from "@/lib/calibration-ports"
 import { connectInputPort } from "@/lib/workflow-flow"
 import { isSourceNode } from "@/lib/file-nodes"
-import { takeOutPset } from "@/lib/values"
+import { holdPset, takeOutPset } from "@/lib/values"
+import { setValueMode } from "@/lib/value-modes"
+import { takeValue } from "@/lib/value-take"
 import { isContainerId } from "@/lib/containers"
 import {
   connect,
@@ -20,6 +22,8 @@ import {
   removeTask,
   replaceRoleInputs,
   type Source,
+  type TaskMap,
+  uid,
 } from "@/lib/task-map"
 
 /**
@@ -204,6 +208,17 @@ export function InspectorPanel() {
     }
   }
 
+  function updateMap(fn: (m: TaskMap) => TaskMap, label: string) {
+    try {
+      w.update(fn, label)
+      w.setTaskError("")
+      return true
+    } catch (e) {
+      w.setTaskError((e as Error).message)
+      return false
+    }
+  }
+
   const { origin, returnEdited } = w.assetViewer
   return (
     <div className="inspector-pane">
@@ -216,16 +231,34 @@ export function InspectorPanel() {
           parameterRequest?.taskId === task.id ? parameterRequest : undefined
         }
         editNode={(id, fn) => w.edit(fn, id)}
-        onTakeOutPset={(name) => {
-          try {
-            w.update(
-              (m) => takeOutPset(m, catalog, task.id, name),
-              `${name} pset 노드로 꺼내기`
+        onTakeOutPset={(name) =>
+          updateMap(
+            (m) => takeOutPset(m, catalog, task.id, name),
+            `${name} 값 노드로 꺼내기`
+          )
+        }
+        onTakeValue={(key) => {
+          const id = uid()
+          if (
+            updateMap(
+              (m) => takeValue(m, catalog, task.id, key, w.rows, id),
+              `${key.slice(key.lastIndexOf(".") + 1)} 다른 값에서 가져오기`
             )
-          } catch (e) {
-            w.setTaskError((e as Error).message)
-          }
+          )
+            useLayout.getState().revealNode(id)
         }}
+        onValueMode={(run) =>
+          updateMap(
+            (m) => setValueMode(m, catalog, task.id, run),
+            `${task.label} 가져오기 변경`
+          )
+        }
+        onPsetSource={(taskId, name) =>
+          updateMap(
+            (m) => holdPset(m, catalog, task.id, taskId, name),
+            `${task.label} 가져오기 변경`
+          )
+        }
         activeTab={locked ? undefined : inspectorTab}
         onTabChange={locked ? undefined : setInspectorTab}
         onSelectNode={(id) => {

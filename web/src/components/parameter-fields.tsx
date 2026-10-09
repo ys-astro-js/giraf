@@ -1,4 +1,4 @@
-import { Pin, PinOff, RotateCcw } from "lucide-react"
+import { LocateFixed, Pin, PinOff, RotateCcw, Variable } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -6,6 +6,7 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Choice, ParameterHelp } from "./workbench-controls"
 import type { Param, Values } from "@/lib/workbench"
 import { TvmarkParameterControl } from "./tvmark-parameter-control"
+import { takesValue } from "@/lib/value-take"
 
 const label = (p: Param) => p.label || p.name
 export function ParamControl({
@@ -63,6 +64,11 @@ export type ParameterPinning = {
   locked: (key: string) => boolean
   linked: (key: string) => string | undefined
   toggle: (key: string) => void
+  /** The node a connected parameter takes its value from. */
+  source?: (key: string) => { id: string; label: string } | undefined
+  /** 다른 값에서 가져오기: a new 값 node feeds the parameter. */
+  take?: (key: string) => void
+  select?: (id: string) => void
 }
 /** Kept as an export for the existing callers; parameters are edited as fields. */
 export function ParameterTable({
@@ -125,6 +131,7 @@ export function ParameterTable({
         const linked = key ? pinning!.linked(key) : undefined
         const locked = !!key && pinning!.locked(key)
         const pinned = !!key && (locked || pinning!.pinned(key))
+        const source = key ? pinning!.source?.(key) : undefined
         return (
           <Field
             key={p.name}
@@ -138,6 +145,27 @@ export function ParameterTable({
                 {p.required && <span aria-hidden="true">*</span>}
               </FieldLabel>
               <span className="parameter-actions">
+              {source && pinning!.select ? (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`${source.label} 노드 선택`}
+                  title={`${source.label} 노드 선택`}
+                  onClick={() => pinning!.select!(source.id)}
+                >
+                  <LocateFixed />
+                </Button>
+              ) : key && !source && pinning!.take && takesValue(p) ? (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`${p.name} 다른 값에서 가져오기`}
+                  title="다른 값에서 가져오기"
+                  onClick={() => pinning!.take!(key)}
+                >
+                  <Variable />
+                </Button>
+              ) : null}
               {key && (
                 <Button
                   variant="ghost"

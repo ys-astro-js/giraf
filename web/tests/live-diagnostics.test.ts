@@ -28,6 +28,24 @@ test("current errors identify the node and follow its renamed label", async () =
   }
 })
 
+test("issues the editor finds show with the server's, named by their node", async () => {
+  const store = createDiagnosticStore()
+  const controller = createWorkflowDiagnosticsController(store, async () => ({ diagnostics: [issue("파일이 없습니다.")] }), 0)
+  try {
+    const local = { id: "value-source:p", severity: "warning" as const, message: "가져올 작업과 pset을 골라 주세요.", nodeId: "p", label: "값" }
+    controller.change("doc", { nodes: [{ id: "n", label: "phot" }], connections: [] }, true, [local])
+    await Bun.sleep(10)
+    expect(store.currentForNode("n").map((d) => d.message)).toEqual(["파일이 없습니다."])
+    expect(store.currentForNode("p").map((d) => [d.source, d.severity, d.message])).toEqual([["값", "warning", "가져올 작업과 pset을 골라 주세요."]])
+    expect("label" in store.currentForNode("p")[0]).toBe(false)
+    controller.change("doc", { nodes: [{ id: "n", label: "phot" }], connections: [] }, true)
+    await Bun.sleep(10)
+    expect(store.currentForNode("p")).toEqual([])
+  } finally {
+    controller.dispose()
+  }
+})
+
 test("current problems replace together, survive history clear, and never persist", () => {
   const saved: string[] = []
   const store = createDiagnosticStore({ getItem: () => null, setItem: (_, value) => saved.push(value) })

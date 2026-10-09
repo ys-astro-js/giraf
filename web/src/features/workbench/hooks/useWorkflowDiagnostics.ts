@@ -1,5 +1,6 @@
 import { diagnostics } from "@/lib/diagnostics"
 import { createWorkflowDiagnosticsController } from "@/lib/live-diagnostics"
+import { valueIssues } from "@/lib/value-modes"
 import { useEffect, useRef, useState } from "react"
 import { type Catalog, type Preferences, type Workspace } from "@/lib/workbench"
 import {
@@ -44,7 +45,9 @@ export function useWorkflowDiagnostics({
     if (!ready || !catalog) return
     diagnosticController.current?.change(
       documentId,
-      workflowDiagnosticRequest(map, catalog, workspace.folder)
+      workflowDiagnosticRequest(map, catalog, workspace.folder),
+      false,
+      valueIssues(map, catalog)
     )
     // The signature excludes position, selection, zoom and other view changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps

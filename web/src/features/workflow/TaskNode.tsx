@@ -48,6 +48,7 @@ import {
   VALUE_HANDLE,
 } from "@/lib/values"
 import type { Source } from "@/lib/task-map"
+import { valueDescription } from "@/lib/value-modes"
 
 import { innerPortLabel, isContainerId } from "@/lib/containers"
 import { WorkflowContext } from "./context"
@@ -122,12 +123,13 @@ export const TaskNode = memo(function TaskNode({
     task.label === task.task
       ? taskDisplayName(task.task)
       : task.label || taskDisplayName(task.task)
-  const description = task.description ?? spec?.description ?? spec?.title
+  const description =
+    task.description ?? valueDescription(map, catalog, task) ?? spec?.description ?? spec?.title
   // The heading's tooltip names the task, and the label too when it renames the task.
   const titleHint =
     title === taskDisplayName(task.task) ? task.task : `${title}\n${task.task}`
   // GIRAF's own nodes show what they are; IRAF tasks are known by name.
-  const icon = isGirafNode(spec) && <NodeIcon icon={spec?.icon} />
+  const icon = isGirafNode(spec) && <NodeIcon icon={spec?.icon} run={spec?.run} />
 
   const clickStart = useStore((state) => state.connectionClickStartHandle)
   const connecting = useConnection((state) => state.inProgress)

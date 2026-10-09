@@ -47,10 +47,11 @@ const specOf = (catalog: Catalog, task: Instance | undefined) =>
   catalog.tasks.find((s) => s.name === task?.task)
 
 // Names an expression reads: identifiers that are not called as functions.
+// Letters of any script name a value (`값`), as in giraf/values.py.
 const WORDS = new Set(["and", "or", "not", "INDEF"])
 export function expressionNames(text: string): string[] {
   const names: string[] = []
-  for (const match of text.replace(/"[^"]*"|'[^']*'/g, " ").matchAll(/[A-Za-z_][A-Za-z0-9_]*(\s*\()?/g)) {
+  for (const match of text.replace(/"[^"]*"|'[^']*'/g, " ").matchAll(/(?<![\p{L}\p{N}_])[\p{L}_][\p{L}\p{N}_]*(\s*\()?/gu)) {
     const name = match[0].replace(/\s*\($/, "")
     if (!match[1] && !WORDS.has(name) && !names.includes(name)) names.push(name)
   }
@@ -82,10 +83,22 @@ export function valueOutputs(spec: Spec | undefined, task: Instance): { name: st
   return []
 }
 
-/** A compute node's inputs: the names its expressions read that no row defines. */
-export function computeVariables(task: Instance): string[] {
+/** The names a compute node's expressions read that no row defines. */
+export function computeReads(task: Instance): string[] {
   const rows = rowsOf(task).map((r) => r.name)
   return [...new Set(rowsOf(task).flatMap((r) => expressionNames(r.value)))].filter((n) => !rows.includes(n))
+}
+
+/** The input a compute node offers while its expressions read none. */
+export const COMPUTE_INPUT = "값"
+
+/**
+ * A compute node's inputs: the names its expressions read, or one
+ * `값` to connect a value to before any row reads it.
+ */
+export function computeVariables(task: Instance): string[] {
+  const reads = computeReads(task)
+  return reads.length ? reads : [COMPUTE_INPUT]
 }
 
 /** The IRAF pset a pset node holds, from any task that declares it. */
@@ -223,27 +236,93 @@ function replaceInto(map: TaskMap, target: string, role: string, source: Source)
   }
 }
 
+/** The title a 값 node starts with, whatever it takes its values from. */
+export const VALUE_TITLE = "값"
+
+/**
+ * For a label the user has not chosen (the kind's title, `값`, the held
+ * pset's name, with the `2`, `3` that numbers copies): that number as
+ * `" 2"` or `""`. A chosen label gives `undefined`.
+ */
+export function defaultLabelSuffix(catalog: Catalog, task: Instance): string | undefined {
+  const spec = specOf(catalog, task)
+  const [, base, suffix = ""] = task.label.match(/^(.*?)( \d+)?$/) ?? []
+  const defaults = [VALUE_TITLE, task.task, spec?.taskName, spec?.title, task.draft.pset?.name]
+  return !task.label || defaults.includes(base) ? suffix : undefined
+}
+
 /** Move a task's pset into its own node, connected back to the task. */
 export function takeOutPset(map: TaskMap, catalog: Catalog, taskId: string, name: string): TaskMap {
   const task = map.tasks.find((t) => t.id === taskId)
-  const set = specOf(catalog, task)?.parameterSets?.find((s) => s.name === name)
   const psetSpec = catalog.tasks.find((s) => s.run === "pset")
-  if (!task || !set || !psetSpec) throw Error("pset 노드를 만들 수 없습니다.")
+  if (!task || !psetSpec) throw Error("pset 노드를 만들 수 없습니다.")
   const node = makeInstance(psetSpec, catalog, { drafts: {}, backend: task.backend, mapping: task.mapping, instrument: task.instrument, packageValues: task.packageValues })
-  node.label = name
-  node.draft = { ...node.draft, pset: { name, task: set.task } }
-  node.parameterSets = { [name]: structuredClone(task.parameterSets?.[name] ?? {}) }
-  node.pinned = (task.pinned ?? []).filter((k) => k.startsWith(name + "."))
   node.subflowId = task.subflowId
   if (task.position) node.position = { x: task.position.x - 264 - 80, y: task.position.y + 40 }
+  return holdPset({ ...map, tasks: [...map.tasks, node] }, catalog, node.id, taskId, name)
+}
+
+/**
+ * A pset node takes a task's pset: it copies the task's current values,
+ * takes over the pset's pinned parameters and the values connected into
+ * them, and feeds the task's pset row. A node that held another pset keeps
+ * only the links that still fit.
+ */
+export function holdPset(map: TaskMap, catalog: Catalog, nodeId: string, taskId: string, name: string): TaskMap {
+  const task = map.tasks.find((t) => t.id === taskId)
+  const node = map.tasks.find((t) => t.id === nodeId)
+  const set = specOf(catalog, task)?.parameterSets?.find((s) => s.name === name)
+  if (!task || !node || !set || specOf(catalog, node)?.run !== "pset") throw Error("pset 노드를 만들 수 없습니다.")
+  if (closesCycle(map, nodeId, PSET_OUTPUT, taskId, PSET_INPUT + name)) throw Error("순환 연결은 만들 수 없습니다.")
+  const prefix = name + "."
+  const held: Instance = {
+    ...node,
+    // A label that only named the old pset or the kind follows the new pset.
+    label: defaultLabelSuffix(catalog, node) === undefined ? node.label : name,
+    draft: { ...node.draft, pset: { name, task: set.task } },
+    parameterSets: { [name]: structuredClone(task.parameterSets?.[name] ?? {}) },
+    pinned: [...new Set([...(node.pinned ?? []).filter((k) => k.startsWith(prefix)), ...(task.pinned ?? []).filter((k) => k.startsWith(prefix))])],
+  }
   // Value connections into the pset's parameters move to the node.
   const moved = map.connections.map((c) =>
-    c.target === taskId && c.role.startsWith(PARAM_HANDLE + name + ".") ? { ...c, target: node.id } : c)
-  return {
+    c.target === taskId && c.role.startsWith(PARAM_HANDLE + prefix) ? { ...c, target: nodeId } : c)
+  const next = {
     ...map,
-    tasks: [...map.tasks.map((t) => t.id === taskId ? { ...t, pinned: (t.pinned ?? []).filter((k) => !k.startsWith(name + ".")) } : t), node],
-    connections: [...moved, { id: uid(), target: taskId, role: PSET_INPUT + name, source: { kind: "pending", taskId: node.id, outputRole: PSET_OUTPUT } }],
+    tasks: map.tasks.map((t) => t.id === taskId ? { ...t, pinned: (t.pinned ?? []).filter((k) => !k.startsWith(prefix)) } : t.id === nodeId ? held : t),
+    connections: moved,
   }
+  // The task it took the pset from comes first among the tasks it feeds (psetUser).
+  const kept = dropStaleLinks(next, catalog, nodeId).connections.filter((c) => !(c.target === taskId && c.role === PSET_INPUT + name))
+  const feed = { id: uid(), target: taskId, role: PSET_INPUT + name, source: { kind: "pending" as const, taskId: nodeId, outputRole: PSET_OUTPUT } }
+  const at = kept.findIndex((c) => c.source.kind !== "files" && c.source.taskId === nodeId && c.source.outputRole === PSET_OUTPUT)
+  return { ...next, connections: at < 0 ? [...kept, feed] : [...kept.slice(0, at), feed, ...kept.slice(at)] }
+}
+
+/**
+ * Removes a value node's connections whose handles it no longer has: rows
+ * that are gone, parameters it no longer holds, a pset it no longer feeds.
+ */
+export function dropStaleLinks(map: TaskMap, catalog: Catalog, id: string): TaskMap {
+  const task = map.tasks.find((t) => t.id === id)
+  const spec = specOf(catalog, task)
+  if (!task || !spec || !isValueNode(spec)) return map
+  const outputs = new Set(valueOutputs(spec, task).map((o) => VALUE_HANDLE + o.name))
+  const entries = parameterEntries(catalog, task)
+  const inputs = new Set(spec.inputs.map((i) => i.name))
+  const pset = task.draft.pset
+  const kept = (c: TaskMap["connections"][number]) => {
+    if (c.target === id)
+      return c.role.startsWith(PARAM_HANDLE) ? entries.has(c.role.slice(PARAM_HANDLE.length)) : inputs.has(c.role)
+    if (c.source.kind === "files" || c.source.taskId !== id) return true
+    const role = c.source.outputRole ?? ""
+    if (role === PSET_OUTPUT) {
+      const name = c.role.slice(PSET_INPUT.length)
+      const target = specOf(catalog, map.tasks.find((t) => t.id === c.target))
+      return !!pset && target?.parameterSets?.find((s) => s.name === name)?.task === pset.task
+    }
+    return outputs.has(role)
+  }
+  return { ...map, connections: map.connections.filter(kept) }
 }
 
 /** The pset values a task runs with: a connected pset node's values replace its own. */

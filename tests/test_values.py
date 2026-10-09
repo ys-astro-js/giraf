@@ -106,6 +106,43 @@ class GraphTests(unittest.TestCase):
         missing = ValueGraph(request, lambda id: None, lambda id: self.files[id]).parameters('phot')
         self.assertIn('실행', missing['l1']['error'])
 
+    def test_compute_partition_splits_inputs_by_their_files(self):
+        exptime = dict(state='completed', manifest=dict(definition=dict(taskName='hselect', values=[
+            dict(name='ncombine', kind='real', **{'from': 'output'}, keyword='NCOMBINE')])),
+            products=[dict(id='b', role='output', path=self.files['b.fits']),
+                      dict(id='v', role='output', path=self.files['v.fits'])])
+        jobs = {'edit': self.job(), 'sel': exptime}
+        jobs['edit']['manifest']['definition']['taskName'] = 'daoedit'
+
+        def graph(inputs, partition='FILTER', extra=()):
+            nodes = [dict(id='calc', run='value-compute', partition=partition,
+                          rows=[dict(name='m', value='median(n) * gain')], inputs=inputs), *extra]
+            return ValueGraph(dict(nodes=nodes), jobs.get, lambda id: self.files[id])
+
+        gain = dict(id='gain', run='value-constant', rows=[dict(name='gain', value='2')])
+        # A header-keyword task value is split by each file's own FILTER; a typed constant applies to every group.
+        result = graph({'n': dict(node='sel', output='ncombine'), 'gain': dict(node='gain', output='gain')},
+                       extra=[gain]).outputs([dict(node='calc', output='m')])['calc:m']
+        self.assertEqual(result['groups'], dict(keyword='FILTER', values={'B': [6.0], 'V': [10.0]}))
+        self.assertNotIn('sources', result)
+        # A value-header node without its own partition is traced to its files too.
+        head = dict(id='head', run='value-header', rows=[dict(name='NCOMBINE', value='')], files=['b.fits', 'v.fits'])
+        result = graph({'n': dict(node='head', output='NCOMBINE'), 'gain': dict(node='gain', output='gain')},
+                       extra=[gain, head]).output(dict(node='calc', output='m'))
+        self.assertEqual(result['groups']['values'], {'B': [6.0], 'V': [10.0]})
+        # A table column does not say which file each value came from.
+        untraced = graph({'n': dict(node='edit', output='fwhm'), 'gain': dict(node='gain', output='gain')}, extra=[gain])
+        error = untraced.outputs([dict(node='calc', output='m')])['calc:m']['error']
+        self.assertEqual(error, 'daoedit 값은 어느 파일에서 나왔는지 알 수 없어 FILTER별로 나눌 수 없습니다.')
+        # Values already split by another keyword cannot be split by this one.
+        other = dict(id='head', run='value-header', partition='OBJECT', rows=[dict(name='NCOMBINE', value='')],
+                     files=['b.fits', 'v.fits'])
+        mixed = graph({'n': dict(node='head', output='NCOMBINE'), 'gain': dict(node='gain', output='gain')}, extra=[gain, other])
+        self.assertIn('나누기 기준이 다른', mixed.outputs([dict(node='calc', output='m')])['calc:m']['error'])
+        # Without a partition the same column is one value for everything, as before.
+        whole = graph({'n': dict(node='edit', output='fwhm'), 'gain': dict(node='gain', output='gain')}, partition=None, extra=[gain])
+        self.assertAlmostEqual(whole.output(dict(node='calc', output='m'))['values'][0], 8.14 * 2)
+
     def test_workflow_orders_value_sources_and_writes_parameters(self):
         graph = dict(nodes=[dict(id='phot', label='phot', payload=dict(task='phot', parameters={}, parameterSets={})),
                             dict(id='edit', label='daoedit', payload=dict(task='daoedit'))],

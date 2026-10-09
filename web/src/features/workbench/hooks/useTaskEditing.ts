@@ -1,6 +1,8 @@
 import { nodeLayout } from "@/lib/node-interaction"
 import { addContainer, isFlowSpec } from "@/lib/containers"
 import { autoLayoutMap } from "@/lib/subflow"
+import { isValueNode } from "@/lib/values"
+import { nextValueLabel } from "@/lib/value-take"
 import { updateOutputPort, removeOutputPort } from "@/lib/output-ports"
 import { useState } from "react"
 import { moveTaskToSubflow } from "@/lib/subflow"
@@ -42,8 +44,12 @@ export function useTaskEditing({
       return true
     }
     const t = makeInstance(s, catalog, prefs)
-    const count = map.tasks.filter((t) => t.task === name).length
-    if (count) t.label = (s.taskName || name) + " " + (count + 1)
+    // Every 값 node is one kind, whatever its 가져오기: titled and numbered together.
+    if (isValueNode(s)) t.label = nextValueLabel(map, catalog)
+    else {
+      const count = map.tasks.filter((task) => task.task === name).length
+      if (count) t.label = (s.taskName || name) + " " + (count + 1)
+    }
     update((m) => {
       let next = addTask(m, t)
       if (ids.length && s.inputs.length)

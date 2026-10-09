@@ -33,3 +33,12 @@
 
 .workflow-node { display:flex; flex-direction:column; }
 .workflow-node .node-footer { margin-top:auto; padding-right:64px; }
+/* One choice of a few (실행 방식, 가져오기): the tabs list's segmented look (ui/tabs) over real radios. */
+.segmented-choice { display:flex; height:36px; padding:4px; border-radius:999px; background:var(--muted); color:var(--muted-foreground); }
+.segmented-choice label { position:relative; flex:1; min-width:0; cursor:pointer; }
+.segmented-choice input { position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer; }
+.segmented-choice span { display:flex; align-items:center; justify-content:center; height:100%; padding:0 4px; border-radius:999px; pointer-events:none; font-size:13px; font-weight:500; white-space:nowrap; color:color-mix(in oklch, var(--foreground) 60%, transparent); transition:background-color .15s, color .15s; }
+.segmented-choice label:hover span { color:var(--foreground); }
+.segmented-choice input:checked + span { background:var(--background); color:var(--foreground); box-shadow:0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent); }
+.dark .segmented-choice input:checked + span { background:color-mix(in oklch, var(--input) 30%, transparent); box-shadow:0 0 0 1px var(--input); }
+.segmented-choice input:focus-visible + span { outline:2px solid var(--ring); outline-offset:2px; }

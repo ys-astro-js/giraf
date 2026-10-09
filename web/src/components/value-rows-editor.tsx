@@ -5,17 +5,34 @@ import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import type { Instance } from "@/lib/task-map"
 import type { Spec, ValueRow } from "@/lib/workbench"
 
-/** Column labels for each value run component (node schema). */
+/** Column labels for each value run component (node schema); 계산 rows have their own editor. */
 const columns: Record<string, { name: string; value?: string }> = {
   "value-constant": { name: "이름", value: "값" },
   "value-header": { name: "키워드" },
-  "value-compute": { name: "이름", value: "식" },
+}
+
+/** 나누기 기준: the header keyword a value node splits its values by. */
+export function PartitionField({ task, edit }: { task: Instance; edit: (fn: (t: Instance) => Instance) => void }) {
+  return (
+    <Field>
+      <FieldLabel htmlFor="value-partition">나누기 기준</FieldLabel>
+      <Input
+        id="value-partition"
+        className="font-mono"
+        value={task.draft.partition ?? ""}
+        placeholder="FILTER"
+        onChange={(e) =>
+          edit((t) => ({ ...t, draft: { ...t.draft, partition: e.target.value.trim().toUpperCase() || undefined } }))
+        }
+      />
+    </Field>
+  )
 }
 
 /**
- * The rows of a value node: `name = value` constants, header keywords, or
- * `name = expression` computations. A constant or header node can split its
- * values by a header keyword; a constant then holds one value per group.
+ * The rows of a value node: `name = value` constants or header keywords.
+ * Either can split its values by a header keyword; a constant then holds
+ * one value per group.
  */
 export function ValueRowsEditor({
   spec,
@@ -35,24 +52,10 @@ export function ValueRowsEditor({
     edit((t) => ({ ...t, draft: { ...t.draft, valueRows: next } }))
   const change = (index: number, patch: Partial<ValueRow>) =>
     setRows(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)))
-  const mono = spec.run === "value-compute" ? "font-mono" : undefined
   return (
     <section className="inspector-section" aria-label="값">
       <FieldGroup>
-        {spec.run !== "value-compute" && (
-          <Field>
-            <FieldLabel htmlFor="value-partition">나누기 기준</FieldLabel>
-            <Input
-              id="value-partition"
-              className="font-mono"
-              value={partition}
-              placeholder="FILTER"
-              onChange={(e) =>
-                edit((t) => ({ ...t, draft: { ...t.draft, partition: e.target.value.trim().toUpperCase() || undefined } }))
-              }
-            />
-          </Field>
-        )}
+        <PartitionField task={task} edit={edit} />
         {spec.run === "value-constant" && partition && (
           <Field>
             <FieldLabel htmlFor="value-groups">그룹</FieldLabel>
@@ -80,7 +83,6 @@ export function ValueRowsEditor({
               {column.value && !groups.length && (
                 <Input
                   aria-label={`${row.name || index + 1 + "행"} ${column.value}`}
-                  className={mono}
                   value={row.value}
                   placeholder={column.value}
                   onChange={(e) => change(index, { value: e.target.value })}

@@ -5,6 +5,9 @@ A value is a list of numbers or strings, optionally split by a header keyword
 component (a text column or a header keyword of its output), or a GIRAF value
 node (`value-constant`, `value-header`, `value-compute`). Values reach a task
 parameter as one scalar; a partitioned target picks its own group's value.
+A compute node with a partition splits its inputs by that keyword
+(partition_input); values read from files carry their files (`sources`) so
+they can be split by each file's header.
 
 The request shape is shared by the `/api/values` endpoint and workflow runs:
 
@@ -120,16 +123,19 @@ def task_value(job, name, resolve_file):
         raise ValueError(f'{name}: 작업 스키마에 없는 값입니다.')
     products = [p for p in job.get('products', []) if p.get('role') == spec['from']]
     kind = spec.get('kind', 'real')
-    values = []
+    values, sources = [], []
     for product in products:
         path = _product_path(product, resolve_file)
         if 'keyword' in spec:
             value = header_value(path, spec['keyword'])
             if value is not None:
                 values.append(value)
+                sources.append(str(path))
         else:
             values += column_values(path.read_text(errors='replace'), spec['column'], kind)
-    return dict(kind=kind, values=values)
+    # A header keyword comes from one file per value; a table column does not say which.
+    trace = dict(sources=sources) if 'keyword' in spec else {}
+    return dict(kind=kind, values=values, origin=definition.get('taskName') or None, **trace)
 
 
 def _group_by(keyed, keyword):
@@ -145,7 +151,7 @@ def constant_value(node, row):
         number = _number(text)
         return number if number is not None else str(text).strip()
     result = dict(kind='real' if _number(row.get('value')) is not None else 'string',
-                  values=[typed(row.get('value', ''))] if str(row.get('value', '')).strip() else [])
+                  values=[typed(row.get('value', ''))] if str(row.get('value', '')).strip() else [], constant=True)
     groups = {k: [typed(v)] for k, v in (row.get('groups') or {}).items() if str(v).strip()}
     if node.get('partition') and groups:
         result['groups'] = dict(keyword=node['partition'], values=groups)
@@ -155,17 +161,18 @@ def constant_value(node, row):
 
 
 def header_values(paths, keyword, partition=None):
-    values, keyed = [], []
+    values, keyed, sources = [], [], []
     for path in paths:
         value = header_value(path, keyword)
         if value is None:
             continue
         values.append(value)
+        sources.append(str(path))
         if partition:
             group = header_value(path, partition)
             keyed.append((str(group if group is not None else '').strip(), value))
     result = dict(kind='real' if values and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values) else 'any',
-                  values=values)
+                  values=values, sources=sources)
     if partition:
         result['groups'] = _group_by(keyed, partition)
     return result
@@ -273,14 +280,44 @@ def expression_names(text):
     return list(dict.fromkeys(n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id not in called))
 
 
+MIXED_PARTITIONS = '나누기 기준이 다른 값은 함께 계산할 수 없습니다.'
+
+
+def partition_input(result, keyword, read_header=header_value):
+    """An input of a compute node split by `keyword` (the node's 나누기 기준).
+
+    Values already split by it pass; one typed constant applies to every
+    group; values read from files are split by each file's header. Values
+    whose files are unknown (a table column) cannot be split.
+    """
+    groups = result.get('groups')
+    if groups:
+        if groups['keyword'] != keyword:
+            raise ValueError(MIXED_PARTITIONS)
+        return result
+    if result.get('constant'):
+        return result
+    sources = result.get('sources')
+    if sources is None or len(sources) != len(result['values']):
+        origin = result.get('origin') or '받은'
+        raise ValueError(f'{origin} 값은 어느 파일에서 나왔는지 알 수 없어 {keyword}별로 나눌 수 없습니다.')
+    keyed = []
+    for path, value in zip(sources, result['values']):
+        group = read_header(path, keyword)
+        keyed.append((str(group if group is not None else '').strip(), value))
+    return {**result, 'groups': _group_by(keyed, keyword)}
+
+
 def compute_value(row, inputs):
     """One `name = expression` row of a compute node, per group when any input is grouped."""
     keyword = next((v['groups']['keyword'] for v in inputs.values() if v.get('groups')), None)
     if keyword and any(v.get('groups') and v['groups']['keyword'] != keyword for v in inputs.values()):
-        raise ValueError('나누기 기준이 다른 값은 함께 계산할 수 없습니다.')
+        raise ValueError(MIXED_PARTITIONS)
+    # Typed constants alone give a constant; it applies to every group downstream.
+    constant = all(v.get('constant') for v in inputs.values())
     if not keyword:
         values = evaluate_expression(row['value'], {k: v['values'] for k, v in inputs.items()})
-        return dict(kind=_kind(values), values=values)
+        return dict(kind=_kind(values), values=values, **({'constant': True} if constant else {}))
     keys = list(dict.fromkeys(k for v in inputs.values() if v.get('groups') for k in v['groups']['values']))
     groups = {}
     for key in keys:
@@ -375,6 +412,8 @@ class ValueGraph:
                 if not ref:
                     raise ValueError(f'{variable}: 연결되지 않은 값입니다.')
                 inputs[variable] = self.output(ref, seen)
+            if node.get('partition'):
+                inputs = {k: partition_input(v, node['partition']) for k, v in inputs.items()}
             return compute_value(rows[name], {**inputs, **local})
         raise ValueError(f'{run}: 값을 계산할 수 없는 노드입니다.')
 
@@ -410,7 +449,7 @@ class ValueGraph:
         result = {}
         for ref in refs:
             try:
-                result[f'{ref["node"]}:{ref["output"]}'] = self.output(ref)
+                result[f'{ref["node"]}:{ref["output"]}'] = public(self.output(ref))
             except (ValueError, OSError, KeyError) as exc:
                 result[f'{ref["node"]}:{ref["output"]}'] = dict(error=str(exc))
         return result
@@ -435,6 +474,14 @@ class ValueGraph:
             if link['target'] == target:
                 visit(link['source'], frozenset())
         return found
+
+
+INTERNAL = ('sources', 'origin', 'constant')
+
+
+def public(result):
+    """A value as the editor sees it, without where its values came from."""
+    return {k: v for k, v in result.items() if k not in INTERNAL}
 
 
 def apply_parameters(payload, links, resolved):

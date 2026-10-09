@@ -3,6 +3,8 @@ import type { createDiagnosticStore } from "./diagnostics"
 type Store = ReturnType<typeof createDiagnosticStore>
 export type WorkflowIssue = { id: string; severity: "warning" | "error"; message: string; nodeId: string; connectionId?: string }
 type Response = { diagnostics: WorkflowIssue[] }
+/** An issue the editor finds itself, shown with the server's; `label` names its node. */
+export type LocalIssue = WorkflowIssue & { label: string }
 
 export async function requestWorkflowDiagnostics(payload: unknown, signal?: AbortSignal): Promise<Response> {
   const response = await fetch("/api/workflow-diagnostics", {
@@ -32,6 +34,7 @@ export function createWorkflowDiagnosticsController(
   let documentId = ""
   let payload: unknown
   let nodeLabels: Record<string, string> = {}
+  let local: LocalIssue[] = []
   let version = 0
   let dueAt = 0
   let lastRecheckAt = 0
@@ -54,10 +57,14 @@ export function createWorkflowDiagnosticsController(
     activeRequest = new AbortController()
     const inspectedDocument = documentId
     const inspectedVersion = version
+    const inspectedLocal = local
     try {
       const result = await request(payload, activeRequest.signal)
       if (!disposed && inspectedDocument === documentId && inspectedVersion === version) {
-        store.replaceCurrent(documentId, result.diagnostics, nodeLabels)
+        store.replaceCurrent(documentId, [
+          ...result.diagnostics,
+          ...inspectedLocal.map(({ id, severity, message, nodeId }) => ({ id, severity, message, nodeId })),
+        ], nodeLabels)
         setFailure("")
       }
     } catch (error) {
@@ -77,7 +84,7 @@ export function createWorkflowDiagnosticsController(
     timer = setTimeout(inspect, Math.max(0, dueAt - Date.now()))
   }
   return {
-    change(nextDocument: string, nextPayload: unknown, immediate = false) {
+    change(nextDocument: string, nextPayload: unknown, immediate = false, nextLocal: LocalIssue[] = []) {
       if (disposed) return
       const changedDocument = documentId !== nextDocument
       if (changedDocument) {
@@ -86,10 +93,11 @@ export function createWorkflowDiagnosticsController(
       }
       documentId = nextDocument
       payload = nextPayload
-      nodeLabels = {}
+      local = nextLocal
+      nodeLabels = Object.fromEntries(local.map((issue) => [issue.nodeId, issue.label]))
       if (nextPayload && typeof nextPayload === "object" && "nodes" in nextPayload && "connections" in nextPayload && Array.isArray(nextPayload.nodes) && Array.isArray(nextPayload.connections)) {
-        nodeLabels = Object.fromEntries(nextPayload.nodes.map((node: { id: string; label?: string }) => [node.id, node.label || node.id]))
-        store.pruneCurrent(nextPayload.nodes.map((node: { id: string }) => node.id), nextPayload.connections.map((edge: { id: string }) => edge.id))
+        nodeLabels = { ...nodeLabels, ...Object.fromEntries(nextPayload.nodes.map((node: { id: string; label?: string }) => [node.id, node.label || node.id])) }
+        store.pruneCurrent([...nextPayload.nodes.map((node: { id: string }) => node.id), ...local.map((issue) => issue.nodeId)], nextPayload.connections.map((edge: { id: string }) => edge.id))
       }
       version++
       requested = true

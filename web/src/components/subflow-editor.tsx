@@ -153,7 +153,7 @@ export function SubflowEditor({
       </fieldset>
       <fieldset>
         <legend>실행 방식</legend>
-        <div className="subflow-runs">
+        <div className="segmented-choice">
           {runs.map((r) => (
             <label key={r.id}>
               <input
