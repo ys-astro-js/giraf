@@ -43,12 +43,12 @@ class GenericPreparationTests(unittest.TestCase):
         params, expected = runner.calls[0]
         self.assertEqual(params['operand'], '2')
         self.assertEqual(params['optional'], '')
-        self.assertEqual((self.job / params['input'][1:]).read_text(), 'input/s00000.fits\ninput/s00001.fits\n')
+        self.assertEqual((self.job / params['input'][1:]).read_text(), 'input/a.fits\ninput/b.fits\n')
         self.assertEqual((self.job / params['output'][1:]).read_text(), 'output/o00000.fits\noutput/o00001.fits\n')
         self.assertEqual((self.job / params['events']).read_text(), 'q\n')
         self.assertEqual((self.job / params['coords']).read_text(), '1 2\n')
         self.assertEqual([p['label'] for p in expected], ['r_a.fits', 'r_b.fits'])
-        self.assertEqual((self.job / 'input/s00000.fits').read_bytes(), b'a')
+        self.assertEqual((self.job / 'input/a.fits').read_bytes(), b'a')
         self.assertEqual(len(json.loads((self.job / 'sources.json').read_text())), 2)
         for suffix in ('cl', 'py'):
             script = (self.job / ('commands.' + suffix)).read_text()
@@ -59,7 +59,7 @@ class GenericPreparationTests(unittest.TestCase):
         self.manifest['definition']['outputs'][0]['naming'] = 'prefix'
         runner = self.prepare()
         self.assertEqual(runner.calls[0][0]['output'], 'output/output_')
-        self.assertEqual([p['file'] for p in runner.expected], ['output/output_s00000.fits', 'output/output_s00001.fits'])
+        self.assertEqual([p['file'] for p in runner.expected], ['output/output_a.fits', 'output/output_b.fits'])
 
     def test_single_output_of_one_image_records_that_image(self):
         self.manifest['outputs']['optional'] = 'table.txt'

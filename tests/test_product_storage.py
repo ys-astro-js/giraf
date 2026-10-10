@@ -108,7 +108,7 @@ class ProductStorageTests(unittest.TestCase):
         spec['outputs'][0]['naming'] = 'prefix'
         _, prefix_job, prefix_products = self.generic(spec, {'output': 'prefix_'})
         self.assertEqual(prefix_products[0]['label'], 'prefix_한글 영상.fit')
-        self.assertEqual((prefix_job / prefix_products[0]['file']).read_bytes(), (prefix_job / 'output/output_s00000.fit').read_bytes())
+        self.assertEqual((prefix_job / prefix_products[0]['file']).read_bytes(), (prefix_job / 'output/output_a.fit').read_bytes())
 
     def test_duplicate_output_roles_and_existing_extensions(self):
         spec = deepcopy(self.spec)
@@ -223,7 +223,7 @@ class ProductStorageTests(unittest.TestCase):
         runner.execute()
         products = json.loads((job / 'products.json').read_text()); assert_products(self, job, products)
         self.assertEqual(products[0]['target'], self.rows['a']['path'])
-        self.assertEqual((job / 'backup/s00000.fit').read_bytes(), before)
+        self.assertEqual((job / 'backup/a.fit').read_bytes(), before)
         self.assertEqual(fits.getheader(job / products[0]['file'])['OBSERVER'], 'tester')
 
     def test_existing_result_lookup_does_not_migrate_files(self):

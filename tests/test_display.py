@@ -167,7 +167,7 @@ class IRAFDisplayTests(unittest.TestCase):
                 status = json.loads((job / 'status.json').read_text())
                 self.assertEqual(status['state'], 'completed', (job / 'task.log').read_text() if (job / 'task.log').exists() else status)
             frame = display.frames[1]
-            self.assertIn('s00000', frame.wcs.splitlines()[0])
+            self.assertIn('input/star.fits', frame.wcs.splitlines()[0])
             self.assertGreater(int((frame.pixels > 150).sum()), 0)
             self.assertGreater(int((frame.pixels == 204).sum()), 4)
 
