@@ -10,7 +10,7 @@ import re
 
 from .values import _number
 
-PLAIN = re.compile(r'^[\w@.+\-/\[\]:,*$]+$')
+PLAIN = re.compile(r'^[\w@.\-]+$')
 
 
 def literal(value):

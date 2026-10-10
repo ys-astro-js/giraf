@@ -176,6 +176,17 @@ class GroupRunTests(unittest.TestCase):
         self.assertAlmostEqual(done['parameterSets']['fitskypars']['dannulus'], 24.4)
 
 
+class CommandTests(unittest.TestCase):
+    def test_cl_arguments_read_as_cl(self):
+        from giraf.commands import argument, differs, literal
+        self.assertEqual([literal(v) for v in ('@input.list', 'Dark15-1.fits', '/', '[1:10]', '', 3.0, 2.5)],
+                         ['@input.list', 'Dark15-1.fits', '"/"', '"[1:10]"', '""', '3', '2.5'])
+        self.assertEqual((argument('zerocor', 'yes', 'b'), argument('zerocor', 'no', 'b')), ('zerocor+', 'zerocor-'))
+        self.assertEqual(argument('combine', 'median', 's'), 'combine=median')
+        self.assertFalse(differs('3', 3.0))
+        self.assertTrue(differs('median', 'average'))
+
+
 class Runner:
     """Each run makes one product named after its first input."""
 
