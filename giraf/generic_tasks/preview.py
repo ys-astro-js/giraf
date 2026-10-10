@@ -16,7 +16,12 @@ def preview_generic(manifest):
         value = manifest['outputs'][slot['name']]
         if slot.get('optional') and not value:
             continue
-        if slot['mode'] == 'each':
+        if slot['mode'] == 'pass':
+            # The edited copies keep their input's names (hedit update=yes).
+            for index, id in enumerate(manifest['inputs'].get(slot['from'], [])):
+                label = rows[id].get('label') or rows[id]['name']
+                result.append(dict(role=slot['name'], source=id, index=index, inputs=[label], output=label))
+        elif slot['mode'] == 'each':
             for index, id in enumerate(main):
                 source = Path(rows[id].get('label') or rows[id]['name'])
                 ext = (source.suffix or '.fits') if slot['kind'] == 'image' else file_extension(slot['kind'])

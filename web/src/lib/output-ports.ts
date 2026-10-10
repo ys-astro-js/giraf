@@ -211,6 +211,11 @@ export function syncPassOutputs(map: TaskMap, catalog: Catalog | null, rows: Fra
     const outputs = { ...task.draft.outputs }
     const passed: Record<string, string[]> = {}
     for (const slot of pass) {
+      // An IRAF task always passes on the copies it edited (hedit update=yes).
+      if (!spec?.run) {
+        outputs[slot.name] = "*"
+        continue
+      }
       const ids = assigned(map, task, slot.from!).ids
       const frames = ids.map((id) => all.get(id))
       if (frames.some((frame) => !frame)) continue

@@ -116,7 +116,8 @@ class NodeSchemaTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '표현식'):
             validate_generic(s, dict(inputs={'image': []}, expressions={'image': 'a.fits'}), lambda _: None)
         for data in ({'inputs': {'image': {'sources': []}}}, {'inputs': {'image': {'sources': ['disk']}}},
-                     {'outputs': {'output': {'mode': 'pass', 'from': 'image'}}}, {'icon': 'file-input'},
+                     {'outputs': {'output': {'mode': 'each', 'from': 'image'}}}, {'outputs': {'edited': {'kind': 'image', 'mode': 'pass'}}},
+                     {'icon': 'file-input'},
                      {'components': [{'type': 'save-files'}]}, {'inputs': {'image': {'kind': 'image-list'}}}):
             with self.subTest(data=data):
                 self.write(self.user, data)

@@ -5,6 +5,16 @@ import shutil
 import unicodedata
 
 IMAGE_SUFFIXES = ('.fits', '.fit', '.fts')
+# Written by IRAF's FITS image kernel whenever it rewrites a header, and
+# blank or commentary cards: not edits anyone asked for.
+KERNEL_KEYS = ('IRAF-TLM', 'DATE', 'ORIGIN', 'EXTEND', 'COMMENT', 'HISTORY', '')
+
+
+def header_changes(before, after):
+    """[(key, before, after)] of the header keys an edit changed, in header order."""
+    return [(key, str(before[key]) if key in before else None, str(after[key]) if key in after else None)
+            for key in [*before, *(k for k in after if k not in before)]
+            if key not in KERNEL_KEYS and before.get(key) != after.get(key)]
 
 
 def each_output_name(template, stem, ext):

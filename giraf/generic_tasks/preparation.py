@@ -95,6 +95,11 @@ def bind_outputs(job, manifest, params, aliases, expected):
         if slot.get('optional') and not manifest['outputs'].get(name):
             call[name] = ''
         products = [p for p in expected if p['role'] == name]
+        if slot.get('mode') == 'pass':
+            # IRAF edits the staged copy itself; that copy is the result.
+            for product in products:
+                product['file'] = aliases[product['source']].split('[')[0]
+            continue
         if name == '$stdout' or not products:
             continue
         if slot.get('naming') == 'prefix':

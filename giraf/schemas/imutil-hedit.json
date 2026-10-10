@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "task": "images.imutil.hedit",
+  "outputs": {
+    "result": { "kind": "image", "mode": "pass", "from": "images", "label": "결과" }
+  },
+  "parameters": {
+    "update": { "default": "yes" },
+    "verify": { "fixed": "no" }
+  }
+}

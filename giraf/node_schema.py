@@ -117,11 +117,13 @@ def format_errors(data):
                 kinds = (NODE_KINDS if node else KINDS) + ((ANY,) if direction == 'inputs' else ())
                 if 'kind' in port and port['kind'] not in kinds:
                     errors.append(f'{where}.kind: {", ".join(kinds)} 중 하나여야 합니다.')
-                modes = ('pass',) if node else ('single', 'each')
+                modes = ('pass',) if node else ('single', 'each', 'pass')
                 if port.get('mode', modes[0]) not in modes:
-                    errors.append(f'{where}.mode: {" 또는 ".join(modes)}여야 합니다.')
-                if node and direction == 'outputs' and not isinstance(port.get('from'), str):
+                    errors.append(f'{where}.mode: {", ".join(modes)} 중 하나여야 합니다.')
+                if direction == 'outputs' and (node or port.get('mode') == 'pass') and not isinstance(port.get('from'), str):
                     errors.append(f'{where}.from: 파일을 넘겨줄 입력 이름이 필요합니다.')
+                if not node and direction == 'outputs' and 'from' in port and port.get('mode') != 'pass':
+                    errors.append(f'{where}.from: pass 출력에만 쓸 수 있습니다.')
                 if 'sources' in port and not (port['sources'] and len(set(port['sources'])) == len(port['sources'])
                                               and all(v in SOURCES for v in port['sources'])):
                     errors.append(f'{where}.sources: {", ".join(SOURCES)} 중 하나 이상의 목록이어야 합니다.')
@@ -269,6 +271,22 @@ def merge_layers(profile, parameters, sets, layers):
             other = 'outputs' if direction == 'inputs' else 'inputs'
             for role, port in patch.get(direction, {}).items():
                 where = f'{direction}.{role}'
+                if direction == 'outputs' and (port or {}).get('mode', ports['outputs'].get(role, {}).get('mode')) == 'pass':
+                    # A pass output hands on the input files the task edited in
+                    # place (hedit update=yes); it binds no IRAF parameter.
+                    if role in pars:
+                        warn(f'{where}: pass 출력 이름은 IRAF 파라미터와 겹칠 수 없습니다.')
+                    elif port is None:
+                        ports['outputs'].pop(role, None)
+                        provenance[where] = name
+                    elif (port.get('from') or ports['outputs'].get(role, {}).get('from')) not in ports['inputs']:
+                        warn(f'{where}.from: 입력 포트가 아닙니다.')
+                    elif role not in ports['outputs'] and port.get('kind') != 'image':
+                        warn(f'{where}: pass 출력은 영상(kind: image)을 넘깁니다.')
+                    else:
+                        ports['outputs'][role] = {**ports['outputs'].get(role, {'name': role}), **port}
+                        provenance.update({f'{where}.{k}': name for k in port})
+                    continue
                 if role not in pars:
                     warn(f'{where}: IRAF 정의에 없는 파라미터입니다.')
                     continue

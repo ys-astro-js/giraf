@@ -7,7 +7,7 @@ import sys
 
 from ..jobs import atomic_json
 from ..task_session import run_process, read_log_since, Cancelled
-from ..products import publish_product
+from ..products import publish_product, header_changes
 from .preparation import stage_inputs, prepare_parameters, plan_outputs, bind_outputs
 from .preview import preview_generic
 from .scripts import write_scripts
@@ -30,7 +30,26 @@ class GenericTaskRun:
         self.expected = plan_outputs(self.m, preview_generic(self.m))
         call = bind_outputs(self.job, self.m, params, aliases, self.expected)
         self.calls = [(call, self.expected)]
+        if self.m.get('interactive'):
+            # The task's standard output as it grows, for the cursor window.
+            atomic_json(self.job / 'live.json', [p['file'] for p in self.expected if p['role'] == '$stdout'])
         self.write_scripts()
+
+    def record_header_changes(self, expected):
+        """Header keys a task changed in the copies it passes on (pass outputs)."""
+        passed = {s['name'] for s in self.spec['outputs'] if s.get('mode') == 'pass'}
+        rows = {r['id']: r for r in self.m['rows']}
+        changes = []
+        for product in expected:
+            path = self.job / product['file']
+            if product['role'] not in passed or not path.is_file():
+                continue
+            from astropy.io import fits
+            before, after = (dict(fits.getheader(p)) for p in (rows[product['source']]['path'], path))
+            changes += [dict(source=product['source'], label=product['label'], key=key, before=old, after=new)
+                        for key, old, new in header_changes(before, after)]
+        if passed:
+            atomic_json(self.job / 'header-diff.json', changes)
 
     def write_scripts(self, only=None):
         write_scripts(self.job, self.m, self.calls, only)
@@ -76,6 +95,7 @@ class GenericTaskRun:
                 for p in expected:
                     if (self.job / p['file']).is_file():
                         products.append(publish_product(self.job, p, len(products)))
+                self.record_header_changes(expected)
             atomic_json(self.job / 'outcomes.json', outcomes)
         products.append(publish_product(self.job, dict(file='task.log', label=self.spec['taskName'] + '-results.txt', asset='text', role='$log'), len(products)))
         atomic_json(self.job / 'products.json', products)

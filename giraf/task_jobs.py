@@ -162,7 +162,10 @@ def preview_task(manifest, *, paths=False):
     name=manifest['output']['name']
     if not output or manifest['parameters'].get('noproc')=='yes':
         return [dict(inputs=[rows[i].get('label',rows[i]['name']) for i in ids],output=manifest['task']+'-results.txt')]
-    if output['mode'] in ('each','edit'):
+    if output['mode']=='edit':
+        # An edited copy keeps its input's name (ccdhedit): M67B.fits stays M67B.fits.
+        result=[dict(inputs=[l],output=l) for i in ids for l in [rows[i].get('label',rows[i]['name'])]]
+    elif output['mode']=='each':
         result=[dict(inputs=[rows[i].get('label',rows[i]['name'])], output=each_output_name(name,l.removesuffix(x),x)) for i in ids for l in [rows[i].get('label',rows[i]['name'])] for x in [Path(l).suffix]]
         if len(ids)==1 and '{name}' not in name and not name.endswith('/') and (Path(name).suffix or '/' in name):
             result[0]['output']=name
@@ -178,7 +181,9 @@ def preview_task(manifest, *, paths=False):
     else:
         result=[dict(inputs=[rows[i].get('label',rows[i]['name']) for i in ids],output=name)]
     names=[r['output'] for r in result]
-    if name.startswith('@'):
+    if output['mode']=='edit':
+        pass
+    elif name.startswith('@'):
         path=Path(name[1:]);path=path if path.is_absolute() else Path(manifest['workingDirectory'])/path
         names=[line.strip() for line in path.read_text().splitlines() if line.strip() and not line.lstrip().startswith('#')]
     elif ',' in name:

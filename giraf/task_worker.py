@@ -12,7 +12,7 @@ from astropy.io import fits
 from .jobs import atomic_json
 from .task_catalog import TASKS, SNAPSHOT, CAPABILITIES
 from .task_jobs import output_paths
-from .products import product_name, publish_product
+from .products import product_name, publish_product, header_changes
 from .task_expressions import split_image
 from .task_session import run_process, read_log_since, Cancelled
 
@@ -276,8 +276,7 @@ class TaskRun:
                         accepted.add(item['file'])
                     if name=='ccdhedit' and items:
                         after=dict(fits.getheader(self.job/items[0]['file']));before=self.before[id]
-                        for key in before.keys()|after.keys():
-                            if before.get(key)!=after.get(key):diffs.append(dict(source=id,key=key,before=str(before[key]) if key in before else None,after=str(after[key]) if key in after else None))
+                        diffs+=[dict(source=id,label=self.rows[id].get('label',self.rows[id]['name']),key=key,before=old,after=new) for key,old,new in header_changes(before,after)]
             atomic_json(self.job/'outcomes.json',self.outcomes)
         atomic_json(self.job/'engine.json',engine);atomic_json(self.job/'header-diff.json',diffs)
         self.products=[p for p in self.expected if p['file'] in accepted]

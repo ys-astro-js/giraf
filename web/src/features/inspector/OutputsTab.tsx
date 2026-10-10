@@ -70,10 +70,11 @@ export function InspectorOutputs({
     },
     loopVariables(map, catalog, task, allRows)
   )
-  // Pass-through outputs carry their input files and have no name to edit.
+  // Pass-through outputs carry their input files and edited copies keep their
+  // input's names: neither has a name to edit.
   const outputFields: OutputSlot[] = spec.outputs?.length
     ? spec.outputs.filter((slot) => slot.mode !== "pass")
-    : spec.output
+    : spec.output && spec.output.mode !== "edit"
       ? [{ ...spec.output, kind: spec.kind, label: spec.output.name }]
       : []
   // Inside loop regions, names can take each round's values.
@@ -143,7 +144,7 @@ export function InspectorOutputs({
           }}
           id={`${id}-help`}
         />
-        {["each", "edit"].includes(output.mode || "") && (
+        {output.mode === "each" && (
           <FieldDescription>
             {"{name}"} 자리에 입력 파일명이 들어갑니다. 뒤에 확장자를 쓰면
             그대로 쓰고, {"{name}"}이 없으면 접두사로 붙습니다.

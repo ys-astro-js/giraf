@@ -70,8 +70,8 @@ def task_definition(name, path, pkg, packages, all_pars, generated, overrides, d
             par['default'] = 'no'
     try:
         apply_profile(spec, profile)
-        if identity not in overrides and not spec['outputs']:
-            spec['outputs'] = [dict(name='$stdout', label='표준 출력', kind='text', mode='single', default=name+'.txt')]
+        if identity not in overrides and all(o.get('mode') == 'pass' for o in spec['outputs']):
+            spec['outputs'] += [dict(name='$stdout', label='표준 출력', kind='text', mode='single', default=name+'.txt')]
     except (ValueError, KeyError, TypeError) as exc:
         issues.append(f'작업 정보를 불러오지 못했습니다: {exc}')
     spec['schemaFingerprint'] = hashlib.sha256(json.dumps(dict(files=files,profile=profile,source=spec.get('sourceHash')),sort_keys=True).encode()).hexdigest()
@@ -99,6 +99,10 @@ def apply_profile(spec, profile):
         slots = []
         for raw in profile[direction]:
             name = raw['name']
+            if direction == 'outputs' and raw.get('mode') == 'pass':
+                # Edited input copies under their own names (node schema `pass`).
+                slots.append(dict(raw, label=raw.get('label', name), default='*', representation='file'))
+                continue
             if name not in pars or name in used or not re.fullmatch(IDENT, name):
                 raise ValueError(f'{name}: 파라미터가 없거나 중복된 역할입니다.')
             if raw.get('kind') not in ('image', 'text', 'mask', 'metacode', 'binary'):
