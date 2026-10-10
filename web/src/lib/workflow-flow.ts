@@ -20,21 +20,6 @@ import { subflowColor } from "./subflow"
 import { helperKind } from "./helper-nodes"
 import { compoundEdges, compoundPorts, memberConnection, COMPOUND_HEADER, COMPOUND_WIDTH } from "./compound"
 import { collapsedAround, groupAncestors, groupContents, groupDepth, parentGroup } from "./group-nesting"
-import {
-  checkContainerConnection,
-  containerTask,
-  flowBoundary,
-  flowPorts,
-  flowRun,
-  flowHeading,
-  crossedRegions,
-  flowLabels,
-  receiveMode,
-  receiveText,
-  isContainerId,
-  type FlowPort,
-  type FlowRun,
-} from "./containers"
 import { connectValue, isValueSource, parameterEntries, valueOutputs, PARAM_HANDLE, PSET_INPUT, PSET_OUTPUT, VALUE_HANDLE } from "./values"
 
 function valueEnds(catalog: Catalog, source: Instance, target: Instance, sourceHandle: string, role: string) {
@@ -54,17 +39,12 @@ export type TaskFlowNode = Node<
   },
   "task"
 >
-/** Where an edge crosses into a region: its chip's text and menu (components/workflow-edge). */
-export type EdgeCrossing = { region: string; text: string; mode: "split" | "all" | "match"; keys: string[]; labels: string[]; value: boolean }
-/** A loop region drawn on its group (lib/containers). */
-export type FlowView = { run: FlowRun; icon?: string; label: string; statement?: string; ports: FlowPort[] }
-const headingView = ({ title, statement }: { title: string; statement?: string }) => ({ label: title, ...(statement ? { statement } : {}) })
 export type SubflowNode = Node<
-  { group: Subflow; count: number; minWidth: number; minHeight: number; flow?: FlowView },
+  { group: Subflow; count: number; minWidth: number; minHeight: number },
   "subflow"
 >
 export type CompoundNode = Node<
-  { group: Subflow; members: string[]; flow?: Omit<FlowView, "ports"> } & ReturnType<typeof compoundPorts>,
+  { group: Subflow; members: string[] } & ReturnType<typeof compoundPorts>,
   "compound"
 >
 export type WorkflowNode = TaskFlowNode | SubflowNode | CompoundNode
@@ -149,7 +129,7 @@ export function flowNodes(
     .sort((a, b) => a.depth - b.depth || a.i - b.i)
     .map(({ group }) => group)
   const groups: (SubflowNode | CompoundNode)[] = nested.map((group) => {
-    const children = tasks.filter((t) => t.parentId === group.id && !isContainerId(map, t.id))
+    const children = tasks.filter((t) => t.parentId === group.id)
     const inner = nested.filter((g) => parentGroup(map, g.id)?.id === group.id)
     const outer = parentGroup(map, group.id)
     const placed = {
@@ -157,39 +137,27 @@ export function flowNodes(
       ...(outer ? { parentId: outer.id } : {}),
       hidden: !!collapsedAround(map, group.id),
     }
-    // A container is its group plus a task holding its settings and ports.
-    const container = containerTask(map, group.id)
-    const run = flowRun(map, catalog, group.id)
-    const flow = container && run
-      ? {
-          run,
-          icon: catalog.tasks.find((s) => s.name === container.task)?.icon,
-          ...headingView(flowHeading(map, catalog, container)),
-        }
-      : undefined
-    const name = flow?.label ?? group.name
+    const name = group.name
     if (group.collapsed) {
-      const ports = compoundPorts(map, group, edges, container && flow ? flowBoundary(map, catalog, container) : undefined)
+      const ports = compoundPorts(map, group, edges)
       return {
         id: group.id,
         type: "compound",
         zIndex: 2,
-        data: { group, members: [...groupContents(map, group.id).tasks].filter((id) => !isContainerId(map, id)), ...(flow ? { flow } : {}), ...ports },
+        data: { group, members: [...groupContents(map, group.id).tasks], ...ports },
         ...placed,
         initialWidth: ports.width,
         initialHeight: ports.height,
-        style: { opacity: children.some((t) => matches(t.data.task, search)) || (container && matches(container, search)) ? 1 : 0.3 },
+        style: { opacity: children.some((t) => matches(t.data.task, search)) ? 1 : 0.3 },
         handles: [
           ...ports.inputs.map((row) => ({ id: row.handleId, type: "target" as const, position: Position.Left, x: 0, y: row.y })),
           ...ports.outputs.map((row) => ({ id: row.handleId, type: "source" as const, position: Position.Right, x: ports.width, y: row.y })),
         ],
         dragHandle: ".subflow-heading",
-        deletable: !!flow,
-        ...(flow ? { selected: map.view.selected === group.id } : {}),
-        ariaLabel: `${name} ${flow ? "컨테이너" : "그룹"}`,
+        deletable: false,
+        ariaLabel: `${name} 그룹`,
       }
     }
-    const view = flow ? { ...flow, ...flowPorts(map, catalog, group) } : undefined
     // Regions inside it count as its children.
     const within = (g: Subflow) => ({ x: g.position.x - group.position.x, y: g.position.y - group.position.y })
     const minWidth = Math.max(
@@ -207,7 +175,7 @@ export function flowNodes(
       type: "subflow",
       // Above edges (1) by DOM order: the heading covers them, the see-through body does not.
       zIndex: 1,
-      data: { group, count: children.length + inner.length, minWidth, minHeight, ...(view ? { flow: view } : {}) },
+      data: { group, count: children.length + inner.length, minWidth, minHeight },
       ...placed,
       style: {
         width: group.width,
@@ -215,24 +183,12 @@ export function flowNodes(
       },
       initialWidth: group.width,
       initialHeight: group.height,
-      ...(view
-        ? {
-            handles: view.ports.map((port) => ({
-              id: port.handleId,
-              type: port.type,
-              position: port.side === "left" ? Position.Left : Position.Right,
-              x: port.x,
-              y: port.y,
-            })),
-            selected: map.view.selected === group.id,
-          }
-        : {}),
       dragHandle: ".subflow-heading",
-      deletable: !!flow,
-      ariaLabel: `${name} ${flow ? "컨테이너" : "그룹"}`,
+      deletable: false,
+      ariaLabel: `${name} 그룹`,
     }
   })
-  return [...groups, ...tasks.filter((node) => !isContainerId(map, node.id))]
+  return [...groups, ...tasks]
 }
 export function outputHandle(source: Source, spec: Spec | undefined, task?: Instance): string {
   // Value and pset outputs are named by their handle.
@@ -261,13 +217,6 @@ export function taskEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
     const value = isValueSource(connection.source)
     // A renamed value row or compute input leaves its connection without handles.
     if (value && !valueEnds(catalog, source, target, sourceHandle, connection.role)) return []
-    // A chip where it crosses into a region drawn open (lib/containers receiveMode).
-    const crossings: EdgeCrossing[] = connection.role.startsWith(PSET_INPUT) ? [] : crossedRegions(map, connection)
-      .filter((region) => !collapsedAround(map, region.id) && !map.subflows?.find((g) => g.id === region.id)?.collapsed)
-      .map((region) => {
-        const mode = receiveMode(map, connection, region)
-        return { region: region.id, text: receiveText(mode), mode: mode.mode, keys: mode.mode === "match" ? mode.keys : [], labels: flowLabels(region), value }
-      })
     const targetGroup = map.view.selected === source.id || map.view.selected === target.id
       ? map.subflows?.find(group => group.id === target.subflowId) : undefined
     return [
@@ -286,7 +235,6 @@ export function taskEdges(map: TaskMap, catalog: Catalog, search = ""): Edge[] {
           fromFiles: [source, target].some((t) => helperKind(catalog.tasks.find((s) => s.name === t.task)) === "files"),
           // Value and pset connections can be hidden (view.valueNodes).
           fromValues: value,
-          ...(crossings.length ? { crossings } : {}),
         },
         source: source.id,
         target: target.id,
@@ -331,11 +279,9 @@ export function connectFlow(
 ): TaskMap {
   // Values go to pinned parameters, psets to pset inputs (lib/values).
   if ([drawn.sourceHandle, drawn.targetHandle].some((h) => h && (h.startsWith(VALUE_HANDLE) || h.startsWith(PARAM_HANDLE) || h === PSET_OUTPUT || h.startsWith(PSET_INPUT)))) {
-    checkContainerConnection(map, drawn)
     return connectValue(map, catalog, drawn, replacingId)
   }
   const connection = memberConnection(map, drawn)
-  checkContainerConnection(map, connection)
   const sourceTask=map.tasks.find(t=>t.id===connection.source)
   const customPort=sourceTask?.outputPorts?.find(p=>customPortHandle(p.id)===connection.sourceHandle)
   if (!(customPort || connection.sourceHandle === "output" || connection.sourceHandle?.startsWith("output:")) || !connection.targetHandle)
@@ -357,13 +303,7 @@ export function connectFlow(
     prior.source.outputRole === outputRole
       ? prior.source
       : customPort ? customOutput(base,connection.source,customPort) : nodeOutput(base, connection.source, outputRole)
-  const connected = connectInputPort(base,catalog,rows,connection.target,connection.targetHandle,source)
-  // A replaced edge keeps how it receives at region borders.
-  if (!prior?.flow) return connected
-  const added = connected.connections.at(-1)
-  return added && !map.connections.some((c) => c.id === added.id)
-    ? { ...connected, connections: connected.connections.map((c) => (c.id === added.id ? { ...c, flow: prior.flow } : c)) }
-    : connected
+  return connectInputPort(base,catalog,rows,connection.target,connection.targetHandle,source)
 }
 /** Connect a source to one input of a task. */
 export function connectInputPort(map:TaskMap,catalog:Catalog,rows:Frame[],targetId:string,role:string,source:Source):TaskMap {
@@ -421,16 +361,13 @@ export function changeFlowNodes(
     subflows,
     tasks: map.tasks.map((task) => {
       if (!carried(task.id)) return task
-      // A region's task stands at its group's place.
-      const group = subflows?.find((g) => g.id === task.id)
-      if (group) return { ...task, position: group.position }
       if (!byId.has(task.id)) return task
       return { ...task, position: absolute(task.id) }
     }),
     view: {
       ...map.view,
       selected:
-        nodes.find((n) => (n.type === "task" || isContainerId(map, n.id)) && n.selected)?.id ??
+        nodes.find((n) => n.type === "task" && n.selected)?.id ??
         "",
     },
   }

@@ -3,7 +3,6 @@ import { type Instance, type TaskMap } from "./model"
 import { connectionRoles } from "./connections"
 import { resolvedSource } from "./runs"
 import { isJobNode, isValueRole, psetValues, valueRequest, withValues, type ValueScalar } from "@/lib/values"
-import { enclosingRegions, flowRequests, isContainerId } from "@/lib/containers"
 const clone = <T,>(value: T): T => structuredClone(value)
 
 /** `values` are resolved value connections (`name` or `pset.name`), see lib/values. */
@@ -59,14 +58,15 @@ export function payloadFor(map: TaskMap, id: string, catalog: Catalog, values: R
       )
     }
     if (links.length) {
-      // Inside loop regions, a connection crossing into them gives the first round's files.
       inputs[slot.name] = links.flatMap((c) =>
-        c.source.kind !== "pending" ? (t.firstRound?.[c.id] ?? c.source.ids) : []
+        c.source.kind !== "pending" ? c.source.ids : []
       )
+      // A split task pairs several files to its groups (lib/splits).
       if (
         requiredNow &&
         !t.expressions[slot.name] &&
         !slot.multiple &&
+        !t.draft.split &&
         inputs[slot.name].length > 1
       ) {
         throw Error(
@@ -107,6 +107,11 @@ function taskPayload(t: Instance, inputs: Record<string, string[]>) {
     exam: t.draft.exam,
     expressions: t.expressions,
     filePolicy: t.filePolicy,
+    // Split execution (lib/splits, giraf/splits.py).
+    ...(t.draft.split?.by?.length ? { split: t.draft.split } : {}),
+    ...(t.draft.pairing && Object.keys(t.draft.pairing).length ? { pairing: t.draft.pairing } : {}),
+    ...(t.draft.groupValues && Object.keys(t.draft.groupValues).length ? { groupValues: t.draft.groupValues } : {}),
+    ...(t.draft.formulas && Object.keys(t.draft.formulas).length ? { formulas: t.draft.formulas } : {}),
   })
 }
 
@@ -120,10 +125,7 @@ export function workflowRequest(
   // Value and pset nodes are evaluated by the server with the tasks they feed.
   const jobs = map.tasks.filter((t) => isJobNode(catalog.tasks.find((s) => s.name === t.task)))
   const jobIds = new Set(jobs.map((t) => t.id))
-  // Loop regions run their members, tasks and inner regions (lib/containers).
-  const regionIds = new Set(flowRequests(map, catalog, jobIds).map((f) => f.id))
-  const flows = flowRequests(map, catalog, jobIds).map((flow) => ({ ...flow, members: flow.members.filter((id) => jobIds.has(id) || regionIds.has(id)) }))
-  const running = new Set([...jobIds, ...flows.map((f) => f.id)])
+  const running = jobIds
   /** The input a connection fills when it carries files, or undefined when it is inactive. */
   const fileRole = (c: TaskMap["connections"][number]) => {
     if (isValueRole(c.role)) return undefined
@@ -161,26 +163,16 @@ export function workflowRequest(
     const role = fileRole(c)
     if (!role) return []
     const sourceId = c.source.kind !== "files" ? c.source.taskId : undefined
-    const crossing = { target: c.target, role: c.role, kind: role.kind, multiple: role.multiple, ...(c.flow ? { flow: c.flow } : {}) }
-    if (sourceId && running.has(sourceId))
-      return [{
-        source: sourceId,
-        ...(c.source.kind !== "files" && c.source.files !== undefined ? { sourceFiles: c.source.files } : {}),
-        ...(c.source.kind !== "files" && c.source.outputRole ? { sourceRole: c.source.outputRole } : {}),
-        ...crossing,
-      }]
-    // Inside regions, files from a source outside this run go with the run, resolved,
-    // so each round receives them as the connection says.
-    if (!enclosingRegions(map, c.target).length) return []
-    const source = resolvedSource(map, c.source)
-    if (source.kind === "pending" || !source.ids.length) return []
-    return [{ source: sourceId ?? "", ...(c.source.kind !== "files" && c.source.outputRole ? { sourceRole: c.source.outputRole } : {}),
-      ...crossing, files: source.ids }]
+    if (!sourceId || !running.has(sourceId)) return []
+    return [{
+      source: sourceId,
+      ...(c.source.kind !== "files" && c.source.files !== undefined ? { sourceFiles: c.source.files } : {}),
+      ...(c.source.kind !== "files" && c.source.outputRole ? { sourceRole: c.source.outputRole } : {}),
+      target: c.target, role: c.role, kind: role.kind, multiple: role.multiple,
+    }]
   })
   const prepared = {
     ...map,
-    // The run, not the first round, decides what each round takes.
-    tasks: map.tasks.map((t) => (t.firstRound ? { ...t, firstRound: undefined } : t)),
     // Pset links stay: each task takes its pset node's values (lib/values psetValues).
     connections: map.connections.map((c) =>
       !isValueRole(c.role) && (c.source.kind === "pending" || links.some((l) => l.target === c.target && l.role === c.role))
@@ -188,12 +180,7 @@ export function workflowRequest(
         : c
     ),
   }
-  // Each round gives a member's value links its own values (giraf/workflow.py value_rounds).
-  const values = valueRequest(
-    { ...valueMap, tasks: valueMap.tasks.map((t) => (t.roundValues ? { ...t, roundValues: undefined } : t)) },
-    catalog,
-    running
-  )
+  const values = valueRequest(valueMap, catalog, running)
   return {
     nodes: jobs.map((t) => ({
       id: t.id,
@@ -202,7 +189,6 @@ export function workflowRequest(
     })),
     links,
     values: { ...values, links: values.links.filter((l) => running.has(l.target)) },
-    flows,
   }
 }
 
@@ -224,18 +210,7 @@ export function workflowDiagnosticRequest(
       connectionRoles(spec, catalog).find(
         (role) => role.name === connection.role
       )
-    const source = resolvedSource(map, connection.source, role?.kind)
-    // Inside regions a connection crossing into them is checked with the first round's files.
-    const first = task?.firstRound?.[connection.id]
-    return {
-      ...connection,
-      // A first round with no match waits like a source not yet run; the warning names the round.
-      source: !first || source.kind === "pending"
-        ? source
-        : first.length || source.kind !== "result" || !source.taskId
-          ? { ...source, ids: first }
-          : { kind: "pending" as const, taskId: source.taskId, ...(source.outputRole ? { outputRole: source.outputRole } : {}) },
-    }
+    return { ...connection, source: resolvedSource(map, connection.source, role?.kind) }
   })
   return {
     workingDirectory,
@@ -263,7 +238,6 @@ export function workflowDiagnosticRequest(
       }
     }),
     connections,
-    flows: flowRequests(map, catalog, checked),
   }
 }
 
@@ -282,7 +256,34 @@ export function workflowDiagnosticSignature(
     }),
     connections: map.connections,
     runs: map.runs,
-    // Region membership decides what each region runs.
-    members: map.tasks.map((task) => (isContainerId(map, task.subflowId) ? task.subflowId : "")),
   })
+}
+
+/**
+ * What the server needs to show a task's 명령, one CL line per group
+ * (giraf/server.py task_commands): its settings with the files known now,
+ * the inputs still waiting on a run, and the value request its values read.
+ */
+export function commandsRequest(map: TaskMap, catalog: Catalog, id: string, workingDirectory: string) {
+  const task = map.tasks.find((t) => t.id === id)
+  const spec = catalog.tasks.find((s) => s.name === task?.task)
+  if (!task || !spec) return undefined
+  const inputs = clone(task.draft.inputs)
+  if (spec.preprocess)
+    for (const slot of catalog.ccdproc.inputs) inputs[slot.name] = clone(task.preprocess.inputs[slot.name] || [])
+  const pending = new Set<string>()
+  for (const slot of connectionRoles(spec, catalog)) {
+    const links = map.connections.filter((c) => c.target === id && c.role === slot.name)
+    if (!links.length) continue
+    const sources = links.map((c) => resolvedSource(map, c.source, slot.kind))
+    if (sources.some((s) => s.kind === "pending")) pending.add(slot.name)
+    inputs[slot.name] = sources.flatMap((s) => (s.kind === "pending" ? [] : s.ids))
+  }
+  if (spec.adapter !== "generic") inputs.instrument = clone(task.instrument)
+  return {
+    node: id,
+    payload: { ...taskPayload({ ...task, parameterSets: psetValues(map, task) }, inputs), workingDirectory },
+    pending: [...pending],
+    values: valueRequest(map, catalog),
+  }
 }

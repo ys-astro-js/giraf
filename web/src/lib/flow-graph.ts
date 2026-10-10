@@ -1,13 +1,5 @@
 import type { TaskMap } from "./task-map/model"
 
-/**
- * A loop region is a GIRAF node whose task id is also the id of its group
- * (lib/containers). It has no file ports; only its value outputs
- * (`value:<label>`) start connections, to tasks inside it.
- */
-export const isContainerId = (map: TaskMap, id: string | undefined) =>
-  !!id && !!map.subflows?.some((g) => g.id === id) && map.tasks.some((t) => t.id === id)
-
 function sourceVertex(ports: ValuePorts, id: string, outputRole?: string) {
   return ports(id) ? `${id}>${outputRole ?? ""}` : id
 }

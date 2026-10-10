@@ -1,21 +1,8 @@
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, getSmoothStepPath, useInternalNode, type EdgeProps } from "@xyflow/react"
 import { roundedRoute, type Point } from "@/lib/edge-routing"
-import type { EdgeCrossing, TaskFlowNode } from "@/lib/workflow-flow"
-import { useContext, useMemo } from "react"
+import type { TaskFlowNode } from "@/lib/workflow-flow"
+import { useContext } from "react"
 import { WorkflowContext } from "@/features/workflow/context"
-import { chipPlace, pathPoints } from "@/lib/edge-crossing"
-import { withMeans } from "@/lib/korean"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-
-/** About how wide a chip draws its words (11px semibold): Hangul wider than Latin, with padding and border. */
-const chipWidth = (text: string) => [...text].reduce((sum, c) => sum + (/[ㄱ-힝]/.test(c) ? 11 : 7), 14)
 
 /** A point late on React Flow's bezier, near the target, so labels of edges sharing a port separate. */
 function labelPoint(sx: number, sy: number, tx: number, ty: number, t = 0.75) {
@@ -53,24 +40,6 @@ export function WorkflowEdge(props: EdgeProps) {
       ? { x: props.targetX - 16, y: props.targetY, end: true }
       : { ...labelPoint(props.sourceX, props.sourceY, props.targetX, props.targetY), end: false }
     : null
-  const context = useContext(WorkflowContext)
-  const crossings = props.data?.bypass ? undefined : props.data?.crossings as EdgeCrossing[] | undefined
-  const groups = context?.map.subflows
-  // Each chip sits where the edge last enters its region's border, moved along
-  // the edge past chips other edges placed there first.
-  const along = useMemo(() => (crossings?.length ? pathPoints(path) : []), [crossings, path])
-  const placed = context?.chipBoxes
-  const chips = (crossings ?? []).flatMap((crossing) => {
-    const group = groups?.find((g) => g.id === crossing.region)
-    if (!group) return []
-    const key = `${crossing.region}\u0000${props.id}`
-    const taken = [...(placed ?? [])].filter(([k]) => k < key && k.startsWith(crossing.region + "\u0000")).map(([, box]) => box)
-    const size = { width: chipWidth(crossing.text), height: 20 }
-    const at = chipPlace(along, { ...group.position, width: group.width, height: group.height }, size, taken)
-    if (at) placed?.set(key, { ...at, ...size })
-    else placed?.delete(key)
-    return at ? [{ crossing, at }] : []
-  })
   return <>
     <BaseEdge id={props.id} path={path}
       style={props.style} markerStart={props.markerStart} markerEnd={props.markerEnd} interactionWidth={props.interactionWidth} />
@@ -80,58 +49,5 @@ export function WorkflowEdge(props: EdgeProps) {
         {props.data?.value ? value : role}
       </span>
     </EdgeLabelRenderer>}
-    {!!chips.length && <EdgeLabelRenderer>
-      {chips.map(({ crossing, at }) => <RegionChip key={crossing.region} connectionId={props.id} crossing={crossing} at={at}
-        opacity={(props.style as { opacity?: number } | undefined)?.opacity} />)}
-    </EdgeLabelRenderer>}
   </>
-}
-
-/**
- * How a connection receives at a region's border (lib/containers): the chip
- * names it and opens a menu to change it. Its connection's diagnostics show
- * on it as on the node.
- */
-function RegionChip({ connectionId, crossing, at, opacity }: { connectionId: string; crossing: EdgeCrossing; at: { x: number; y: number }; opacity?: number }) {
-  const context = useContext(WorkflowContext)
-  const connection = context?.map.connections.find((c) => c.id === connectionId)
-  const from = connection && connection.source.kind !== "files" ? connection.source.taskId : undefined
-  const source = context?.map.tasks.find((t) => t.id === from)
-  const region = context?.map.tasks.find((t) => t.id === crossing.region)
-  const issues = context?.currentIssues.filter((issue) => issue.connectionId === connectionId) ?? []
-  const severity = issues.some((issue) => issue.severity === "error") ? "error" : issues.length ? "warning" : undefined
-  const choose = context?.chooseReceive
-  const name = source?.label ?? ""
-  return <DropdownMenu>
-    <DropdownMenuTrigger
-      render={<button type="button" />}
-      className="region-chip nodrag nopan"
-      data-severity={severity}
-      title={issues.map((issue) => issue.message).join("\n") || undefined}
-      aria-label={`${name} ${region?.label ?? ""} ${crossing.text}${issues.map((issue) => `, ${issue.severity === "error" ? "오류" : "경고"}: ${issue.message}`).join("")}`}
-      disabled={!choose}
-      style={{ transform: `translate(${at.x}px, ${at.y}px) translate(-50%, -50%)`, opacity }}
-    >
-      {crossing.text}
-    </DropdownMenuTrigger>
-    <DropdownMenuContent aria-label={`${name} 받는 방법`}>
-      <DropdownMenuRadioGroup
-        value={crossing.mode === "match" ? "" : crossing.mode}
-        onValueChange={(mode: string) => choose?.(connectionId, crossing.region, mode === "split" ? "split" : "all")}
-      >
-        {/* Values have no files to divide. */}
-        {!crossing.value && <DropdownMenuRadioItem value="split" closeOnClick>나눠서</DropdownMenuRadioItem>}
-        <DropdownMenuRadioItem value="all" closeOnClick>모두에</DropdownMenuRadioItem>
-      </DropdownMenuRadioGroup>
-      {crossing.labels.map((key) => (
-        <DropdownMenuCheckboxItem
-          key={key}
-          checked={crossing.mode === "match" && crossing.keys.includes(key)}
-          onCheckedChange={() => choose?.(connectionId, crossing.region, { key })}
-        >
-          {withMeans(key)} 짝
-        </DropdownMenuCheckboxItem>
-      ))}
-    </DropdownMenuContent>
-  </DropdownMenu>
 }

@@ -5,13 +5,13 @@ import { CursorInput } from "@/components/cursor-input"
 
 import { isGirafNode, type Catalog, type Spec, type Frame, type Slot } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
-import { crossedRegions, loopFrames, memberPassInputs, passFilesText, receiveMode, receiveText, type InputPasses } from "@/lib/containers"
+import { splitOf } from "@/lib/splits"
+import { PairControl, SplitControl } from "./SplitControls"
 
 import type { Source } from "@/lib/task-map"
 import type * as React from "react"
 export function InspectorInputSlot({
   map,
-  catalog,
   task,
   spec,
   rows,
@@ -85,13 +85,13 @@ export function InspectorInputSlot({
     onInputSource?.(s.name, { kind: "files", ids: next, label: s.label })
     if (!onInputSource) reorderInput(s.name, next)
   }
-  // Inside a loop region: what each round receives through this input.
-  const passes = memberPassInputs(map, catalog, task, rows)?.[role]
-  // How each connection receives where it last crosses into a region: its chip's words.
-  const receives = [...new Set(links.flatMap((link) => {
-    const region = crossedRegions(map, link).at(-1)
-    return region ? [receiveText(receiveMode(map, link, region))] : []
-  }))]
+  // 나누기 on a file list, or 짝 맞추기 once another input is split (lib/splits).
+  const split = splitOf(task)
+  const pending = assigned(map, task, role).pending.length > 0
+  const several = ids.length > 1 || pending
+  const control = !several || expression ? null
+    : !split || split.input === role ? (s.multiple ? <SplitControl map={map} task={task} role={role} rows={rows} edit={edit} /> : null)
+    : <PairControl map={map} task={task} role={role} rows={rows} edit={edit} />
   const field = (
     <InspectorFileSource
       s={s}
@@ -112,8 +112,9 @@ export function InspectorInputSlot({
       onInputSource={onInputSource}
       map={map}
       task={task}
+      count={!expression && (links.length || ids.length) && !pending ? ids.length : undefined}
     >
-      {passes && <PassFiles label={slotLabel(s, spec)} receives={receives} input={passes} frames={loopFrames(map, rows)} />}
+      {control}
     </InspectorFileSource>
   )
   if (
@@ -181,32 +182,5 @@ export function InspectorInputSlot({
         }))
       }}
     />
-  )
-}
-
-const slotLabel = (s: Slot, spec: Spec) => (isGirafNode(spec) && s.label ? s.label : s.name)
-
-/** 회차별 파일: how the input receives, then one row when every round takes the same files, else a row a round. */
-function PassFiles({ label, receives, input, frames }: { label: string; receives: string[]; input: InputPasses; frames: Map<string, Frame> }) {
-  const rows = [
-    ...(receives.length ? [{ name: "받는 방법", text: receives.join(", ") }] : []),
-    ...(input.kind === "unknown" ? [{ name: "", text: "실행하면 정해집니다" }]
-    : input.kind === "each" ? [{ name: "회차마다", text: "1장" }]
-    : input.kind === "same" ? [{ name: "모든 회차", text: input.ids.length ? passFilesText(input.ids, frames) : "없음", missing: !input.ids.length }]
-    : input.passes.map((pass) => ({
-        name: pass.name,
-        text: pass.ids.length ? passFilesText(pass.ids, frames) : "없음",
-        missing: !pass.ids.length,
-      }))),
-  ]
-  return (
-    <ul className="pass-files" aria-label={`${label} 회차별 파일`}>
-      {rows.map((row) => (
-        <li key={row.name}>
-          {row.name && <span>{row.name}</span>}
-          <span className="pass-value" data-missing={"missing" in row && row.missing ? "" : undefined}>{row.text}</span>
-        </li>
-      ))}
-    </ul>
   )
 }

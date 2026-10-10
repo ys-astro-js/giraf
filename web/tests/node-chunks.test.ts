@@ -12,14 +12,13 @@ test("GIRAF nodes split into files and script by run, in a fixed order; 값 is o
     node("compute", "value-compute"),
     node("files", "pass-files"),
     node("save", "save-files"),
-    node("foreach", "foreach"),
     node("header", "value-header"),
     node("value", "value-constant"),
     node("pset", "pset"),
   ]
   expect(nodeChunks(nodes).map((c) => [c.id, c.label, c.nodes.map((n) => n.name)])).toEqual([
     ["files", "파일", ["files", "save"]],
-    ["script", "스크립트하기", ["foreach", "value"]],
+    ["script", "스크립트하기", ["value"]],
   ])
   // The other 가져오기 runs are reached from the 값 node; search still finds them.
   expect(nodes.filter(isModeOnly).map((n) => n.name)).toEqual(["compute", "header", "pset"])

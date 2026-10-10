@@ -36,7 +36,6 @@ import { parameterLink } from "@/lib/value-take"
 import { SearchField } from "@/components/search-field"
 import { ValueSourceEditor } from "@/components/value-source-editor"
 import { PACKAGE_SET, valueDescription } from "@/lib/value-modes"
-import { isFlowSpec } from "@/lib/containers"
 import { inspectorTabs, type InspectorTab } from "@/lib/inspector-tabs"
 import { SidebarHeader } from "@/components/ui/sidebar"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -361,7 +360,7 @@ export function TaskInspector({
       : []),
   ]
   const displayGroups = schemaParameterGroups(spec, groups).filter(
-    (group) => group.parameters.length > 0 || !(isValueNode(spec) || isFlowSpec(spec))
+    (group) => group.parameters.length > 0 || !isValueNode(spec)
   )
   const hasParameters = displayGroups.some((group) => group.parameters.length > 0)
   // Only the tabs this kind of node has; a hidden tab falls back to the first.

@@ -1,5 +1,4 @@
 import { type CustomOutputPort } from "@/lib/output-ports"
-import type { ReceiveMode } from "@/lib/containers"
 import {
   defaults,
   makeDraft,
@@ -33,10 +32,6 @@ export type Connection = {
   target: string
   role: string
   source: Source
-  /** How it receives at each loop region border it crosses, by region id; unset is the default (lib/containers receiveMode). */
-  flow?: Record<string, ReceiveMode>
-  /** Opened from an older document where it took one value of a split or calibration port; now it takes the whole output. Warns until its receive mode is chosen (lib/region-migration). */
-  widened?: true
 }
 
 export type Instance = {
@@ -60,10 +55,8 @@ export type Instance = {
   pinned?: string[]
   /** Derived: the files each pass output carries now (syncPassOutputs). */
   passed?: Record<string, string[]>
-  /** Derived: inside loop regions, the files their first rounds take from each connection crossing into them or from a task inside them that ran, by connection id (syncContainerItems). */
-  firstRound?: Record<string, string[]>
-  /** Derived: inside loop regions, their first rounds' values by label, which a run of this member alone takes (syncContainerItems). */
-  roundValues?: Record<string, string>
+  /** An older document's loop region around it was unwrapped; warns until its split is set (lib/region-migration). */
+  migrated?: true
   subflowId?: string
 }
 
@@ -72,8 +65,10 @@ export type MapRun = {
   instanceId: string
   state: string
   products: Frame[]
-  /** The workflow run it was a step of; a task inside loop regions makes one run per round there. */
+  /** The workflow run it was a step of; a split task makes one run per group there. */
   workflow?: string
+  /** The group of a split task this run was (giraf/splits.py group id). */
+  group?: string
 }
 
 export type SubflowColor =

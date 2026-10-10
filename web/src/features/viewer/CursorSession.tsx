@@ -50,9 +50,7 @@ import {
 } from "@/lib/cursor-session"
 import { displayQueryOptions, displayRow, frameToImage, runFrame } from "@/lib/display"
 import { outputTable } from "@/lib/output-table"
-import { roundText } from "@/lib/containers"
 import { jobTitle, type Job } from "@/lib/workbench"
-import { useWorkbench } from "@/features/workbench/context"
 import { OutputTableView } from "./OutputTableView"
 
 /** The node schema's cursor icons (giraf/node_schema.py CURSOR_ICONS). */
@@ -515,9 +513,8 @@ function CursorResults({
   job: Job
   table: NonNullable<ReturnType<typeof outputTable>>
 }) {
-  const { map, catalog } = useWorkbench()
   const title = jobTitle(job)
-  const round = catalog ? roundText(map, catalog, job.manifest?.round) : ""
+  const round = job.manifest?.group?.name ?? ""
   return (
     <section className="cursor-results" aria-label={`${title} 결과`}>
       <header className="cursor-results-header">

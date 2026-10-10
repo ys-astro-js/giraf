@@ -1,9 +1,9 @@
 import type { Subflow, TaskMap } from "./task-map/model"
 
 /**
- * Groups inside groups (docs/node-structure-brief.md §3.5): a loop region is a
- * task whose id is its group's, so a region sits in the group its task is in.
- * Plain groups have no task and stay at the top. Positions are absolute.
+ * Groups and what they hold. A group with a task of the same id sits in the
+ * group that task is in (older documents); plain groups have no task and stay
+ * at the top. Positions are absolute.
  */
 
 const groupOf = (map: TaskMap, id: string | undefined) => (id ? map.subflows?.find((g) => g.id === id) : undefined)

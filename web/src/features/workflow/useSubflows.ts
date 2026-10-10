@@ -2,9 +2,7 @@ import type { TaskMap } from "@/lib/task-map"
 import type { Catalog } from "@/lib/workbench"
 import { useState } from "react"
 import { type Edge, type ReactFlowInstance } from "@xyflow/react"
-import { moveGroupToGroup, moveTaskToSubflow, subflowDropTarget } from "@/lib/subflow"
-import { isContainerId } from "@/lib/containers"
-import { groupContents } from "@/lib/group-nesting"
+import { moveTaskToSubflow, subflowDropTarget } from "@/lib/subflow"
 import { type WorkflowNode } from "@/lib/workflow-flow"
 
 export function useSubflowInteraction({
@@ -29,15 +27,12 @@ export function useSubflowInteraction({
 
   function groupDrop(node: WorkflowNode) {
     if (!flow) return null
-    // A region can go into another group; a plain group has no task to hold its place.
-    const region = node.type !== "task" && isContainerId(map, node.id)
-    if (node.type !== "task" && !region) return null
+    // A group has no task to hold its place in another.
+    if (node.type !== "task") return null
     const parent = node.parentId ? flow.getInternalNode(node.parentId)?.internals.positionAbsolute : undefined
     const position = { x: node.position.x + (parent?.x ?? 0), y: node.position.y + (parent?.y ?? 0) }
     const width = node.measured?.width ?? node.initialWidth ?? 280
     const height = node.measured?.height ?? node.initialHeight ?? 200
-    // Not into itself or a region inside it.
-    const own = region ? groupContents(map, node.id).groups : new Set<string>()
     // Native intersection detection uses flow coordinates, independent of viewport pan/zoom.
     const candidates = new Set(
       flow
@@ -47,14 +42,14 @@ export function useSubflowInteraction({
           width: 2,
           height: 2,
         })
-        .filter((n) => n.type === "subflow" && !n.hidden && n.id !== node.id && !own.has(n.id))
+        .filter((n) => n.type === "subflow" && !n.hidden && n.id !== node.id)
         .map((n) => n.id)
     )
     const target = subflowDropTarget(
       (map.subflows ?? []).filter((g) => candidates.has(g.id)),
       { ...position, width, height }
     )
-    return { position: { x: position.x, y: position.y }, target, original: node.parentId, region }
+    return { position: { x: position.x, y: position.y }, target, original: node.parentId }
   }
   function previewGroupDrop(node: WorkflowNode) {
     const info = groupDrop(node)
@@ -70,14 +65,8 @@ export function useSubflowInteraction({
   }
   function finishGroupDrop(node: WorkflowNode) {
     const info = groupDrop(node)
-    if (info && (!info.region || info.target !== info.original))
-      update(
-        (m) =>
-          info.region
-            ? moveGroupToGroup(m, catalog, node.id, info.target, info.position)
-            : moveTaskToSubflow(m, catalog, node.id, info.target, info.position),
-        "노드 이동"
-      )
+    if (info)
+      update((m) => moveTaskToSubflow(m, catalog, node.id, info.target, info.position), "노드 이동")
     setDragPreview({})
   }
   function finishGroupSelection() {

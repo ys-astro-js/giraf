@@ -14,13 +14,13 @@ import { apiQueryOptions } from "@/lib/queries"
 import { api, type Spec } from "@/lib/workbench"
 import type { TaskMap } from "@/lib/task-map"
 
-/** One round's remembered measurement (giraf/measurements.py). */
+/** One group's remembered measurement (giraf/measurements.py; the field keeps its older name `round`). */
 type Measurement = { round: string; job: string; label: string; count: number; at: number }
 
 /**
- * What a cursor task measured in workflow runs, round by round. A later run
- * uses a round's measurement again while its image is unchanged; 다시 측정
- * forgets the chosen rounds so the next run asks again.
+ * What a cursor task measured in workflow runs, group by group of its split
+ * (lib/splits). A later run uses a group's measurement again while its image
+ * is unchanged; 다시 측정 forgets the chosen groups so the next run asks again.
  */
 export function MeasurementsSection({
   spec,
@@ -55,7 +55,7 @@ export function MeasurementsSection({
     <section className="inspector-section" aria-label="측정">
       <h3>측정</h3>
       <FieldGroup>
-        <ul className="input-files pass-files" aria-label="회차별 측정">
+        <ul className="input-files pass-files" aria-label="그룹별 측정">
           {data.map((m) => (
             <li key={m.round}>
               <span>{[m.round, m.label].filter(Boolean).join(" ")}</span>
@@ -73,7 +73,7 @@ export function MeasurementsSection({
                 다시 측정
                 <ChevronDown data-icon="inline-end" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent aria-label="다시 측정할 회차" align="start">
+              <DropdownMenuContent aria-label="다시 측정할 그룹" align="start">
                 <DropdownMenuGroup>
                   {rounds.map((m) => (
                     <DropdownMenuItem key={m.round} onClick={() => void forget([m.round])}>
@@ -81,7 +81,7 @@ export function MeasurementsSection({
                     </DropdownMenuItem>
                   ))}
                   <DropdownMenuItem onClick={() => void forget(null)}>
-                    모든 회차
+                    모든 그룹
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
               </DropdownMenuContent>

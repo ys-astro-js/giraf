@@ -1,226 +1,143 @@
 /**
- * Older loops become loop regions when a document opens (docs/node-structure-brief.md §7).
+ * Older documents' loop regions (반복 영역) become split tasks when a document
+ * opens (lib/splits). A region was a task whose id is also its group's
+ * (`giraf.foreach`, and before it `giraf.for` and `giraf.if`), with settings
+ * in `draft.flow = {criteria, split, condition}` and, on each connection
+ * crossing its border, `flow[region id] = {mode: all|match, keys}`.
  *
- * Before regions, a 각각 반복 took its files on an `items` input and handed
- * them to members through `이번 파일` (`item`); members' outputs went back
- * through `결과` (`result`) and left by `results`. A 반복 (`giraf.for`) ran a
- * number range and a 조건 분기 (`giraf.if`) routed files to 참 and 거짓 lanes.
- * Output ports could be split by a header keyword (묶음 포트) and calibration
- * inputs and outputs by filter and exposure (보정 그룹 포트).
- *
- * Here keywords become keyword criteria, the source on `items` becomes the
- * region's split, connections through the item, lane and result ports become
- * connections from their source to their target, a range becomes `N번`, a
- * condition stays the region's condition (the 거짓 lane's tasks go to a second
- * region with the opposite one), and a connection that took one member of a
- * split or calibration port becomes a plain connection, marked `widened` so
- * diagnostics say it now takes the whole output (lib/containers loopIssues).
+ * A region that wraps exactly one task, whose split source feeds that task and
+ * whose criteria are header keywords, N장씩 or 파일마다 becomes that task's
+ * split on the input the source feeds: keyword → {key}, count → {per},
+ * each → {each}. Its connections' `match` modes become pairing by their first
+ * key and `all` becomes IRAF에 맡기기. Anything else is unwrapped: the tasks
+ * stay, marked `migrated` so a warning asks for the split and pairing again.
  */
-import { uid, type Connection, type Instance, type Source, type TaskMap } from "./task-map/model"
-import { EACH_LABEL, TIMES_LABEL, isFlowSpec, labelName, type Criterion, type FlowSettings } from "./containers"
-import { VALUE_HANDLE } from "./values"
+import type { Connection, Instance, TaskMap } from "./task-map/model"
 import type { Catalog } from "./workbench"
+import type { PairRule, SplitPart } from "./splits"
 
-/** The node kinds regions replace; their schemas are gone, so only their names say what they were. */
-const LEGACY_RUNS: Record<string, "for" | "if"> = { "giraf.for": "for", "giraf.if": "if" }
-const FOREACH = "giraf.foreach"
-const ITEMS = "items", ITEM = "item", COLLECT = "result", RESULTS = "results"
-const LANES = { then: "then", else: "else" }
+type OldCriterion = { keyword?: string; expression?: string; name?: string; count?: number; order?: string; each?: boolean; times?: number }
+type OldFlow = { criteria?: OldCriterion[]; split?: { taskId: string; outputRole?: string }; condition?: string }
+type OldConnection = Connection & { flow?: Record<string, { mode: "all" | "match"; keys?: string[] }>; widened?: true; targetGroup?: unknown }
+type OldInstance = Instance & { firstRound?: unknown; roundValues?: unknown; firstPass?: unknown; firstPassValues?: unknown }
 
-type OldFlow = FlowSettings & { variable?: string; keywords?: string[]; partition?: unknown; start?: string; end?: string; step?: string }
-type OldSource = Source & { group?: unknown; partition?: { keyword: string; value: string } }
+const REGION_TASKS = new Set(["giraf.foreach", "giraf.for", "giraf.if"])
+const flowOf = (task: Instance) => (task.draft as { flow?: OldFlow }).flow
+const sourceId = (c: Connection) => (c.source.kind !== "files" ? c.source.taskId : undefined)
 
-/** A source that took one value of a split port or one group of a calibration port. */
-const narrow = (source: Source) => "group" in source || "partition" in source
-const sourceId = (source: Source) => (source.kind !== "files" ? source.taskId : undefined)
-const plain = (source: Source): Source => {
-  const { group: _g, partition: _p, ...rest } = source as OldSource
-  void _g
-  void _p
-  return rest as Source
+/** A region: its task's id is also a group's. */
+const isRegion = (map: TaskMap, task: Instance) =>
+  !!map.subflows?.some((g) => g.id === task.id) && (REGION_TASKS.has(task.task) || !!flowOf(task))
+
+/** The label names a region's criteria put in output names (`{EXPTIME}`, `{묶음}`, `{파일}`). */
+function labels(flow: OldFlow): string[] {
+  return (flow.criteria ?? []).map((c) => c.keyword ?? (c.expression !== undefined ? c.name ?? "" : c.count !== undefined ? "묶음" : c.each ? "파일" : "회차"))
 }
 
-/** How many numbers a range from `start` to `end` by `step` has (giraf/flows.py had flow_range). */
-function rangeCount(flow: OldFlow): number {
-  const [start, end, step] = [flow.start, flow.end, flow.step || "1"].map((v) => Number(v))
-  if (![start, end, step].every(Number.isFinite) || step === 0 || (end - start) * step < 0) return 1
-  return Math.min(1000, Math.floor((end - start) / step + 1e-9) + 1)
-}
-
-/** Old regions: a 각각 반복 still written with variables, and every 반복 and 조건 분기. */
-function legacyRun(task: Instance, catalog: Catalog): "foreach" | "for" | "if" | undefined {
-  if (LEGACY_RUNS[task.task]) return LEGACY_RUNS[task.task]
-  const flow = task.draft.flow as OldFlow | undefined
-  const foreach = task.task === FOREACH || isFlowSpec(catalog.tasks.find((s) => s.name === task.task))
-  return foreach && flow && !Array.isArray(flow.criteria) ? "foreach" : undefined
-}
-
-/** The keywords an old 각각 반복 ran by: chosen on it, an older `partition`, or its list's split port. */
-function oldKeywords(map: TaskMap, task: Instance, items: Connection[]): string[] {
-  const flow = task.draft.flow as OldFlow
-  if (Array.isArray(flow.keywords)) return flow.keywords
-  if (typeof flow.partition === "string" && flow.partition) return [flow.partition]
-  const from = items[0]?.source as OldSource | undefined
-  if (!from || from.kind === "files" || from.partition) return []
-  const source = map.tasks.find((t) => t.id === from.taskId)
-  const ports = (source?.outputPorts ?? []) as { id: string; outputRole?: string; partition?: { keyword: string } }[]
-  const port = ports.find((p) => p.partition && (from.port === "output" ? p.id === "$default" : from.port === `output:${p.outputRole}` ||
-    from.port === `output-custom:${p.id}` || (!from.port && (p.outputRole === from.outputRole || p.id === "$default"))))
-  return port?.partition ? [port.partition.keyword] : []
-}
-
-/** Members an `if` lane reaches, through other members. */
-function laneMembers(map: TaskMap, id: string, lane: string): Set<string> {
-  const members = new Set(map.tasks.filter((t) => t.subflowId === id).map((t) => t.id))
-  const reached = new Set<string>()
-  const stack = map.connections.filter((c) => sourceId(c.source) === id && c.source.kind !== "files" && c.source.outputRole === lane &&
-    members.has(c.target)).map((c) => c.target)
-  while (stack.length) {
-    const next = stack.pop()!
-    if (reached.has(next)) continue
-    reached.add(next)
-    stack.push(...map.connections.filter((c) => sourceId(c.source) === next && members.has(c.target)).map((c) => c.target))
-  }
-  return reached
-}
-
-/** Output names that read the old variable read the region's label. */
-function renameVariable(task: Instance, from: string | undefined, to: string | undefined): Instance {
-  if (!from || !to || from === to) return task
-  const swap = (text: string) => text.replaceAll(`{${from}}`, `{${to}}`)
+/** `Dark{EXPTIME}_{묶음}.fits` is `Dark.fits`: a group's suffix names it now. */
+function withoutLabels(task: Instance, names: string[]): Instance {
+  const strip = (text: string) => names.reduce((name, label) => name.replaceAll(`{${label}}`, ""), text).replace(/[_-]+(?=\.|$)/, "")
   const d = task.draft
   return {
     ...task,
     draft: {
       ...d,
-      outputs: d.outputs && Object.fromEntries(Object.entries(d.outputs).map(([k, v]) => [k, swap(v)])),
-      output: { ...d.output, name: swap(d.output.name) },
+      ...(d.outputs ? { outputs: Object.fromEntries(Object.entries(d.outputs).map(([k, v]) => [k, strip(v)])) } : {}),
+      output: { ...d.output, name: strip(d.output.name) },
     },
   }
 }
 
-function migrateOne(map: TaskMap, catalog: Catalog, region: Instance): TaskMap {
-  const run = legacyRun(region, catalog)!
-  const id = region.id
-  const flow = (region.draft.flow ?? {}) as OldFlow
-  const input = run === "if" ? "input" : ITEMS
-  const items = map.connections.filter((c) => c.target === id && c.role === input)
-  const split = items.find((c) => sourceId(c.source))
-  const splitSource = split ? plain(split.source) : undefined
-  let criteria: Criterion[] = []
-  let condition = ""
-  if (run === "foreach") {
-    const keywords = oldKeywords(map, region, items)
-    criteria = keywords.length ? keywords.map((keyword) => ({ keyword })) : [{ each: true }]
-  } else if (run === "for") criteria = [{ times: rangeCount(flow) }]
-  else condition = flow.condition?.trim() ?? ""
-  const keys = criteria.flatMap((c) => ("keyword" in c ? [c.keyword] : []))
-  const labels = criteria.map(labelName)
-  const connections: Connection[] = []
-  const elseLane = run === "if" ? laneMembers(map, id, LANES.else) : new Set<string>()
-  const elseId = elseLane.size ? uid() : undefined
-  for (const c of map.connections) {
-    const from = sourceId(c.source)
-    if (c.target === id) continue // The list, a condition value and collected results: no ports now.
-    if (from === id && c.source.kind !== "files") {
-      const role = c.source.outputRole ?? ""
-      if (role === ITEM || role === LANES.then || role === LANES.else) {
-        // The current file: every list source straight to the member; the split one divides.
-        for (const item of items) {
-          const other = item !== split && !!sourceId(item.source)
-          const region = role === LANES.else && elseId ? elseId : id
-          connections.push({
-            id: uid(), target: c.target, role: c.role, source: plain(item.source),
-            ...(narrow(item.source) ? { widened: true as const } : {}),
-            ...(other ? { flow: { [region]: keys.length ? { mode: "match" as const, keys } : { mode: "all" as const, keys: [] } } } : {}),
-          })
-        }
-        continue
-      }
-      if (role === RESULTS) {
-        // Every round's results: each collected member output, straight to the target.
-        for (const collect of map.connections.filter((x) => x.target === id && x.role === COLLECT))
-          connections.push({ id: uid(), target: c.target, role: c.role, source: plain(collect.source), ...(narrow(collect.source) ? { widened: true as const } : {}) })
-        continue
-      }
-      if (role.startsWith(VALUE_HANDLE) && run === "for") {
-        connections.push({ ...c, source: { ...c.source, outputRole: VALUE_HANDLE + TIMES_LABEL } })
-        continue
-      }
-      continue
-    }
-    // Another list source reaching a member directly paired by the keywords, as on the list.
-    const listed = items.some((item) => item !== split && sourceId(item.source) === from)
-    const member = map.tasks.find((t) => t.id === c.target)?.subflowId === id
-    if (from && listed && member && keys.length && !c.flow?.[id]) {
-      connections.push({ ...c, flow: { ...c.flow, [id]: { mode: "match", keys } } })
-      continue
-    }
-    connections.push(c)
+function parts(flow: OldFlow): SplitPart[] | undefined {
+  const found: SplitPart[] = []
+  for (const c of flow.criteria ?? []) {
+    if (c.keyword) found.push({ key: c.keyword })
+    else if (c.count !== undefined && (!c.order || c.order === "name")) found.push({ per: Math.max(1, Math.floor(c.count)) })
+    else if (c.each) found.push({ each: true })
+    else return undefined
   }
-  // A 각각 반복 by file had one name for the file; a range, one for its number.
-  const renamed = run === "foreach" && !keys.length ? EACH_LABEL : run === "for" ? TIMES_LABEL : undefined
-  const variable = flow.variable && !labels.includes(flow.variable) ? flow.variable : undefined
-  const settings: FlowSettings = { criteria, ...(splitSource && sourceId(splitSource) ? { split: { taskId: sourceId(splitSource)!, ...(splitSource.kind !== "files" && splitSource.outputRole ? { outputRole: splitSource.outputRole } : {}) } } : {}), ...(condition ? { condition } : {}) }
-  const group = map.subflows?.find((g) => g.id === id)
-  let tasks = map.tasks.map((t) => {
-    if (t.id === id) {
-      const { passed: _, ...rest } = t
-      void _
-      return { ...rest, task: FOREACH, draft: { ...t.draft, flow: settings } }
-    }
-    if (t.subflowId !== id) return t
-    const moved = elseLane.has(t.id) ? { ...t, subflowId: elseId } : t
-    return renameVariable(moved, variable, renamed ?? (labels.length === 1 ? labels[0] : undefined))
-  })
-  let subflows = map.subflows
-  if (elseId && group) {
-    // The 거짓 lane is a region of its own, with the opposite condition, below the first.
-    const opposite = { ...region, id: elseId, label: `${region.label} 아님`, task: FOREACH,
-      draft: { ...region.draft, flow: { ...settings, condition: `!(${condition})` } }, position: undefined }
-    delete opposite.passed
-    tasks = [...tasks, opposite]
-    subflows = [...(subflows ?? []), { ...group, id: elseId, name: opposite.label, collapsed: undefined,
-      position: { x: group.position.x, y: group.position.y + group.height + 40 } }]
-  }
-  return { ...map, tasks, subflows, connections }
+  return found.length && !flow.condition?.trim() ? found : undefined
 }
 
-/** Open an older document: old loops become regions, split and calibration ports plain outputs. */
+function migrateRegion(map: TaskMap, region: Instance): TaskMap {
+  const flow = flowOf(region) ?? {}
+  const members = map.tasks.filter((t) => t.subflowId === region.id)
+  const parent = region.subflowId
+  const connections = map.connections as OldConnection[]
+  const by = parts(flow)
+  const member = members.length === 1 ? members[0] : undefined
+  const into = member && flow.split?.taskId
+    ? connections.find((c) => c.target === member.id && sourceId(c) === flow.split!.taskId &&
+      (!flow.split!.outputRole || c.source.kind === "files" || !c.source.outputRole || c.source.outputRole === flow.split!.outputRole))
+    : undefined
+  const converted = by && member && into && !member.draft.split
+  const tasks = map.tasks.flatMap((t): Instance[] => {
+    if (t.id === region.id) return []
+    if (t.subflowId !== region.id) return [t]
+    const moved: Instance = { ...t, subflowId: parent }
+    if (!converted) return [{ ...moved, migrated: true }]
+    const pairing: Record<string, PairRule> = { ...t.draft.pairing }
+    for (const c of connections)
+      if (c.target === t.id && c !== into && c.flow?.[region.id]) {
+        const mode = c.flow[region.id]
+        pairing[c.role] = mode.mode === "match" && mode.keys?.length ? { by: mode.keys[0] } : { iraf: true }
+      }
+    // A value from the region (its round's value) has no source now.
+    const lostValue = connections.some((c) => c.target === t.id && sourceId(c) === region.id)
+    const named = withoutLabels(moved, labels(flow))
+    return [{
+      ...named,
+      draft: { ...named.draft, split: { input: into!.role, by: by! }, ...(Object.keys(pairing).length ? { pairing } : {}) },
+      ...(lostValue ? { migrated: true as const } : {}),
+    }]
+  })
+  return {
+    ...map,
+    tasks,
+    subflows: map.subflows?.filter((g) => g.id !== region.id),
+    connections: connections.filter((c) => c.target !== region.id && sourceId(c) !== region.id),
+  }
+}
+
+/** Open an older document: its loop regions become split tasks or are unwrapped. */
 export function migrateRegions(map: TaskMap, catalog: Catalog): TaskMap {
+  void catalog
   let next = map
-  for (const task of map.tasks)
-    if (map.subflows?.some((g) => g.id === task.id) && legacyRun(task, catalog)) next = migrateOne(next, catalog, task)
+  // Inner regions first: a region holding another is migrated once that one is.
+  for (;;) {
+    const regions = next.tasks.filter((t) => isRegion(next, t))
+    const inner = regions.find((r) => !regions.some((o) => o.subflowId === r.id))
+    if (!inner) break
+    next = migrateRegion(next, inner)
+  }
   const stale = (value: object, keys: string[]) => keys.some((k) => k in value)
-  if (next === map && !map.connections.some((c) => stale(c, ["targetGroup"]) || stale(c.source, ["group", "partition"])) &&
-    !map.tasks.some((t) => stale(t, ["firstPass", "firstPassValues"]) || t.outputPorts?.some((p) => stale(p, ["partition", "open"])) ||
-      Object.keys(t.passed ?? {}).some((k) => k.includes("~"))))
+  const old = (draft: object) => stale(draft, ["flow", "partition", "partitionValues"])
+  if (next === map && !map.connections.some((c) => stale(c, ["flow", "widened", "targetGroup"])) &&
+    !map.tasks.some((t) => stale(t, ["firstRound", "roundValues", "firstPass", "firstPassValues"]) || old(t.draft) ||
+      t.draft.valueRows?.some((r) => "groups" in r)))
     return map
   return {
     ...next,
-    connections: next.connections.map((c) => {
-      const { targetGroup, ...rest } = c as Connection & { targetGroup?: unknown }
-      // It took one value of a port that is one output now: it warns until its receiving is chosen.
-      const widened = !!targetGroup || narrow(c.source)
-      return { ...rest, source: plain(c.source), ...(widened ? { widened: true as const } : {}) }
+    connections: (next.connections as OldConnection[]).map((c) => {
+      const { flow: _f, widened: _w, targetGroup: _t, ...rest } = c
+      void _f
+      void _w
+      void _t
+      return rest
     }),
-    tasks: next.tasks.map((t) => {
-      const { firstPass: _a, firstPassValues: _b, ...rest } = t as Instance & { firstPass?: unknown; firstPassValues?: unknown }
+    tasks: (next.tasks as OldInstance[]).map((t) => {
+      const { firstRound: _a, roundValues: _b, firstPass: _c, firstPassValues: _d, ...rest } = t
       void _a
       void _b
-      // A value node's 나누기 기준 is the files' labels now; a constant's table keeps its own.
-      const spec = catalog.tasks.find((s) => s.name === t.task)
-      const draft = t.draft.partition && spec?.run && spec.run !== "value-constant" ? { ...t.draft, partition: undefined } : t.draft
+      void _c
+      void _d
+      const { flow: _f, partition: _p, partitionValues: _v, ...draft } = t.draft as Instance["draft"] & { flow?: unknown; partition?: unknown; partitionValues?: unknown }
+      void _f
+      void _p
+      void _v
       return {
         ...rest,
-        draft,
-        ...(t.outputPorts ? { outputPorts: t.outputPorts.map((p) => {
-          const { partition: _p, open: _o, ...port } = p as typeof p & { partition?: unknown; open?: unknown }
-          void _p
-          void _o
-          return port
-        }) } : {}),
-        ...(t.passed ? { passed: Object.fromEntries(Object.entries(t.passed).filter(([k]) => !k.includes("~"))) } : {}),
+        draft: { ...draft, ...(draft.valueRows ? { valueRows: draft.valueRows.map(({ name, value }) => ({ name, value })) } : {}) },
       }
     }),
   }

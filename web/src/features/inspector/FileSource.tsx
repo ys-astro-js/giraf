@@ -1,6 +1,6 @@
 import type { Connection } from "@/lib/task-map"
 import { ParameterHelp } from "@/components/workbench-controls"
-import { FolderOpen, X, ArrowUp, ArrowDown, ChevronDown } from "lucide-react"
+import { FolderOpen, X, ArrowUp, ArrowDown, ChevronDown, File } from "lucide-react"
 import { CountBadge } from "@/components/count-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,6 +34,7 @@ export function InspectorFileSource({
   onInputSource,
   map,
   task,
+  count,
   children,
 }: {
   s: Slot
@@ -66,7 +67,9 @@ export function InspectorFileSource({
     | undefined
   map: TaskMap
   task: Instance
-  /** Shown under the input: what each round of a loop region receives. */
+  /** How many files the input holds now, beside its source. */
+  count?: number
+  /** Shown under the input: how it is split, or pairs to the groups (lib/splits). */
   children?: React.ReactNode
 }) {
   return (
@@ -91,6 +94,12 @@ export function InspectorFileSource({
         onClick={() => setExpanded((v) => ({ ...v, [s.name]: limit ? 0 : 5 }))}
       >
         <span className="truncate">{summary}</span>
+        {count !== undefined && (
+          <span className="input-count">
+            <File className="node-input-file" aria-hidden="true" />
+            {count}
+          </span>
+        )}
         <ChevronDown />
       </Button>
       {!compact && !label && s.valueType !== "cursor" && (

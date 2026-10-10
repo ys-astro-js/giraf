@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { createEditorStore } from "../src/lib/edit-history"
 import { emptyMap, removeTask, type TaskMap } from "../src/lib/task-map"
-import { makeDraft, type Catalog } from "../src/lib/workbench"
+import { makeDraft, type Catalog, type Job } from "../src/lib/workbench"
 
 const rename =
   (name: string) =>
@@ -227,7 +227,7 @@ test("deleted library assets never return through undo or redo and updates do no
   expect(editor.getMap().connections[0].source).toMatchObject({ ids: ["keep"] })
 })
 
-test("a workflow run's rounds all reach the connection out of their region", () => {
+test("every group's run of a split task reaches the connection out of it", () => {
   const catalog = {
     tasks: [{ name: "imcopy", adapter: "generic", inputs: [{ name: "input", kind: "image", multiple: true }] }],
   } as Catalog
@@ -235,8 +235,9 @@ test("a workflow run's rounds all reach the connection out of their region", () 
   const round = (id: string, exptime: string) => ({
     id,
     state: "completed",
-    products: [{ id: "Dark" + exptime, label: `Dark${exptime}.fits`, asset: "image", labels: { EXPTIME: exptime } }],
+    products: [{ id: "Dark" + exptime, label: `Dark${exptime}.fits`, asset: "image" }],
     execution: { id: "w1", step: 0 },
+    manifest: { group: { id: exptime, name: exptime } } as Job["manifest"],
   })
   editor.publishRun("a", round("r15", "15"), catalog)
   editor.publishRun("a", round("r30", "30"), catalog)

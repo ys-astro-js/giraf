@@ -33,9 +33,6 @@ import {
   plannedOutputs,
 } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
-import { loopOutputNames, loopVariables, memberVariables, variableMeaning } from "@/lib/containers"
-import { withSubject } from "@/lib/korean"
-import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group"
 
 
 export function InspectorOutputs({
@@ -57,19 +54,15 @@ export function InspectorOutputs({
 }) {
   const d = task.draft
   const allRows = [...rows, ...map.runs.flatMap((run) => run.products)]
-  // Inside a foreach or for, names show the first iteration's `{variable}`.
-  const previewDraft = loopOutputNames(
-    {
-      ...d,
-      inputs: Object.fromEntries(
-        connectionRoles(spec, catalog).map((s) => [
-          s.name,
-          assigned(map, task, s.name).ids,
-        ])
-      ),
-    },
-    loopVariables(map, catalog, task, allRows)
-  )
+  const previewDraft = {
+    ...d,
+    inputs: Object.fromEntries(
+      connectionRoles(spec, catalog).map((s) => [
+        s.name,
+        assigned(map, task, s.name).ids,
+      ])
+    ),
+  }
   // Pass-through outputs carry their input files and edited copies keep their
   // input's names: neither has a name to edit.
   const outputFields: OutputSlot[] = spec.outputs?.length
@@ -77,8 +70,6 @@ export function InspectorOutputs({
     : spec.output && spec.output.mode !== "edit"
       ? [{ ...spec.output, kind: spec.kind, label: spec.output.name }]
       : []
-  // Inside loop regions, names can take each round's values.
-  const variables = memberVariables(map, catalog, task)
   function outputField(output: OutputSlot, prefix = "") {
     const id = `${prefix}generic-output-${output.name}`
     const value =
@@ -100,41 +91,10 @@ export function InspectorOutputs({
       value,
       onChange: (e: React.ChangeEvent<HTMLInputElement>) => change(e.target.value),
     }
-    // The mark goes where the cursor is, or before the extension.
-    function insertVariable(variable: string) {
-      const input = document.getElementById(id) as HTMLInputElement | null
-      const mark = `{${variable}}`
-      const dot = value.lastIndexOf(".")
-      const at = input && document.activeElement === input ? (input.selectionStart ?? value.length) : dot > 0 ? dot : value.length
-      change(value.slice(0, at) + mark + value.slice(at))
-      requestAnimationFrame(() => {
-        input?.focus()
-        input?.setSelectionRange(at + mark.length, at + mark.length)
-      })
-    }
     return (
       <Field key={output.name} className="generic-output-field">
         <FieldLabel htmlFor={id}>{output.name}</FieldLabel>
-        {variables.length ? (
-          <InputGroup>
-            <InputGroupInput {...props} />
-            <InputGroupAddon align="inline-end">
-              {variables.map((variable) => (
-                <InputGroupButton
-                  key={variable}
-                  aria-label={`${variableMeaning(variable)} 넣기`}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => insertVariable(variable)}
-                >
-                  {/* Several keywords name themselves; one says what it holds. */}
-                  {variables.length > 1 ? variable : `${variableMeaning(variable)} 넣기`}
-                </InputGroupButton>
-              ))}
-            </InputGroupAddon>
-          </InputGroup>
-        ) : (
-          <Input {...props} />
-        )}
+        <Input {...props} />
         <ParameterHelp
           p={{
             name: output.name,
@@ -148,16 +108,6 @@ export function InspectorOutputs({
           <FieldDescription>
             {"{name}"} 자리에 입력 파일명이 들어갑니다. 뒤에 확장자를 쓰면
             그대로 쓰고, {"{name}"}이 없으면 접두사로 붙습니다.
-          </FieldDescription>
-        )}
-        {variables.length === 1 && (
-          <FieldDescription>
-            {`{${variables[0]}}`} 자리에는 회차마다 {withSubject(variableMeaning(variables[0]))} 들어갑니다.
-          </FieldDescription>
-        )}
-        {variables.length > 1 && (
-          <FieldDescription>
-            {variables.map((v) => `{${v}}`).join(", ")} 자리에는 회차마다 그 키워드의 값이 들어갑니다.
           </FieldDescription>
         )}
       </Field>

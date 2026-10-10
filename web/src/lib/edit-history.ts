@@ -239,12 +239,14 @@ export function createEditorStore(
       )
         return false
       const workflow = run.manifest?.workflowId || run.execution?.id
+      const group = run.manifest?.group?.id
       const record = {
         id: run.id,
         state: run.state,
         products: run.products,
         instanceId,
         ...(workflow ? { workflow } : {}),
+        ...(group !== undefined ? { group } : {}),
       }
       const runs = previous
         ? runtime.runs.map((value) => (value.id === run.id ? record : value))

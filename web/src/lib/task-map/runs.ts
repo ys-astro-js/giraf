@@ -71,49 +71,46 @@ type RunJob = Pick<Job, "id" | "state" | "products"> & Partial<Pick<Job, "execut
 
 /** The workflow run a job was a step of. */
 const workflowOf = (job: RunJob) => job.manifest?.workflowId || job.execution?.id || undefined
+const groupOf = (job: RunJob) => job.manifest?.group?.id
 
 /**
- * A task's latest results. Inside loop regions a workflow run runs the task
- * once per round; leaving the regions, every round's results go on together,
- * each with its round's labels, so all runs of that workflow run count (the
- * newest per round).
+ * A task's latest results. A split task runs once per group (lib/splits);
+ * every group's results go on together, so all runs of that workflow run
+ * count (the newest per group).
  */
 export function latestRun(map: TaskMap, taskId: string | undefined): MapRun | undefined {
-  const rounds = latestRuns(map, taskId)
-  const last = rounds.at(-1)
-  return last && rounds.length > 1 ? { ...last, products: rounds.flatMap((r) => r.products) } : last
+  const groups = latestRuns(map, taskId)
+  const last = groups.at(-1)
+  return last && groups.length > 1 ? { ...last, products: groups.flatMap((r) => r.products) } : last
 }
 
-/** The runs `latestRun` gathers, oldest first: the latest run, or every round's of its workflow run. */
+/** The runs `latestRun` gathers, oldest first: the latest run, or every group's of its workflow run. */
 export function latestRuns(map: TaskMap, taskId: string | undefined): MapRun[] {
   const own = map.runs.filter((r) => r.instanceId === taskId)
   const last = own.at(-1)
-  if (!last?.workflow || last.state !== "completed") return last ? [last] : []
-  const rounds = new Map<string, MapRun>()
+  if (!last?.workflow || last.group === undefined || last.state !== "completed") return last ? [last] : []
+  const groups = new Map<string, MapRun>()
   for (const run of own)
-    if (run.workflow === last.workflow && run.state === "completed") {
-      // One run per round; runs recorded without their round's labels count apart.
-      const labels = run.products.find((p) => p.labels)?.labels
-      const key = labels ? JSON.stringify(labels) : run.id
-      rounds.delete(key)
-      rounds.set(key, run)
+    if (run.workflow === last.workflow && run.group !== undefined && run.state === "completed") {
+      groups.delete(run.group)
+      groups.set(run.group, run)
     }
-  return [...rounds.values()]
+  return [...groups.values()]
 }
 
 /**
  * Saved documents retain run snapshots; the execution library is authoritative.
- * With `catalog`, a connection holding the last round's results of a workflow
- * run takes every round's (documents saved before rounds were gathered).
+ * With `catalog`, a connection holding the last group's results of a workflow
+ * run takes every group's.
  */
 export function reconcileRuns(map: TaskMap, jobs: RunJob[], catalog?: Catalog): TaskMap {
   const reconciled = reconcileRecords(map, jobs)
   if (!catalog) return reconciled
   let bound = reconciled
   for (const taskId of new Set(reconciled.runs.map((run) => run.instanceId))) {
-    const rounds = latestRuns(reconciled, taskId)
-    const last = rounds.at(-1)
-    if (rounds.length > 1 && last)
+    const groups = latestRuns(reconciled, taskId)
+    const last = groups.at(-1)
+    if (groups.length > 1 && last)
       bound = bindWorkflowOutputs(bound, taskId, last, catalog, (source) => holdsWholeRun(source, last))
   }
   return bound
@@ -149,7 +146,8 @@ function reconcileRecords(map: TaskMap, jobs: RunJob[]): TaskMap {
     runs: cleaned.runs.map((run) => {
       const job = actual.get(run.id)!
       const workflow = run.workflow ?? workflowOf(job)
-      return { ...run, state: job.state, products: job.products, ...(workflow ? { workflow } : {}) }
+      const group = run.group ?? groupOf(job)
+      return { ...run, state: job.state, products: job.products, ...(workflow ? { workflow } : {}), ...(group !== undefined ? { group } : {}) }
     }),
   }
 }
@@ -183,12 +181,14 @@ export function replacePending(
 
 export function publishRun(map: TaskMap, instanceId: string, run: RunJob): TaskMap {
   const workflow = workflowOf(run)
+  const group = groupOf(run)
   const record = {
     id: run.id,
     instanceId,
     state: run.state,
     products: clone(run.products || []),
     ...(workflow ? { workflow } : {}),
+    ...(group !== undefined ? { group } : {}),
   }
   return {
     ...map,
@@ -227,7 +227,7 @@ export function bindWorkflowOutputs(
   eligible: (source: Source) => boolean = () => true
 ): TaskMap {
   if (run.state !== "completed") return published
-  // Every round's results of the workflow run this run was a step of.
+  // Every group's results of the workflow run this run was a step of.
   const latest = latestRun(published, instanceId)
   const results = latest?.id === run.id ? latest.products : run.products || []
   return {

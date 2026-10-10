@@ -35,7 +35,6 @@ import { groupExecutions, type ExecutionGroup } from "@/lib/execution-history"
 import { runLabel } from "@/lib/file-library"
 import { stateLabel } from "@/lib/task-map"
 import { api, jobTitle, taskDisplayName, type Job } from "@/lib/workbench"
-import { roundText } from "@/lib/containers"
 import { waitingCursor } from "@/lib/cursor-session"
 import "@/styles/library/history.css"
 
@@ -183,13 +182,13 @@ function RunList({
 }
 
 /**
- * A step paused for a measurement: which round, which task on which image,
+ * A step paused for a measurement: which group, which task on which image,
  * and that it waits (the run's log continues once it is measured).
  */
-function waitingText(job: Job, round: string) {
+function waitingText(job: Job) {
   const image = job.manifest?.rows.find((r) => r.id === job.manifest?.cursorImage)
   return [
-    [round, job.manifest?.round?.name].filter(Boolean).join(" "),
+    job.manifest?.group?.name ?? "",
     [taskDisplayName(job.task || job.name), image?.label].filter(Boolean).join(" "),
     "측정 기다리는 중",
   ].filter(Boolean).join("\n")
@@ -282,7 +281,7 @@ function RunDetail({
           <>
             <pre>
               {waitingCursor(job)
-                ? waitingText(job, w.catalog ? roundText(w.map, w.catalog, job.manifest?.round) : "")
+                ? waitingText(job)
                 : job.log || job.message || "로그가 없습니다."}
             </pre>
             {job.outcomes?.map((outcome, i) => (

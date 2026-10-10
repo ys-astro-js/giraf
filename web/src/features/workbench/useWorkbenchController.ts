@@ -44,6 +44,7 @@ import { useWorkflowDocuments } from "@/features/workbench/hooks/useWorkflowDocu
 import { useWorkbenchBootstrap } from "@/features/workbench/hooks/useWorkbenchBootstrap"
 import { useTaskEditing } from "@/features/workbench/hooks/useTaskEditing"
 import { useTaskExecution } from "@/features/workbench/hooks/useTaskExecution"
+import { splitOf } from "@/lib/splits"
 import { useWorkflowExecution } from "@/features/workbench/hooks/useWorkflowExecution"
 import { useJobPolling } from "@/features/workbench/hooks/useJobPolling"
 import { useDocumentPersistence } from "@/features/workbench/hooks/useDocumentPersistence"
@@ -214,7 +215,7 @@ export function useWorkbenchController() {
     checking,
     plan,
     preparingName,
-    run,
+    run: runTask,
     setPlan,
     start,
     pendingPayload,
@@ -228,6 +229,9 @@ export function useWorkbenchController() {
     workflow,
     workspace,
   })
+  // A split task runs once per group, as a workflow of one task (lib/splits).
+  const run = (id = map.view.selected) =>
+    splitOf(map.tasks.find((t) => t.id === id)) ? runWorkflow(undefined, { task: id }) : runTask(id)
   const restoreHistory = useCallback(
     (type: "undo" | "redo", steps = 1) => {
       if (!editor[type](steps)) return

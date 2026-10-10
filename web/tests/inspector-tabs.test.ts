@@ -33,11 +33,6 @@ test("an IRAF task shows every tab", () => {
   expect(tabsOf(imstat)).toEqual(["info", "input", "output", "dependencies", "settings"])
 })
 
-test("a loop region shows what it repeats by", () => {
-  // No ports: its tasks take their files; 설정 holds what it repeats by.
-  expect(tabsOf(giraf("foreach"))).toEqual(["info", "dependencies", "settings"])
-})
-
 test("value and pset nodes hand on values, not files", () => {
   expect(tabsOf(giraf("value-constant"))).toEqual(["info", "dependencies", "settings"])
   expect(tabsOf(giraf("value-header", files))).toEqual(["info", "input", "dependencies", "settings"])

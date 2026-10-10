@@ -6,7 +6,7 @@ import { connectionFeedback } from "@/lib/workflow-flow"
 import type { TaskMapViewProps } from "./types"
 type NodeContext = Pick<
   TaskMapViewProps,
-  "map" | "catalog" | "rows" | "onInput" | "duplicate" | "open" | "flowProgress"
+  "map" | "catalog" | "rows" | "onInput" | "duplicate" | "open"
 > & {
   validateConnection: (
     connection: FlowConnection
@@ -29,9 +29,5 @@ type NodeContext = Pick<
   values?: import("@/lib/values").ValueResponse
   valueLabel: (connectionId: string) => string
   onParameter?: (id: string, key: string) => void
-  /** Change how a connection receives at a region's border (lib/containers chooseReceive). */
-  chooseReceive?: (connectionId: string, regionId: string, choice: import("@/lib/containers").ReceiveChoice) => void
-  /** Where region chips are drawn, by region and edge, so later chips clear earlier ones (components/workflow-edge). */
-  chipBoxes?: Map<string, import("@/lib/edge-crossing").Box>
 }
 export const WorkflowContext = createContext<NodeContext | null>(null)

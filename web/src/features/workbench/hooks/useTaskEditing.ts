@@ -1,5 +1,4 @@
 import { nodeLayout } from "@/lib/node-interaction"
-import { addContainer, isFlowSpec } from "@/lib/containers"
 import { autoLayoutMap } from "@/lib/subflow"
 import { isValueNode } from "@/lib/values"
 import { nextValueLabel } from "@/lib/value-take"
@@ -35,14 +34,6 @@ export function useTaskEditing({
   function add(name: string, ids: string[]) {
     if (!catalog) return false
     const s = catalog.tasks.find((s) => s.name === name)!
-    // foreach, for and if are containers: a task with an empty group of the same id.
-    if (isFlowSpec(s)) {
-      update(
-        (m) => addContainer(m, catalog, s, prefs, nodeLayout(m, catalog, rows)),
-        `${s.taskName || name} 추가`
-      )
-      return true
-    }
     const t = makeInstance(s, catalog, prefs)
     // Every 값 node is one kind, whatever its 가져오기: titled and numbered together.
     if (isValueNode(s)) t.label = nextValueLabel(map, catalog)

@@ -5,7 +5,7 @@ import { apiQueryOptions } from "@/lib/queries"
 import { type ExecutionReference } from "@/lib/execution-status"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "@/components/ui/toast"
-import { subflowRequest } from "@/lib/subflow"
+import { subflowRequest, taskRunRequest } from "@/lib/subflow"
 import {
   api,
   type Catalog,
@@ -150,23 +150,28 @@ export function useWorkflowExecution({
     if (workflowQuery.error)
       toast.add({ title: workflowQuery.error.message, type: "error" })
   }, [workflowQuery.error])
-  async function runWorkflow(subflowId?: string) {
+  /** The whole workflow, a group of it, or one split task once per group (`{task}`, lib/splits). */
+  async function runWorkflow(subflowId?: string, only?: { task: string }) {
     if (!catalog || workflowLock.current || workflowActive(workflow)) return
     workflowLock.current = true
     setLastExecution(undefined)
     setWorkflowName(
-      subflowId
-        ? map.subflows?.find((s) => s.id === subflowId)?.name || "워크플로우"
-        : prefs._document?.name || "워크플로우"
+      only
+        ? map.tasks.find((t) => t.id === only.task)?.label || "워크플로우"
+        : subflowId
+          ? map.subflows?.find((s) => s.id === subflowId)?.name || "워크플로우"
+          : prefs._document?.name || "워크플로우"
     )
     setWorkflowStarting(true)
     setError("")
     try {
       const w = await workflowMutation.mutateAsync({
         action: "workflow-run",
-        payload: subflowId
-          ? subflowRequest(map, catalog, workspace.folder, subflowId)
-          : workflowRequest(map, catalog, workspace.folder),
+        payload: only
+          ? taskRunRequest(map, catalog, workspace.folder, only.task)
+          : subflowId
+            ? subflowRequest(map, catalog, workspace.folder, subflowId)
+            : workflowRequest(map, catalog, workspace.folder),
       })
       setLastExecution({ kind: "workflow", id: w.id })
       following.current = w.id

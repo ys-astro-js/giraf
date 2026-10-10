@@ -1,23 +1,17 @@
-import { memo, useContext, useEffect, type CSSProperties } from "react"
-import { NodeResizeControl, Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
+import { memo, useContext, type CSSProperties } from "react"
+import { NodeResizeControl, type NodeProps } from "@xyflow/react"
 import { Play, GripVertical, Pencil, Maximize2, Terminal, ChevronsDownUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { NodeIcon } from "@/components/node-icon"
 import { subflowColor } from "@/lib/subflow"
-import { flowProgress, isContainerId } from "@/lib/containers"
 import { groupContents } from "@/lib/group-nesting"
 import { compoundStatus } from "@/lib/compound"
 import { stateLabel } from "@/lib/task-map"
 import { type SubflowNode } from "@/lib/workflow-flow"
 
 import { WorkflowContext } from "./context"
-import { Handle } from "./Handle"
 import { StatusIcon } from "./StatusIcon"
 export const GroupNode = memo(function GroupNode({
-  id,
   data,
-  selected,
-  isConnectable,
 }: NodeProps<SubflowNode>) {
   const {
     map,
@@ -29,40 +23,20 @@ export const GroupNode = memo(function GroupNode({
     endEdit,
     setGroupCollapsed,
     currentIssues,
-    flowProgress: progress,
   } = useContext(WorkflowContext)!
-  const { flow } = data
-  // A container's heading is its name, then what it does (`M67 FILTER별로`).
-  const name = flow?.label ?? data.group.name
-  const meta = flowProgress(flow?.run, progress?.id === id ? progress : undefined)
-  // The same status as the collapsed node: members' runs and diagnostics, and the container's own.
-  // Regions inside it count with it.
-  const members = [...groupContents(map, data.group.id).tasks].filter((t) => !isContainerId(map, t))
-  const status = compoundStatus(map, members, currentIssues, flow ? id : undefined)
+  const name = data.group.name
+  // The same status as the collapsed node: members' runs and diagnostics.
+  const members = [...groupContents(map, data.group.id).tasks]
+  const status = compoundStatus(map, members, currentIssues)
   const statusLabel = status.severity
     ? `${status.severity === "error" ? "오류" : "경고"}: ${status.issues.map((issue) => issue.message).join("; ")}`
     : status.state
       ? stateLabel(status.state)
       : "실행 전"
-  const updateNodeInternals = useUpdateNodeInternals()
-  const handlesKey = flow?.ports.map((port) => `${port.handleId}@${port.x},${port.y}`).join("|")
-  useEffect(() => {
-    if (handlesKey !== undefined) updateNodeInternals(id)
-  }, [id, handlesKey, updateNodeInternals])
-  // Source handles are `output:<role>` or `value:<name>`; connections store the role.
-  const connected = (handleId: string, type: "source" | "target") =>
-    map.connections.some((c) =>
-      type === "target"
-        ? c.target === id && c.role === handleId
-        : c.source.kind !== "files" && c.source.taskId === id &&
-          [c.source.outputRole, "output:" + c.source.outputRole].includes(handleId)
-    )
   return (
     <section
       className="subflow-node"
       aria-label={name}
-      data-flow={flow?.run}
-      data-selected={flow ? selected : undefined}
       data-diagnostic={status.severity}
       data-drop-state={
         dragPreview.leaving === data.group.id
@@ -77,9 +51,7 @@ export const GroupNode = memo(function GroupNode({
     >
       <header className="subflow-heading">
         <GripVertical aria-hidden="true" />
-        {flow && <NodeIcon icon={flow.icon} />}
         <strong title={name}>{name}</strong>
-        {flow?.statement && <span className="flow-statement" title={flow.statement}>{flow.statement}</span>}
         <span
           className="node-state"
           data-severity={status.severity}
@@ -90,11 +62,6 @@ export const GroupNode = memo(function GroupNode({
         >
           <StatusIcon severity={status.severity} state={status.state} />
         </span>
-        {meta && (
-          <span className="flow-progress" role="img" aria-label={meta.label} title={meta.label}>
-            {meta.text}
-          </span>
-        )}
         <Button
           className="nodrag nopan"
           variant="ghost"
@@ -130,39 +97,6 @@ export const GroupNode = memo(function GroupNode({
           <Play />
         </Button>
       </header>
-      {flow?.ports.map((port) => (
-        <Handle
-          key={port.handleId}
-          type={port.type}
-          position={port.side === "left" ? Position.Left : Position.Right}
-          id={port.handleId}
-          isConnectable={isConnectable}
-          className={`workflow-input-handle flow-port${port.value ? " workflow-value-handle" : ""}`}
-          data-connected={connected(port.handleId, port.type)}
-          style={
-            port.side === "left"
-              ? { left: port.x, top: port.y }
-              : { left: "auto", right: data.group.width - port.x, top: port.y }
-          }
-          aria-label={`${name} ${port.label ?? "결과"} ${port.type === "target" ? "입력" : "출력"} 연결`}
-        />
-      ))}
-      {flow?.ports
-        .filter((port) => port.label && port.x > 0 && port.x < data.group.width)
-        .map((port) => (
-          <span
-            key={port.handleId}
-            className="flow-port-label"
-            data-side={port.side}
-            style={
-              port.side === "right"
-                ? { left: port.x + 12, top: port.y }
-                : { right: data.group.width - port.x + 12, top: port.y }
-            }
-          >
-            {port.label}
-          </span>
-        ))}
       <NodeResizeControl
         onResizeStart={beginEdit}
         onResizeEnd={endEdit}

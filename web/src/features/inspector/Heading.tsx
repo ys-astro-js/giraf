@@ -1,5 +1,4 @@
 import { isValueNode } from "@/lib/values"
-import { containerName, isFlowSpec } from "@/lib/containers"
 import { useRef, useState } from "react"
 import { taskDisplayName } from "@/lib/workbench"
 import { Pencil, Check, X, Play } from "lucide-react"
@@ -56,12 +55,9 @@ export function InspectorHeading({
     setIdentityDraft(null)
     requestAnimationFrame(() => identityButton.current?.focus())
   }
-  const flow = isFlowSpec(spec)
-  const title = flow
-    ? containerName(spec, task)
-    : task.label === task.task
-      ? taskDisplayName(task.task)
-      : task.label || taskDisplayName(task.task)
+  const title = task.label === task.task
+    ? taskDisplayName(task.task)
+    : task.label || taskDisplayName(task.task)
   const fallback = kindDescription ?? spec.description ?? spec.title
   const description = task.description ?? fallback
   const bars = (
@@ -80,7 +76,7 @@ export function InspectorHeading({
             onClick={() =>
               identityDraft
                 ? closeIdentity(false)
-                : setIdentityDraft({ label: flow ? title : task.label, description })
+                : setIdentityDraft({ label: task.label, description })
             }
           >
             <Pencil />
@@ -90,7 +86,7 @@ export function InspectorHeading({
         <ToolbarGroup label="작업 실행">
           <ToolbarButton
             prominent
-            label={checking ? "확인 중" : busy ? "실행 중" : flow ? `${title} 실행` : "이 작업 실행"}
+            label={checking ? "확인 중" : busy ? "실행 중" : "이 작업 실행"}
             disabled={busy || checking || spec.runnable === false || isValueNode(spec)}
             onClick={onRun}
           >

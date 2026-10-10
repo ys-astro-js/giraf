@@ -19,7 +19,6 @@ function parseHandle(handle: string | null | undefined, prefix: "in" | "out") {
 }
 
 export type CompoundPort = { handleId: string; member: string; port: string; label: string; summary: string; y: number; value?: boolean }
-type Boundary = { inputs: Omit<CompoundPort, "y">[]; outputs: Omit<CompoundPort, "y">[]; width?: number }
 
 /** The collapsed group drawn in a task's place: the outermost one around it. */
 export function collapsedGroupOf(map: TaskMap, taskId: string): Subflow | undefined {
@@ -33,20 +32,15 @@ function outputName(task: Instance | undefined, handle: string): string {
   return `${task?.label ?? ""} 결과`.trim()
 }
 
-/**
- * Rows follow connections that cross the group's boundary; `edges` are task-level edges.
- * A container's own ports (`boundary`, lib/containers) come first.
- */
-export function compoundPorts(map: TaskMap, group: Subflow, edges: Edge[], boundary?: Boundary) {
-  // Regions inside it are inside it too.
+/** Rows follow connections that cross the group's boundary; `edges` are task-level edges. */
+export function compoundPorts(map: TaskMap, group: Subflow, edges: Edge[]) {
+  // Groups inside it are inside it too.
   const members = groupContents(map, group.id).tasks
   const label = (id: string) => map.tasks.find((t) => t.id === id)?.label ?? id
-  const inputs = new Map<string, Omit<CompoundPort, "y">>(boundary?.inputs.map((row) => [row.handleId, row]))
+  const inputs = new Map<string, Omit<CompoundPort, "y">>()
   const sources = new Map<string, string[]>()
-  const outputs = new Map<string, Omit<CompoundPort, "y">>(boundary?.outputs.map((row) => [row.handleId, row]))
+  const outputs = new Map<string, Omit<CompoundPort, "y">>()
   for (const edge of edges) {
-    // A container's edges to its own members stay inside it.
-    if (edge.source === group.id || edge.target === group.id) continue
     const inside = members.has(edge.target), from = members.has(edge.source)
     if (inside && !from) {
       const role = edge.targetHandle ?? ""
@@ -69,7 +63,7 @@ export function compoundPorts(map: TaskMap, group: Subflow, edges: Edge[], bound
   const outputsTop = inputsEnd + m.sectionStart
   const height = (outputs.size ? outputsTop + m.row * outputs.size + m.sectionEnd : inputsEnd) + 1
   return {
-    width: boundary?.width ?? COMPOUND_WIDTH,
+    width: COMPOUND_WIDTH,
     height,
     inputs: [...inputs.values()].map((row, i) => ({ ...row, y: inputsTop + m.row / 2 + m.row * i })),
     outputs: [...outputs.values()].map((row, i) => ({ ...row, y: outputsTop + m.row / 2 + m.row * i })),
@@ -110,9 +104,8 @@ export function memberConnection<C extends { source: string; target: string; sou
 }
 
 /** Worst diagnostic first, then activity; "completed" only when every member's last run completed. */
-export function compoundStatus(map: TaskMap, members: string[], issues: Diagnostic[], container?: string) {
-  // A container's own diagnostics (its settings) count with its members'.
-  const own = issues.filter((issue) => issue.nodeId && (members.includes(issue.nodeId) || issue.nodeId === container))
+export function compoundStatus(map: TaskMap, members: string[], issues: Diagnostic[]) {
+  const own = issues.filter((issue) => issue.nodeId && members.includes(issue.nodeId))
   const severity = own.some((issue) => issue.severity === "error") ? "error" : own.length ? "warning" : undefined
   const states = members.map((id) => map.runs.filter((r) => r.instanceId === id).at(-1)?.state)
   const state = states.some((s) => s === "running" || s === "queued")

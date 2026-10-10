@@ -9,7 +9,7 @@ import {
   type TaskMap,
 } from "@/lib/task-map"
 import { acceptsAsset, acceptsSource, type Catalog, type Frame, type Slot } from "./workbench"
-import { closesCycle, isContainerId } from "./flow-graph"
+import { closesCycle } from "./flow-graph"
 import { isValueNode, pinnedKeys, psetLinksInto, psetOutputName, valueOutputs, PARAM_HANDLE, PSET_INPUT, PSET_OUTPUT, VALUE_HANDLE } from "./values"
 
 const flags: Record<string, string> = {
@@ -240,16 +240,10 @@ export function nodeLayout(map: TaskMap, catalog: Catalog, rows:Frame[] = [], co
     y: number
     id: string
   })[] = []
-  const containers = (map.subflows ?? []).filter((g) => isContainerId(map, g.id)).map((g) => ({
-    ...g.position, width: g.width, occupiedHeight: g.collapsed ? COLLAPSED_HEIGHT : g.height,
-  }))
   return map.tasks.map((t) => {
     const level = base.find((p) => p.id === t.id)!,
       g = nodeGeometry(map, t, catalog, rows, collapseAll || !!t.collapsed),
       y = bottoms.get(level.x) || 32
-    // A container is drawn by its group; its task takes no place of its own.
-    const container = isContainerId(map, t.id) ? map.subflows!.find((group) => group.id === t.id)! : undefined
-    if (container) return { id: t.id, ...g, x: container.position.x, y: container.position.y, width: 0, height: 0, occupiedHeight: 0 }
     bottoms.set(level.x, y + g.occupiedHeight + 40)
     const node = {
       id: t.id,
@@ -260,8 +254,7 @@ export function nodeLayout(map: TaskMap, catalog: Catalog, rows:Frame[] = [], co
       }),
     }
     // Larger role cards must not collide with positions saved by the compact layout.
-    // A new node also stays clear of containers, which have no task node of their own.
-    const blocked = t.position ? placed : [...placed, ...containers]
+    const blocked = placed
     let overlap
     do {
       overlap = blocked.find(

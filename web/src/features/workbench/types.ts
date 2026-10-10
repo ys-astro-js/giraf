@@ -30,8 +30,6 @@ export type WorkflowRun = {
   total: number
   done: number
   currentTask: string
-  /** The foreach or for container running now, and its iteration. */
-  flow?: { id: string; index: number; total: number }
   jobs: (Job & { instanceId: string })[]
   currentJob: Job | null
   plan: Plan["filePlan"] | null

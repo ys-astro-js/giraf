@@ -1,8 +1,9 @@
 /**
- * A region's expression criterion and condition, read in the editor where the
- * files' headers are known (giraf/values.py evaluate_expression on one file):
- * numbers, quoted text, header names, + - * / % **, comparisons, && || !, and
- * the one-value functions. Anything else is left to the run.
+ * An IRAF expression read in the editor (giraf/values.py evaluate_expression
+ * on one value of each name): a parameter formula of a split task's group
+ * (lib/splits formulaValue). Numbers, quoted text, names, + - * / % **,
+ * comparisons, && || !, and the one-value functions. Anything else is left
+ * to the run.
  */
 type Value = number | string | boolean
 type Token = { kind: "number" | "text" | "name" | "op"; text: string }

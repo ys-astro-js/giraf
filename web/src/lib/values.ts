@@ -10,11 +10,10 @@
  * and each parameter pinned on it is also a value output (`value:<param>`).
  * The server evaluates values (giraf/values.py); this module only describes them.
  */
-import { uid, makeInstance, type Connection, type Instance, type Source, type TaskMap } from "./task-map/model"
+import { uid, makeInstance, type Instance, type Source, type TaskMap } from "./task-map/model"
 import { latestRuns, resolvedSource } from "./task-map/runs"
 import type { Catalog, Param, ParameterSet, Spec, ValueRow } from "./workbench"
 import { closesCycle, type ValuePorts } from "./flow-graph"
-import { criteriaOf, enclosingRegions, flowLabels, insideRegion, labelName } from "./containers"
 
 export const VALUE_HANDLE = "value:"
 export const PARAM_HANDLE = "p:"
@@ -26,21 +25,16 @@ export type ValueScalar = string | number | boolean
 export type ValueResult = {
   kind?: string
   values: ValueScalar[]
-  /** The labels of the files each value came from (giraf/values.py). */
-  labels?: Record<string, string>[]
   error?: undefined
-} | { error: string; values?: undefined; labels?: undefined; kind?: undefined }
+} | { error: string; values?: undefined; kind?: undefined }
 export type ValueResponse = {
   outputs: Record<string, ValueResult>
   parameters: Record<string, { value: ValueScalar; error?: undefined } | { error: string; value?: undefined }>
 }
 
-// Loop regions (lib/containers) are expanded by the runner.
-const FLOW_RUNS = new Set(["foreach"])
-
 /** Value and pset nodes are evaluated with the tasks they feed, never run as jobs. */
 export const isValueNode = (spec: Spec | undefined) => !!spec?.run && VALUE_RUNS.has(spec.run)
-export const isJobNode = (spec: Spec | undefined) => !isValueNode(spec) && !(spec?.run && FLOW_RUNS.has(spec.run))
+export const isJobNode = (spec: Spec | undefined) => !isValueNode(spec)
 export const isValueRole = (role: string) => role.startsWith(PARAM_HANDLE) || role.startsWith(PSET_INPUT)
 export const isValueSource = (source: Source) =>
   source.kind !== "files" && !!source.outputRole &&
@@ -86,14 +80,10 @@ export function valueOutputs(spec: Spec | undefined, task: Instance, catalog: Ca
   if (!spec) return []
   if (spec.values?.length) return spec.values.map((v) => ({ name: v.name, kind: v.kind || "real" }))
   if (spec.run === "pset") return psetOutputs(catalog, task).map(({ name, kind }) => ({ name, kind }))
-  if (spec.run === "foreach")
-    // A region's round values: numbers for 묶음 and 회차, header text otherwise.
-    return criteriaOf(task).map((c) => ({ name: labelName(c), kind: "count" in c || "times" in c ? "int" : "any" }))
   const named = rowsOf(task).filter((r) => r.name.trim())
   if (spec.run === "value-constant")
     return named.map((r) => {
-      const entries = task.draft.partition ? Object.values(r.groups ?? {}) : [r.value]
-      const numeric = entries.length > 0 && entries.every((v) => v.trim() !== "" && Number.isFinite(Number(v)))
+      const numeric = r.value.trim() !== "" && Number.isFinite(Number(r.value))
       return { name: r.name, kind: numeric ? "real" : "string" }
     })
   if (spec.run === "value-header") return named.map((r) => ({ name: r.name, kind: "any" }))
@@ -168,7 +158,6 @@ export function pinnedKeys(map: TaskMap, catalog: Catalog, task: Instance): stri
   const entries = parameterEntries(catalog, task)
   const run = specOf(catalog, task)?.run
   if (run === "value-compute") return [...entries.keys()]
-  if (run && FLOW_RUNS.has(run)) return []
   const connected = valueLinksInto(map, task.id).map((c) => c.role.slice(PARAM_HANDLE.length))
   return [...new Set([...(task.pinned ?? []), ...connected])].filter((key) => entries.has(key))
 }
@@ -398,54 +387,36 @@ export function withValues<T extends { parameters: Record<string, unknown>; para
 }
 
 type Ref = { node: string; output: string }
-/** `round` is the round values a member run alone chooses by; `flow` its receive modes (lib/containers). */
-type ValueLink = { id: string; target: string; parameter: string; type: string; source: Ref; round?: Record<string, string>; flow?: Connection["flow"] }
+/** `groups` are a split target's group ids: the server gives one value per group (giraf/values.py). */
+type ValueLink = { id: string; target: string; parameter: string; type: string; source: Ref; groups?: string[] }
 
 const refOf = (source: Source): Ref | undefined =>
   source.kind !== "files" && source.outputRole?.startsWith(VALUE_HANDLE)
     ? { node: source.taskId!, output: source.outputRole.slice(VALUE_HANDLE.length) } : undefined
 
 /**
- * The round values a member of loop regions run alone chooses its value by:
- * the first round of each region the value crosses into, unless the
- * connection gives that region's every round all values (giraf/workflow.py
- * value_rounds does the same per round).
- */
-function firstRoundOf(map: TaskMap, target: string, connection: Connection, source: string) {
-  const task = map.tasks.find((t) => t.id === target)
-  if (!task?.roundValues) return undefined
-  const round: Record<string, string> = {}
-  for (const region of enclosingRegions(map, target)) {
-    if (insideRegion(map, source, region.id) || connection.flow?.[region.id]?.mode === "all") continue
-    const keys = connection.flow?.[region.id]?.keys ?? flowLabels(region)
-    for (const key of keys) if (key in task.roundValues) round[key] = task.roundValues[key]
-  }
-  return Object.keys(round).length ? round : undefined
-}
-
-/**
  * The value request for giraf/values.py: value nodes, links into task
  * parameters (through pset nodes), and the latest run of each task whose
  * value output is read. `inRun` names job nodes a workflow runs now; their
- * files are read from this run instead of the last one.
+ * files are read from this run instead of the last one. `groupsOf` gives a
+ * split task's group ids, so its links get one value per group.
  */
-export function valueRequest(map: TaskMap, catalog: Catalog, inRun: Set<string> = new Set()) {
+export function valueRequest(map: TaskMap, catalog: Catalog, inRun: Set<string> = new Set(), groupsOf?: (taskId: string) => string[] | undefined) {
   const runs: Record<string, string | string[]> = {}
   const latest = (id: string) => {
-    // Inside loop regions, the run of every round (lib/task-map/runs latestRuns).
-    const rounds = latestRuns(map, id)
-    if (rounds.at(-1)?.state === "completed" && !inRun.has(id))
-      runs[id] = rounds.length > 1 ? rounds.map((r) => r.id) : rounds[0].id
+    // A split task's run of every group (lib/task-map/runs latestRuns).
+    const groups = latestRuns(map, id)
+    if (groups.at(-1)?.state === "completed" && !inRun.has(id))
+      runs[id] = groups.length > 1 ? groups.map((r) => r.id) : groups[0].id
   }
-  const nodes = map.tasks.flatMap((task) => {
+  const grouped = (target: string) => {
+    const groups = groupsOf?.(target)
+    return groups && groups.length > 1 ? { groups } : {}
+  }
+  type ValueNodeRequest = { id: string; run: string; rows: { name: string; value: string; type?: string }[]
+    files: string[]; fileLinks: Record<string, unknown>[]; inputs: Record<string, Ref> }
+  const nodes = map.tasks.flatMap((task): ValueNodeRequest[] => {
     const spec = specOf(catalog, task)
-    // A region's values are constants at its first round; each round replaces them.
-    if (spec?.run === "foreach") {
-      const first = map.tasks.find((t) => t.subflowId === task.id && t.roundValues)?.roundValues ?? {}
-      const rows = flowLabels(task).filter((name) => name in first).map((name) => ({ name, value: first[name] } as ValueRow))
-      return rows.length ? [{ id: task.id, run: "value-constant", rows, partition: null as string | null, files: [] as string[],
-        fileLinks: [] as Record<string, unknown>[], inputs: {} as Record<string, Ref> }] : []
-    }
     if (spec?.run === "pset") {
       // Each offered parameter is its stored value, or the value connected into it.
       const set = task.draft.pset?.name ?? ""
@@ -456,9 +427,9 @@ export function valueRequest(map: TaskMap, catalog: Catalog, inRun: Set<string> 
         inputs[name] = ref
         latest(ref.node)
       }
-      const rows = psetOutputs(catalog, task).map(({ name, param }) =>
+      const rows: { name: string; value: string; type?: string }[] = psetOutputs(catalog, task).map(({ name, param }) =>
         ({ name, value: storedValue(task, { key: `${set}.${name}`, owner: set, param }), type: param.type }))
-      return [{ id: task.id, run: spec.run, rows, partition: null as string | null, files: [] as string[], fileLinks: [] as Record<string, unknown>[], inputs }]
+      return [{ id: task.id, run: spec.run, rows, files: [] as string[], fileLinks: [] as Record<string, unknown>[], inputs }]
     }
     if (!spec?.run || !["value-constant", "value-header", "value-compute"].includes(spec.run)) return []
     const files: string[] = []
@@ -477,9 +448,8 @@ export function valueRequest(map: TaskMap, catalog: Catalog, inRun: Set<string> 
       if (ref) latest(ref.node)
       return ref ? [[c.role.slice(PARAM_HANDLE.length), ref]] : []
     }))
-    return [{ id: task.id, run: spec.run, rows: rowsOf(task).filter((r) => r.name.trim()).map((r) => ({ name: r.name, value: r.value, ...(r.groups ? { groups: r.groups } : {}) })),
-      // Only a constant's table has a label of its own; other values take their files' labels.
-      partition: spec.run === "value-constant" ? task.draft.partition || null : null, files, fileLinks, inputs }]
+    return [{ id: task.id, run: spec.run, rows: rowsOf(task).filter((r) => r.name.trim()).map((r): { name: string; value: string; type?: string } => ({ name: r.name, value: r.value })),
+      files, fileLinks, inputs }]
   })
   const links: ValueLink[] = []
   for (const c of map.connections) {
@@ -498,15 +468,12 @@ export function valueRequest(map: TaskMap, catalog: Catalog, inRun: Set<string> 
         const user = map.tasks.find((t) => t.id === use.target)
         const name = use.role.slice(PSET_INPUT.length)
         if (!user) continue
-        const round = firstRoundOf(map, user.id, use, target.id)
         links.push({ id: `${c.id}:${user.id}`, target: user.id, parameter: `${name}.${entry.param.name}`, type: entry.param.type, source: ref,
-          ...(round ? { round } : {}), ...(use.flow ? { flow: use.flow } : {}) })
+          ...grouped(user.id) })
       }
       continue
     }
-    const round = firstRoundOf(map, target.id, c, ref.node)
-    links.push({ id: c.id, target: target.id, parameter: key, type: entry.param.type, source: ref,
-      ...(round ? { round } : {}), ...(c.flow ? { flow: c.flow } : {}) })
+    links.push({ id: c.id, target: target.id, parameter: key, type: entry.param.type, source: ref, ...grouped(target.id) })
   }
   return { nodes, links, runs }
 }
@@ -519,19 +486,9 @@ export function valueRefs(map: TaskMap, catalog: Catalog): Ref[] {
 const short = (value: ValueScalar) =>
   typeof value === "number" ? String(Number(value.toPrecision(4))) : typeof value === "boolean" ? (value ? "yes" : "no") : String(value)
 
-/** A value for a row or a connection label: `3.21`, `B 3.38, V 3.07`, `8.28, 8.00 외 10개`. */
+/** A value for a row or a connection label: `3.21`, `8.28, 8.00 외 10개`. */
 export function formatValue(result: ValueResult | undefined): string {
   if (!result || result.error !== undefined) return ""
-  const labels = result.labels
-  if (labels?.some((tag) => Object.keys(tag).length)) {
-    // `B 3.38, V 3.07`: one entry per label combination.
-    const grouped = new Map<string, ValueScalar[]>()
-    result.values.forEach((value, i) => {
-      const key = Object.values(labels[i] ?? {}).join(" ") || "값 없음"
-      grouped.set(key, [...(grouped.get(key) ?? []), value])
-    })
-    return [...grouped].map(([key, values]) => `${key} ${formatList(values)}`).join(", ")
-  }
   return formatList(result.values)
 }
 function formatList(values: ValueScalar[]) {

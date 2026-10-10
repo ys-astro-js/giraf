@@ -129,7 +129,6 @@ test("the line under a 값 node says what it hands on", () => {
   const describe = (spec: Spec, draft: Partial<Instance["draft"]> = {}) =>
     valueDescription(map, catalog, make(spec, "x", { draft: draftOf(spec, draft) }))
   expect(describe(value)).toBe("직접 정한 값을 전달")
-  expect(describe(value, { partition: "FILTER" })).toBe("직접 정한 값을 FILTER별로 전달")
   expect(describe(header)).toBe("파일 헤더의 키워드 값을 전달")
   expect(describe(compute)).toBe("받은 값을 계산해 전달")
   expect(describe(pset)).toBe("작업 설정을 여러 작업에 전달")

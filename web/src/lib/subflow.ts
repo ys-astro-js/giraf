@@ -4,12 +4,11 @@ import {
   type SubflowColor,
   workflowRequest,
   payloadFor,
-  removeTask,
+  type Instance,
 } from "@/lib/task-map"
 import { nodeLayout, roleActive } from "./node-interaction"
 import type { Catalog } from "./workbench"
 import { isValueNode, isValueRole } from "./values"
-import { containerTask } from "./containers"
 import { resolvedSource } from "./task-map/runs"
 import { fitGroups, groupContents } from "./group-nesting"
 
@@ -70,8 +69,6 @@ export function saveSubflow(
 }
 
 export function dissolveSubflow(map: TaskMap, id: string): TaskMap {
-  // A container goes with its task; its members stay, as with a group.
-  if (containerTask(map, id)) return removeTask(map, id)
   return {
     ...map,
     subflows: (map.subflows ?? []).filter((g) => g.id !== id),
@@ -88,12 +85,21 @@ export function subflowRequest(
   id: string
 ) {
   const group = map.subflows?.find((g) => g.id === id)
-  // A container runs with its members (lib/containers).
-  const container = containerTask(map, id)
-  // Regions inside it run with it.
   const inside = groupContents(map, id).tasks
-  const tasks = [...map.tasks.filter((t) => inside.has(t.id)), ...(container ? [container] : [])]
-  if (!group || tasks.length === (container ? 1 : 0)) throw Error("실행할 그룹 작업이 없습니다.")
+  const tasks = map.tasks.filter((t) => inside.has(t.id))
+  if (!group || !tasks.length) throw Error("실행할 그룹 작업이 없습니다.")
+  return partRequest(map, catalog, workingDirectory, tasks, group.name)
+}
+
+/** A split task run on its own runs as a workflow of one task, once per group (lib/splits). */
+export function taskRunRequest(map: TaskMap, catalog: Catalog, workingDirectory: string, id: string) {
+  const task = map.tasks.find((t) => t.id === id)
+  if (!task) throw Error("task를 선택해 주세요.")
+  return partRequest(map, catalog, workingDirectory, [task], task.label)
+}
+
+/** A workflow request for some of the tasks; sources outside them give the files they hold now. */
+function partRequest(map: TaskMap, catalog: Catalog, workingDirectory: string, tasks: Instance[], name: string) {
   const ids = new Set(tasks.map((t) => t.id))
   const connections = map.connections.filter((c) => ids.has(c.target))
   // Validate external inputs before workflowRequest replaces internal dependencies.
@@ -117,11 +123,11 @@ export function subflowRequest(
         const label =
           map.tasks.find((t) => t.id === sourceId)?.label ?? "연결한 작업"
         throw Error(
-          `${group.name}: 외부 작업 ‘${label}’의 결과가 없습니다. 해당 작업을 실행하고 사용할 결과를 연결해 주세요.`
+          `${name}: 외부 작업 ‘${label}’의 결과가 없습니다. 해당 작업을 실행하고 사용할 결과를 연결해 주세요.`
         )
       }
     }
-    if (task !== container) payloadFor({ ...map, connections: external }, task.id, catalog)
+    payloadFor({ ...map, connections: external }, task.id, catalog)
   }
   // Value and pset nodes stay available to the group's tasks; they never run as jobs.
   const values = map.tasks.filter((t) => !ids.has(t.id) && isValueNode(catalog.tasks.find((s) => s.name === t.task)))
@@ -209,39 +215,6 @@ export function moveTaskToSubflow(
   if (!groupId) return next
   const layout = nodeLayout(next, catalog)
   const size = (id: string) => layout[next.tasks.findIndex((t) => t.id === id)]
-  return fitGroups(next, groupId, size)
-}
-
-/**
- * Move a region into another group (or out, with `groupId` undefined), its
- * members along: a region nests in the group its task is in. A plain group
- * has no task and stays at the top.
- */
-export function moveGroupToGroup(
-  map: TaskMap,
-  catalog: Catalog,
-  id: string,
-  groupId: string | undefined,
-  position: { x: number; y: number }
-): TaskMap {
-  const group = map.subflows?.find((g) => g.id === id)
-  if (!group || !containerTask(map, id)) return map
-  if (groupId && (groupId === id || !map.subflows?.some((g) => g.id === groupId) || groupContents(map, id).groups.has(groupId)))
-    return map
-  const d = { x: position.x - group.position.x, y: position.y - group.position.y }
-  const inside = groupContents(map, id)
-  const shift = (p: { x: number; y: number } | undefined) => (p ? { x: p.x + d.x, y: p.y + d.y } : p)
-  const next: TaskMap = {
-    ...map,
-    subflows: map.subflows!.map((g) => (g.id === id || inside.groups.has(g.id) ? { ...g, position: shift(g.position)! } : g)),
-    tasks: map.tasks.map((t) => {
-      const moved = t.id === id || inside.tasks.has(t.id) ? { ...t, position: shift(t.position) } : t
-      return t.id === id ? { ...moved, subflowId: groupId } : moved
-    }),
-  }
-  if (!groupId) return next
-  const layout = nodeLayout(next, catalog)
-  const size = (taskId: string) => layout[next.tasks.findIndex((t) => t.id === taskId)]
   return fitGroups(next, groupId, size)
 }
 

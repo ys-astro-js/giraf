@@ -41,10 +41,10 @@ test("without a plot to accept, a clicked star counts once IRAF reads the image 
   startSession(null)
 })
 
-test("workflow jobs are named by their node and round", () => {
+test("workflow jobs are named by their node and group", () => {
   const job = waiting("1")
   expect(jobTitle(job)).toBe("daoedit")
-  job.manifest = { ...job.manifest!, nodeLabel: "RDNOISE", round: { name: "B", regions: [] } }
+  job.manifest = { ...job.manifest!, nodeLabel: "RDNOISE", group: { id: "B", name: "B" } }
   expect(jobTitle(job)).toBe("RDNOISE B")
 })
 

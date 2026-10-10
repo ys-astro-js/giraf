@@ -2,7 +2,6 @@ import { expect, test } from "bun:test"
 import { addTask, emptyMap, makeInstance, payloadFor, workflowRequest, workflowDiagnosticRequest, type Instance, type TaskMap } from "../src/lib/task-map"
 import { nodeGeometry, NODE_METRICS, NODE_WIDTH } from "../src/lib/node-interaction"
 import { connectFlow, connectionFeedback, flowNodes, taskEdges } from "../src/lib/workflow-flow"
-import { setGroupRun } from "../src/lib/containers"
 import {
   computeVariables,
   expressionNames,
@@ -122,10 +121,12 @@ test("values resolve into the payload and the workflow request", () => {
   ])
   expect(request.links).toEqual([{ id: map.connections.at(-1)!.id, target: "phot", parameter: "datapars.fwhmpsf", type: "r", source: { node: "calc", output: "m" } }])
   expect(request.runs).toEqual({ edit: "run-edit" })
-  // A task run once per round of a workflow run gives every round's run.
-  const round = (id: string, filter: string) =>
-    ({ id, instanceId: "edit", state: "completed", workflow: "w1", products: [{ id: id + ".txt", label: "", labels: { FILTER: filter } }] })
-  expect(valueRequest({ ...map, runs: [...map.runs, round("edit-B", "B"), round("edit-V", "V")] }, catalog).runs).toEqual({ edit: ["edit-B", "edit-V"] })
+  // A split task run once per group of a workflow run gives every group's run.
+  const group = (id: string, filter: string) =>
+    ({ id, instanceId: "edit", state: "completed", workflow: "w1", group: filter, products: [{ id: id + ".txt", label: "" }] })
+  expect(valueRequest({ ...map, runs: [...map.runs, group("edit-B", "B"), group("edit-V", "V")] }, catalog).runs).toEqual({ edit: ["edit-B", "edit-V"] })
+  // A split target's links ask for one value per group.
+  expect(valueRequest(map, catalog, new Set(), (id) => (id === "phot" ? ["B", "V"] : undefined)).links[0].groups).toEqual(["B", "V"])
   const payload = payloadFor(map, "phot", catalog, { "datapars.fwhmpsf": 8.1, verify: "no" })
   expect(payload.parameterSets.datapars.fwhmpsf).toBe(8.1)
   expect(payload.parameters.verify).toBe("no")
@@ -177,15 +178,6 @@ test("a pset node's values reach every task it feeds, in a run, a region and a r
   const run = workflowRequest(map, catalog, "/tmp")
   for (const id of ["phot", "find"]) expect(held(run.nodes.find((n) => n.id === id)!.payload)).toEqual([3.2, "EXPTIME"])
   expect(run.values.links.map((l) => [l.target, l.parameter])).toEqual([["phot", "datapars.fwhmpsf"], ["find", "datapars.fwhmpsf"]])
-  // Members of a region, fed by a task inside it, take them too.
-  const region: Spec = { ...node("giraf.foreach", "foreach"), taskName: "반복" }
-  const looped: Catalog = { ...catalog, tasks: [...catalog.tasks, region] }
-  let inner = setGroupRun({ ...map, subflows: [{ id: "loop", name: "반복", position: { x: 0, y: 0 }, width: 400, height: 240 }] }, looped, prefs, "loop", "foreach")
-  inner = { ...inner, tasks: inner.tasks.map((t) => (t.id === "phot" || t.id === "find" ? { ...t, subflowId: "loop" } : t)) }
-  inner = { ...inner, connections: [...inner.connections, { id: "chain", target: "find", role: "image", source: { kind: "pending", taskId: "phot", outputRole: "output" } }] }
-  const regionRun = workflowRequest(inner, looped, "/tmp")
-  expect(regionRun.flows.map((f) => f.members)).toEqual([["phot", "find"]])
-  for (const id of ["phot", "find"]) expect(held(regionRun.nodes.find((n) => n.id === id)!.payload)).toEqual([3.2, "EXPTIME"])
 })
 
 test("a pset node offers its pinned parameters as values", () => {
@@ -213,7 +205,7 @@ test("a pset node offers its pinned parameters as values", () => {
   map = link(map, pset.id, "value:fwhmpsf", "find", "p:photpars.apertures")
   expect(connectionFeedback(map, catalog, [], { source: pset.id, sourceHandle: "value:emission", target: "find", targetHandle: "p:datapars.fwhmpsf" }).valid).toBe(false)
   let request = valueRequest(map, catalog)
-  expect(request.nodes.find((n) => n.id === pset.id)).toEqual({ id: pset.id, run: "pset", partition: null, files: [], fileLinks: [], inputs: {},
+  expect(request.nodes.find((n) => n.id === pset.id)).toEqual({ id: pset.id, run: "pset", files: [], fileLinks: [], inputs: {},
     rows: [{ name: "fwhmpsf", value: "3.2", type: "r" }, { name: "emission", value: "", type: "b" }] })
   expect(request.links.map((l) => [l.target, l.parameter, l.source])).toEqual([["find", "photpars.apertures", { node: pset.id, output: "fwhmpsf" }]])
   // A value connected into the row is what the row passes on.
@@ -243,7 +235,6 @@ test("a value loops only when it comes to read itself", () => {
 test("values format compactly for rows and labels", () => {
   expect(formatValue({ values: [3.2149] })).toBe("3.215")
   expect(formatValue({ values: [8.28, 8, 7.5, 9] })).toBe("8.28, 8 외 2개")
-  expect(formatValue({ values: [3.38, 3.07], labels: [{ FILTER: "B" }, { FILTER: "V" }] })).toBe("B 3.38, V 3.07")
   expect(formatValue({ error: "x" })).toBe("")
 })
 

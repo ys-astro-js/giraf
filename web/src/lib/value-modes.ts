@@ -78,14 +78,11 @@ export function psetUser(map: TaskMap, nodeId: string): { taskId: string; name: 
   return link && { taskId: link.target, name: link.role.slice(PSET_INPUT.length) }
 }
 
-const by = (partition: string | undefined) => (partition ? `${partition}별로 ` : "")
-
 /** The line under a 값 node's title: what it hands on, for its 가져오기. */
 export function valueDescription(map: TaskMap, catalog: Catalog, task: Instance): string | undefined {
-  const partition = task.draft.partition
   switch (specOf(catalog, task)?.run) {
     case "value-constant":
-      return `직접 정한 값을 ${by(partition)}전달`
+      return "직접 정한 값을 전달"
     case "value-header":
       return "파일 헤더의 키워드 값을 전달"
     case "value-compute":

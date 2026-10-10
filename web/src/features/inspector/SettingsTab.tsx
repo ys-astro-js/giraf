@@ -19,8 +19,6 @@ import { ParameterEditorFields } from "@/components/parameter-editor"
 import { type ParameterPinning } from "@/components/parameter-fields"
 import { ValueRowsEditor } from "@/components/value-rows-editor"
 import { ComputeRowsEditor } from "@/components/compute-rows-editor"
-import { FlowSettingsEditor } from "@/components/flow-settings-editor"
-import { isFlowSpec } from "@/lib/containers"
 import { isValueNode } from "@/lib/values"
 import { type ParameterGroup } from "@/lib/parameter-presentation"
 import { MeasurementsSection } from "./Measurements"
@@ -40,7 +38,6 @@ export function InspectorSettings({
   valueSource,
   map,
   catalog,
-  rows,
 }: {
   groups: ParameterGroup[]
   query: string
@@ -73,8 +70,7 @@ export function InspectorSettings({
         ) : (
           <ValueRowsEditor spec={spec} task={task} edit={edit} />
         )}
-        <FlowSettingsEditor spec={spec} task={task} edit={edit} map={map} catalog={catalog} rows={rows} />
-        {(!(isValueNode(spec) || isFlowSpec(spec)) || groups.length > 0) && (
+        {(!isValueNode(spec) || groups.length > 0) && (
           <ParameterEditorFields
             task={spec.name}
             groups={groups}

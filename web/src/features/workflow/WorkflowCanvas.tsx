@@ -68,8 +68,6 @@ import { SubflowEditor } from "@/components/subflow-editor"
 import { setSubflowCollapsed, subflowColor } from "@/lib/subflow"
 import { WorkflowClickConnection } from "@/components/workflow-click-connection"
 import { type WorkflowNode } from "@/lib/workflow-flow"
-import { chooseReceive, isContainerId } from "@/lib/containers"
-import type { Box } from "@/lib/edge-crossing"
 import { clippedTitle } from "@/lib/clipped-title"
 import {
   bypassEdges,
@@ -108,7 +106,6 @@ export function TaskMapView({
   layoutBusy = false,
   map,
   catalog,
-  prefs,
   rows,
   update,
   onEditStart,
@@ -124,10 +121,8 @@ export function TaskMapView({
   runDisabled,
   open,
   add,
-  flowProgress,
 }: TaskMapViewProps) {
   const [hoveredNode, setHoveredNode] = useState("")
-  const [chipBoxes] = useState(() => new Map<string, Box>())
   const values = useValueResults(map, catalog)
   const autoCollapse = useNodeView((state) => state.autoCollapse)
   const setAutoCollapse = useNodeView((state) => state.setAutoCollapse)
@@ -271,7 +266,6 @@ export function TaskMapView({
           map={map}
           catalog={catalog}
           group={map.subflows?.find((g) => g.id === editingGroup)}
-          prefs={prefs}
           update={update}
           taskIds={groupSelection.filter((id) =>
             map.tasks.some((t) => t.id === id && !t.subflowId)
@@ -334,12 +328,6 @@ export function TaskMapView({
               },
               runGroup: onRunSubflow,
               groupRunDisabled: workflowBusy || runDisabled,
-              flowProgress,
-              chipBoxes,
-              chooseReceive: selectingGroup
-                ? undefined
-                : (connectionId, regionId, choice) =>
-                    update((m) => chooseReceive(m, connectionId, regionId, choice), "받는 방법 변경"),
             }}
           >
             <ReactFlow<WorkflowNode, Edge>
@@ -416,7 +404,7 @@ export function TaskMapView({
               }
               onNodeClick={(event, node) => {
                 if (
-                  (node.type === "task" || isContainerId(map, node.id)) &&
+                  node.type === "task" &&
                   !(event.target as Element).closest(".react-flow__handle")
                 )
                   choose(node.id)

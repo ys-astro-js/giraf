@@ -47,7 +47,6 @@ import {
 import type { Source } from "@/lib/task-map"
 import { valueDescription } from "@/lib/value-modes"
 
-import { isContainerId } from "@/lib/containers"
 import { WorkflowContext } from "./context"
 import { Handle } from "./Handle"
 import { StatusIcon } from "./StatusIcon"
@@ -513,7 +512,7 @@ export const TaskNode = memo(function TaskNode({
                 // A file source's files are ready without running it.
                 const pending =
                   !fromFiles &&
-                  links.some((c) => c.source.kind === "pending" && !isContainerId(map, c.source.taskId))
+                  links.some((c) => c.source.kind === "pending")
                 const key = ccdTasks.has(task.task)
                   ? calibrationLabels[slot.role] || slot.role
                   : slot.role

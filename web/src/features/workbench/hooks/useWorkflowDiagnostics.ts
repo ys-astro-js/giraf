@@ -1,7 +1,7 @@
 import { diagnostics } from "@/lib/diagnostics"
 import { createWorkflowDiagnosticsController } from "@/lib/live-diagnostics"
 import { valueIssues } from "@/lib/value-modes"
-import { loopIssues } from "@/lib/containers"
+import { splitIssues } from "@/lib/splits"
 import { useEffect, useRef, useState } from "react"
 import { type Catalog, type Preferences, type Workspace } from "@/lib/workbench"
 import {
@@ -48,10 +48,9 @@ export function useWorkflowDiagnostics({
       documentId,
       workflowDiagnosticRequest(map, catalog, workspace.folder),
       false,
-      [...valueIssues(map, catalog), ...loopIssues(map, catalog, workspace.files)]
+      [...valueIssues(map, catalog), ...splitIssues(map)]
     )
-    // The signature excludes position, selection, zoom and other view changes;
-    // file headers decide which files a loop's passes take.
+    // The signature excludes position, selection, zoom and other view changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [diagnosticSignature, documentId, ready, catalog, diagnosticController, workspace.files])
   useEffect(() => {

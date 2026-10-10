@@ -61,8 +61,6 @@ export function duplicateTask(
         ...clone(link),
         id: uid(),
         target: ids.get(link.target)!,
-        // Receive modes follow the copied region.
-        ...(link.flow ? { flow: Object.fromEntries(Object.entries(link.flow).map(([region, mode]) => [ids.get(region) ?? region, clone(mode)])) } : {}),
         ...(copied && source.kind !== "files"
           ? {
               source: {
@@ -232,16 +230,9 @@ export function moveTask(
 export function removeTask(map: TaskMap, id: string): TaskMap {
   const index = map.tasks.findIndex((t) => t.id === id)
   if (index < 0) return map
-  // Removing a container (lib/containers) keeps its members, as dissolving a group does.
-  const container = map.subflows?.some((g) => g.id === id)
-  // A region's members (and regions inside it) go to the group it was in.
-  const parent = map.tasks[index].subflowId
-  const tasks = map.tasks
-    .filter((t) => t.id !== id)
-    .map((t) => (container && t.subflowId === id ? { ...t, subflowId: parent } : t))
+  const tasks = map.tasks.filter((t) => t.id !== id)
   return {
     ...map,
-    ...(container ? { subflows: map.subflows!.filter((g) => g.id !== id) } : {}),
     tasks,
     connections: map.connections
       .filter(
@@ -250,13 +241,6 @@ export function removeTask(map: TaskMap, id: string): TaskMap {
           !(c.source.kind === "pending" && c.source.taskId === id)
       )
       .map((c) => {
-        if (container && c.flow?.[id]) {
-          const { [id]: _, ...flow } = c.flow
-          void _
-          const { flow: _f, ...rest } = c
-          void _f
-          c = Object.keys(flow).length ? { ...rest, flow } : rest
-        }
         if (c.source.kind !== "result" || c.source.taskId !== id) return c
         const { taskId: _, ...source } = c.source
         return { ...c, source }
@@ -317,20 +301,6 @@ export function restoreTask(
     )
       continue
     connections.push(clone(c))
-  }
-  // A container comes back with its group and the members it held.
-  const group = before.subflows?.find((g) => g.id === id)
-  if (group && !map.subflows?.some((g) => g.id === id)) {
-    const members = new Set(before.tasks.filter((t) => t.subflowId === id).map((t) => t.id))
-    // Receive modes at its border come back on the connections still there.
-    const modes = new Map(before.connections.flatMap((c) => (c.flow?.[id] ? [[c.id, c.flow[id]] as const] : [])))
-    return {
-      ...map,
-      subflows: [...(map.subflows ?? []), clone(group)],
-      tasks: tasks.map((t) => (members.has(t.id) && t.subflowId === task.subflowId ? { ...t, subflowId: id } : t)),
-      connections: connections.map((c) => (modes.has(c.id) && !c.flow?.[id] ? { ...c, flow: { ...c.flow, [id]: clone(modes.get(c.id)!) } } : c)),
-      view: { ...map.view, selected: id },
-    }
   }
   return { ...map, tasks, connections, view: { ...map.view, selected: id } }
 }

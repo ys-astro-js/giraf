@@ -2,7 +2,6 @@
  * The inspector's tabs for a node: only those with something to show for its
  * kind, so the tab bar reads as what the node can do.
  */
-import { isFlowSpec } from "./containers"
 import { isJobNode, isValueNode } from "./values"
 import type { Spec } from "./workbench"
 
@@ -22,8 +21,7 @@ export function inspectorTabs(spec: Spec): InspectorTab[] {
     !!spec.parameterSets?.length ||
     !!spec.preprocess ||
     spec.adapter !== "generic" ||
-    isValueNode(spec) ||
-    isFlowSpec(spec)
+    isValueNode(spec)
   const shown: Record<InspectorTab, boolean> = {
     info: true,
     input: spec.inputs.length > 0,

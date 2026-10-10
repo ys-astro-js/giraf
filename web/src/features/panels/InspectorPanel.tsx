@@ -13,7 +13,6 @@ import { isSourceNode } from "@/lib/file-nodes"
 import { holdPset, takeOutPset } from "@/lib/values"
 import { setValueMode } from "@/lib/value-modes"
 import { takeValue } from "@/lib/value-take"
-import { isContainerId } from "@/lib/containers"
 import {
   connect,
   connectionRoles,
@@ -265,10 +264,7 @@ export function InspectorPanel() {
         }
         pick={w.pick}
         onOpen={w.assetViewer.open}
-        // A container runs with its members, like its heading's run button.
-        onRun={() =>
-          isContainerId(w.map, task.id) ? void w.runWorkflow(task.id) : w.run(task.id)
-        }
+        onRun={() => w.run(task.id)}
         busy={w.workflowBusy || w.busy || !!(taskJob && activeJob(taskJob))}
         error={w.taskError}
         onErrorFocus={focusError}

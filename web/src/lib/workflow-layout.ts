@@ -4,8 +4,7 @@ import { flowEdges, taskEdges } from "./workflow-flow"
 import { compoundPorts } from "./compound"
 import type { TaskMap } from "@/lib/task-map"
 import type { Catalog, Frame } from "./workbench"
-import { containerTask, flowBoundary } from "./containers"
-import { collapsedAround, groupAncestors, parentGroup } from "./group-nesting"
+import { collapsedAround, parentGroup } from "./group-nesting"
 import { BYPASS_PREFIX, bypassEdges, helperAnchors, hiddenHelpers } from "./helper-nodes"
 
 const options: LayoutOptions = {
@@ -39,8 +38,8 @@ export async function autoLayoutMap(
   const collapsed = new Map(shown.filter(group => group.collapsed).map(group => [group.id, group]))
   // A group is at least wide enough for its heading, even with little inside.
   const minimum = (id: string) => {
-    const container = containerTask(map, id)
-    return { width: container ? flowBoundary(map, catalog, container).width : 360, height: 160 }
+    void id
+    return { width: 360, height: 160 }
   }
   const groups = new Map<string, ElkNode>(shown.filter(group => !group.collapsed).map(group => [group.id, {
     id: groupId(group.id),
@@ -63,8 +62,7 @@ export async function autoLayoutMap(
   // A collapsed group is one node with the compound's ports; its members keep their places.
   const plain = collapsed.size ? taskEdges(map, catalog) : []
   for (const group of collapsed.values()) {
-    const container = containerTask(map, group.id)
-    const ports = compoundPorts(map, group, plain, container ? flowBoundary(map, catalog, container) : undefined)
+    const ports = compoundPorts(map, group, plain)
     const node: ElkNode = {
       id: groupId(group.id), width: ports.width, height: ports.height,
       layoutOptions: { "elk.portConstraints": "FIXED_POS" },
@@ -87,12 +85,6 @@ export async function autoLayoutMap(
   for (const task of map.tasks) {
     if (collapsedAround(map, task.id)) continue
     if (hidden.has(task.id)) continue
-    // A container's task is its group node.
-    if (containerTask(map, task.id)) {
-      const group = groups.get(task.id)
-      if (group) nodes.set(task.id, group)
-      continue
-    }
     const geometry = nodeGeometry(map, task, catalog, rows)
     const node: ElkNode = {
       id: taskId(task.id), width: geometry.width, height: geometry.height,
@@ -127,13 +119,9 @@ export async function autoLayoutMap(
     return routedPort.id
   }
   const elk = new ELK()
-  // Edges between a container and its members stay out: ELK lays out the members inside it.
-  const inner = (container: string, other: string) =>
-    !!containerTask(map, container) && groupAncestors(map, other).some(group => group.id === container)
   const all = flowEdges(map, catalog)
   const edges = [...all, ...bypassEdges(all, hidden)].filter(edge =>
-    !edge.hidden && !hidden.has(edge.source) && !hidden.has(edge.target) &&
-    !inner(edge.source, edge.target) && !inner(edge.target, edge.source))
+    !edge.hidden && !hidden.has(edge.source) && !hidden.has(edge.target))
   const graph = await elk.layout({
     id: "root", layoutOptions: options, children,
     edges: edges.map(edge => ({

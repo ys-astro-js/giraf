@@ -2,9 +2,7 @@ import { memo, useContext, useEffect, type CSSProperties } from "react"
 import { Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react"
 import { ChevronsUpDown, GripVertical, Pencil, Play, Terminal } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { NodeIcon } from "@/components/node-icon"
 import { compoundStatus } from "@/lib/compound"
-import { flowProgress } from "@/lib/containers"
 import { subflowColor } from "@/lib/subflow"
 import { stateLabel } from "@/lib/task-map"
 import { type CompoundNode as CompoundFlowNode } from "@/lib/workflow-flow"
@@ -20,13 +18,11 @@ export const CompoundNode = memo(function CompoundNode({
   dragging,
   isConnectable,
 }: NodeProps<CompoundFlowNode>) {
-  const { map, currentIssues, runGroup, groupRunDisabled, setGroupCollapsed, editGroup, flowProgress: progress } =
+  const { map, currentIssues, runGroup, groupRunDisabled, setGroupCollapsed, editGroup } =
     useContext(WorkflowContext)!
-  const { group, members, inputs, outputs, height, flow } = data
-  // A container keeps its name and what it does as the heading, collapsed or not.
-  const name = flow?.label ?? group.name
-  const meta = flowProgress(flow?.run, progress?.id === id ? progress : undefined)
-  const status = compoundStatus(map, members, currentIssues, flow ? id : undefined)
+  const { group, members, inputs, outputs, height } = data
+  const name = group.name
+  const status = compoundStatus(map, members, currentIssues)
   const statusLabel = status.severity
     ? `${status.severity === "error" ? "오류" : "경고"}: ${status.issues.map((issue) => issue.message).join("; ")}`
     : status.state
@@ -48,10 +44,9 @@ export const CompoundNode = memo(function CompoundNode({
           "--group-color": subflowColor(group.color),
         } as CSSProperties
       }
-      aria-label={`${name} ${flow ? "컨테이너" : "그룹"} 노드`}
+      aria-label={`${name} 그룹 노드`}
       data-selected={selected}
       data-dragging={dragging}
-      data-flow={flow?.run}
       data-running={status.state === "running"}
       data-diagnostic={status.severity}
     >
@@ -64,9 +59,7 @@ export const CompoundNode = memo(function CompoundNode({
         }}
       >
         <GripVertical aria-hidden="true" />
-        {flow && <NodeIcon icon={flow.icon} />}
         <strong title={name}>{name}</strong>
-        {flow?.statement && <span className="flow-statement" title={flow.statement}>{flow.statement}</span>}
         <span
           className="node-state"
           data-severity={status.severity}
@@ -77,11 +70,6 @@ export const CompoundNode = memo(function CompoundNode({
         >
           <StatusIcon severity={status.severity} state={status.state} />
         </span>
-        {meta && (
-          <span className="flow-progress" role="img" aria-label={meta.label} title={meta.label}>
-            {meta.text}
-          </span>
-        )}
         <Button
           className="nodrag nopan"
           variant="ghost"
