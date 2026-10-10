@@ -168,6 +168,19 @@
 .pass-files .pass-value[data-missing] {
   color: var(--warning);
 }
+/* 나누기 and 짝 맞추기 under an input (lib/splits): a chip that opens the choices, right-aligned. */
+.split-controls .pass-value { display: flex; justify-content: flex-end; overflow: visible; color: var(--foreground); }
+.split-controls li { align-items: center; }
+.split-controls li > span:first-child { padding-left: 12px; font-size: 12px; color: var(--muted-foreground); }
+.split-chip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 6px 0 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); color: var(--foreground); font-size: 12px; line-height: 16px; white-space: nowrap; cursor: pointer; }
+.split-chip:hover, .split-chip[data-popup-open] { background: var(--accent); border-color: var(--ring); }
+.split-chip:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.split-chip[data-missing] { border-color: var(--warning); }
+.split-chip > svg:last-child { width: 14px; height: 14px; color: var(--muted-foreground); }
+.split-chip .split-token { color: inherit; }
+.split-count { width: 64px; height: 24px; text-align: right; }
+.split-choice-values { margin-left: auto; padding-left: 12px; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.input-count { display: inline-flex; align-items: center; margin-left: auto; color: var(--muted-foreground); font-size: 12px; font-variant-numeric: tabular-nums; }
 .inspector-connection {
   display: flex;
   align-items: center;
@@ -353,3 +366,15 @@
   white-space: nowrap;
   color: var(--muted-foreground);
 }
+
+/* A split task's parameters per group (lib/group-values), columns under the group chips. */
+.group-values { table-layout: fixed; }
+.group-values th, .group-values td { height: auto; padding: 8px 6px; }
+.group-values-head { width: 64px; text-align: right; }
+.group-values-name { font-weight: 400; white-space: nowrap; }
+.group-values-name > * + * { margin-left: 6px; }
+.group-values-note { font-size: 11px; color: var(--muted-foreground); }
+.group-values-cell { text-align: right; font-variant-numeric: tabular-nums; }
+.group-inputs li { align-items: center; }
+.group-inputs .partition-chip { justify-self: start; }
+.commands .command-line { white-space: normal; overflow-wrap: anywhere; font-size: 12px; line-height: 18px; }

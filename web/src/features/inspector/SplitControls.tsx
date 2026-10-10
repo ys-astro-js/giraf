@@ -124,7 +124,11 @@ export function PairControl({ map, task, role, rows, edit }: Props) {
   const rule = task.draft.pairing?.[role]
   const { ids } = assigned(map, task, role)
   const frames = framesOf(map, rows)
-  const keys = keyChoices(ids, frames, rule && "by" in rule ? [rule.by] : [])
+  // A key pairs a group's files with the candidate of the same value: the split files' keywords
+  // that differ between them come first, then those the candidates hold.
+  const split = splitOf(task)
+  const own = split ? keyChoices(assigned(map, task, split.input).ids, frames).filter((c) => c.values.length > 1) : []
+  const keys = [...own, ...keyChoices(ids, frames, rule && "by" in rule ? [rule.by] : []).filter((c) => !own.some((o) => o.key === c.key))]
   const { groups } = taskGroups(map, task, rows)
   const set = (next: PairRule | undefined) => edit((t) => setPairing(t, role, next))
   const value = !rule ? "" : "by" in rule ? `by:${rule.by}` : "order" in rule ? "order" : "iraf" in rule ? "iraf" : "manual"

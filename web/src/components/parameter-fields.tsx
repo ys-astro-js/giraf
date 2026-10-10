@@ -1,4 +1,4 @@
-import { LocateFixed, Pin, PinOff, RotateCcw, Variable } from "lucide-react"
+import { Columns3, LocateFixed, Pin, PinOff, RotateCcw, Sigma, Variable } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
@@ -69,6 +69,13 @@ export type ParameterPinning = {
   /** 다른 값에서 가져오기: a new 값 node feeds the parameter. */
   take?: (key: string) => void
   select?: (id: string) => void
+  /** A split task's groups (lib/splits): a parameter may hold a value per group. */
+  groups?: { id: string; name: string }[]
+  grouped?: (key: string) => Record<string, string> | undefined
+  setGrouped?: (key: string, values: Record<string, string> | undefined) => void
+  /** A formula of the task's other parameters (`3 * fwhmpsf`). */
+  formula?: (key: string) => string | undefined
+  setFormula?: (key: string, text: string | undefined) => void
 }
 /** Kept as an export for the existing callers; parameters are edited as fields. */
 export function ParameterTable({
@@ -132,6 +139,11 @@ export function ParameterTable({
         const locked = !!key && pinning!.locked(key)
         const pinned = !!key && (locked || pinning!.pinned(key))
         const source = key ? pinning!.source?.(key) : undefined
+        const groups = pinning?.groups ?? []
+        const grouped = key && !linked ? pinning!.grouped?.(key) : undefined
+        const formula = key && !linked ? pinning!.formula?.(key) : undefined
+        const numeric = ["i", "r", "d"].includes(p.type)
+        const current = String(values[p.name] ?? p.default ?? "")
         return (
           <Field
             key={p.name}
@@ -166,6 +178,30 @@ export function ParameterTable({
                   <Variable />
                 </Button>
               ) : null}
+              {key && !linked && groups.length > 1 && pinning!.setGrouped && formula === undefined && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`${p.name} 그룹마다 다른 값`}
+                  aria-pressed={!!grouped}
+                  title={grouped ? "모든 그룹에 같은 값" : "그룹마다 다른 값"}
+                  onClick={() => pinning!.setGrouped!(key, grouped ? undefined : Object.fromEntries(groups.map((g) => [g.id, current])))}
+                >
+                  <Columns3 />
+                </Button>
+              )}
+              {key && !linked && numeric && pinning!.setFormula && !grouped && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`${p.name} 식`}
+                  aria-pressed={formula !== undefined}
+                  title={formula !== undefined ? "값으로 정하기" : "식으로 정하기"}
+                  onClick={() => pinning!.setFormula!(key, formula !== undefined ? undefined : "")}
+                >
+                  <Sigma />
+                </Button>
+              )}
               {key && (
                 <Button
                   variant="ghost"
@@ -194,6 +230,31 @@ export function ParameterTable({
             </div>
             {linked ? (
               <Input id={id} value={linked} readOnly aria-label={label(p)} aria-describedby={`${id}-description`} />
+            ) : formula !== undefined ? (
+              <Input
+                id={id}
+                className="font-mono"
+                aria-label={`${label(p)} 식`}
+                aria-describedby={`${id}-description`}
+                placeholder="3 * fwhmpsf"
+                value={formula}
+                onChange={(e) => pinning!.setFormula!(key!, e.target.value)}
+              />
+            ) : grouped ? (
+              <ul className="input-files pass-files group-inputs" aria-label={`${label(p)} 그룹마다`}>
+                {groups.map((g) => (
+                  <li key={g.id}>
+                    <span className="partition-chip" data-filter={g.name}>{g.name}</span>
+                    <ParamControl
+                      task={task}
+                      p={{ ...p, label: `${label(p)} ${g.name}` }}
+                      id={`${id}-${g.id}`}
+                      value={grouped[g.id] ?? current}
+                      onChange={(v) => pinning!.setGrouped!(key!, { ...grouped, [g.id]: v })}
+                    />
+                  </li>
+                ))}
+              </ul>
             ) : (
               <ParamControl
                 task={task}

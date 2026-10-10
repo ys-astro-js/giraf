@@ -22,6 +22,8 @@ import { ComputeRowsEditor } from "@/components/compute-rows-editor"
 import { isValueNode } from "@/lib/values"
 import { type ParameterGroup } from "@/lib/parameter-presentation"
 import { MeasurementsSection } from "./Measurements"
+import { CommandsSection, GroupValuesSection } from "./SplitSections"
+import { isGirafNode } from "@/lib/workbench"
 
 export function InspectorSettings({
   groups,
@@ -38,6 +40,7 @@ export function InspectorSettings({
   valueSource,
   map,
   catalog,
+  rows,
 }: {
   groups: ParameterGroup[]
   query: string
@@ -70,6 +73,7 @@ export function InspectorSettings({
         ) : (
           <ValueRowsEditor spec={spec} task={task} edit={edit} />
         )}
+        {!isGirafNode(spec) && <GroupValuesSection map={map} catalog={catalog} task={task} rows={rows} />}
         {(!isValueNode(spec) || groups.length > 0) && (
           <ParameterEditorFields
             task={spec.name}
@@ -82,6 +86,7 @@ export function InspectorSettings({
           />
         )}
 
+        {!isGirafNode(spec) && task.draft.split && <CommandsSection map={map} catalog={catalog} task={task} />}
         {spec.name === "ccdhedit" && String(d.parameters.value) === "" && (
           <Alert>
             <AlertDescription>

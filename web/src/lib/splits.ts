@@ -292,3 +292,66 @@ export function toggledParts(parts: SplitPart[], part: SplitPart): SplitPart[] {
     : [...parts.filter((p) => "key" in part || "key" in p), part]
   return [...next.filter((p) => "key" in p), ...next.filter((p) => !("key" in p))]
 }
+
+/** Per-group columns a node shows under its group chips; more groups than this read as one row. */
+export const MAX_COLUMNS = 4
+/** A node with group columns is wider, so each column holds a short value. */
+export const SPLIT_NODE_WIDTH = 304
+export const columnWidth = (columns: number) => (columns <= 2 ? 56 : columns === 3 ? 48 : 40)
+
+/**
+ * What a split task's node draws under its header: a strip of group chips
+ * that head per-group columns, or for a split by two parts a small matrix
+ * (rows by the first part, columns by the second, each cell its files).
+ * `columns` is how many per-group columns the rows below may use (0: none).
+ */
+export type SplitView = {
+  groups?: SplitGroup[]
+  waiting: boolean
+  strip?: { heads: string[]; more: number }
+  matrix?: { rows: string[]; cols: string[]; cells: (number | undefined)[][] }
+  columns: number
+}
+export function splitView(map: TaskMap, task: Instance, rows: Frame[]): SplitView | undefined {
+  const split = splitOf(task)
+  if (!split) return undefined
+  const { groups, waiting } = taskGroups(map, task, rows)
+  if (!groups?.length) return { groups, waiting, columns: 0 }
+  if (split.by.length === 2) {
+    // Columns by the second part's value: a chunk's number, named by its files when every row's agree (`1–5`).
+    const part = (g: SplitGroup, i: number) => g.id.split("/")[i]
+    const rowIds = [...new Set(groups.map((g) => part(g, 0)))]
+    const colIds = [...new Set(groups.map((g) => part(g, 1)))]
+    const names = (i: number, ids: string[]) => {
+      const each = ids.map((id) => [...new Set(groups.filter((g) => part(g, i) === id).map((g) => g.names[i]))])
+      return each.every((n) => n.length === 1) ? each.map((n) => n[0]) : ids
+    }
+    const cells = rowIds.map((r) => colIds.map((c) => groups.find((g) => part(g, 0) === r && part(g, 1) === c)?.files.length))
+    return { groups, waiting, matrix: { rows: names(0, rowIds), cols: names(1, colIds), cells }, columns: 0 }
+  }
+  const fits = groups.length <= MAX_COLUMNS
+  return {
+    groups,
+    waiting,
+    strip: { heads: groups.slice(0, fits ? groups.length : MAX_COLUMNS - 1).map((g) => g.name), more: fits ? 0 : groups.length },
+    columns: fits && groups.length > 1 ? groups.length : 0,
+  }
+}
+
+/**
+ * A split task's output name as its first group names it (`Dark15-1`), for
+ * an output each group names once; undefined for per-file, passed and
+ * edited outputs, which keep their per-file names.
+ */
+export function firstOutputName(task: Instance, spec: import("./workbench").Spec | undefined, role: string | undefined, group: SplitGroup | undefined, groups: number): string | undefined {
+  if (!spec || !group || groups < 2) return undefined
+  if (spec.adapter === "generic") {
+    const slot = spec.outputs?.find((s) => s.name === role) ?? spec.outputs?.[0]
+    if (!slot) return undefined
+    const mode = slot.eachWhen ? (task.draft.parameters[slot.eachWhen] === "yes" ? "each" : "single") : slot.mode
+    const name = task.draft.outputs?.[slot.name] ?? slot.default
+    return mode && ["each", "pass", "edit"].includes(mode) || !name ? undefined : groupOutputName(name, group, groups)
+  }
+  if (!spec.output || ["each", "edit"].includes(spec.output.mode)) return undefined
+  return groupOutputName(task.draft.output.name || spec.output.default, group, groups)
+}

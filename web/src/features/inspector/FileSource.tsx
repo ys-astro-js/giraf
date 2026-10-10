@@ -102,13 +102,13 @@ export function InspectorFileSource({
         )}
         <ChevronDown />
       </Button>
+      {children}
       {!compact && !label && s.valueType !== "cursor" && (
         <ParameterHelp
           p={{ name: s.name, prompt: s.label, min: "", max: "" }}
           id={`${prefix}source-${s.name}-description`}
         />
       )}
-      {children}
       {limit > 0 && (
         <Tabs
           defaultValue={

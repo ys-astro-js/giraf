@@ -10,6 +10,7 @@ import {
 } from "@/lib/task-map"
 import { acceptsAsset, acceptsSource, type Catalog, type Frame, type Slot } from "./workbench"
 import { closesCycle } from "./flow-graph"
+import { splitView, SPLIT_NODE_WIDTH } from "./splits"
 import { isValueNode, pinnedKeys, psetLinksInto, psetOutputName, valueOutputs, PARAM_HANDLE, PSET_INPUT, PSET_OUTPUT, VALUE_HANDLE } from "./values"
 
 const flags: Record<string, string> = {
@@ -126,7 +127,7 @@ export const NODE_WIDTH = 264
 export const COLLAPSED_WIDTH = 184
 export const COLLAPSED_HEIGHT = 40
 /** Vertical metrics shared by the node markup, handles, ELK ports and fitting. */
-export const NODE_METRICS = { header: 52, row: 32, member: 28, sectionStart: 5, sectionEnd: 4, preview: 77 }
+export const NODE_METRICS = { header: 52, row: 32, member: 28, sectionStart: 5, sectionEnd: 4, preview: 77, chips: 28, matrixRow: 24 }
 /** The latest completed run's images, newest first; the node previews a few. */
 export function nodePreviewIds(map: TaskMap, id: string) {
   const run = latestRun(map, id)
@@ -142,7 +143,6 @@ export function inputSlots(t: Instance, catalog: Catalog) {
     .map((slot) => ({ ...slot, role: slot.name }))
 }
 export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:Frame[] = [], collapsed = !!t.collapsed) {
-  void rows
   const spec = catalog.tasks.find((s) => s.name === t.task)
   const roles = inputSlots(t, catalog).filter(
     (s) => (
@@ -169,7 +169,9 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
     const row = psetOutput ? params.find((p) => psetOutputName(t, p.key) === o.name) : undefined
     return { ...o, handleId: VALUE_HANDLE + o.name, param: row?.handleId }
   })
-  const base = { primaryOutputRole: primaryOutputRole(spec, t), roles, primary, collapsed, showInputs, psetOutput }
+  // A split task's group chips (lib/splits) sit under the header; columns widen the node.
+  const split = splitView(map, t, rows)
+  const base = { primaryOutputRole: primaryOutputRole(spec, t), roles, primary, collapsed, showInputs, psetOutput, split }
   if (collapsed) {
     const middle = COLLAPSED_HEIGHT / 2
     return {
@@ -192,9 +194,12 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
     }
   }
   const m = NODE_METRICS
+  const strip = split?.strip ? m.sectionStart + m.chips + m.sectionEnd
+    : split?.matrix ? m.sectionStart + m.chips + m.matrixRow * split.matrix.rows.length + m.sectionEnd : 0
+  const width = split?.columns || split?.matrix ? SPLIT_NODE_WIDTH : NODE_WIDTH
   // The 1px node border precedes the header.
-  const inputsTop = 1 + m.header + m.sectionStart
-  const inputsEnd = showInputs ? inputsTop + m.row * Math.max(roles.length, 1) + m.sectionEnd : 1 + m.header
+  const inputsTop = 1 + m.header + strip + m.sectionStart
+  const inputsEnd = showInputs ? inputsTop + m.row * Math.max(roles.length, 1) + m.sectionEnd : 1 + m.header + strip
   // Pinned parameters sit between inputs and outputs.
   const paramsTop = inputsEnd + m.sectionStart
   const paramsEnd = params.length ? paramsTop + m.row * params.length + m.sectionEnd : inputsEnd
@@ -216,14 +221,14 @@ export function nodeGeometry(map: TaskMap, t: Instance, catalog: Catalog, rows:F
   return {
     ...base,
     preview,
-    width: NODE_WIDTH,
-    outputX: NODE_WIDTH,
+    width,
+    outputX: width,
     height,
     occupiedHeight: height,
     outputY,
-    outputs: outputs.map((slot) => ({ ...slot, x: NODE_WIDTH, y: rowY(slot.handleId) })),
+    outputs: outputs.map((slot) => ({ ...slot, x: width, y: rowY(slot.handleId) })),
     params: params.map((row, index) => ({ ...row, y: paramY(index) })),
-    values: values.map((row) => ({ ...row, x: NODE_WIDTH, y: row.param ? paramY(params.findIndex((p) => p.handleId === row.param)) : rowY(row.handleId) })),
+    values: values.map((row) => ({ ...row, x: width, y: row.param ? paramY(params.findIndex((p) => p.handleId === row.param)) : rowY(row.handleId) })),
     psetOutputY: psetOutput ? rowY(PSET_OUTPUT) : 0,
     inputY: (role: string) => inputsTop + m.row / 2 + m.row * Math.max(0, roles.findIndex((slot) => slot.name === role)),
   }

@@ -392,6 +392,10 @@ async def task_validate_endpoint(request: Request, *, action):
     def resolve(id):
         path=get_file(id)
         return register(path,registry[id].get('label'),registry[id].get('job'),registry[id].get('asset'))
+    # A task run alone takes its formulas here; a split task runs as a workflow (giraf/splits.py).
+    from .splits import apply_formulas, without_fields
+    if isinstance(payload, dict):
+        payload = without_fields(apply_formulas(dict(payload)))
     manifest=await run_in_threadpool(validate_task,payload,resolve)
     for row in manifest['rows']:registry[row['id']]=row
     if action=='task-validate':
@@ -430,7 +434,7 @@ def task_commands(request):
     try:
         runs = group_runs(payload, files, TASKS.get(payload.get('task')))
     except SplitError as exc:
-        return dict(groups=[], error=str(exc))
+        return dict(groups=[], problem=str(exc))
     result = []
     for group, each in runs:
         entry = dict(id=group['id'], name=group['name'], files=group['files']) if group else dict(id='', name='', files=[])
@@ -442,7 +446,7 @@ def task_commands(request):
                                      pending_roles=frozenset(request.get('pending') or ()))
             entry['commands'] = command_lines(manifest)
         except (ValueError, KeyError, TypeError, OSError) as exc:
-            entry['error'] = str(exc)
+            entry['problem'] = str(exc)
         result.append(entry)
     return dict(groups=result)
 

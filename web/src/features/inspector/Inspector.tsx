@@ -32,6 +32,7 @@ import {
   VALUE_HANDLE,
 } from "@/lib/values"
 import { parameterLink } from "@/lib/value-take"
+import { setFormula, setGroupValues, splitOf, taskGroups } from "@/lib/splits"
 
 import { SearchField } from "@/components/search-field"
 import { ValueSourceEditor } from "@/components/value-source-editor"
@@ -370,12 +371,16 @@ export function TaskInspector({
     ? requestedTab
     : tabs[0]
   const valueLinks = valueLinksInto(map, task.id)
+  // A split task's groups: a parameter may hold a value per group (lib/splits).
+  const splitGroups = splitOf(task) ? taskGroups(map, task, rows).groups : undefined
   const pinning = {
     pinned: (key: string) => (task.pinned ?? []).includes(key),
-    // A pset node's parameter whose value is connected onward stays pinned too.
+    // A pset node's parameter whose value is connected onward stays pinned too,
+    // and so does one set per group or by a formula.
     locked: (key: string) => {
       const offered = psetOutputName(task, key)
       return valueLinks.some((c) => c.role === PARAM_HANDLE + key) ||
+        !!task.draft.groupValues?.[key] || task.draft.formulas?.[key] !== undefined ||
         (!!offered && map.connections.some((c) => c.source.kind !== "files" && c.source.taskId === task.id &&
           c.source.outputRole === VALUE_HANDLE + offered))
     },
@@ -397,6 +402,13 @@ export function TaskInspector({
     select: onSelectNode,
     toggle: (key: string) =>
       edit((t) => togglePinned(t, key, !(t.pinned ?? []).includes(key))),
+    ...(isJobNode(spec) ? {
+      groups: splitGroups?.map((g) => ({ id: g.id, name: g.name })),
+      grouped: (key: string) => task.draft.groupValues?.[key],
+      setGrouped: (key: string, values: Record<string, string> | undefined) => edit((t) => setGroupValues(t, key, values)),
+      formula: (key: string) => task.draft.formulas?.[key],
+      setFormula: (key: string, text: string | undefined) => edit((t) => setFormula(t, key, text)),
+    } : {}),
   }
   const psetActions = (group: ParameterGroup) => {
     if (!group.id.startsWith("set-") || spec.run === "pset") return null

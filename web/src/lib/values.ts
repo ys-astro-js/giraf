@@ -159,7 +159,9 @@ export function pinnedKeys(map: TaskMap, catalog: Catalog, task: Instance): stri
   const run = specOf(catalog, task)?.run
   if (run === "value-compute") return [...entries.keys()]
   const connected = valueLinksInto(map, task.id).map((c) => c.role.slice(PARAM_HANDLE.length))
-  return [...new Set([...(task.pinned ?? []), ...connected])].filter((key) => entries.has(key))
+  // A value set per group or by a formula (lib/splits) shows on the node too.
+  const own = [...Object.keys(task.draft.groupValues ?? {}), ...Object.keys(task.draft.formulas ?? {})]
+  return [...new Set([...(task.pinned ?? []), ...connected, ...own])].filter((key) => entries.has(key))
 }
 
 /** Psets of a task fed by a pset node: `pset:<name>` connections. */

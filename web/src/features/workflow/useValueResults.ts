@@ -1,7 +1,8 @@
 import { useMemo } from "react"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
-import { api, type Catalog } from "@/lib/workbench"
+import { api, type Catalog, type Frame } from "@/lib/workbench"
 import type { TaskMap } from "@/lib/task-map"
+import { taskGroups } from "@/lib/splits"
 import { formatScalar, formatValue, isValueSource, valueRefs, valueRequest, VALUE_HANDLE, type ValueResponse } from "@/lib/values"
 
 /**
@@ -9,8 +10,15 @@ import { formatScalar, formatValue, isValueSource, valueRefs, valueRequest, VALU
  * connection, evaluated by the server (giraf/values.py). Moving nodes keeps
  * the request unchanged, so only value edits and new runs refetch.
  */
-export function useValueResults(map: TaskMap, catalog: Catalog) {
-  const request = useMemo(() => ({ ...valueRequest(map, catalog), refs: valueRefs(map, catalog) }), [map, catalog])
+export function useValueResults(map: TaskMap, catalog: Catalog, rows: Frame[] = []) {
+  const request = useMemo(() => {
+    // A split task's links get one value per group (lib/group-values).
+    const groupsOf = (id: string) => {
+      const task = map.tasks.find((t) => t.id === id)
+      return task ? taskGroups(map, task, rows).groups?.map((g) => g.id) : undefined
+    }
+    return { ...valueRequest(map, catalog, new Set(), groupsOf), refs: valueRefs(map, catalog) }
+  }, [map, catalog, rows])
   const key = JSON.stringify(request)
   const { data } = useQuery({
     queryKey: ["api", "values", key],

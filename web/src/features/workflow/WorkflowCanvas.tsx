@@ -123,7 +123,7 @@ export function TaskMapView({
   add,
 }: TaskMapViewProps) {
   const [hoveredNode, setHoveredNode] = useState("")
-  const values = useValueResults(map, catalog)
+  const values = useValueResults(map, catalog, rows)
   const autoCollapse = useNodeView((state) => state.autoCollapse)
   const setAutoCollapse = useNodeView((state) => state.setAutoCollapse)
   const setCollapsed = useCallback(

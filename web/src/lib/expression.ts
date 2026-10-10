@@ -110,10 +110,3 @@ export function evaluateExpression(text: string, lookup: (name: string) => strin
     return undefined
   }
 }
-
-/** A value as a round names it (giraf/flows.py _text): `30.0`, `True`, `B`. */
-export function expressionText(value: Value): string {
-  if (typeof value === "boolean") return value ? "True" : "False"
-  if (typeof value === "number") return Number.isInteger(value) ? `${value}.0` : String(value)
-  return value.trim()
-}

@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { TabsContent } from "@/components/ui/tabs"
-import { type Catalog, type Spec, type Frame, type Slot } from "@/lib/workbench"
+import { isGirafNode, type Catalog, type Spec, type Frame, type Slot } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
 import type * as React from "react"
+import { CommandsSection } from "./SplitSections"
 
 export function InspectorInputs({
   slot,
@@ -197,6 +198,7 @@ export function InspectorInputs({
           connectMaster={(role, id) => onInputSource?.(role, { kind: "pending", taskId: id })}
         />
       )}
+      {!isGirafNode(spec) && <CommandsSection map={map} catalog={catalog} task={task} />}
       {["imheader", "imstatistics"].includes(spec.name) && (
         <Field>
           <FieldLabel htmlFor="image-section">영상 영역</FieldLabel>

@@ -46,6 +46,10 @@ import {
 } from "@/lib/values"
 import type { Source } from "@/lib/task-map"
 import { valueDescription } from "@/lib/value-modes"
+import { firstOutputName, groupInputs, splitOf, stem } from "@/lib/splits"
+import { groupedValue } from "@/lib/group-values"
+import { PairToken, SplitToken, TokenIcon } from "@/components/split-token"
+import { GroupStrip, GroupValues } from "./SplitRows"
 
 import { WorkflowContext } from "./context"
 import { Handle } from "./Handle"
@@ -53,6 +57,8 @@ import { StatusIcon } from "./StatusIcon"
 
 const count = (source: Source) =>
   source.kind === "result" ? `${source.ids.length}개` : ""
+/** A file count as split rows show it: the file icon and a bare number. */
+const files = (n: number) => <><TokenIcon icon="file" />{n}</>
 
 const activate = (e: React.KeyboardEvent<HTMLElement>) => {
   if (e.key === "Enter" || e.key === " ") {
@@ -84,6 +90,11 @@ export const TaskNode = memo(function TaskNode({
     hiddenNodes,
   } = useContext(WorkflowContext)!
   const { task, geometry } = data
+  // A split task's groups (lib/splits): chips under the header, values per group in the rows.
+  const split = splitOf(task)
+  const view = geometry.split
+  const groups = view?.groups
+  const columns = view?.columns ?? 0
   const nodeIssues = currentIssues.filter((issue) => issue.nodeId === id)
   const nodeIssue =
     nodeIssues.find((issue) => issue.severity === "error") || nodeIssues[0]
@@ -344,20 +355,34 @@ export const TaskNode = memo(function TaskNode({
     </Handle>
   )
 
+  // Every group's results gather on one output: its first group's name, then the merge icon.
+  const gathered = !!split && (groups?.length ?? 0) > 1
   const outputRow = (
     handleId: string,
     name: string,
     result: Source,
-    fallback: string
-  ) => (
-    <div className="node-output-row" key={handleId}>
-      <span className="node-output-name" data-unnamed={!name} data-full-text={name || fallback}>
-        {name || fallback}
-      </span>
-      <span className="node-output-count">{count(result)}</span>
-      {outputHandleElement(handleId, name, result)}
-    </div>
-  )
+    fallback: string,
+    role?: string
+  ) => {
+    const first = !name && gathered ? firstOutputName(task, spec, role, groups![0], groups!.length) : undefined
+    const shown = name || (first ? `${first} …` : fallback)
+    return (
+      <div className="node-output-row" key={handleId}>
+        <span className="node-output-name" data-unnamed={!name && !first} data-full-text={shown}>
+          {shown}
+        </span>
+        {gathered ? (
+          <span className="node-output-count split-value">
+            <TokenIcon icon="merge" />
+            {result.kind === "result" ? result.ids.length : first ? groups!.length : ""}
+          </span>
+        ) : (
+          <span className="node-output-count">{count(result)}</span>
+        )}
+        {outputHandleElement(handleId, name, result)}
+      </div>
+    )
+  }
 
   const preview = geometry.preview ? nodePreviewIds(map, id) : []
   const frames = map.runs.flatMap((r) => r.products)
@@ -367,7 +392,7 @@ export const TaskNode = memo(function TaskNode({
       ref={article}
       className="workflow-node"
       style={{
-        width: collapsed ? COLLAPSED_WIDTH : NODE_WIDTH,
+        width: collapsed ? COLLAPSED_WIDTH : geometry.collapsed ? NODE_WIDTH : geometry.width,
         minHeight: collapsed ? undefined : geometry.height,
       }}
       data-node-id={id}
@@ -461,6 +486,7 @@ export const TaskNode = memo(function TaskNode({
               </Button>
             </span>
           </header>
+          {view && <GroupStrip view={view} label={task.label} />}
           {geometry.showInputs && <div className="node-section node-inputs">
             {geometry.roles.length ? (
               geometry.roles.map((slot) => {
@@ -518,6 +544,24 @@ export const TaskNode = memo(function TaskNode({
                   : slot.role
                 const about = slot.label || slot.name
                 const shown = pending ? `${summary} 출력 대기` : summary
+                // The split input names how it splits; another input of a split task how it pairs.
+                const splitting = split?.input === slot.role
+                const rule = split && !splitting ? task.draft.pairing?.[slot.role] : undefined
+                const token = splitting ? <SplitToken parts={split.by} /> : rule ? <PairToken rule={rule} /> : null
+                const perGroup = !pending && groups?.length && columns
+                  ? splitting
+                    ? <GroupValues values={groups.map((g) => g.files.length)} icon="file" />
+                    : (() => {
+                        const given = groupInputs(map, task, rows, slot.role, groups)
+                        if (!("files" in given)) return null
+                        const frames = [...rows, ...map.runs.flatMap((r) => r.products)]
+                        return <GroupValues values={groups.map((g) => {
+                          const ids = given.files[g.id] ?? []
+                          return ids.length === 1 ? stem(frames.find((f) => f.id === ids[0])?.label ?? "") : ids.length || ""
+                        })} />
+                      })()
+                  : null
+                const total = splitting && !pending && !perGroup ? a.ids.length : undefined
                 return (
                   <div
                     className="node-input-row"
@@ -548,14 +592,17 @@ export const TaskNode = memo(function TaskNode({
                         }}
                       >
                         <span className="node-input-label">{key}</span>
+                        {token}
                         <span className="node-input-source">
-                          {fromFiles && (
-                            <File
-                              className="node-input-file"
-                              aria-hidden="true"
-                            />
-                          )}
-                          {shown}
+                          {perGroup ?? (total !== undefined ? files(total) : <>
+                            {fromFiles && (
+                              <File
+                                className="node-input-file"
+                                aria-hidden="true"
+                              />
+                            )}
+                            {shown}
+                          </>)}
                         </span>
                         {!enabled && (
                           <span className="node-input-flag">비활성</span>
@@ -582,6 +629,8 @@ export const TaskNode = memo(function TaskNode({
                 // A pset node's parameter row also offers its value, named without the pset.
                 const offered = geometry.values.find((v) => v.param === row.handleId)
                 const name = offered?.name ?? row.key
+                // A split task's parameter in each group, and where its value comes from.
+                const grouped = split && !row.pset ? groupedValue(map, catalog, task, row.key, groups, values) : undefined
                 return (
                 <div
                   className="node-input-row node-param-row"
@@ -612,9 +661,11 @@ export const TaskNode = memo(function TaskNode({
                     <span className="node-param-name" data-full-text={name}>{name}</span>
                     <span
                       className="node-param-value"
-                      data-full-text={from ? `${text}\n${from}에서 받은 값` : text}
+                      data-full-text={grouped?.formula ?? (from ? `${text}\n${from}에서 받은 값` : text)}
                     >
-                      {text}
+                      {grouped?.cells && columns
+                        ? <GroupValues values={grouped.cells} icon={grouped.kind} />
+                        : <>{grouped?.kind && <TokenIcon icon={grouped.kind} />}{grouped?.cells ? `${grouped.cells[0]} …` : grouped?.formula !== undefined ? grouped.text : text}</>}
                     </span>
                   </button>
                   {offered && valueHandle(offered.handleId, offered.name)}
@@ -626,7 +677,7 @@ export const TaskNode = memo(function TaskNode({
           {(geometry.primary || outputSlots.length > 0 || rowValues.length > 0 || geometry.psetOutput) && (
             <div className="node-section node-outputs">
               {geometry.primary &&
-                outputRow("output", primaryName, output, "결과")}
+                outputRow("output", primaryName, output, "결과", geometry.primaryOutputRole)}
               {outputSlots.map(({ slot, result, name }) =>
                 outputRow(slot.handleId, name, result, "이름 없는 포트")
               )}
