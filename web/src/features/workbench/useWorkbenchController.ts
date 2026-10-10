@@ -322,8 +322,13 @@ export function useWorkbenchController() {
     setSelectedJob,
   })
   const { asset, setAsset } = assetViewer
-  function pick(slot: Slot, ids: string[], apply: (ids: string[]) => void) {
-    setPicker({ slot, initial: ids, apply })
+  function pick(
+    slot: Slot,
+    ids: string[],
+    apply: (ids: string[]) => void,
+    title?: string
+  ) {
+    setPicker({ slot, initial: ids, apply, title })
   }
   /** Switches the workspace folder and leaves the main screen on success. */
   async function openFolder(path: string) {

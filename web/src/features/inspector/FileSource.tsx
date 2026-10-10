@@ -7,7 +7,12 @@ import { Input } from "@/components/ui/input"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Choice } from "@/components/workbench-controls"
-import { acceptsSource, type Frame, type Slot } from "@/lib/workbench"
+import {
+  acceptsSource,
+  taskDisplayName,
+  type Frame,
+  type Slot,
+} from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
 import type * as React from "react"
 
@@ -41,7 +46,12 @@ export function InspectorFileSource({
   summary: string
   expression: string
   links: Connection[]
-  pick: (slot: Slot, ids: string[], apply: (ids: string[]) => void) => void
+  pick: (
+    slot: Slot,
+    ids: string[],
+    apply: (ids: string[]) => void,
+    title?: string
+  ) => void
   ids: string[]
   replace: (next: string[]) => void
   rows: Frame[]
@@ -121,10 +131,15 @@ export function InspectorFileSource({
               size="sm"
               variant="outline"
               onClick={() =>
-                pick(s, ids, (next) => {
-                  replace(next)
-                  setExpanded((v) => ({ ...v, [s.name]: 0 }))
-                })
+                pick(
+                  s,
+                  ids,
+                  (next) => {
+                    replace(next)
+                    setExpanded((v) => ({ ...v, [s.name]: 0 }))
+                  },
+                  `${task.label && task.label !== task.task ? task.label : taskDisplayName(task.task)} › ${label ?? s.name}`
+                )
               }
             >
               <FolderOpen />

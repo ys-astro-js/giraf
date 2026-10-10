@@ -254,7 +254,7 @@ function RunDetail({
         {removable && (
           <DeleteSelectionButton
             ids={execution.jobs.map((item) => item.id)}
-            label={`${groupName(execution)} 기록 삭제`}
+            label="휴지통으로 이동"
             description="산출물도 함께 이동합니다. 원본 파일은 유지됩니다."
             onDelete={(ids) => w.deleteLibrary("jobs", ids)}
           />

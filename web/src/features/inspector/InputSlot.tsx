@@ -32,7 +32,12 @@ export function InspectorInputSlot({
   spec: Spec
   rows: Frame[]
   edit: (fn: (t: Instance) => Instance) => void
-  pick: (slot: Slot, ids: string[], apply: (ids: string[]) => void) => void
+  pick: (
+    slot: Slot,
+    ids: string[],
+    apply: (ids: string[]) => void,
+    title?: string
+  ) => void
   onOpen: (r: Frame, role?: string) => void
   onInputSource?: (
     role: string,

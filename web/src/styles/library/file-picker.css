@@ -1,0 +1,126 @@
+/* The input picker: a toolbar row, places | files | input order, a footer. */
+.file-picker-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  height: min(90dvh, 800px);
+  max-width: min(1152px, calc(100vw - 32px));
+  padding: 20px;
+}
+
+.picker-toolbar { display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 0; }
+.picker-toolbar > .toolbar-cluster { flex-shrink: 0; }
+.picker-search { width: 240px; height: 42px; border-radius: 21px; }
+
+/* The path: crumbs in a capsule; empty space in it edits the path. */
+.picker-path {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  height: 42px;
+  overflow: hidden;
+  cursor: text;
+}
+/* Crumbs sit at the start; a path longer than the capsule keeps its end in
+   view, overflowing at the start. The filler after them takes the clicks
+   that edit the path. */
+.picker-path { justify-content: flex-end; }
+.picker-crumbs { display: flex; flex-shrink: 0; align-items: center; white-space: nowrap; }
+.picker-path-filler { flex: 1 1 0; min-width: 0; align-self: stretch; }
+.picker-crumbs > li { display: flex; align-items: center; flex-shrink: 0; }
+.picker-crumb { padding-inline: 10px; cursor: default; }
+.picker-crumb-current { padding-inline: 10px; font-weight: 500; }
+.picker-crumb-separator { width: 14px; height: 14px; color: var(--muted-foreground); }
+.picker-path-input { flex: 1; min-width: 0; height: 42px; border-radius: 21px; }
+
+.picker-body { display: flex; flex: 1; min-height: 0; gap: 16px; }
+.picker-shortcuts { display: flex; flex-direction: column; width: 144px; flex-shrink: 0; gap: 4px; overflow: auto; }
+.picker-shortcuts > [data-active] { background: var(--muted); }
+
+.picker-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.picker-files { flex: 1; }
+.picker-chosen { width: 320px; flex-shrink: 0; }
+.picker-pane-list { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; outline: none; padding-bottom: 4px; }
+.picker-pane-state { padding: 12px; }
+.picker-pane-empty { padding: 12px; color: var(--muted-foreground); font-size: 13px; }
+
+/* Rows share columns: name, filter, exposure and the row's actions. */
+.picker-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px 96px 60px;
+  align-items: center;
+  min-height: 36px;
+  padding-inline: 8px;
+  font-size: 13px;
+  user-select: none;
+  -webkit-user-select: none;
+  outline: none;
+}
+.picker-chosen .picker-row { grid-template-columns: 28px minmax(0, 1fr) 60px; padding-block: 4px; }
+.picker-row[role="option"]:hover { background: var(--muted); }
+.picker-row[role="option"][data-highlighted] { background: var(--selection); color: var(--selection-foreground); }
+.picker-row[role="option"]:focus-visible { box-shadow: inset 0 0 0 2px var(--ring); }
+.picker-row[data-inert] { opacity: 0.6; color: var(--muted-foreground); }
+.picker-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-height: 36px;
+  border-bottom: 1px solid var(--border);
+  background: var(--popover);
+  font-weight: 500;
+  color: var(--foreground);
+}
+.picker-head:hover { background: var(--popover); }
+.picker-cell { display: flex; align-items: center; gap: 8px; min-width: 0; padding-inline: 4px; }
+.picker-span { grid-column: 1 / -1; }
+.picker-name > svg, .picker-chevron { width: 16px; height: 16px; flex-shrink: 0; color: var(--muted-foreground); }
+.picker-row[data-highlighted] .picker-name > svg { color: inherit; }
+.picker-name[data-depth="1"] { padding-inline-start: 28px; }
+.picker-name[data-depth="2"] { padding-inline-start: 52px; }
+.picker-filename { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-number { font-variant-numeric: tabular-nums; }
+.picker-muted { color: var(--muted-foreground); font-weight: 400; }
+.picker-row[data-highlighted] .picker-muted { color: inherit; opacity: 0.75; }
+
+/* Run results: a header per run, its files under it. */
+.picker-run-node { font-weight: 500; }
+.picker-run-time { margin-inline-start: auto; font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
+
+.picker-chosen-name { flex-direction: column; align-items: stretch; gap: 0; }
+.picker-origin { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted-foreground); }
+.picker-row[data-highlighted] .picker-origin { color: inherit; opacity: 0.75; }
+
+/* Row actions appear on the hovered or focused row, in their own column. */
+.picker-actions { justify-content: flex-end; gap: 4px; padding-inline: 0; }
+.picker-row-action { visibility: hidden; }
+.picker-row:hover .picker-row-action,
+.picker-row:focus-visible .picker-row-action,
+.picker-row:has(:focus-visible) .picker-row-action { visibility: visible; }
+.picker-in-input { width: 16px; height: 16px; margin-inline: 6px; color: var(--muted-foreground); }
+.picker-reorder { justify-content: flex-end; gap: 4px; padding-inline: 0; }
+.picker-chosen .picker-head { grid-template-columns: minmax(0, 1fr) auto; }
+.picker-chosen .picker-head > .picker-span { grid-column: auto; }
+
+.picker-footer { display: flex; align-items: center; justify-content: flex-end; flex-shrink: 0; gap: 12px; }
+
+@media (max-width: 767px) {
+  .file-picker-dialog { padding: 16px; max-width: calc(100vw - 16px); height: 96dvh; }
+  .picker-toolbar { flex-wrap: wrap; }
+  .picker-search { width: 160px; }
+  .picker-body { flex-direction: column; gap: 8px; }
+  .picker-shortcuts { flex-direction: row; width: 100%; max-height: 40px; }
+  .picker-shortcuts > * { flex-shrink: 0; }
+  .picker-shortcuts [data-slot="separator"] { display: none; }
+  .picker-chosen { width: auto; max-height: 30%; }
+  .picker-row { grid-template-columns: minmax(0, 1fr) 56px 72px 60px; }
+}

@@ -1,16 +1,11 @@
 /* File and image workspaces give the data the remaining viewport. */
-.file-picker-dialog { display: flex; flex-direction: column; gap: 12px; height: min(90dvh, 800px); max-width: min(1152px, calc(100vw - 32px)); padding: 20px; }
-.picker-body { display: flex; flex: 1; min-height: 0; gap: 16px; }
-.picker-shortcuts { display: flex; flex-direction: column; width: 144px; flex-shrink: 0; gap: 4px; overflow: auto; }
-.picker-main { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; gap: 8px; }
-.picker-filters { flex-direction: row; gap: 8px; }
+/* The input picker's own layout is in library/file-picker.css. */
 .picker-list { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .picker-list th { position: sticky; top: 0; background: var(--popover); height: 36px; }
 .picker-list td { padding-block: 4px; }
 .picker-list td:nth-last-child(-n+2) { font-variant-numeric: tabular-nums; }
 .picker-filename { white-space: normal; overflow-wrap: anywhere; text-align: start; }
 .picker-list td button { height: auto; min-height: 32px; max-width: 100%; }
-.picker-footer { flex-direction: row; flex-shrink: 0; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; background: none; border: 0; }
 /* A viewer window gives the file the whole window; its row floats on top. */
 .viewer-window { display: flex; flex-direction: column; height: 100%; min-height: 0; min-width: 0; }
 .viewer-window > .asset-content, .viewer-window > .viewer-grid { flex: 1; }
@@ -45,11 +40,6 @@
 }
 @media (min-width: 900px) { .viewer-grid-split { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 @media (max-width: 767px) {
-  .file-picker-dialog { padding: 16px; max-width: calc(100vw - 16px); height: 96dvh; }
-  .picker-body { flex-direction: column; gap: 8px; }
-  .picker-shortcuts { flex-direction: row; width: 100%; max-height: 40px; }
-  .picker-shortcuts > * { flex-shrink: 0; }
-  .picker-shortcuts [data-slot="separator"] { display: none; }
   .picker-list td, .picker-list th { padding-inline: 4px; }
   .asset-dialog { max-width: calc(100vw - 16px); height: 96dvh; }
   .viewer-grid-split { grid-template-rows: repeat(2,minmax(0,1fr)); }

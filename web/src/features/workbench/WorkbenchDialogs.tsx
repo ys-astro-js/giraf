@@ -28,6 +28,7 @@ export function WorkbenchDialogs() {
           request={w.picker}
           workspace={w.workspace}
           rows={w.rows}
+          jobs={w.jobs}
           remember={w.remember}
           onClose={() => w.setPicker(null)}
           onDelete={(ids) => w.deleteLibrary("files", ids)}

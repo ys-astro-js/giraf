@@ -70,7 +70,12 @@ type Props = {
   task: Instance
   rows: Frame[]
   edit: (fn: (t: Instance) => Instance) => void
-  pick: (slot: Slot, ids: string[], apply: (ids: string[]) => void) => void
+  pick: (
+    slot: Slot,
+    ids: string[],
+    apply: (ids: string[]) => void,
+    title?: string
+  ) => void
   onOpen: (r: Frame, role?: string) => void
   onRun: () => void
   busy: boolean

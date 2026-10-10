@@ -1,6 +1,5 @@
 import { FolderOpen, FileImage, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Table,
   TableBody,
@@ -13,21 +12,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { type Frame } from "@/lib/workbench"
 import { Blank } from "@/components/workbench-controls"
 
-export type FileSelection = {
-  selected: Set<string>
-  multiple: boolean
-  onSelect: (id: string, checked: boolean, shift: boolean) => void
-  onAll: (checked: boolean) => void
-}
-
 const fileIcon = (file: Frame) =>
   ["text", "image-list"].includes(file.asset || "") ? FileText : FileImage
 
 /**
  * A table of files: folders to go into, then files with their filter and
- * exposure. Choosing a file's name acts on it (previews it in the input
- * picker, opens it in a viewer from the toolbar); with `selection`, each
- * row also has a checkbox.
+ * exposure. Choosing a file's name acts on it (in the toolbar's files
+ * popover, opens it in a viewer).
  */
 export function FileTable({
   busy,
@@ -35,7 +26,6 @@ export function FileTable({
   directories = [],
   navigate,
   details = true,
-  selection,
   onActivate,
   activateLabel,
   empty,
@@ -46,15 +36,12 @@ export function FileTable({
   navigate?: (path: string) => void
   /** Filter and exposure columns; off when only folders are listed. */
   details?: boolean
-  selection?: FileSelection
   onActivate: (file: Frame) => void
   activateLabel: (file: Frame) => string
   /** What an empty list says. */
   empty: string
 }) {
-  const columns = (selection ? 1 : 0) + 1 + (details ? 2 : 0)
-  const all = list.length > 0 && list.every((r) => selection?.selected.has(r.id))
-  const some = list.some((r) => selection?.selected.has(r.id))
+  const columns = 1 + (details ? 2 : 0)
   return (
     <div className="picker-list" tabIndex={0} aria-label="파일 목록">
       {busy ? (
@@ -67,21 +54,6 @@ export function FileTable({
         <Table>
           <TableHeader>
             <TableRow>
-              {selection && (
-                <TableHead className="w-10">
-                  {selection.multiple ? (
-                    <Checkbox
-                      aria-label="표시된 파일 전체 선택"
-                      checked={all}
-                      indeterminate={some && !all}
-                      disabled={!list.length}
-                      onCheckedChange={(checked) => selection.onAll(checked)}
-                    />
-                  ) : (
-                    <span className="sr-only">선택</span>
-                  )}
-                </TableHead>
-              )}
               <TableHead>이름</TableHead>
               {details && (
                 <>
@@ -110,27 +82,7 @@ export function FileTable({
             {list.map((r) => {
               const Icon = fileIcon(r)
               return (
-                <TableRow
-                  key={r.id}
-                  data-state={
-                    selection?.selected.has(r.id) ? "selected" : undefined
-                  }
-                >
-                  {selection && (
-                    <TableCell>
-                      <Checkbox
-                        aria-label={`${r.label} 선택`}
-                        checked={selection.selected.has(r.id)}
-                        onCheckedChange={(checked, event) =>
-                          selection.onSelect(
-                            r.id,
-                            checked,
-                            Boolean((event.event as MouseEvent).shiftKey)
-                          )
-                        }
-                      />
-                    </TableCell>
-                  )}
+                <TableRow key={r.id}>
                   <TableCell>
                     <Button
                       variant="ghost"

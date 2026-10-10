@@ -1,8 +1,17 @@
 import type { PickerRequest } from "./FilePicker"
-import { acceptsAsset } from "@/lib/workbench"
-import { useEffect, useMemo, useRef, useState } from "react"
-import { defaultFileFilters, filterFiles } from "@/lib/file-library"
-import { api, type Frame, type Workspace } from "@/lib/workbench"
+import { acceptsAsset, jobTitle } from "@/lib/workbench"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { defaultFileFilters, filterFiles, matchesFileName } from "@/lib/file-library"
+import {
+  emptyHighlight,
+  folderName,
+  groupRuns,
+  step,
+  visit,
+  type Highlight,
+  type History,
+} from "@/lib/file-picker"
+import { api, type Frame, type Job, type Workspace } from "@/lib/workbench"
 type Browse = {
   path: string
   parent: string
@@ -12,94 +21,113 @@ type Browse = {
   files: Frame[]
 }
 
+/** The run results place in the picker's history, beside folder paths. */
+export const RESULTS = ":results"
+
 export function useFilePicker({
   workspace,
   request,
   remember,
   rows,
+  jobs,
 }: {
   workspace: Workspace
   request: PickerRequest
   remember: (rows: Frame[]) => void
   rows: Frame[]
+  jobs: Job[]
 }) {
-  const [location, setLocation] = useState(
-    request.startPath || workspace.folder
-  )
-  const [path, setPath] = useState(request.startPath || workspace.folder),
-    [data, setData] = useState<Browse | null>(null),
-    [busy, setBusy] = useState(true),
-    [error, setError] = useState("")
-  const [tab, setTab] = useState("folder"),
-    [query, setQuery] = useState(""),
-    [filters, setFilters] = useState(defaultFileFilters),
-    [selection, setSelection] = useState(new Set(request.initial))
-  const [preview, setPreview] = useState<Frame | null>(null),
-    [text, setText] = useState("")
+  const start = request.startPath || workspace.folder
+  const [history, setHistory] = useState<History>({
+    entries: [start],
+    index: 0,
+  })
+  const place = history.entries[history.index]
+  const results = place === RESULTS
+  // The folder shown last stays loaded while the run results are shown.
+  const path =
+    history.entries
+      .slice(0, history.index + 1)
+      .findLast((entry) => entry !== RESULTS) ?? start
   const [browseAttempt, setBrowseAttempt] = useState(0)
-  const last = useRef(""),
-    rememberRef = useRef(remember)
-  rememberRef.current = remember
+  const key = `${browseAttempt}:${path}`
+  // What the last browse answered, and for which path and attempt.
+  const [loaded, setLoaded] = useState<{
+    key: string
+    data: Browse | null
+    error: string
+  }>({ key: "", data: null, error: "" })
+  const [shortcuts, setShortcuts] = useState<Browse["shortcuts"]>([])
+  const busy = loaded.key !== key
+  // A failed path shows no list: a stale one would read as that folder.
+  const data = busy && loaded.error ? null : loaded.data
+  const error = busy ? "" : loaded.error
+  const [query, setQuery] = useState(""),
+    [filters, setFilters] = useState(defaultFileFilters),
+    [chosen, setChosen] = useState<string[]>(request.initial)
+  const [left, setLeft] = useState<Highlight>(emptyHighlight),
+    [right, setRight] = useState<Highlight>(emptyHighlight)
+  const [preview, setPreview] = useState<Frame | null>(null),
+    [shownText, setShownText] = useState({ id: "", text: "" })
+  const text = shownText.id === preview?.id ? shownText.text : ""
+  const rememberRef = useRef(remember)
+  useLayoutEffect(() => {
+    rememberRef.current = remember
+  })
   useEffect(() => {
     let cancelled = false
-    setBusy(true)
-    setError("")
     api<Browse>("browse?path=" + encodeURIComponent(path))
       .then((next) => {
         if (cancelled) return
-        setData(next)
+        setLoaded({ key, data: next, error: "" })
+        setShortcuts(next.shortcuts)
         rememberRef.current(next.files)
-        setBusy(false)
       })
       .catch((e) => {
-        if (!cancelled) {
-          setError(e.message)
-          setBusy(false)
-        }
+        if (!cancelled) setLoaded({ key, data: null, error: e.message })
       })
     return () => {
       cancelled = true
     }
-  }, [path, browseAttempt])
+  }, [path, key])
   useEffect(() => {
     let cancelled = false
-    setText("")
     if (preview && ["text", "image-list"].includes(preview.asset || ""))
       api<{ text: string }>("text?id=" + preview.id)
         .then((r) => {
-          if (!cancelled) setText(r.text)
+          if (!cancelled) setShownText({ id: preview.id, text: r.text })
         })
         .catch((e) => {
-          if (!cancelled) setError(e.message)
+          if (!cancelled) setShownText({ id: preview.id, text: e.message })
         })
     return () => {
       cancelled = true
     }
   }, [preview])
+
+  const accepts = (file: Frame) =>
+    acceptsAsset(request.slot.kind, file.asset) && !file.error
+  const products = useMemo(() => jobs.flatMap((job) => job.products), [jobs])
   const lookup = useMemo(
-    () => new Map([...rows, ...(data?.files || [])].map((r) => [r.id, r])),
-    [rows, data]
-  )
-  const list = useMemo(() => {
-    const source =
-      tab === "folder"
-        ? data?.files || []
-        : tab === "results"
-          ? rows.filter((r) => r.job)
-          : [...selection]
-              .map((id) => lookup.get(id))
-              .filter((r): r is Frame => !!r)
-    return filterFiles(
-      source.filter(
-        (r) => acceptsAsset(request.slot.kind, r.asset) && !r.error
+    () =>
+      new Map(
+        [...rows, ...products, ...(data?.files || [])].map((r) => [r.id, r])
       ),
-      query,
-      filters
-    )
-  }, [tab, data, rows, selection, lookup, request.slot.kind, filters, query])
+    [rows, products, data]
+  )
+  const files = request.folderOnly
+    ? (data?.files || []).filter((file) => matchesFileName(file, query))
+    : filterFiles((data?.files || []).filter(accepts), query, filters)
+  const directories = (data?.directories || []).filter((d) =>
+    matchesFileName({ id: d.path, label: d.name }, query)
+  )
+  const runs = groupRuns(
+    jobs,
+    (file) => accepts(file) && filterFiles([file], query, filters).length > 0
+  )
   const bands = [
     ...new Set(
-      [...rows, ...(data?.files || [])]
+      [...rows, ...products, ...(data?.files || [])]
         .map((file) => file.filter)
         .filter((band): band is string => !!band)
     ),
@@ -108,52 +136,60 @@ export function useFilePicker({
     filters.kind !== "all" ||
     filters.band !== "all" ||
     !!(filters.minExposure || filters.maxExposure)
-  function select(id: string, checked: boolean, shift = false) {
-    setSelection((current) => {
-      const next = request.slot.multiple ? new Set(current) : new Set<string>()
-      const a = list.findIndex((r) => r.id === last.current),
-        b = list.findIndex((r) => r.id === id)
-      const ids =
-        shift && a >= 0 && request.slot.multiple
-          ? list.slice(Math.min(a, b), Math.max(a, b) + 1).map((r) => r.id)
-          : [id]
-      for (const id of ids) checked ? next.add(id) : next.delete(id)
-      return next
-    })
-    last.current = id
+
+  /** Where a chosen file comes from: its folder, or the run that made it. */
+  function origin(file: Frame | undefined) {
+    if (!file) return ""
+    const job = file.job && jobs.find((j) => j.id === file.job)
+    if (job) return `${jobTitle(job)} 실행 결과`
+    return folderName(file.path)
   }
-  function navigate(path: string) {
-    setLocation(path)
-    setPath(path)
+
+  function go(next: History) {
+    setHistory(next)
     setQuery("")
-    setTab("folder")
+    setLeft(emptyHighlight)
     setPreview(null)
   }
-  const directories = tab === "folder" && !query ? data?.directories || [] : []
+  function navigate(target: string) {
+    if (target === path && !results) setBrowseAttempt((v) => v + 1)
+    go(visit(history, target))
+  }
 
   return {
-    error,
-    setBrowseAttempt,
-    navigate,
-    location,
-    busy,
+    error: results ? "" : error,
+    busy: !results && busy,
     data,
-    setLocation,
-    tab,
-    setTab,
-    setQuery,
-    setFilters,
-    selection,
+    path,
+    place,
+    results,
+    shortcuts,
+    navigate,
+    back: history.index > 0 ? () => go(step(history, -1)) : undefined,
+    forward:
+      history.index < history.entries.length - 1
+        ? () => go(step(history, 1))
+        : undefined,
+    reload: () => setBrowseAttempt((v) => v + 1),
     query,
+    setQuery,
     filters,
+    setFilters,
+    hasFilters,
     bands,
-    list,
-    setSelection,
+    files,
+    directories,
+    runs,
+    chosen,
+    setChosen,
+    lookup,
+    origin,
+    left,
+    setLeft,
+    right,
+    setRight,
     preview,
     setPreview,
-    directories,
-    select,
-    hasFilters,
     text,
   }
 }
