@@ -62,7 +62,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libx11-dev
       - run: bun install --frozen-lockfile
       # Each release has a higher version, so installed apps see it as an update.
-      - run: npm pkg set version=0.1.${{ github.run_number }}
+      - run: npm pkg set version=0.2.${{ github.run_number }}
       - run: node scripts/stage.mjs
       # macOS signs with the Developer ID certificate from a keychain set up
       # here (electron-builder's own temporary keychain fails to unlock on
@@ -154,7 +154,7 @@ jobs:
           name: wsl-backend
           path: desktop/build/wsl
       - run: bun install --frozen-lockfile
-      - run: npm pkg set version=0.1.${{ github.run_number }}
+      - run: npm pkg set version=0.2.${{ github.run_number }}
       - run: bunx electron-builder --win --publish never
       - uses: actions/upload-artifact@v4
         with:
@@ -182,8 +182,8 @@ jobs:
           # Installed apps update from latest*.yml in the latest release
           # (see desktop/package.json build.publish).
           test -f dist/latest.yml && test -f dist/latest-mac.yml && test -f dist/latest-linux.yml
-          gh release create "v0.1.${GITHUB_RUN_NUMBER}" dist/* \
+          gh release create "v0.2.${GITHUB_RUN_NUMBER}" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "GIRAF 0.1.${GITHUB_RUN_NUMBER}" \
+            --title "GIRAF 0.2.${GITHUB_RUN_NUMBER}" \
             --notes-file RELEASE_NOTES.md
