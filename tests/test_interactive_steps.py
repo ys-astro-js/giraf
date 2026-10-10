@@ -75,20 +75,19 @@ class SchemaRules(unittest.TestCase):
         self.assertTrue(validate_generic(self.spec('fit'), dict(inputs={'image': ['a']}, parameters={'interactive': 'yes'}), lambda _: self.row)['interactive'])
 
 
-class Rounds(unittest.TestCase):
-    def test_jobs_inside_regions_learn_their_round(self):
+class Groups(unittest.TestCase):
+    def test_jobs_of_a_split_task_learn_their_group(self):
         from giraf.workflow import execute_workflow
         seen = []
 
         def run(node, payload):
-            seen.append(node.get('round'))
+            seen.append(node.get('group'))
             return dict(id=node['id'], state='completed', products=[])
-        graph = dict(nodes=[dict(id='t', label='daoedit', payload={})], links=[],
-                     flows=[dict(id='r', label='Photometry', members=['t'], criteria=[{'times': 2}])])
-        state = execute_workflow(graph, run, lambda: False, lambda s: None)
+        graph = dict(nodes=[dict(id='t', label='daoedit', payload={'inputs': {'image': ['M67B.fits', 'M67V.fits']},
+                                                                  'split': {'input': 'image', 'by': [{'each': True}]}})], links=[])
+        state = execute_workflow(graph, run, lambda: False, lambda s: None, str, lambda id: {'label': id})
         self.assertEqual(state['state'], 'completed', state['message'])
-        self.assertEqual([r['name'] for r in seen], ['1', '2'])
-        self.assertEqual(seen[1]['regions'], [dict(id='r', label='Photometry', name='2', index=2, total=2)])
+        self.assertEqual(seen, [dict(id='M67B', name='M67B'), dict(id='M67V', name='M67V')])
 
 
 class Measuring(unittest.TestCase):
@@ -110,10 +109,10 @@ class Measuring(unittest.TestCase):
         (job / 'interaction-history.jsonl').write_text(''.join(json.dumps(dict(kind=k, response=r)) + '\n' for k, r in answers))
         return job
 
-    def test_a_round_reuses_its_measurement_while_the_image_is_unchanged(self):
+    def test_a_group_reuses_its_measurement_while_the_image_is_unchanged(self):
         from giraf.measurements import Measurements
         store = Measurements(Path(self.tmp.name) / 'm.json', self.runs, lambda job: dict(id=job.name, state='completed'))
-        manifest = dict(instanceId='node', round=dict(name='B'), nodeLabel='daoedit', inputs={'image': ['new']},
+        manifest = dict(instanceId='node', group=dict(id='B', name='B'), nodeLabel='daoedit', inputs={'image': ['new']},
                         rows=[dict(id='new', sha256='h1', label='M67B.fits')], cursorImage='new',
                         cursor={'image': {'click': 'a', 'count': '측정한 별 {n}개'}}, definition=dict(taskName='daoedit'))
         self.finished(manifest, [('imcur', '10 10 1 a'), ('imcur', '20 20 1 r'), ('imcur', '30 30 1 a'), ('imcur', '0 0 1 q')])
@@ -127,9 +126,9 @@ class Measuring(unittest.TestCase):
         products = json.loads((folder / 'products.json').read_text())
         self.assertEqual(products[0]['sourceInput'], 'new')
         self.assertEqual(products[-1]['role'], '$log')
-        # Another image, or another round, measures again; clearing asks again.
+        # Another image, or another group, measures again; clearing asks again.
         self.assertIsNone(store.reuse(dict(manifest, rows=[dict(id='new', sha256='h2')])))
-        self.assertIsNone(store.reuse(dict(manifest, round=dict(name='V'))))
+        self.assertIsNone(store.reuse(dict(manifest, group=dict(id='V', name='V'))))
         store.clear('node', ['B'])
         self.assertIsNone(store.reuse(manifest))
 

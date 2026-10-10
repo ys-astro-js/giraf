@@ -49,32 +49,12 @@ class ExpressionTests(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 evaluate_expression(bad, v)
 
-    def test_parameter_value_needs_one_value_and_follows_the_round(self):
-        result = dict(kind='real', values=[3.38, 3.07], labels=[{'FILTER': 'B'}, {'FILTER': 'V'}])
-        self.assertEqual(parameter_value(result, {'FILTER': 'V'}, 'r'), 3.07)
+    def test_parameter_value_needs_one_value(self):
         with self.assertRaisesRegex(ValueError, '2개'):
-            parameter_value(result, None, 'r')
-        self.assertEqual(parameter_value(dict(values=[4.0]), None, 'i'), 4)
-        self.assertEqual(parameter_value(dict(values=[True]), None, 'b'), 'yes')
-        self.assertEqual(parameter_value(dict(values=[3.0, 3.0]), None, 's'), '3')
-
-    def test_a_round_value_finds_its_label_as_a_number(self):
-        # Labels keep the header's text; a round of 15 and a typed label of 15.0 are one.
-        result = dict(kind='real', values=[1.0, 2.0], labels=[{'EXPTIME': '15.0'}, {'EXPTIME': '30'}])
-        self.assertEqual(parameter_value(result, {'EXPTIME': '15'}, 'r'), 1.0)
-        self.assertEqual(parameter_value(result, {'EXPTIME': '30.00'}, 'r'), 2.0)
-        with self.assertRaisesRegex(ValueError, '60 회차에 맞는 값이 없습니다'):
-            parameter_value(result, {'EXPTIME': '60.0'}, 'r')
-
-    def test_a_region_member_run_alone_takes_its_first_round(self):
-        # The editor gives a member's value links the region's first round (web/src/lib/values.ts).
-        request = dict(nodes=[dict(id='fwhm', run='value-constant', partition='SUBSET',
-                                   rows=[dict(name='fwhmpsf', value='', groups={'B': '3.38', 'V': '3.07'})])],
-                       links=[dict(id='l1', target='phot', parameter='datapars.fwhmpsf', type='r',
-                                   source=dict(node='fwhm', output='fwhmpsf'), round={'SUBSET': 'B'})])
-        self.assertEqual(ValueGraph(request, lambda id: None, str).parameters('phot'), {'l1': {'value': 3.38}})
-        del request['links'][0]['round']
-        self.assertIn('2개', ValueGraph(request, lambda id: None, str).parameters('phot')['l1']['error'])
+            parameter_value(dict(kind='real', values=[3.38, 3.07]), 'r')
+        self.assertEqual(parameter_value(dict(values=[4.0]), 'i'), 4)
+        self.assertEqual(parameter_value(dict(values=[True]), 'b'), 'yes')
+        self.assertEqual(parameter_value(dict(values=[3.0, 3.0]), 's'), '3')
 
 
 class GraphTests(unittest.TestCase):
@@ -98,8 +78,7 @@ class GraphTests(unittest.TestCase):
     def test_task_header_constant_and_compute_nodes(self):
         request = dict(nodes=[
             dict(id='gain', run='value-constant', rows=[dict(name='gain', value='1.4')]),
-            dict(id='fw', run='value-constant', partition='FILTER',
-                 rows=[dict(name='fwhm', value='', groups={'B': '3.38', 'V': '3.07'})]),
+            dict(id='fw', run='value-constant', rows=[dict(name='fwhm', value='3.38')]),
             dict(id='head', run='value-header', rows=[dict(name='NCOMBINE', value='')], files=['b.fits', 'v.fits']),
             dict(id='calc', run='value-compute', rows=[dict(name='m', value='median(fwhm) * 4'),
                                                          dict(name='n', value='gain * NCOMBINE')],
@@ -108,13 +87,12 @@ class GraphTests(unittest.TestCase):
         ], links=[
             dict(id='l1', target='phot', parameter='datapars.fwhmpsf', type='r', source=dict(node='calc', output='m')),
             dict(id='l2', target='phot', parameter='datapars.epadu', type='r', source=dict(node='calc', output='n')),
-            dict(id='l3', target='phot', parameter='photpars.apertures', type='s', source=dict(node='fw', output='fwhm'),
-                 round={'FILTER': 'B'}),
+            dict(id='l3', target='phot', parameter='photpars.apertures', type='s', source=dict(node='fw', output='fwhm')),
         ])
         graph = ValueGraph(request, lambda id: self.job() if id == 'edit' else None, lambda id: self.files[id])
         resolved = graph.parameters('phot')
         self.assertAlmostEqual(resolved['l1']['value'], 8.14 * 4)
-        # Files read outside a region carry no labels: NCOMBINE is two values.
+        # NCOMBINE of two files is two values.
         self.assertIn('2개', resolved['l2']['error'])
         self.assertEqual(resolved['l3']['value'], '3.38')
         self.assertEqual(graph.dependencies('phot'), {'edit'})
@@ -123,46 +101,21 @@ class GraphTests(unittest.TestCase):
         missing = ValueGraph(request, lambda id: None, lambda id: self.files[id]).parameters('phot')
         self.assertIn('실행', missing['l1']['error'])
 
-    def test_values_carry_the_labels_of_their_files(self):
-        labels = {'b': {'FILTER': 'B'}, 'v': {'FILTER': 'V'}, 'img-b': {'FILTER': 'B'}, 'img-v': {'FILTER': 'V'}}
-        sel = dict(state='completed', manifest=dict(definition=dict(taskName='hselect', values=[
-            dict(name='ncombine', kind='real', **{'from': 'output'}, keyword='NCOMBINE')])),
-            products=[dict(id='b', role='output', path=self.files['b.fits'], labels=labels['b']),
-                      dict(id='v', role='output', path=self.files['v.fits'], labels=labels['v'])])
-        gain = dict(id='gain', run='value-constant', rows=[dict(name='gain', value='2')])
-        calc = dict(id='calc', run='value-compute', rows=[dict(name='m', value='median(n) * gain')],
-                    inputs={'n': dict(node='sel', output='ncombine'), 'gain': dict(node='gain', output='gain')})
-        graph = ValueGraph(dict(nodes=[calc, gain]), {'sel': sel}.get, lambda id: self.files[id], labels.get)
-        result = graph.outputs([dict(node='calc', output='m')])['calc:m']
-        # Computed per label; a typed constant takes part in every one.
-        self.assertEqual((result['values'], result['labels']), ([6.0, 10.0], [{'FILTER': 'B'}, {'FILTER': 'V'}]))
-        # A header node reading a run's products keeps their labels.
-        head = dict(id='head', run='value-header', rows=[dict(name='NCOMBINE', value='')], fileLinks=[dict(source='sel')])
-        result = ValueGraph(dict(nodes=[head]), {'sel': sel}.get, lambda id: self.files[id]).output(dict(node='head', output='NCOMBINE'))
-        self.assertEqual(result['labels'], [{'FILTER': 'B'}, {'FILTER': 'V'}])
-
-    def test_table_rows_follow_the_image_their_product_came_from(self):
-        (self.root / 'b.txt').write_text(DAOEDIT)
-        (self.root / 'v.txt').write_text(DAOEDIT.replace('8.28', '3.00').replace('8.00', '3.50'))
-        spec = dict(name='fwhm', kind='real', **{'from': '$stdout'}, column='FWHM')
-        rows = [dict(id='img-b', path=self.files['b.fits']), dict(id='img-v', path=self.files['v.fits'])]
-        labels = {'img-b': {'FILTER': 'B'}, 'img-v': {'FILTER': 'V'}}
-        # daoedit runs over one image at a time; a per-image output (phot's .mag) names its input as `source`.
-        daoedit = dict(state='completed', manifest=dict(rows=rows, definition=dict(taskName='daoedit', values=[spec])),
-                       products=[dict(id='t1', role='$stdout', path=str(self.root / 'b.txt'), sourceInput='img-b'),
-                                 dict(id='t2', role='$stdout', path=str(self.root / 'v.txt'), sourceInput='img-v')])
-        phot = dict(daoedit, products=[dict(p, source=p['sourceInput'], sourceInput=None) for p in daoedit['products']])
-        calc = dict(id='calc', run='value-compute', rows=[dict(name='m', value='median(fwhm)')],
-                    inputs={'fwhm': dict(node='edit', output='fwhm')})
-        for job in (daoedit, phot):
-            with self.subTest(products=job['products']):
-                graph = ValueGraph(dict(nodes=[calc]), {'edit': job}.get, str, lambda id: labels.get(id, {}))
-                result = graph.output(dict(node='calc', output='m'))
-                self.assertEqual((result['values'], result['labels']), ([8.14, 3.25], [{'FILTER': 'B'}, {'FILTER': 'V'}]))
-        # A table made from both images at once has only the labels they share: none.
-        mixed = dict(daoedit, products=[dict(id='t3', role='$stdout', path=str(self.root / 'b.txt'))])
-        graph = ValueGraph(dict(nodes=[calc]), {'edit': mixed}.get, str, lambda id: labels.get(id, {}))
-        self.assertNotIn('labels', graph.output(dict(node='calc', output='m')))
+    def test_a_split_tasks_group_reads_its_own_groups_run(self):
+        def job(value):
+            (self.root / f'{value}.txt').write_text(DAOEDIT.replace('8.28', value).replace('8.00', value))
+            return dict(state='completed', manifest=dict(definition=dict(values=[
+                dict(name='fwhm', kind='real', **{'from': '$stdout'}, column='FWHM')])),
+                products=[dict(id=value, role='$stdout', path=str(self.root / f'{value}.txt'))])
+        b, v = job('3.0'), job('4.0')
+        merged = dict(b, products=b['products'] + v['products'])
+        request = dict(links=[dict(id='l', target='phot', parameter='fwhmpsf', type='r',
+                                   source=dict(node='edit', output='fwhm'), groups=['B', 'V', 'R'])])
+        resolved = ValueGraph(request, {'edit': merged}.get, str).parameters('phot', {'edit': {'B': b, 'V': v}})
+        self.assertIn('4개', resolved['l']['error'])
+        self.assertEqual((resolved['l@B'], resolved['l@V']), ({'value': 3.0}, {'value': 4.0}))
+        # A group the source has no run of reads its whole run.
+        self.assertIn('4개', resolved['l@R']['error'])
 
     def test_pset_node_rows_are_typed_values_and_follow_their_connections(self):
         pset = dict(id='datapars', run='pset', rows=[

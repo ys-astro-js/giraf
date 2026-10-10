@@ -33,24 +33,19 @@ SOURCES = ('files', 'expression', 'node', 'text', 'cursor')
 # Symbols a GIRAF node shows in the add-task popover.
 NODE_ICONS = ('file-input', 'folder-down', 'variable', 'file-search', 'calculator', 'repeat', 'list-ordered', 'split', 'sliders-horizontal')
 PARAMETER_FIELDS = {'label', 'default', 'fixed', 'connectable'}
-# `task` components extend an IRAF task; `run` and `flow` components are what a
-# GIRAF node does: run as a job, or steer the workflow runner.
+# `task` components extend an IRAF task; `run` components are what a GIRAF
+# node does when it runs.
 COMPONENT_CLASSES = {
     'cursor': 'task', 'image-cursor': 'task', 'value-output': 'task', 'value-input': 'task',
     'ccd-preprocess': 'task',
     'pass-files': 'run', 'save-files': 'run',
     'value-constant': 'run', 'value-header': 'run', 'value-compute': 'run', 'pset': 'run',
-    'foreach': 'flow',
 }
 RUN_COMPONENTS = ('pass-files', 'save-files', 'value-constant', 'value-header', 'value-compute', 'pset')
 # Run components evaluated by GIRAF instead of launched as a job: their value
 # outputs (and a pset node's values) feed other nodes' parameters.
 VALUE_RUNS = ('value-constant', 'value-header', 'value-compute', 'pset')
 PLANNED_COMPONENTS = ('image-cursor', 'value-input', 'ccd-preprocess')
-# A flow component makes a GIRAF node a region the workflow runner expands
-# (giraf/workflow.py): `foreach` runs the tasks inside it once per round of
-# the criteria set on it. Its settings live in the workflow document.
-FLOW_COMPONENTS = ('foreach',)
 # What a value carries; an IRAF parameter of a matching type can take it.
 VALUE_KINDS = ('real', 'int', 'bool', 'string')
 COMPONENTS = ('cursor',)
@@ -163,7 +158,7 @@ def format_errors(data):
                 errors += cursor_errors(item)
             elif kind == 'value-output':
                 errors += value_output_errors(item)
-            elif kind in RUN_COMPONENTS or kind in FLOW_COMPONENTS:
+            elif kind in RUN_COMPONENTS:
                 if set(item) != {'type'}:
                     errors.append(f'components.{kind}: type 외의 필드는 없습니다.')
             else:
@@ -438,9 +433,9 @@ def node_definition(task, layers):
         if 'components' in patch:
             components = patch['components']
             provenance['components'] = name
-    actions = [c['type'] for c in components if COMPONENT_CLASSES.get(c.get('type')) in ('run', 'flow')]
+    actions = [c['type'] for c in components if COMPONENT_CLASSES.get(c.get('type')) == 'run']
     if len(actions) != 1:
-        error('components: 실행 또는 흐름 구성 요소가 하나 필요합니다.')
+        error('components: 실행 구성 요소가 하나 필요합니다.')
     run = actions[0] if len(actions) == 1 else None
     inputs = [{'label': p['name'], 'multiple': True, 'required': False, **p} for p in ports['inputs'].values()]
     # A pass output exists only while its input holds files of its kind.
@@ -452,9 +447,6 @@ def node_definition(task, layers):
         error('outputs: save-files 노드는 출력이 없습니다.')
     if run == 'pass-files' and not outputs:
         error('outputs: pass-files 노드에는 넘겨줄 출력이 필요합니다.')
-    if run in FLOW_COMPONENTS and (inputs or outputs):
-        # A region has no ports: connections go straight to the tasks inside it.
-        error(f'inputs, outputs: {run} 노드에는 입력과 출력이 없습니다.')
     fingerprint = hashlib.sha256(json.dumps(dict(files=files, inputs=inputs, outputs=outputs, run=run),
                                             sort_keys=True).encode()).hexdigest()
     reason = ' '.join(dict.fromkeys(i['message'] for i in issues))

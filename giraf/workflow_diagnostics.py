@@ -7,6 +7,7 @@ from .model import inspect_file
 from .task_catalog import TASKS, CALIBRATIONS
 from .task_jobs import validate_task, values
 from .image_lists import accepts_asset
+from .splits import group_runs, split_problems, without_fields
 
 
 def connection_components(connections):
@@ -68,14 +69,16 @@ def workflow_diagnostics(request, resolve):
                            message=message, nodeId=node_id,
                            **({'connectionId': connection_id} if connection_id else {})))
 
-    flows = request.get('flows', [])
-    if not isinstance(flows, list):
-        raise ValueError('컨테이너 목록 형식이 올바르지 않습니다.')
     pending = diagnose_connections(by_id, connections, add)
-    diagnose_flows(flows, connections, add, by_id)
-    diagnose_loop_outputs(flows, by_id, add)
+
+    checked = {}
 
     def fresh(file_id):
+        if file_id not in checked:
+            checked[file_id] = inspected(file_id)
+        return checked[file_id]
+
+    def inspected(file_id):
         row = resolve(file_id)
         if not row:
             raise ValueError('선택한 파일을 다시 불러와 주세요.')
@@ -87,6 +90,7 @@ def workflow_diagnostics(request, resolve):
             return {**row, **inspected, 'asset': 'image'}
         return row
 
+    known = files(fresh)
     for node in nodes:
         node_id = node['id']
         payload = {**node['payload'], 'workingDirectory': request.get('workingDirectory') or node['payload'].get('workingDirectory')}
@@ -95,7 +99,16 @@ def workflow_diagnostics(request, resolve):
             if issue['severity'] == 'warning':
                 add('warning', '노드 스키마 ' + issue['message'], node_id)
         try:
-            manifest = validate_task(payload, fresh, diagnostics=True, pending_roles=pending[node_id])
+            for severity, message in split_problems(payload, known, pending[node_id]):
+                add(severity, message, node_id)
+            runs = group_runs(payload, known, TASKS.get(payload.get('task')))
+        except (ValueError, KeyError, TypeError, OSError):
+            # The split's problems are reported above; check the task with one file of each other input.
+            split = (payload.get('split') or {}).get('input')
+            runs = [(None, {**payload, 'inputs': {role: ids if role == split else ids[:1] for role, ids in payload.get('inputs', {}).items()}})]
+        try:
+            # The first group stands for the others: they differ only in files and values.
+            manifest = validate_task(without_fields(runs[0][1]), fresh, diagnostics=True, pending_roles=pending[node_id])
         except (ValueError, KeyError, TypeError, OSError) as exc:
             add('error', str(exc), node_id)
             continue
@@ -104,63 +117,10 @@ def workflow_diagnostics(request, resolve):
     return result
 
 
-def diagnose_flows(flows, connections, add, by_id=None):
-    """Settings of loop regions (giraf/flows.py), and connections into them
-    that take every round the same files although their source differs by a
-    label the region does not run by."""
-    from .flows import flow_errors, flow_labels, receive_mode, with_object, with_topic
-    for flow in flows:
-        for message in flow_errors(flow):
-            add('error', message, flow['id'])
-        if not flow.get('members'):
-            add('warning', '안에 작업이 없습니다. 반복할 작업을 이 안으로 옮겨 주세요.', flow['id'])
-    regions = {flow['id']: flow for flow in flows}
-    owner = {member: flow['id'] for flow in flows for member in flow.get('members', [])}
-
-    def enclosing(id):
-        found = []
-        while id in owner and owner[id] not in found:
-            id = owner[id]
-            found.append(id)
-        return found
-    names = {id: node.get('label') or id for id, node in (by_id or {}).items()}
-    for edge in connections:
-        source, target = edge.get('source', {}).get('taskId'), edge.get('target')
-        if not source or not target:
-            continue
-        around = enclosing(source)
-        carried = [name for id in reversed(around) for name in flow_labels(regions[id])]
-        link = dict(source=source, sourceRole=edge['source'].get('outputRole'), flow=edge.get('flow'))
-        for id in reversed(enclosing(target)):
-            if id in around:
-                continue
-            if receive_mode(link, regions[id], set(carried))[0] != 'all':
-                continue
-            for name in [n for n in carried if n not in flow_labels(regions[id])]:
-                add('warning', f'{with_topic(names.get(source, source))} {name}마다 다릅니다. '
-                               f'영역에 {with_object(name)} 더하면 짝을 지을 수 있습니다.', target, edge.get('id'))
-
-
-def diagnose_loop_outputs(flows, by_id, add):
-    """A member output named the same in every round is overwritten."""
-    from .flows import constant_outputs, flow_errors, flow_labels
-    regions = {flow['id']: flow for flow in flows}
-    owner = {member: flow['id'] for flow in flows for member in flow.get('members', [])}
-    for member, node in by_id.items():
-        variables, id = [], member
-        while id in owner and owner[id] not in variables:
-            id = owner[id]
-            variables.append(id)
-        regions_around = [regions[id] for id in reversed(variables)]
-        # A region of one round (a condition alone) does not overwrite anything.
-        if not any(flow.get('criteria') for flow in regions_around) or any(flow_errors(flow) for flow in regions_around):
-            continue
-        labels = [name for flow in regions_around for name in flow_labels(flow)]
-        suggested = ', '.join('{' + v + '}' for v in labels)
-        payload = node.get('payload', {})
-        for role, name in constant_outputs(TASKS.get(payload.get('task'), {}), payload, labels):
-            add('warning', f'{role}: 회차마다 이름이 같아({name}) 앞 회차의 파일을 덮어씁니다. '
-                           f'출력 이름에 {suggested}를 넣어 주세요.', member)
+def files(fresh):
+    """Header values of the files the editor checks (giraf/splits.py)."""
+    from .splits import Files
+    return Files(lambda id: fresh(id)['path'], lambda id: fresh(id).get('label'), lambda id: fresh(id).get('headers'))
 
 
 def diagnose_connections(by_id, connections, add):

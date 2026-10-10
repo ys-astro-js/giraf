@@ -1,8 +1,0 @@
-{
-  "version": 2,
-  "task": "giraf.foreach",
-  "title": "반복",
-  "description": "고른 기준의 회차마다 실행",
-  "icon": "repeat",
-  "components": [{ "type": "foreach" }]
-}

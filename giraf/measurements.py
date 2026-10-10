@@ -1,10 +1,12 @@
-"""What interactive steps measured in workflow runs, kept per node and round.
+"""What interactive steps measured in workflow runs, kept per node and group.
 
 A workflow run that reaches a task reading the cursor (a node schema `cursor`
-component, giraf/node_schema.py) waits for the person to measure, round by
-round. The completed run of each round is remembered here, with the hashes
-of the files it measured. A later run whose round gets the same files uses
-that run again instead of asking; clearing a round asks again.
+component, giraf/node_schema.py) waits for the person to measure, group by
+group of a split task (giraf/splits.py). The completed run of each group is
+remembered here by the group's name (`''` for a task run once), with the
+hashes of the files it measured. A later run whose group gets the same files
+uses that run again instead of asking; clearing a group asks again. The
+records and requests keep their older field names (`round`, `rounds`).
 """
 from datetime import datetime
 import hashlib
@@ -96,7 +98,7 @@ class Measurements:
 
     @staticmethod
     def _key(manifest):
-        return manifest.get('instanceId'), (manifest.get('round') or {}).get('name', '')
+        return manifest.get('instanceId'), (manifest.get('group') or {}).get('name', '')
 
     def list(self, instance):
         with self.lock:
@@ -127,7 +129,7 @@ class Measurements:
             self._save(data)
 
     def reuse(self, manifest):
-        """A new completed run carrying the round's earlier measurement, or None."""
+        """A new completed run carrying the group's earlier measurement, or None."""
         instance, name = self._key(manifest)
         with self.lock:
             record = self._load().get(instance, {}).get(name)

@@ -67,9 +67,8 @@ class DaoeditTests(unittest.TestCase):
             self.assertEqual(json.loads((job / 'status.json').read_text())['state'], 'completed', (job / 'task.log').read_text())
             products = [dict(p, path=str(job / p['file'])) for p in json.loads((job / 'products.json').read_text())]
             run = dict(state='completed', manifest=manifest, products=products)
-            fwhm = task_value(run, 'fwhm', lambda _: None, lambda _: {'FILTER': 'V'})
+            fwhm = task_value(run, 'fwhm', lambda _: None)
             self.assertEqual(len(fwhm['values']), 3)
             # Wider stars measure wider, in the order they were picked.
             self.assertEqual(fwhm['values'], sorted(fwhm['values']))
-            self.assertEqual(fwhm['labels'], [{'FILTER': 'V'}] * 3)
             self.assertEqual(len(task_value(run, 'sky', lambda _: None)['values']), 3)

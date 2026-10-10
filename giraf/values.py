@@ -3,22 +3,16 @@
 A value is a list of numbers or strings. It comes from a task's `value-output`
 component (a text column or a header keyword of its output), or a GIRAF value
 node (`value-constant`, `value-header`, `value-compute`, or a `pset` node's
-parameter). Values read from files carry those files' labels (`labels`, one
-`{name: value}` per value) that loop regions put on results
-(giraf/flows.py); a compute node computes once per label combination. Values
-reach a task parameter as one scalar; inside a region a value with labels
-takes the round's own (`round`). A table's rows are traced to the input image
-its product was made from (`source` or `sourceInput`).
+parameter). Values reach a task parameter as one scalar. A task split into
+groups (giraf/splits.py) runs once per group; a group of another split task
+with the same id reads that group's run (giraf/workflow.py group_scope).
 
 The request shape is shared by the `/api/values` endpoint and workflow runs:
 
-  nodes: [{id, run, rows: [{name, value, groups?, type?}], partition?, files: [file id],
+  nodes: [{id, run, rows: [{name, value, type?}], files: [file id],
            fileLinks: [{source, sourceRole?, sourceFiles?}], inputs: {variable: ref}}]
-  links: [{id, target, parameter, type, source: ref, round?: {label: value}}]
+  links: [{id, target, parameter, type, source: ref, groups?: [group id]}]
   ref:   {node, output}
-
-A constant's `groups` give one value per value of the label `partition`. The
-editor sends a region member run alone with the region's first round.
 """
 import ast
 import math
@@ -38,14 +32,14 @@ def _number(text):
 
 
 def same_value(a, b):
-    """Header values as a loop compares them: as numbers when both read as
+    """Header values as a split compares them: as numbers when both read as
     one (15 is 15.0), otherwise as trimmed text."""
     x, y = _number(a), _number(b)
     return x == y if x is not None and y is not None else str(a).strip() == str(b).strip()
 
 
 def pass_value(text):
-    """A loop pass's value as people read it and output names take it: a whole
+    """A header value as people read it and output names take it: a whole
     number without decimals (15.0 is 15), otherwise the trimmed text (30.66011, B)."""
     text = str(text).strip()
     number = _number(text)
@@ -131,14 +125,8 @@ def _product_path(product, resolve_file):
     return Path(resolve_file(product['id']))
 
 
-def task_value(job, name, resolve_file, labels_of=None):
-    """A `value-output` of a finished task run, read from its products.
-
-    Each value carries labels: a header value its output image's; a table row
-    also those of the input image the table was made from, when the run
-    recorded one (a per-image output's `source`, a run over one image's
-    `sourceInput`), else those every input of the run shares.
-    """
+def task_value(job, name, resolve_file):
+    """A `value-output` of a finished task run, read from its products."""
     if not job or job.get('state') != 'completed':
         raise ValueError('작업을 먼저 실행해 주세요.')
     definition = (job.get('manifest') or {}).get('definition') or {}
@@ -147,46 +135,24 @@ def task_value(job, name, resolve_file, labels_of=None):
         raise ValueError(f'{name}: 작업 스키마에 없는 값입니다.')
     products = [p for p in job.get('products', []) if p.get('role') == spec['from']]
     kind = spec.get('kind', 'real')
-    labels_of = labels_of or (lambda id: {})
-    inputs = [labels_of(r['id']) for r in (job.get('manifest') or {}).get('rows', [])]
-    shared = {k: v for k, v in (inputs[0] if inputs else {}).items() if all(i.get(k) == v for i in inputs)}
-    values, labels = [], []
+    values = []
     for product in products:
-        own = dict(product.get('labels') or {})
         path = _product_path(product, resolve_file)
         if 'keyword' in spec:
             value = header_value(path, spec['keyword'])
             if value is not None:
                 values.append(value)
-                labels.append(own)
             continue
-        column = column_values(path.read_text(errors='replace'), spec['column'], kind)
-        source = product.get('source') or product.get('sourceInput')
-        tag = {**(labels_of(source) if source else shared), **own}
-        values += column
-        labels += [tag] * len(column)
-    return dict(kind=kind, values=values, origin=definition.get('taskName') or None, **_labelled(labels))
+        values += column_values(path.read_text(errors='replace'), spec['column'], kind)
+    return dict(kind=kind, values=values, origin=definition.get('taskName') or None)
 
 
-def _labelled(labels):
-    """`labels` of a value when any of its values has one."""
-    return dict(labels=labels) if any(labels) else {}
-
-
-def constant_value(node, row):
-    """A user-typed value; a table by the label `partition` gives each label value its own."""
-    def typed(text):
-        number = _number(text)
-        return number if number is not None else str(text).strip()
-    result = dict(kind='real' if _number(row.get('value')) is not None else 'string',
-                  values=[typed(row.get('value', ''))] if str(row.get('value', '')).strip() else [], constant=True)
-    groups = {k: typed(v) for k, v in (row.get('groups') or {}).items() if str(v).strip()}
-    if node.get('partition') and groups:
-        result['values'] = list(groups.values())
-        result['labels'] = [{node['partition']: k} for k in groups]
-        result['kind'] = 'real' if all(isinstance(v, float) for v in result['values']) else 'string'
-        del result['constant']
-    return result
+def constant_value(row):
+    """A user-typed value."""
+    number = _number(row.get('value'))
+    text = str(row.get('value', '')).strip()
+    return dict(kind='real' if number is not None else 'string',
+                values=[number if number is not None else text] if text else [], constant=True)
 
 
 PSET_KINDS = {'r': 'real', 'd': 'real', 'i': 'int', 'b': 'bool'}
@@ -215,16 +181,10 @@ def pset_value(row):
 
 
 def header_values(files, keyword):
-    """A keyword of each file, `(path, labels)`; values keep their file's labels."""
-    values, labels = [], []
-    for path, label in files:
-        value = header_value(path, keyword)
-        if value is None:
-            continue
-        values.append(value)
-        labels.append(dict(label or {}))
+    """A keyword of each file (paths)."""
+    values = [value for value in (header_value(path, keyword) for path in files) if value is not None]
     return dict(kind='real' if values and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in values) else 'any',
-                values=values, **_labelled(labels))
+                values=values)
 
 
 # IRAF expressions (hselect's expr) use C operators; Python's grammar reads the rest.
@@ -329,62 +289,20 @@ def expression_names(text):
     return list(dict.fromkeys(n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id not in called))
 
 
-def agrees(labels, other):
-    """Two label sets agree on every name they share (15 is 15.0)."""
-    return all(same_value(value, other[name]) for name, value in labels.items() if name in other)
-
-
 def compute_value(row, inputs):
-    """One `name = expression` row of a compute node, once per label combination of its inputs.
-
-    Values without labels (typed constants, files outside regions) take part
-    in every combination; a combination takes the values whose labels agree
-    with it. A less specific combination is left out when a more specific one
-    covers it (FILTER B within FILTER B, EXPTIME 15).
-    """
+    """One `name = expression` row of a compute node."""
     constant = all(v.get('constant') for v in inputs.values())
-    combinations = []
-    for value in inputs.values():
-        for labels in value.get('labels') or []:
-            if labels and labels not in combinations:
-                combinations.append(labels)
-    combinations = [c for c in combinations if not any(c != o and c.items() <= o.items() for o in combinations)]
-    if not combinations:
-        values = evaluate_expression(row['value'], {k: v['values'] for k, v in inputs.items()})
-        return dict(kind=_kind(values), values=values, **({'constant': True} if constant else {}))
-    values, labels = [], []
-    for combination in combinations:
-        variables = {}
-        for name, value in inputs.items():
-            tags = value.get('labels') or [{}] * len(value['values'])
-            variables[name] = [v for v, tag in zip(value['values'], tags) if agrees(tag, combination)]
-        found = evaluate_expression(row['value'], variables)
-        values += found
-        labels += [dict(combination) for _ in found]
-    return dict(kind=_kind(values), values=values, labels=labels)
+    values = evaluate_expression(row['value'], {k: v['values'] for k, v in inputs.items()})
+    return dict(kind=_kind(values), values=values, **({'constant': True} if constant else {}))
 
 
 def _kind(values):
     return 'bool' if values and all(isinstance(v, bool) for v in values) else 'real'
 
 
-def round_values(result, match):
-    """The values of `result` a round takes: those whose labels agree with its values `match`
-    (a label a value does not carry does not decide)."""
-    values, labels = result['values'], result.get('labels')
-    if not match or not labels:
-        return values
-    chosen = [v for v, tag in zip(values, labels) if agrees(tag, match)]
-    if not chosen:
-        shown = ' '.join(pass_value(v) for v in match.values())
-        raise ValueError(f'{shown} 회차에 맞는 값이 없습니다.')
-    return chosen
-
-
-def parameter_value(result, match, type_):
-    """The one value a parameter takes, converted to its IRAF type; `match` is
-    the round values a value with labels is chosen by."""
-    values = round_values(result, match)
+def parameter_value(result, type_):
+    """The one value a parameter takes, converted to its IRAF type."""
+    values = result['values']
     if not values:
         raise ValueError('값이 없습니다.')
     distinct = list(dict.fromkeys(values))
@@ -416,15 +334,19 @@ class ValueGraph:
     """Evaluate value refs of one request with memoization.
 
     `job_of(node_id)` returns the finished job of a task node (or None);
-    `resolve_file(id)` returns the path of a library file or product;
-    `labels_of(id)` the labels a workflow run put on a product.
+    `resolve_file(id)` returns the path of a library file or product.
     """
 
-    def __init__(self, request, job_of, resolve_file, labels_of=None):
+    def __init__(self, request, job_of, resolve_file):
+        self.request = request
         self.nodes = {n['id']: n for n in request.get('nodes', [])}
         self.links = list(request.get('links', []))
-        self.job_of, self.resolve_file, self.labels_of = job_of, resolve_file, labels_of
+        self.job_of, self.resolve_file = job_of, resolve_file
         self.cache = {}
+
+    def scoped(self, jobs):
+        """The same values read from other runs of some tasks (a group's own, giraf/workflow.py group_scope)."""
+        return ValueGraph(self.request, lambda id: jobs[id] if id in jobs else self.job_of(id), self.resolve_file)
 
     def output(self, ref, seen=()):
         key = (ref['node'], ref['output'])
@@ -435,7 +357,7 @@ class ValueGraph:
             raise ValueError('값 연결이 순환합니다.')
         node = self.nodes.get(ref['node'])
         if node is None:
-            result = task_value(self.job_of(ref['node']), ref['output'], self.resolve_file, self.labels_of)
+            result = task_value(self.job_of(ref['node']), ref['output'], self.resolve_file)
         else:
             result = self._node_output(node, ref['output'], (*seen, key))
         self.cache[key] = result
@@ -449,7 +371,7 @@ class ValueGraph:
             raise ValueError(f'{name}: 노드에 없는 값입니다.')
         run = node['run']
         if run == 'value-constant':
-            return constant_value(node, rows[name])
+            return constant_value(rows[name])
         if run == 'value-header':
             return header_values(self.files(node), name)
         if run == 'value-compute':
@@ -496,9 +418,9 @@ class ValueGraph:
         return list(node.get('inputs', {}).values())
 
     def files(self, node):
-        """(path, labels) of each file a header node reads."""
+        """The path of each file a header node reads."""
         from .workflow import matches_files
-        paths = [(Path(self.resolve_file(id)), {}) for id in node.get('files', [])]
+        paths = [Path(self.resolve_file(id)) for id in node.get('files', [])]
         for link in node.get('fileLinks', []):
             job = self.job_of(link['source'])
             if not job or job.get('state') != 'completed':
@@ -507,21 +429,31 @@ class ValueGraph:
                 if (product.get('role') != '$log' and product.get('asset', 'image') == 'image'
                         and (not link.get('sourceRole') or product.get('role') == link['sourceRole'])
                         and matches_files(product, link.get('sourceFiles'))):
-                    paths.append((_product_path(product, self.resolve_file), product.get('labels') or {}))
+                    paths.append(_product_path(product, self.resolve_file))
         return paths
 
-    def parameters(self, target=None):
-        """{link id: {value} or {error}} for the links into `target` (or all)."""
+    def parameters(self, target=None, groups=None):
+        """{link id: {value} or {error}} for the links into `target` (or all).
+
+        A link listing `groups` (a split task's group ids) also gets one value
+        per group, `<link id>@<group id>`, read from the runs `groups` gives
+        for that group id ({task id: {group id: job}}).
+        """
         result = {}
         for link in self.links:
             if target is not None and link['target'] != target:
                 continue
-            try:
-                value = parameter_value(self.output(link['source']), link.get('round'), link.get('type', 's'))
-                result[link['id']] = dict(value=value)
-            except (ValueError, OSError, KeyError) as exc:
-                result[link['id']] = dict(error=str(exc))
+            result[link['id']] = self._parameter(link)
+            for group in link.get('groups') or []:
+                scoped = self.scoped({id: jobs[group] for id, jobs in (groups or {}).items() if group in jobs})
+                result[f"{link['id']}@{group}"] = scoped._parameter(link)
         return result
+
+    def _parameter(self, link):
+        try:
+            return dict(value=parameter_value(self.output(link['source']), link.get('type', 's')))
+        except (ValueError, OSError, KeyError) as exc:
+            return dict(error=str(exc))
 
     def outputs(self, refs):
         result = {}

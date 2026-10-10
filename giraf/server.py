@@ -206,20 +206,10 @@ def resolve_rows(ids, edits):
     return rows
 
 
-def round_labels(manifest):
-    values = (manifest.get('round') or {}).get('values')
-    return {str(k): str(v) for k, v in values.items()} if isinstance(values, dict) else {}
-
-
-def file_labels(id):
-    """The round values of a result file, read from the run that made it."""
-    try:
-        file = get_file(id).resolve()
-        runs = RUNS.resolve()
-        job = runs / file.relative_to(runs).parts[0]
-        return round_labels(json.loads((job / 'manifest.json').read_text()))
-    except (OSError, ValueError, IndexError):
-        return {}
+def describe_file(id):
+    """A file's name and the headers read when it was listed (giraf/splits.py Files)."""
+    row = registry.get(id) or {}
+    return dict(label=row.get('label'), headers=row.get('headers'))
 
 
 def job_info(job):
@@ -234,10 +224,6 @@ def job_info(job):
     result['products']=[]
     if (job / 'products.json').exists():
         result['products'] = [dict(register(job / p['file'], p['label'], job.name, p.get('asset')), **p) for p in json.loads((job / 'products.json').read_text())]
-        # Results made in a loop region's round carry its values (giraf/workflow.py run_task).
-        values = round_labels(manifest)
-        if values:
-            result['products'] = [dict(p, labels={**(p.get('labels') or {}), **values}) for p in result['products']]
     if manifest.get('operation')=='task':
         result.update(operation='task',task=manifest['task'],backend=manifest['backend'],manifest=manifest)
     for key,file in [('outcomes','outcomes.json'),('headerDiff','header-diff.json'),('effective','effective.json'),('interaction','interaction.json')]:
@@ -277,10 +263,11 @@ def run_info(id):
 
 
 def with_run_records(values):
-    """The client names each task's latest run, or the runs of its rounds;
-    values read their products together, each with its round's labels."""
+    """The client names each task's latest run, or the runs of its groups;
+    values read their products together. `groupRuns` keeps each group's own
+    run by its group id (giraf/values.py ValueGraph.parameters)."""
     values = dict(values or {})
-    runs = {}
+    runs, groups = {}, {}
     for node, ids in (values.get('runs') or {}).items():
         records = []
         for id in ids if isinstance(ids, list) else [ids]:
@@ -292,7 +279,12 @@ def with_run_records(values):
             last = records[-1]
             runs[node] = dict(last, products=[p for r in records for p in r.get('products', [])],
                               manifest=dict(last.get('manifest') or {}, rows=[row for r in records for row in (r.get('manifest') or {}).get('rows', [])]))
+            for record in records:
+                group = ((record.get('manifest') or {}).get('group') or {}).get('id')
+                if group is not None:
+                    groups.setdefault(node, {})[group] = record
     values['runs'] = runs
+    values['groupRuns'] = groups
     return values
 
 
@@ -302,7 +294,7 @@ measurements = Measurements(DATA / '.workflow' / 'measurements.json', RUNS, lamb
 workflow_manager = WorkflowManager(DATA / '.workflow', workflow_prepare,
     lambda manifest: job_info(start_task(manifest, manifest.get('workingDirectory', workspace['folder']))),
     lambda id: job_info(RUNS / id), workflow_cancel_job, resolve_file=lambda id: get_file(id),
-    measurements=measurements, file_labels=file_labels)
+    measurements=measurements, describe_file=describe_file)
 
 
 async def measurements_endpoint(request: Request):
@@ -411,8 +403,55 @@ async def task_validate_endpoint(request: Request, *, action):
 
 def resolve_values(payload):
     from .workflow import value_graph
-    graph = value_graph({'values': with_run_records(payload)}, resolve_file=get_file)
-    return dict(outputs=graph.outputs(payload.get('refs', [])), parameters=graph.parameters())
+    values = with_run_records(payload)
+    graph = value_graph({'values': values}, resolve_file=get_file)
+    return dict(outputs=graph.outputs(payload.get('refs', [])), parameters=graph.parameters(groups=values['groupRuns']))
+
+
+def task_commands(request):
+    """The CL command each group of a task runs (giraf/splits.py), built as a
+    workflow run builds them: its groups, paired inputs, values and formulas,
+    then the validated plan (giraf/commands.py)."""
+    from .commands import command_lines
+    from .splits import Files, SplitError, apply_formulas, group_runs, without_fields
+    from .task_catalog import TASKS
+    from .values import apply_parameters
+    from .workflow import group_scope, value_graph
+    payload = request.get('payload')
+    if not isinstance(payload, dict):
+        raise ValueError('작업 요청 형식이 올바르지 않습니다.')
+    node = request.get('node') or payload.get('instanceId') or ''
+    values = with_run_records(request.get('values') or {})
+    graph = value_graph({'values': values}, resolve_file=get_file)
+    files = Files(get_file, lambda id: describe_file(id).get('label'), lambda id: describe_file(id).get('headers'))
+    def resolve(id):
+        path = get_file(id)
+        return register(path, registry[id].get('label'), registry[id].get('job'), registry[id].get('asset'))
+    try:
+        runs = group_runs(payload, files, TASKS.get(payload.get('task')))
+    except SplitError as exc:
+        return dict(groups=[], error=str(exc))
+    result = []
+    for group, each in runs:
+        entry = dict(id=group['id'], name=group['name'], files=group['files']) if group else dict(id='', name='', files=[])
+        try:
+            scoped = graph.scoped(group_scope({}, values['groupRuns'], group)) if group else graph
+            incoming = [link for link in scoped.links if link['target'] == node]
+            apply_parameters(each, incoming, scoped.parameters(node))
+            manifest = validate_task(without_fields(apply_formulas(each)), resolve, diagnostics=True,
+                                     pending_roles=frozenset(request.get('pending') or ()))
+            entry['commands'] = command_lines(manifest)
+        except (ValueError, KeyError, TypeError, OSError) as exc:
+            entry['error'] = str(exc)
+        result.append(entry)
+    return dict(groups=result)
+
+
+async def task_commands_endpoint(request: Request):
+    payload = await request_payload(request)
+    if not isinstance(payload, dict):
+        raise ValueError('작업 요청 형식이 올바르지 않습니다.')
+    return JSONResponse(await run_in_threadpool(task_commands, payload))
 
 
 async def values_endpoint(request: Request):
@@ -699,6 +738,7 @@ api_routes = [
     Route('/task-run', partial(task_validate_endpoint, action='task-run'), methods=['POST'], name='task-run'),
     Route('/header', header_endpoint, methods=['GET'], name='header'),
     Route('/values', values_endpoint, methods=['POST'], name='values'),
+    Route('/task-commands', task_commands_endpoint, methods=['POST'], name='task-commands'),
     Route('/task-respond', partial(task_respond_endpoint, action='task-respond'), methods=['POST'], name='task-respond'),
     Route('/task-cancel', partial(task_respond_endpoint, action='task-cancel'), methods=['POST'], name='task-cancel'),
     Route('/task-graphics', partial(task_respond_endpoint, action='task-graphics'), methods=['GET'], name='task-graphics'),

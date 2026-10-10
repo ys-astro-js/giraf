@@ -37,6 +37,26 @@ class AlignmentBinding(RequestModel):
     input: list[str] = Field(default_factory=list)
 
 
+class SplitPart(RequestModel):
+    """One of {key}, {per}, {each} (giraf/splits.py)."""
+    key: str | None = None
+    per: int | None = None
+    each: bool | None = None
+
+
+class Split(RequestModel):
+    input: str
+    by: list[SplitPart] = Field(default_factory=list)
+
+
+class PairRule(RequestModel):
+    """One of {by}, {order}, {iraf}, {manual} (giraf/splits.py pair_files)."""
+    by: str | None = None
+    order: bool | None = None
+    iraf: bool | None = None
+    manual: dict[str, str] | None = None
+
+
 class TaskRequest(RequestModel):
     task: str = ''
     backend: Literal['cl', 'pyraf'] = 'cl'
@@ -59,18 +79,17 @@ class TaskRequest(RequestModel):
     workingDirectory: str | None = None
     instanceId: str | None = None
     fileConfirmation: str | None = None
+    # Split execution (giraf/splits.py); IRAF validation never reads these.
+    split: Split | None = None
+    pairing: dict[str, PairRule] = Field(default_factory=dict)
+    groupValues: dict[str, dict[str, ParameterValue]] = Field(default_factory=dict)
+    formulas: dict[str, str] = Field(default_factory=dict)
 
 
 class WorkflowNode(RequestModel):
     id: str
     label: str
     payload: TaskRequest
-
-
-class ReceiveMode(RequestModel):
-    """How a connection crossing into a loop region receives (giraf/flows.py receive_mode)."""
-    mode: Literal['all', 'match']
-    keys: list[str] = Field(default_factory=list)
 
 
 class WorkflowLink(RequestModel):
@@ -81,8 +100,6 @@ class WorkflowLink(RequestModel):
     multiple: bool
     sourceFiles: list[str] | None = None
     sourceRole: str | None = None
-    # By region id; regions without one receive by default.
-    flow: dict[str, ReceiveMode] = Field(default_factory=dict)
     # The source's files when it is not part of this run, resolved by the editor.
     files: list[str] | None = None
 
@@ -95,7 +112,6 @@ class ValueRef(RequestModel):
 class ValueRow(RequestModel):
     name: str
     value: str = ''
-    groups: dict[str, str] | None = None
     # A pset node's row carries its parameter's IRAF type.
     type: str | None = None
 
@@ -104,7 +120,6 @@ class ValueNode(RequestModel):
     id: str
     run: Literal['value-constant', 'value-header', 'value-compute', 'pset']
     rows: list[ValueRow] = Field(default_factory=list)
-    partition: str | None = None
     files: list[str] = Field(default_factory=list)
     fileLinks: list[dict[str, ParameterValue | list[str] | dict[str, str] | None]] = Field(default_factory=list)
     inputs: dict[str, ValueRef] = Field(default_factory=dict)
@@ -116,50 +131,20 @@ class ValueLink(RequestModel):
     parameter: str
     type: str = 's'
     source: ValueRef
-    flow: dict[str, ReceiveMode] = Field(default_factory=dict)
-    # Round values a value with labels is chosen by (a region member run alone).
-    round: dict[str, str] | None = None
+    # A split task's group ids: one value per group (giraf/values.py ValueGraph.parameters).
+    groups: list[str] = Field(default_factory=list)
 
 
 class WorkflowValues(RequestModel):
     """Value nodes and links into task parameters (giraf/values.py)."""
     nodes: list[ValueNode] = Field(default_factory=list)
     links: list[ValueLink] = Field(default_factory=list)
-    # A task's latest run; inside loop regions, the run of each round.
+    # A task's latest run; a split task's, the run of each group.
     runs: dict[str, str | list[str]] = Field(default_factory=dict)
-
-
-class FlowCriterion(RequestModel):
-    """One of {keyword}, {expression, name}, {count, order}, {each}, {times}."""
-    keyword: str | None = None
-    expression: str | None = None
-    name: str | None = None
-    count: int | None = None
-    order: str | None = None
-    each: bool | None = None
-    times: int | None = None
-
-
-class FlowSplit(RequestModel):
-    taskId: str
-    outputRole: str | None = None
-
-
-class WorkflowFlow(RequestModel):
-    """A loop region (giraf/flows.py). Members are its tasks and inner regions."""
-    id: str
-    label: str = ''
-    members: list[str] = Field(default_factory=list)
-    criteria: list[FlowCriterion] = Field(default_factory=list)
-    split: FlowSplit | None = None
-    # The split source's files when it is not part of this run, resolved by the editor.
-    splitFiles: list[str] = Field(default_factory=list)
-    condition: str = ''
 
 
 class WorkflowRequest(RequestModel):
     nodes: list[WorkflowNode]
     links: list[WorkflowLink] = Field(default_factory=list)
     values: WorkflowValues | None = None
-    flows: list[WorkflowFlow] = Field(default_factory=list)
 

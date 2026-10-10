@@ -239,29 +239,16 @@ class ProductStorageTests(unittest.TestCase):
         self.assertEqual((job / 'products.json').read_bytes(), before)
         self.assertFalse((job / 'products').exists())
 
-    def test_results_of_a_round_keep_its_values(self):
+    def test_values_read_every_group_run_of_a_task(self):
         from giraf import server
-        job = self.job({'rows': [], 'settings': {}, 'workspace_folder': str(self.root),
-                        'round': {'name': '15', 'values': {'EXPTIME': '15.0'}, 'regions': []}})
-        (job / 'Dark15.txt').write_text('dark')
-        atomic_json(job / 'products.json', [dict(file='Dark15.txt', label='Dark15.txt', asset='text')])
-        atomic_json(job / 'status.json', {'state': 'completed'})
-        with patch.object(server, 'RUNS', self.root), patch.object(server, 'registry', {}), patch.object(server, 'workspace', {'folder': str(self.root), 'overrides': {}, 'sets': []}):
-            product = server.job_info(job)['products'][0]
-            self.assertEqual(product['labels'], {'EXPTIME': '15.0'})
-            # A later run reading the file alone finds the same values.
-            self.assertEqual(server.file_labels(product['id']), {'EXPTIME': '15.0'})
-            self.assertEqual(server.file_labels(server.register(self.rows['a']['path'])['id']), {})
-
-    def test_values_read_every_round_run_of_a_task(self):
-        from giraf import server
-        records = {'r15': dict(id='r15', state='completed', products=[{'id': 'a', 'labels': {'EXPTIME': '15'}}], manifest={'rows': [{'id': 'x'}]}),
-                   'r30': dict(id='r30', state='completed', products=[{'id': 'b', 'labels': {'EXPTIME': '30'}}], manifest={'rows': [{'id': 'y'}]})}
+        records = {'r15': dict(id='r15', state='completed', products=[{'id': 'a'}], manifest={'rows': [{'id': 'x'}], 'group': {'id': '15', 'name': '15'}}),
+                   'r30': dict(id='r30', state='completed', products=[{'id': 'b'}], manifest={'rows': [{'id': 'y'}], 'group': {'id': '30', 'name': '30'}})}
         with patch.object(server, 'run_info', lambda id: records[id]):
-            runs = server.with_run_records({'runs': {'task': ['r15', 'r30'], 'alone': 'r15'}})['runs']
+            values = server.with_run_records({'runs': {'task': ['r15', 'r30'], 'alone': 'r15'}})
+        runs = values['runs']
         self.assertEqual([p['id'] for p in runs['task']['products']], ['a', 'b'])
         self.assertEqual(runs['task']['manifest']['rows'], [{'id': 'x'}, {'id': 'y'}])
-        self.assertEqual(runs['alone'], records['r15'])
+        self.assertEqual(values['groupRuns']['task'], {'15': records['r15'], '30': records['r30']})
 
     def test_missing_old_result_keeps_display_name_in_validation_and_execution(self):
         from giraf import server
