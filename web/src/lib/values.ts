@@ -11,7 +11,7 @@
  * The server evaluates values (giraf/values.py); this module only describes them.
  */
 import { uid, makeInstance, type Connection, type Instance, type Source, type TaskMap } from "./task-map/model"
-import { resolvedSource } from "./task-map/runs"
+import { latestRuns, resolvedSource } from "./task-map/runs"
 import type { Catalog, Param, ParameterSet, Spec, ValueRow } from "./workbench"
 import { closesCycle, type ValuePorts } from "./flow-graph"
 import { criteriaOf, enclosingRegions, flowLabels, insideRegion, labelName } from "./containers"
@@ -430,10 +430,12 @@ function firstRoundOf(map: TaskMap, target: string, connection: Connection, sour
  * files are read from this run instead of the last one.
  */
 export function valueRequest(map: TaskMap, catalog: Catalog, inRun: Set<string> = new Set()) {
-  const runs: Record<string, string> = {}
+  const runs: Record<string, string | string[]> = {}
   const latest = (id: string) => {
-    const run = map.runs.filter((r) => r.instanceId === id).at(-1)
-    if (run?.state === "completed" && !inRun.has(id)) runs[id] = run.id
+    // Inside loop regions, the run of every round (lib/task-map/runs latestRuns).
+    const rounds = latestRuns(map, id)
+    if (rounds.at(-1)?.state === "completed" && !inRun.has(id))
+      runs[id] = rounds.length > 1 ? rounds.map((r) => r.id) : rounds[0].id
   }
   const nodes = map.tasks.flatMap((task) => {
     const spec = specOf(catalog, task)

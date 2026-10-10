@@ -253,6 +253,16 @@ class ProductStorageTests(unittest.TestCase):
             self.assertEqual(server.file_labels(product['id']), {'EXPTIME': '15.0'})
             self.assertEqual(server.file_labels(server.register(self.rows['a']['path'])['id']), {})
 
+    def test_values_read_every_round_run_of_a_task(self):
+        from giraf import server
+        records = {'r15': dict(id='r15', state='completed', products=[{'id': 'a', 'labels': {'EXPTIME': '15'}}], manifest={'rows': [{'id': 'x'}]}),
+                   'r30': dict(id='r30', state='completed', products=[{'id': 'b', 'labels': {'EXPTIME': '30'}}], manifest={'rows': [{'id': 'y'}]})}
+        with patch.object(server, 'run_info', lambda id: records[id]):
+            runs = server.with_run_records({'runs': {'task': ['r15', 'r30'], 'alone': 'r15'}})['runs']
+        self.assertEqual([p['id'] for p in runs['task']['products']], ['a', 'b'])
+        self.assertEqual(runs['task']['manifest']['rows'], [{'id': 'x'}, {'id': 'y'}])
+        self.assertEqual(runs['alone'], records['r15'])
+
     def test_missing_old_result_keeps_display_name_in_validation_and_execution(self):
         from giraf import server
         path = self.root / 'o00000.fits'

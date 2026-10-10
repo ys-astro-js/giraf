@@ -79,9 +79,16 @@ const workflowOf = (job: RunJob) => job.manifest?.workflowId || job.execution?.i
  * newest per round).
  */
 export function latestRun(map: TaskMap, taskId: string | undefined): MapRun | undefined {
+  const rounds = latestRuns(map, taskId)
+  const last = rounds.at(-1)
+  return last && rounds.length > 1 ? { ...last, products: rounds.flatMap((r) => r.products) } : last
+}
+
+/** The runs `latestRun` gathers, oldest first: the latest run, or every round's of its workflow run. */
+export function latestRuns(map: TaskMap, taskId: string | undefined): MapRun[] {
   const own = map.runs.filter((r) => r.instanceId === taskId)
   const last = own.at(-1)
-  if (!last?.workflow || last.state !== "completed") return last
+  if (!last?.workflow || last.state !== "completed") return last ? [last] : []
   const rounds = new Map<string, MapRun>()
   for (const run of own)
     if (run.workflow === last.workflow && run.state === "completed") {
@@ -89,7 +96,7 @@ export function latestRun(map: TaskMap, taskId: string | undefined): MapRun | un
       rounds.delete(key)
       rounds.set(key, run)
     }
-  return rounds.size > 1 ? { ...last, products: [...rounds.values()].flatMap((r) => r.products) } : last
+  return [...rounds.values()]
 }
 
 /** Saved documents retain run snapshots; the execution library is authoritative. */

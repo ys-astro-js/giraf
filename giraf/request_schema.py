@@ -125,7 +125,8 @@ class WorkflowValues(RequestModel):
     """Value nodes and links into task parameters (giraf/values.py)."""
     nodes: list[ValueNode] = Field(default_factory=list)
     links: list[ValueLink] = Field(default_factory=list)
-    runs: dict[str, str] = Field(default_factory=dict)
+    # A task's latest run; inside loop regions, the run of each round.
+    runs: dict[str, str | list[str]] = Field(default_factory=dict)
 
 
 class FlowCriterion(RequestModel):

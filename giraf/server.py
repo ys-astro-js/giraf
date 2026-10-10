@@ -277,14 +277,21 @@ def run_info(id):
 
 
 def with_run_records(values):
-    """The client names each task's latest run; values read that run's products."""
+    """The client names each task's latest run, or the runs of its rounds;
+    values read their products together, each with its round's labels."""
     values = dict(values or {})
     runs = {}
-    for node, id in (values.get('runs') or {}).items():
-        try:
-            runs[node] = run_info(id)
-        except (ValueError, OSError, TypeError):
-            pass  # A deleted run reads as "not run yet" for the values it held.
+    for node, ids in (values.get('runs') or {}).items():
+        records = []
+        for id in ids if isinstance(ids, list) else [ids]:
+            try:
+                records.append(run_info(id))
+            except (ValueError, OSError, TypeError):
+                pass  # A deleted run reads as "not run yet" for the values it held.
+        if records:
+            last = records[-1]
+            runs[node] = dict(last, products=[p for r in records for p in r.get('products', [])],
+                              manifest=dict(last.get('manifest') or {}, rows=[row for r in records for row in (r.get('manifest') or {}).get('rows', [])]))
     values['runs'] = runs
     return values
 

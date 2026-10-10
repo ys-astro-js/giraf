@@ -122,6 +122,10 @@ test("values resolve into the payload and the workflow request", () => {
   ])
   expect(request.links).toEqual([{ id: map.connections.at(-1)!.id, target: "phot", parameter: "datapars.fwhmpsf", type: "r", source: { node: "calc", output: "m" } }])
   expect(request.runs).toEqual({ edit: "run-edit" })
+  // A task run once per round of a workflow run gives every round's run.
+  const round = (id: string, filter: string) =>
+    ({ id, instanceId: "edit", state: "completed", workflow: "w1", products: [{ id: id + ".txt", label: "", labels: { FILTER: filter } }] })
+  expect(valueRequest({ ...map, runs: [...map.runs, round("edit-B", "B"), round("edit-V", "V")] }, catalog).runs).toEqual({ edit: ["edit-B", "edit-V"] })
   const payload = payloadFor(map, "phot", catalog, { "datapars.fwhmpsf": 8.1, verify: "no" })
   expect(payload.parameterSets.datapars.fwhmpsf).toBe(8.1)
   expect(payload.parameters.verify).toBe("no")
