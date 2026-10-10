@@ -48,7 +48,7 @@ import {
   type CursorIcon,
   type Point,
 } from "@/lib/cursor-session"
-import { displayQueryOptions, displayRow, frameToImage } from "@/lib/display"
+import { displayQueryOptions, displayRow, frameToImage, runFrame } from "@/lib/display"
 import { outputTable } from "@/lib/output-table"
 import { roundText } from "@/lib/containers"
 import { jobTitle, type Job } from "@/lib/workbench"
@@ -384,8 +384,8 @@ function useReply(interaction: Job["interaction"] | undefined) {
 }
 
 /**
- * The image cursor of an interactive run, in the IRAF display: the frame
- * the user displayed (or the task's image), the marks the task accepted,
+ * The image cursor of an interactive run, in the IRAF display: the image
+ * the task measures (a frame it loaded itself, or its image input), the marks the task accepted,
  * the task's named steps, and its plot in the corner while it has one.
  * Clicking a star sends the schema's click key there; keys typed anywhere
  * go to IRAF at the image cursor (cursorKeydown).
@@ -402,9 +402,9 @@ export function CursorImage({ job }: { job: Job }) {
   const [closed, setClosed] = useState("")
   const outside = useWindowShown("graphics")
   const { data: display } = useQuery(displayQueryOptions)
-  const shown =
-    display?.frames.find((f) => f.frame === display.current) ??
-    display?.frames[0]
+  // The image the task measures: the frame it loaded itself, else its
+  // image input; never a frame an earlier run left in the display.
+  const shown = runFrame(display, job.id)
   const frame = shown
     ? displayRow(shown)
     : job.manifest?.rows.find((row) => row.id === job.manifest?.cursorImage)

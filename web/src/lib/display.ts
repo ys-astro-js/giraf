@@ -9,6 +9,8 @@ export type DisplayFrame = {
   height: number
   title: string
   transform: number[] | null
+  /** The run that last loaded an image into the frame. */
+  job?: string | null
 }
 export type DisplayState = { current: number; frames: DisplayFrame[] }
 
@@ -18,6 +20,15 @@ export const displayQueryOptions = queryOptions({
   refetchInterval: 1000,
   refetchIntervalInBackground: false,
 })
+
+/**
+ * The frame a run's own IRAF task loaded (the current one if it loaded
+ * several). Frames an earlier run left behind are not the run's image.
+ */
+export function runFrame(display: DisplayState | undefined, job: string) {
+  const own = display?.frames.filter((f) => f.job === job) ?? []
+  return own.find((f) => f.frame === display?.current) ?? own.at(-1)
+}
 
 /** Display frames open in the standard image viewer as `display:N` assets. */
 export const displayRow = (frame: DisplayFrame): Frame => ({

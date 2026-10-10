@@ -147,6 +147,21 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIn('set stdimcur = "text"', script)
         self.assertIn('>G "interactive.gki"', script)
 
+    def test_image_cursor_lists_only_the_tasks_own_key_file(self):
+        from giraf.generic_tasks import validate_generic
+        (self.pkg / 'sample.par').write_text('interactive,b,h,no,,,Interactive?\nmode,s,h,ql\n')
+        keys = self.pkg / 'sample'
+        keys.mkdir()
+        # daoedit's folder: its own keys and the setup menu `i` opens.
+        (keys / 'sample.key').write_text('\t\tSample Commands\n\n?\tPrint help\ni\tInteractive parameter setup menu\na\tMeasure star\n')
+        (keys / 'isample.key').write_text('\tInteractive Sample Parameter Setup Menu\n\nf\tMark the fwhm\nw\tMark the psf radius\n')
+        (keys / 'other.key').write_text('\tOther Commands\n\nz\tZoom\n')
+        spec = self.discover(descriptors=[self.descriptor])['tasks']['demo.sample']
+        m = validate_generic(spec, {'task': spec['name'], 'backend': 'pyraf', 'parameters': {'interactive': 'yes'}}, lambda key: None)
+        groups = {g['cursor']: g for g in m['cursorKeys']}
+        self.assertEqual([k['key'] for k in groups['image']['keys']], ['?', 'i', 'a'])
+        self.assertEqual(groups['image']['files'], ['sample.key'])
+
 
 class EachOutputNameTests(unittest.TestCase):
     def test_name_placeholder_or_prefix(self):

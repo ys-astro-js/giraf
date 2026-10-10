@@ -4,6 +4,7 @@ import { WorkbenchToolbar } from "../src/components/workbench-toolbar"
 import { SidebarProvider } from "../src/components/ui/sidebar"
 import { OutputTableView } from "../src/features/viewer/OutputTableView"
 import { outputTable } from "../src/lib/output-table"
+import { runFrame, type DisplayFrame } from "../src/lib/display"
 import { advance, pressKey, startSession, useCursorSession } from "../src/lib/cursor-session"
 import { jobTitle, plannedOutputs, type Job, type Spec } from "../src/lib/workbench"
 
@@ -72,4 +73,17 @@ test("a run paused for a measurement offers its window at the capsule's end", ()
   expect(html).toContain("lucide-clock")
   expect(html).not.toContain("lucide-circle-pause")
   expect(render()).not.toContain("측정 창 열기")
+})
+
+test("the measurement window shows the run's own image, not a frame an earlier run displayed", () => {
+  const frame = (n: number, job: string | null): DisplayFrame => ({
+    frame: n, version: 1, width: 512, height: 512, title: `f${n}`, transform: null, job,
+  })
+  // `display` loaded frame 1 before the run; the run's daoedit loads nothing.
+  expect(runFrame({ current: 1, frames: [frame(1, "display-run")] }, "measuring")).toBeUndefined()
+  expect(runFrame(undefined, "measuring")).toBeUndefined()
+  // A task that displays its image itself is measured in that frame.
+  const display = { current: 1, frames: [frame(1, "display-run"), frame(2, "measuring")] }
+  expect(runFrame(display, "measuring")?.frame).toBe(2)
+  expect(runFrame({ ...display, current: 2 }, "measuring")?.frame).toBe(2)
 })

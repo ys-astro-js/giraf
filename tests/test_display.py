@@ -79,6 +79,26 @@ class ProtocolTests(unittest.TestCase):
         receive(c, 320)
         self.assertEqual(self.server.frames[2].title, 'NGC2420b.fits')
 
+    def test_frames_remember_the_run_that_loaded_them(self):
+        writers = iter(['earlier-display-run', 'measuring-run'])
+        self.server.writer_job = lambda directory: next(writers)
+        c = self.client()
+        wcs = b'm51\n1. 0. 0. -1. 1. 512. 0. 1. 1\n'
+        c.sendall(header(PACKED, len(wcs), WCS, z=1) + wcs + header(PACKED, 4, MEMORY, z=1) + b'\x10' * 4)
+        c.sendall(header(PACKED, len(wcs), WCS, z=2) + wcs + header(PACKED, 4, MEMORY, z=2) + b'\x10' * 4)
+        c.sendall(header(IIS_READ | PACKED, 4, MEMORY, z=2))
+        receive(c, 4)
+        self.assertEqual([(f['frame'], f['job']) for f in self.server.state()['frames']],
+                         [(1, 'earlier-display-run'), (2, 'measuring-run')])
+
+    def test_writer_job_is_the_run_folder_the_process_works_in(self):
+        from giraf.display import writer_job
+        from giraf.jobs import RUNS
+        self.assertEqual(writer_job(RUNS / '20261010-090000-abcdef'), '20261010-090000-abcdef')
+        self.assertEqual(writer_job(RUNS / '20261010-090000-abcdef' / 'work'), '20261010-090000-abcdef')
+        self.assertIsNone(writer_job(Path(self.tmp.name)))
+        self.assertIsNone(writer_job(None))
+
     def test_stale_sockets_of_exited_servers_are_removed(self):
         from giraf.display import remove_stale_sockets
         folder = Path(self.tmp.name)

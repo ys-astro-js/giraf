@@ -4,6 +4,12 @@ IRAF pages these files when the user types `?` at a cursor prompt. The same
 text lets GIRAF offer the keys as buttons without per-task code. A file whose
 section titles mention graphics describes the graphics cursor (gcur); when a
 task has such a file, its other files describe the image cursor (imcur).
+
+A task folder also holds key files that are not the task's own cursor keys:
+`iNAME.key` beside `NAME.key` is the setup menu `i` opens (a cursor loop of
+its own), and a folder shared by several tasks (apphot/phot: phot, qphot)
+holds the others' files. When the folder has the task's own `TASK.key`, that
+file alone is the image cursor's; a graphics cursor file still joins it.
 """
 from pathlib import Path
 import re
@@ -38,11 +44,21 @@ def key_files(par_path, task_name):
     return list(dict.fromkeys(found))
 
 
+def own_files(groups, task_name):
+    """The key files of the task's own cursors (module docstring)."""
+    names = {g['file'] for g in groups}
+    groups = [g for g in groups if not (g['file'].startswith('i') and g['file'][1:] in names)]
+    own = f'{task_name}.key'
+    if any(g['file'] == own for g in groups):
+        groups = [g for g in groups if g['file'] == own or g['cursor'] == 'graphics']
+    return groups
+
+
 def cursor_keys(spec):
     par = next((p for p in spec.get('schemaFiles', {}) if p.endswith('/' + spec['taskName'] + '.par')), None)
     if not par:
         return []
-    groups = [g for g in map(parse_key_file, key_files(par, spec['taskName'])) if g['keys'] or g['colon']]
+    groups = own_files([g for g in map(parse_key_file, key_files(par, spec['taskName'])) if g['keys'] or g['colon']], spec['taskName'])
     labelled = {g['cursor'] for g in groups} - {None}
     merged = {}
     for group in groups:

@@ -3,6 +3,8 @@
 IRAF tasks started by GIRAF inherit IMTDEV pointing here, so `display`, `tvmark`
 and other image-display output appears in GIRAF and never in a user's own ds9.
 Frames persist across jobs, as in ds9: tvmark draws onto what display loaded.
+Each frame remembers the run that last loaded an image into it, so a run's
+own windows can tell its frames from what an earlier run left there.
 """
 import io
 import os
@@ -56,10 +58,11 @@ class Frame:
         self.wcs = ''
         self.title = ''
         self.version = 0
+        self.job = None
 
 
 class DisplayServer:
-    def __init__(self, path=None, configs=None, source_name=None):
+    def __init__(self, path=None, configs=None, source_name=None, writer_job=None):
         self.path = str(path or Path(tempfile.gettempdir()) / f'giraf-{os.getpid()}.imt')
         self.configs = configs or dict(CONFIGS)
         self.frames = {}
@@ -70,6 +73,8 @@ class DisplayServer:
         self.palette = palette()
         # Jobs display staged copies (input/s00000.fits); map back to the original name.
         self.source_name = source_name or (lambda alias, directory: None)
+        # The run whose IRAF process loads a frame, from its working folder.
+        self.writer_job = writer_job or (lambda directory: None)
 
     @property
     def device(self):
@@ -150,13 +155,18 @@ class DisplayServer:
 
     def write_wcs(self, mask, t, data, directory=lambda: None):
         wcs = data.split(b'\0', 1)[0].decode(errors='replace')
-        title = self.title(wcs, directory)
+        folder = []
+        def writer():
+            if not folder: folder.append(directory())
+            return folder[0]
+        title = self.title(wcs, writer)
+        job = self.writer_job(writer())
         with self.lock:
             self.config = (t & 0o777) + 1
             for number in self.numbers(mask):
                 self.current = number
                 frame = self.frame(number)
-                frame.wcs, frame.title = wcs, title
+                frame.wcs, frame.title, frame.job = wcs, title, job
                 frame.version += 1
 
     def title(self, wcs, directory=lambda: None):
@@ -200,7 +210,7 @@ class DisplayServer:
         with self.lock:
             return dict(current=self.current, frames=[
                 dict(frame=n, version=f.version, width=f.pixels.shape[1], height=f.pixels.shape[0],
-                     title=f.title, transform=describe(f.wcs)['transform'])
+                     title=f.title, transform=describe(f.wcs)['transform'], job=f.job)
                 for n, f in sorted(self.frames.items()) if f.pixels.any()])
 
     def info(self, number):
@@ -297,6 +307,16 @@ def source_name(alias, directory):
     return running_source_name(alias)
 
 
+def writer_job(directory):
+    """The run whose job folder (or a folder inside it) the IRAF process works in."""
+    from .jobs import RUNS
+    runs = RUNS.resolve()
+    for folder in [directory, *directory.parents[:2]] if directory else []:
+        if folder.resolve().parent == runs:
+            return folder.name
+    return None
+
+
 def running_source_name(alias):
     """Fallback without a known writer: the one active job using the alias."""
     import json
@@ -329,7 +349,8 @@ def start_display():
     if SERVER is None:
         remove_stale_sockets()
         from .task_capabilities import installed_root
-        SERVER = DisplayServer(configs=read_configs(installed_root()), source_name=source_name).start()
+        SERVER = DisplayServer(configs=read_configs(installed_root()), source_name=source_name,
+                               writer_job=writer_job).start()
         os.environ['IMTDEV'] = SERVER.device
     return SERVER
 
