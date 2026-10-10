@@ -141,7 +141,7 @@ def split_groups(ids, parts, files):
                                         kinds=[*group['kinds'], 'each'], files=[id]))
         groups = refined
         if len(groups) > MAX_GROUPS:
-            raise SplitError(f'나눈 묶음은 {MAX_GROUPS}개까지입니다. 지금은 {len(groups)}개입니다.')
+            raise SplitError(f'그룹은 {MAX_GROUPS}개까지입니다. 지금은 {len(groups)}개입니다.')
     return [dict(id='/'.join(g['values']), name=' '.join(g['names']), values=g['values'], files=g['files'],
                  keys=g['keys'], suffix=output_suffix(g['values'], g['kinds'])) for g in groups if g['files'] or not parts]
 
@@ -213,7 +213,7 @@ def pair_files(role, rule, candidates, groups, files):
         return found
     if rule.get('order'):
         if len(candidates) != len(groups):
-            raise SplitError(f'{role} 파일 {len(candidates)}개를 묶음 {len(groups)}개에 순서대로 맞출 수 없습니다.')
+            raise SplitError(f'{role} 파일 {len(candidates)}개를 그룹 {len(groups)}개에 순서대로 맞출 수 없습니다.')
         return {group['id']: [id] for group, id in zip(groups, candidates)}
     if rule.get('iraf'):
         return {group['id']: list(candidates) for group in groups}

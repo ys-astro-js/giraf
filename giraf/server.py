@@ -304,7 +304,7 @@ async def measurements_endpoint(request: Request):
     payload = await request_payload(request)
     rounds = payload.get('rounds')
     if not isinstance(payload.get('instance'), str) or not (rounds is None or (isinstance(rounds, list) and all(isinstance(r, str) for r in rounds))):
-        raise ValueError('다시 측정할 회차를 선택해 주세요.')
+        raise ValueError('다시 측정할 그룹을 선택해 주세요.')
     measurements.clear(payload['instance'], rounds)
     return JSONResponse(measurements.list(payload['instance']))
 

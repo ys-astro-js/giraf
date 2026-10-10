@@ -253,7 +253,7 @@ export function setFormula(task: Instance, key: string, text: string | undefined
   return { ...task, draft: { ...task.draft, formulas } }
 }
 
-export const MIGRATED_MESSAGE = "반복 영역을 풀었습니다. 나누기와 짝 맞추기를 다시 정해 주세요."
+export const MIGRATED_MESSAGE = "이전 버전의 나누기 설정을 옮기지 못했습니다. 나누기와 짝 맞추기를 다시 정해 주세요."
 
 /** Warnings only the editor knows: a task an older document's region was unwrapped around (lib/region-migration). */
 export function splitIssues(map: TaskMap) {
