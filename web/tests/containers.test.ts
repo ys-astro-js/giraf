@@ -612,3 +612,22 @@ test("saved runs learn their workflow run from the library", () => {
   const jobs = [{ id: "a15", state: "completed", products: [], manifest: { workflowId: "w1" } as Job["manifest"] }]
   expect(reconcileRuns(map, jobs).runs[0].workflow).toBe("w1")
 })
+
+test("a document saved with the last round's master dark takes every round's when reopened", () => {
+  let map = reduction()
+  const dark = map.connections.find((c) => c.target === "ccdproc" && c.role === "dark")!
+  const run = (id: string, product: string) => ({ id, instanceId: "average", state: "completed", products: [frame(product), frame(product + "-log", {}, { role: "$log", asset: "text" })] })
+  map = {
+    ...map,
+    runs: [...map.runs, run("a15", "Dark15"), run("a30", "Dark30")],
+    connections: map.connections.map((c) => (c.id === dark.id ? { ...c, source: { kind: "result" as const, taskId: "average", runId: "a30", ids: ["Dark30"] } } : c)),
+  }
+  const job = (id: string, product: string) => ({ ...run(id, product), manifest: { workflowId: "w1" } as Job["manifest"] })
+  const jobs = [...map.runs.filter((r) => r.instanceId !== "average"), job("a15", "Dark15"), job("a30", "Dark30")]
+  const reopened = reconcileRuns(map, jobs, catalog)
+  expect(reopened.connections.find((c) => c.id === dark.id)!.source).toMatchObject({ runId: "a30", ids: ["Dark15", "Dark30"] })
+  // A file picked from the run stays as it was.
+  const picked = { ...map, runs: map.runs.map((r) => (r.id === "a30" ? { ...r, products: [...r.products, frame("Dark30b")] } : r)) }
+  const kept = reconcileRuns(picked, jobs.map((j) => (j.id === "a30" ? { ...j, products: [...j.products, frame("Dark30b")] } : j)), catalog)
+  expect(kept.connections.find((c) => c.id === dark.id)!.source).toMatchObject({ ids: ["Dark30"] })
+})

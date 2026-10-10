@@ -82,7 +82,7 @@ export function useWorkflowDocuments({
       packageValues: { ...defaults(catalog.ccdred), ...value.packageValues },
     }
     const nextMap = normalizeFileInputs(
-      reconcileRuns(migrateMap(next, catalog), runs),
+      reconcileRuns(migrateMap(next, catalog), runs, catalog),
       catalog,
       [...workspace.files, ...runs.flatMap((j) => j.products || [])]
     )

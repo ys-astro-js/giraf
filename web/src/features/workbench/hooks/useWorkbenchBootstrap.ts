@@ -92,7 +92,7 @@ export function useWorkbenchBootstrap({
       ...w.files,
       ...j.flatMap((j) => j.products || []),
     ]
-    setMap(normalizeFileInputs(reconcileRuns(migrateMap(pref, c), j), c, known))
+    setMap(normalizeFileInputs(reconcileRuns(migrateMap(pref, c), j, c), c, known))
     if (recovered !== p) queueSave()
     setWorkspace(w)
     setJobs(j)

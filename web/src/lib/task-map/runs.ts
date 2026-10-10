@@ -92,15 +92,43 @@ export function latestRuns(map: TaskMap, taskId: string | undefined): MapRun[] {
   const rounds = new Map<string, MapRun>()
   for (const run of own)
     if (run.workflow === last.workflow && run.state === "completed") {
-      const key = JSON.stringify(run.products.find((p) => p.labels)?.labels ?? {})
+      // One run per round; runs recorded without their round's labels count apart.
+      const labels = run.products.find((p) => p.labels)?.labels
+      const key = labels ? JSON.stringify(labels) : run.id
       rounds.delete(key)
       rounds.set(key, run)
     }
   return [...rounds.values()]
 }
 
-/** Saved documents retain run snapshots; the execution library is authoritative. */
-export function reconcileRuns(map: TaskMap, jobs: RunJob[]): TaskMap {
+/**
+ * Saved documents retain run snapshots; the execution library is authoritative.
+ * With `catalog`, a connection holding the last round's results of a workflow
+ * run takes every round's (documents saved before rounds were gathered).
+ */
+export function reconcileRuns(map: TaskMap, jobs: RunJob[], catalog?: Catalog): TaskMap {
+  const reconciled = reconcileRecords(map, jobs)
+  if (!catalog) return reconciled
+  let bound = reconciled
+  for (const taskId of new Set(reconciled.runs.map((run) => run.instanceId))) {
+    const rounds = latestRuns(reconciled, taskId)
+    const last = rounds.at(-1)
+    if (rounds.length > 1 && last)
+      bound = bindWorkflowOutputs(bound, taskId, last, catalog, (source) => holdsWholeRun(source, last))
+  }
+  return bound
+}
+
+/** A connection bound to all of a run's results of its kind, not to files picked from them. */
+function holdsWholeRun(source: Source, run: MapRun) {
+  if (source.kind !== "result" || source.runId !== run.id) return false
+  const held = run.products.filter((p) => source.ids.includes(p.id))
+  return held.length > 0 && run.products.every((p) =>
+    source.ids.includes(p.id) || p.role === "$log" || !matchesFiles(p, source.files) ||
+    (!!source.outputRole && p.role !== source.outputRole) || !held.some((h) => (h.asset ?? "image") === (p.asset ?? "image")))
+}
+
+function reconcileRecords(map: TaskMap, jobs: RunJob[]): TaskMap {
   const actual = new Map(jobs.map((job) => [job.id, job]))
   const deleted = new Set(
     map.runs.filter((run) => !actual.has(run.id)).map((run) => run.id)
