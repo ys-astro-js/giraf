@@ -206,6 +206,22 @@ def resolve_rows(ids, edits):
     return rows
 
 
+def round_labels(manifest):
+    values = (manifest.get('round') or {}).get('values')
+    return {str(k): str(v) for k, v in values.items()} if isinstance(values, dict) else {}
+
+
+def file_labels(id):
+    """The round values of a result file, read from the run that made it."""
+    try:
+        file = get_file(id).resolve()
+        runs = RUNS.resolve()
+        job = runs / file.relative_to(runs).parts[0]
+        return round_labels(json.loads((job / 'manifest.json').read_text()))
+    except (OSError, ValueError, IndexError):
+        return {}
+
+
 def job_info(job):
     manifest = json.loads((job / 'manifest.json').read_text())
     result = dict(id=job.name, name=manifest.get('name') or ('영상 결합' if manifest.get('operation') == 'combine' else '전체 전처리'),
@@ -218,6 +234,10 @@ def job_info(job):
     result['products']=[]
     if (job / 'products.json').exists():
         result['products'] = [dict(register(job / p['file'], p['label'], job.name, p.get('asset')), **p) for p in json.loads((job / 'products.json').read_text())]
+        # Results made in a loop region's round carry its values (giraf/workflow.py run_task).
+        values = round_labels(manifest)
+        if values:
+            result['products'] = [dict(p, labels={**(p.get('labels') or {}), **values}) for p in result['products']]
     if manifest.get('operation')=='task':
         result.update(operation='task',task=manifest['task'],backend=manifest['backend'],manifest=manifest)
     for key,file in [('outcomes','outcomes.json'),('headerDiff','header-diff.json'),('effective','effective.json'),('interaction','interaction.json')]:
@@ -275,7 +295,7 @@ measurements = Measurements(DATA / '.workflow' / 'measurements.json', RUNS, lamb
 workflow_manager = WorkflowManager(DATA / '.workflow', workflow_prepare,
     lambda manifest: job_info(start_task(manifest, manifest.get('workingDirectory', workspace['folder']))),
     lambda id: job_info(RUNS / id), workflow_cancel_job, resolve_file=lambda id: get_file(id),
-    measurements=measurements)
+    measurements=measurements, file_labels=file_labels)
 
 
 async def measurements_endpoint(request: Request):

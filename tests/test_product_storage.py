@@ -239,6 +239,20 @@ class ProductStorageTests(unittest.TestCase):
         self.assertEqual((job / 'products.json').read_bytes(), before)
         self.assertFalse((job / 'products').exists())
 
+    def test_results_of_a_round_keep_its_values(self):
+        from giraf import server
+        job = self.job({'rows': [], 'settings': {}, 'workspace_folder': str(self.root),
+                        'round': {'name': '15', 'values': {'EXPTIME': '15.0'}, 'regions': []}})
+        (job / 'Dark15.txt').write_text('dark')
+        atomic_json(job / 'products.json', [dict(file='Dark15.txt', label='Dark15.txt', asset='text')])
+        atomic_json(job / 'status.json', {'state': 'completed'})
+        with patch.object(server, 'RUNS', self.root), patch.object(server, 'registry', {}), patch.object(server, 'workspace', {'folder': str(self.root), 'overrides': {}, 'sets': []}):
+            product = server.job_info(job)['products'][0]
+            self.assertEqual(product['labels'], {'EXPTIME': '15.0'})
+            # A later run reading the file alone finds the same values.
+            self.assertEqual(server.file_labels(product['id']), {'EXPTIME': '15.0'})
+            self.assertEqual(server.file_labels(server.register(self.rows['a']['path'])['id']), {})
+
     def test_missing_old_result_keeps_display_name_in_validation_and_execution(self):
         from giraf import server
         path = self.root / 'o00000.fits'

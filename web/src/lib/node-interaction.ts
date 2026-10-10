@@ -1,5 +1,6 @@
 import {customPortHandle,customOutput,outputPorts,primaryOutputRole} from "./output-ports"
 import {correctionFlags,correctionRoles} from "./calibration"
+import { latestRun } from "./task-map/runs"
 import {
   connectionRoles,
   layoutMap,
@@ -35,7 +36,7 @@ export function roleActive(t: Instance, role: string, catalog: Catalog) {
 export function nodeOutput(map: TaskMap, id: string, outputRole?: string): Source {
   const configured = map.tasks.find(t=>t.id===id)?.outputPorts?.find(p=>p.id===(outputRole?'$role:'+outputRole:'$default'))
   if(configured) return customOutput(map,id,configured)
-  const run = map.runs.filter((r) => r.instanceId === id).at(-1)
+  const run = latestRun(map, id)
   if (!run || run.state !== "completed") return { kind: "pending", taskId: id, ...(outputRole ? {outputRole} : {}) }
   const products = run.products.filter(p => p.role !== "$log")
   const kind = products.some(p => (p.asset || "image") === "image")
@@ -128,7 +129,7 @@ export const COLLAPSED_HEIGHT = 40
 export const NODE_METRICS = { header: 52, row: 32, member: 28, sectionStart: 5, sectionEnd: 4, preview: 77 }
 /** The latest completed run's images, newest first; the node previews a few. */
 export function nodePreviewIds(map: TaskMap, id: string) {
-  const run = map.runs.filter((r) => r.instanceId === id).at(-1)
+  const run = latestRun(map, id)
   if (!run || run.state !== "completed") return []
   return run.products.filter((p) => p.role !== "$log" && (p.asset || "image") === "image").map((p) => p.id)
 }

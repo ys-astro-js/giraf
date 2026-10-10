@@ -1,5 +1,5 @@
 import { beforeAll, expect, test } from "bun:test"
-import { emptyMap, makeInstance, addTask, connect, removeTask, duplicateTask, restoreTask, workflowRequest, workflowDiagnosticRequest, migrateMap, payloadFor } from "../src/lib/task-map"
+import { emptyMap, makeInstance, addTask, connect, removeTask, duplicateTask, restoreTask, workflowRequest, workflowDiagnosticRequest, migrateMap, payloadFor, publishWorkflowRun, publishRun, latestRun, resolvedSource, reconcileRuns } from "../src/lib/task-map"
 import { setSubflowCollapsed, autoLayoutMap, moveTaskToSubflow, moveGroupToGroup, saveSubflow, updateSubflow, dissolveSubflow } from "../src/lib/subflow"
 import {
   addContainer, containerLabel, flowHeading, flowPorts, flowProgress, flowStatement, setGroupRun, syncContainerItems, loopOutputNames,
@@ -9,7 +9,7 @@ import {
 import { flowNodes, flowEdges, connectFlow, connectionFeedback, changeFlowNodes } from "../src/lib/workflow-flow"
 import { valueRequest } from "../src/lib/values"
 import { nodeLayout } from "../src/lib/node-interaction"
-import { plannedOutputs, type Catalog, type Frame, type Preferences, type Spec } from "../src/lib/workbench"
+import { plannedOutputs, type Catalog, type Frame, type Job, type Preferences, type Spec } from "../src/lib/workbench"
 import type { TaskMap } from "../src/lib/task-map"
 
 beforeAll(async () => {
@@ -580,4 +580,35 @@ test("inside a region, a task's results reach the next task one round at a time"
   expect(checked(together).flat).toEqual(["psfB"])
   // The run itself carries no first round: the server gives each round its own.
   expect(workflowRequest(syncContainerItems(rounds, local, []), local, "/work").nodes.find((n) => n.id === "allstar")!.payload.inputs.flat).toEqual([])
+})
+
+test("leaving a region, every round's results of the latest workflow run go on with their labels", () => {
+  let map = reduction()
+  const master = (id: string, exptime: string): Frame => frame(id, {}, { labels: { EXPTIME: exptime } })
+  const step = (id: string, workflow: string, products: Frame[]) =>
+    ({ id, state: "completed", products, manifest: { workflowId: workflow } as Job["manifest"] })
+  // An older workflow run, then the darks group: Master Dark once per EXPTIME round.
+  map = publishWorkflowRun(map, "average", step("old", "w0", [master("Dark60", "60")]), catalog)
+  map = publishWorkflowRun(map, "average", step("a15", "w1", [master("Dark15", "15")]), catalog)
+  map = publishWorkflowRun(map, "average", step("a30", "w1", [master("Dark30", "30")]), catalog)
+  const dark = map.connections.find((c) => c.target === "ccdproc" && c.role === "dark")!
+  expect(dark.source).toMatchObject({ kind: "result", runId: "a30", ids: ["Dark15", "Dark30"] })
+  expect(latestRun(map, "average")!.products.map((p) => p.id)).toEqual(["Dark15", "Dark30"])
+  // The science group run alone takes both; each round picks the one of its EXPTIME.
+  const only = { ...map, tasks: map.tasks.filter((t) => ["proc", "ccdproc"].includes(t.id)) }
+  const request = workflowRequest(only, catalog, "/work", map)
+  expect(request.links.find((l) => l.role === "dark")).toMatchObject({ source: "average", files: ["Dark15", "Dark30"] })
+  const ccdproc = memberPassInputs(map, catalog, map.tasks.find((t) => t.id === "ccdproc")!, [])!
+  expect(ccdproc.dark).toEqual({ kind: "passes", passes: [{ name: "B 30", ids: ["Dark30"] }, { name: "V 15", ids: ["Dark15"] }], missing: [] })
+  // Unbound, the connection resolves the same way; a run of the task alone is its latest result.
+  const pending = { kind: "pending" as const, taskId: "average" }
+  expect(resolvedSource(map, pending)).toMatchObject({ ids: ["Dark15", "Dark30"] })
+  map = publishRun(map, "average", { id: "alone", state: "completed", products: [master("Dark15b", "15")] })
+  expect(resolvedSource(map, pending)).toMatchObject({ ids: ["Dark15b"] })
+})
+
+test("saved runs learn their workflow run from the library", () => {
+  const map = { ...emptyMap(), runs: [{ id: "a15", instanceId: "average", state: "completed", products: [] }] }
+  const jobs = [{ id: "a15", state: "completed", products: [], manifest: { workflowId: "w1" } as Job["manifest"] }]
+  expect(reconcileRuns(map, jobs).runs[0].workflow).toBe("w1")
 })

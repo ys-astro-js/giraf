@@ -95,9 +95,12 @@ export function useWorkflowExecution({
           : { kind: "workflow", id: workflow.id }
       )
     }
+    // A finished step stays as the current job too; its record in `jobs` wins.
     const current = [
       ...workflow.jobs,
-      ...(workflow.currentJob ? [workflow.currentJob] : []),
+      ...(workflow.currentJob && !workflow.jobs.some((job) => job.id === workflow.currentJob!.id)
+        ? [workflow.currentJob]
+        : []),
     ]
     if (
       current.some((job) => publishedWorkflowJobs.current.get(job.id) !== job)

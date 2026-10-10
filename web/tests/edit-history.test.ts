@@ -226,3 +226,24 @@ test("deleted library assets never return through undo or redo and updates do no
   editor.redo()
   expect(editor.getMap().connections[0].source).toMatchObject({ ids: ["keep"] })
 })
+
+test("a workflow run's rounds all reach the connection out of their region", () => {
+  const catalog = {
+    tasks: [{ name: "imcopy", adapter: "generic", inputs: [{ name: "input", kind: "image", multiple: true }] }],
+  } as Catalog
+  const editor = createEditorStore(fixture())
+  const round = (id: string, exptime: string) => ({
+    id,
+    state: "completed",
+    products: [{ id: "Dark" + exptime, label: `Dark${exptime}.fits`, asset: "image", labels: { EXPTIME: exptime } }],
+    execution: { id: "w1", step: 0 },
+  })
+  editor.publishRun("a", round("r15", "15"), catalog)
+  editor.publishRun("a", round("r30", "30"), catalog)
+  expect(editor.getMap().runs.map((run) => run.workflow)).toEqual(["w1", "w1"])
+  expect(editor.getMap().connections[0].source).toMatchObject({
+    kind: "result",
+    runId: "r30",
+    ids: ["Dark15", "Dark30"],
+  })
+})

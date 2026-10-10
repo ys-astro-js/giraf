@@ -161,7 +161,9 @@ def round_values(graph, ctx):
     return {**graph, 'values': values}
 
 
-def execute_workflow(graph, run, cancelled, report, resolve_file=None):
+def execute_workflow(graph, run, cancelled, report, resolve_file=None, file_labels=None):
+    """`file_labels(id)` gives the round labels of a file a region run made
+    earlier, so files from outside this run match rounds as they would within it."""
     from .flows import (Items, flow_labels, loop_names, loop_values, matching, receive_mode,
                         rounds, unmatched_labels, with_object, with_subject, with_topic)
     from .values import apply_parameters
@@ -174,6 +176,10 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
     labels = {**{id: f.get('label') or '반복' for id, f in flows.items()}, **{id: n['label'] for id, n in nodes.items()}}
     files = Items(resolve_file or (lambda id: id))
     state = dict(state='running', message='', jobs=[], total=len(order), done=0, currentTask='')
+
+    def described(file):
+        labels = file_labels(file) if file_labels else None
+        return {'id': file, 'labels': labels} if labels else {'id': file}
 
     def warn(id, message):
         """A run-time warning on a node, shown with the editor's diagnostics."""
@@ -234,7 +240,7 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
         bindings = {}
         for link in [l for l in links if l['target'] == id]:
             if link.get('files') is not None:
-                products = [{'id': file} for file in link['files']]
+                products = [described(file) for file in link['files']]
                 if not products:
                     continue
             else:
@@ -260,7 +266,7 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
         if ctx:
             # The round a job ran in names it (`daoedit B`) and keys what it measured.
             node = dict(node, round=dict(
-                name=' '.join(step['name'] for _, step in ctx),
+                name=' '.join(step['name'] for _, step in ctx), values=dict(current),
                 regions=[dict(id=region['id'], label=region.get('label') or '', name=step['name'],
                               index=step['index'], total=step['total']) for region, step in ctx]))
         job = run(node, payload)
@@ -286,7 +292,7 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
             items = [p for p in done[source].get('products', []) if p.get('role') != '$log'
                      and (not split.get('outputRole') or p.get('role') == split['outputRole'])]
         else:
-            items = [{'id': file} for file in flow.get('splitFiles', [])]
+            items = [described(file) for file in flow.get('splitFiles', [])]
         if source:
             # Through outer regions the split source arrives as its links into this one do.
             probe = next((l for l in links if l['source'] == source and inside(owner, l['target'], id)),
@@ -339,12 +345,12 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
 
 
 class WorkflowManager:
-    def __init__(self, root, prepare, launch, inspect, cancel_job, resolve_file=None, measurements=None):
+    def __init__(self, root, prepare, launch, inspect, cancel_job, resolve_file=None, measurements=None, file_labels=None):
         self.root = Path(root)
         # Interactive steps keep what was measured per round (giraf/measurements.py).
         self.measurements = measurements
         self.prepare, self.launch, self.inspect, self.cancel_job = prepare, launch, inspect, cancel_job
-        self.resolve_file = resolve_file
+        self.resolve_file, self.file_labels = resolve_file, file_labels
         self.lock = threading.RLock()
         self.stop = threading.Event()
         self.approved = threading.Event()
@@ -451,7 +457,7 @@ class WorkflowManager:
             return self.current()
 
     def _execute(self, graph):
-        execute_workflow(graph, self._run, self.stop.is_set, self.save, self.resolve_file)
+        execute_workflow(graph, self._run, self.stop.is_set, self.save, self.resolve_file, self.file_labels)
         self.save({'currentJob': None, 'plan': None})
 
     def _run(self, node, payload):

@@ -72,6 +72,8 @@ export type MapRun = {
   instanceId: string
   state: string
   products: Frame[]
+  /** The workflow run it was a step of; a task inside loop regions makes one run per round there. */
+  workflow?: string
 }
 
 export type SubflowColor =

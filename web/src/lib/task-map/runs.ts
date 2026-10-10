@@ -1,7 +1,7 @@
 import { matchesFiles } from "@/lib/output-ports"
 import { acceptsAsset } from "@/lib/workbench"
 import { type Catalog, type Job } from "@/lib/workbench"
-import { type Source, type TaskMap } from "./model"
+import { type MapRun, type Source, type TaskMap } from "./model"
 import { connectionRoles } from "./connections"
 const clone = <T,>(value: T): T => structuredClone(value)
 
@@ -67,11 +67,33 @@ export function removeLibraryReferences(
   }
 }
 
+type RunJob = Pick<Job, "id" | "state" | "products"> & Partial<Pick<Job, "execution" | "manifest">>
+
+/** The workflow run a job was a step of. */
+const workflowOf = (job: RunJob) => job.manifest?.workflowId || job.execution?.id || undefined
+
+/**
+ * A task's latest results. Inside loop regions a workflow run runs the task
+ * once per round; leaving the regions, every round's results go on together,
+ * each with its round's labels, so all runs of that workflow run count (the
+ * newest per round).
+ */
+export function latestRun(map: TaskMap, taskId: string | undefined): MapRun | undefined {
+  const own = map.runs.filter((r) => r.instanceId === taskId)
+  const last = own.at(-1)
+  if (!last?.workflow || last.state !== "completed") return last
+  const rounds = new Map<string, MapRun>()
+  for (const run of own)
+    if (run.workflow === last.workflow && run.state === "completed") {
+      const key = JSON.stringify(run.products.find((p) => p.labels)?.labels ?? {})
+      rounds.delete(key)
+      rounds.set(key, run)
+    }
+  return rounds.size > 1 ? { ...last, products: [...rounds.values()].flatMap((r) => r.products) } : last
+}
+
 /** Saved documents retain run snapshots; the execution library is authoritative. */
-export function reconcileRuns(
-  map: TaskMap,
-  jobs: Pick<Job, "id" | "state" | "products">[]
-): TaskMap {
+export function reconcileRuns(map: TaskMap, jobs: RunJob[]): TaskMap {
   const actual = new Map(jobs.map((job) => [job.id, job]))
   const deleted = new Set(
     map.runs.filter((run) => !actual.has(run.id)).map((run) => run.id)
@@ -91,7 +113,8 @@ export function reconcileRuns(
     ...cleaned,
     runs: cleaned.runs.map((run) => {
       const job = actual.get(run.id)!
-      return { ...run, state: job.state, products: job.products }
+      const workflow = run.workflow ?? workflowOf(job)
+      return { ...run, state: job.state, products: job.products, ...(workflow ? { workflow } : {}) }
     }),
   }
 }
@@ -123,16 +146,14 @@ export function replacePending(
   }
 }
 
-export function publishRun(
-  map: TaskMap,
-  instanceId: string,
-  run: Pick<Job, "id" | "state" | "products">
-): TaskMap {
+export function publishRun(map: TaskMap, instanceId: string, run: RunJob): TaskMap {
+  const workflow = workflowOf(run)
   const record = {
     id: run.id,
     instanceId,
     state: run.state,
     products: clone(run.products || []),
+    ...(workflow ? { workflow } : {}),
   }
   return {
     ...map,
@@ -155,7 +176,7 @@ export function inputResults(map: TaskMap, taskId: string, kind: string) {
 export function publishWorkflowRun(
   map: TaskMap,
   instanceId: string,
-  run: Pick<Job, "id" | "state" | "products">,
+  run: RunJob,
   catalog: Catalog
 ): TaskMap {
   const published = publishRun(map, instanceId, run)
@@ -171,6 +192,9 @@ export function bindWorkflowOutputs(
   eligible: (source: Source) => boolean = () => true
 ): TaskMap {
   if (run.state !== "completed") return published
+  // Every round's results of the workflow run this run was a step of.
+  const latest = latestRun(published, instanceId)
+  const results = latest?.id === run.id ? latest.products : run.products || []
   return {
     ...published,
     connections: published.connections.map((c) => {
@@ -186,7 +210,7 @@ export function bindWorkflowOutputs(
       const slot =
         spec && connectionRoles(spec, catalog).find((s) => s.name === c.role)
       if (!slot) return c
-      const products = (run.products || []).filter(
+      const products = results.filter(
         (p) =>
           p.role !== "$log" &&
           matchesFiles(p, source.files) &&
@@ -236,7 +260,7 @@ export function resolvedSource(
   // A port's file filter matches labels the run publishes, so it waits for that run.
   if (passed && (!source.files || source.files.every((f) => f === "*")))
     return passed.length ? { ...source, kind: "result", runId: "", ids: passed } : source
-  const run = map.runs.filter((r) => r.instanceId === source.taskId).at(-1)
+  const run = latestRun(map, source.taskId)
   if (!run || run.state !== "completed") return source
   const products = run.products.filter(
     (p) =>

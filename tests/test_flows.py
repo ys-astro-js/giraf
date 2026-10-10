@@ -154,6 +154,42 @@ class ScenarioTests(unittest.TestCase):
             {'images': ['v30a'], 'zero': ['Zero.fits'], 'dark': ['average[median[d30_1]]'], 'flat': ['FlatV.fits']}])
         self.assertNotIn('warnings', state)
 
+    def test_master_darks_of_every_round_reach_a_later_run(self):
+        """The darks group ran first: its Master Dark ran once per EXPTIME round.
+        Run alone, the ccdproc group receives every round's master dark and
+        each of its rounds takes the one of its EXPTIME."""
+        darks = self.dark_graph()
+        runner = Runner(self.ccdproc_sources(), combine=['median', 'average'])
+        state, _ = run(darks, runner)
+        self.assertEqual(state['state'], 'completed', state['message'])
+        made = [p for job in state['jobs'] if job['instanceId'] == 'average' for p in job['products']]
+        self.assertEqual([(p['id'], p['labels']) for p in made],
+                         [('average[median[d15_1]]', {'EXPTIME': '15'}), ('average[median[d30_1]]', {'EXPTIME': '30.0'})])
+        labels = {p['id']: p['labels'] for p in made}
+        graph = self.ccdproc_graph()
+        graph['nodes'] = [n for n in graph['nodes'] if n['id'] in ('science', 'mflat', 'mbias', 'ccdproc')]
+        graph['flows'] = [f for f in graph['flows'] if f['id'] == 'proc']
+        graph['links'] = [l for l in graph['links'] if l['target'] == 'ccdproc' and l['role'] != 'dark'] + [
+            link('average', 'ccdproc', 'dark', multiple=False, files=list(labels),
+                 flow={'proc': {'mode': 'match', 'keys': ['EXPTIME']}})]
+        WorkflowRequest.model_validate(graph)
+        runner = Runner(self.ccdproc_sources())
+        state = execute_workflow(graph, runner, lambda: False, lambda s: None, None, labels.get)
+        self.assertEqual(state['state'], 'completed', state['message'])
+        self.assertEqual(runner.inputs('ccdproc', 'dark'),
+                         [['average[median[d30_1]]'], ['average[median[d15_1]]'], ['average[median[d30_1]]']])
+        self.assertNotIn('warnings', state)
+
+    def test_a_round_job_records_its_values(self):
+        seen = []
+        runner = Runner(self.ccdproc_sources(), combine=['median', 'average'])
+        def recording(node, payload):
+            seen.append((node['id'], (node.get('round') or {}).get('values')))
+            return runner(node, payload)
+        state, _ = run(self.dark_graph(), recording)
+        self.assertEqual(state['state'], 'completed', state['message'])
+        self.assertEqual([values for id, values in seen if id == 'average'], [{'EXPTIME': '15'}, {'EXPTIME': '30.0'}])
+
     def test_without_a_stored_mode_unlabelled_files_reach_every_round(self):
         graph = self.ccdproc_graph(flat_mode=False)
         graph['links'] = [l for l in graph['links'] if l['role'] != 'flat'] + [link('mflat', 'ccdproc', 'flat')]

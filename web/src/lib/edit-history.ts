@@ -21,7 +21,7 @@ type Checkpoint = {
   selected: string
   label: string
 }
-type Run = Pick<Job, "id" | "state" | "products">
+type Run = Pick<Job, "id" | "state" | "products"> & Partial<Pick<Job, "execution" | "manifest">>
 type Runtime = {
   runs: TaskMap["runs"]
   bindings: Map<string, { run: Run; catalog: Catalog; revision: number }>
@@ -238,11 +238,13 @@ export function createEditorStore(
         (!bind || binding?.run === run)
       )
         return false
+      const workflow = run.manifest?.workflowId || run.execution?.id
       const record = {
         id: run.id,
         state: run.state,
         products: run.products,
         instanceId,
+        ...(workflow ? { workflow } : {}),
       }
       const runs = previous
         ? runtime.runs.map((value) => (value.id === run.id ? record : value))

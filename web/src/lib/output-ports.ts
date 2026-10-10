@@ -1,6 +1,7 @@
 import { acceptsAsset, type Catalog, type Frame, type Spec } from "./workbench"
 import type { Instance, Source, TaskMap } from "@/lib/task-map"
 import { assigned } from "@/lib/task-map/inputs"
+import { latestRun } from "@/lib/task-map/runs"
 
 export type CustomOutputPort = {
   id: string
@@ -87,7 +88,7 @@ export function customOutput(
     files: port.files,
     ...(port.outputRole ? { outputRole: port.outputRole } : {}),
   }
-  const run = map.runs.filter((r) => r.instanceId === taskId).at(-1)
+  const run = latestRun(map, taskId)
   const ids =
     run?.state === "completed"
       ? run.products
@@ -154,7 +155,7 @@ export function updateOutputPort(
             ? catalog.ccdproc.inputs.find((s) => s.name === c.role)
             : undefined)
         const products =
-          next.runs.find((r) => r.id === updated.runId)?.products || []
+          latestRun(next, taskId)?.products || []
         const ids = updated.ids.filter((id) =>
           products.some(
             (p) => p.id === id && (!slot || acceptsAsset(slot.kind, p.asset))
