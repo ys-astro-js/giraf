@@ -93,3 +93,9 @@
   .toolbar-diagnostics-transition[data-transitioning="true"] > .status-transition-in { animation: toolbar-diagnostics-enter 380ms cubic-bezier(0.22, 1, 0.36, 1) both; }
   .toolbar-diagnostics-transition > .status-transition-out { animation: toolbar-diagnostics-exit 320ms ease-out both; }
 }
+/* A paused step says what it waits for after its name, and offers the
+   window it waits on at the capsule's trailing end. */
+.toolbar-task-content:has(.toolbar-status-detail) .toolbar-status-name { flex: 0 1 auto; }
+.toolbar-status-detail { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toolbar-status-action { flex-shrink: 0; margin-inline: -4px -9px; background: var(--muted); }
+.toolbar-status-action:hover { background: color-mix(in oklch, var(--muted), var(--foreground) 6%); }

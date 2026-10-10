@@ -257,6 +257,12 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
             link['round'] = value_rounds(values, link, ctx)
         apply_parameters(payload, incoming, values.parameters(id))
         report(deepcopy(state))
+        if ctx:
+            # The round a job ran in names it (`daoedit B`) and keys what it measured.
+            node = dict(node, round=dict(
+                name=' '.join(step['name'] for _, step in ctx),
+                regions=[dict(id=region['id'], label=region.get('label') or '', name=step['name'],
+                              index=step['index'], total=step['total']) for region, step in ctx]))
         job = run(node, payload)
         if ctx:
             # Results carry the round they were made in; the editor reads them too.
@@ -292,7 +298,7 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
         for index, current in enumerate(steps):
             state['flow'] = dict(id=id, index=index + 1, total=len(steps))
             local = dict(done)
-            run_units(member_order(graph, flow), local, [*ctx, (flow, current)])
+            run_units(member_order(graph, flow), local, [*ctx, (flow, dict(current, index=index + 1, total=len(steps)))])
             # Leaving the region, every round's results are one list.
             for member in held:
                 if member in local and local[member] is not done.get(member):
@@ -333,8 +339,10 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None):
 
 
 class WorkflowManager:
-    def __init__(self, root, prepare, launch, inspect, cancel_job, resolve_file=None):
+    def __init__(self, root, prepare, launch, inspect, cancel_job, resolve_file=None, measurements=None):
         self.root = Path(root)
+        # Interactive steps keep what was measured per round (giraf/measurements.py).
+        self.measurements = measurements
         self.prepare, self.launch, self.inspect, self.cancel_job = prepare, launch, inspect, cancel_job
         self.resolve_file = resolve_file
         self.lock = threading.RLock()
@@ -448,6 +456,9 @@ class WorkflowManager:
 
     def _run(self, node, payload):
         manifest = self.prepare(payload)
+        if node.get('round'):
+            manifest['round'] = node['round']
+        manifest['nodeLabel'] = node.get('label') or ''
         plan = manifest['filePlan']
         if plan['destructive']:
             self.approved.clear()
@@ -461,6 +472,12 @@ class WorkflowManager:
         manifest['workflowStep'] = len(self.state['jobs'])
         manifest['fileAuthorized'] = True
         self.save({'state': 'running', 'plan': None})
+        if manifest.get('interactive') and self.measurements:
+            # The round's measurement on the same input files is used again.
+            reused = self.measurements.reuse(manifest)
+            if reused:
+                self.save({'currentJob': reused})
+                return reused
         job = self.launch(manifest)
         self.save({'currentJob': job})
         while job['state'] in ('queued', 'running', 'waiting'):
@@ -472,6 +489,8 @@ class WorkflowManager:
             time.sleep(.2)
             job = self.inspect(job['id'])
             self.save({'currentJob': job, 'state': 'cancelling' if self.stop.is_set() else 'waiting' if job['state'] == 'waiting' else 'running'})
+        if manifest.get('interactive') and self.measurements and job['state'] == 'completed':
+            self.measurements.remember(manifest, job['id'])
         return job
 
     def confirm(self, token):

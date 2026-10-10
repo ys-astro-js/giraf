@@ -7,7 +7,8 @@ import {
   FolderOpen,
   ChevronRight,
   LoaderCircle,
-  CirclePause,
+  Clock3,
+  Crosshair,
   CircleCheck,
   CircleAlert,
   CircleStop,
@@ -36,7 +37,8 @@ export type { ExecutionStatus } from "@/lib/execution-status"
 
 const statusIcons = {
   running: LoaderCircle,
-  waiting: CirclePause,
+  // The node's 사용자 입력 대기 symbol (features/workflow/StatusIcon).
+  waiting: Clock3,
   completed: CircleCheck,
   failed: CircleAlert,
   cancelled: CircleStop,
@@ -61,6 +63,8 @@ type Props = {
   runDisabled: boolean
   onRun: () => void
   onCancel: () => void
+  /** Opens the measurement window of a run paused for one. */
+  onMeasure?: () => void
   trayOpen: boolean
   onTray: () => void
   columnOpen: boolean
@@ -226,6 +230,11 @@ export function WorkbenchToolbar(props: Props) {
                           shimmer={status.state === "running"}
                           className="toolbar-status-name font-medium"
                         />
+                        {status.detail && (
+                          <span className="toolbar-status-detail text-muted-foreground">
+                            {status.detail}
+                          </span>
+                        )}
                         <span className="sr-only">{status.label}</span>
                       </div>
                     </div>
@@ -252,6 +261,24 @@ export function WorkbenchToolbar(props: Props) {
                           )}
                         </span>
                       </span>
+                    )}
+                    {status.state === "waiting" && props.onMeasure && (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="toolbar-status-action"
+                            />
+                          }
+                          aria-label="측정 창 열기"
+                          onClick={props.onMeasure}
+                        >
+                          <Crosshair />
+                        </TooltipTrigger>
+                        <TooltipContent>측정 창 열기</TooltipContent>
+                      </Tooltip>
                     )}
                   </>
                 ) : (

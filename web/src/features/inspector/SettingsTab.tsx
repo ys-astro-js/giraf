@@ -23,6 +23,7 @@ import { FlowSettingsEditor } from "@/components/flow-settings-editor"
 import { isFlowSpec } from "@/lib/containers"
 import { isValueNode } from "@/lib/values"
 import { type ParameterGroup } from "@/lib/parameter-presentation"
+import { MeasurementsSection } from "./Measurements"
 
 export function InspectorSettings({
   groups,
@@ -65,6 +66,7 @@ export function InspectorSettings({
   return (
     <TabsContent value="settings" className="inspector-settings">
       <div ref={bodyRef} className="parameter-editor-body">
+        <MeasurementsSection spec={spec} instance={task.id} map={map} />
         {valueSource}
         {spec.run === "value-compute" ? (
           <ComputeRowsEditor map={map} catalog={catalog} task={task} edit={edit} />

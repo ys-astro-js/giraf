@@ -18,6 +18,7 @@ import {
   api,
   type Job,
   type Slot,
+  jobTitle,
 } from "@/lib/workbench"
 import {
   type TaskMap,
@@ -37,6 +38,7 @@ import { useJobDiagnostics } from "@/hooks/use-job-diagnostics"
 import type { PickerRequest } from "@/features/file-picker/FilePicker"
 import { useLayout } from "@/features/workbench/layout-store"
 import { revealPanel } from "@/features/dock/store"
+import { waitingCursor } from "@/lib/cursor-session"
 import { useAssetViewer } from "@/features/workbench/hooks/useAssetViewer"
 import { useWorkflowDocuments } from "@/features/workbench/hooks/useWorkflowDocuments"
 import { useWorkbenchBootstrap } from "@/features/workbench/hooks/useWorkbenchBootstrap"
@@ -216,8 +218,6 @@ export function useWorkbenchController() {
     setPlan,
     start,
     pendingPayload,
-    daoedit,
-    setDaoedit,
   } = useTaskExecution({
     setLastExecution,
     setJobs,
@@ -261,7 +261,22 @@ export function useWorkbenchController() {
   const currentWorkflowTask = map.tasks.find(
     (t) => t.id === workflow?.currentTask
   )
-  const executionStatus = resolveExecutionStatus({
+  // A run paused for a measurement: the workflow's step or a task run alone.
+  const measuring = [
+    ...(workflow?.currentJob ? [workflow.currentJob] : []),
+    ...jobs,
+  ].find((job) => waitingCursor(job))
+  const measuringId = measuring?.id
+  /** Opens the measurement window for the paused step, from anywhere. */
+  const openMeasurement = useCallback(() => {
+    if (!measuringId) return
+    setSelectedJob(measuringId)
+    revealPanel("display")
+  }, [measuringId, setSelectedJob])
+  const measurement = measuring
+    ? { job: measuring, open: openMeasurement }
+    : null
+  const resolvedStatus = resolveExecutionStatus({
     preparing,
     workflow: workflow && {
       ...workflow,
@@ -275,6 +290,10 @@ export function useWorkbenchController() {
     jobs,
     lastExecution,
   })
+  const executionStatus: ExecutionStatus | undefined =
+    resolvedStatus?.state === "waiting" && measuring
+      ? { ...resolvedStatus, name: jobTitle(measuring), detail: "측정 기다리는 중" }
+      : resolvedStatus
   const running = jobs.some(activeJob)
   useJobPolling({
     jobs,
@@ -576,6 +595,7 @@ export function useWorkbenchController() {
     runWorkflow,
     cancelWorkflow,
     executionStatus,
+    measurement,
     running,
     locked,
     busy,
@@ -585,8 +605,6 @@ export function useWorkbenchController() {
     plan,
     setPlan,
     pendingPayload,
-    daoedit,
-    setDaoedit,
     taskError,
     setTaskError,
     error,

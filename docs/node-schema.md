@@ -63,7 +63,7 @@
 | `multiple` | ✓ | | 여러 파일 입력 |
 | `required` | ✓ | | 필수 입력 |
 | `sources` | ✓ | | 입력을 받는 방법의 목록. 생략하면 지금처럼 모두 허용 |
-| `mode` | | ✓ | `single` 또는 `each`(입력마다 출력). GIRAF 노드는 `pass` |
+| `mode` | | ✓ | `single`, `each`(입력마다 출력) 또는 `pass`(입력 파일을 넘김). GIRAF 노드는 `pass`만 |
 | `from` | | ✓ | `pass` 출력이 파일을 받아 넘기는 입력 이름 |
 | `default` | | ✓ | 기본 출력 이름 또는 접두사 |
 | `optional` | | ✓ | 이름을 입력했을 때만 생성 |
@@ -79,6 +79,19 @@
 | `cursor` | 커서 명령 기록 (커서 parameter) |
 
 `pass` 출력은 `from` 입력에 들어온 파일 중 자기 `kind`인 파일을 그대로 넘깁니다. 이름을 입력받지 않으며 해당 종류의 파일이 있을 때만 포트로 나타납니다. 가장 먼저 나타난 포트가 기본 출력입니다.
+
+IRAF 작업의 `pass` 출력은 작업이 제자리에서 고친 입력 영상을 넘깁니다(hedit `update=yes`). 작업은 실행 폴더의 사본을 고치고, 그 사본이 입력과 같은 이름(`M67B.fits`)의 결과가 되어 다음 작업으로 갑니다. 원본은 바뀌지 않습니다. 이 출력은 IRAF 파라미터에 묶이지 않으므로 이름이 IRAF 파라미터와 겹치면 안 되고(겹치면 경고 후 무시), `kind`는 `image`, `from`은 영상 입력이어야 합니다. 이런 출력이 있는 작업만 `update=yes`로 실행할 수 있습니다(`verify` 같은 확인 질문은 여전히 `no`). 실행 기록에는 사본마다 바뀐 헤더 키를 `header-diff.json`으로 남기고, 실행 기록의 실행 설정 탭이 키, 변경 전, 변경 후 표로 보여 줍니다. IRAF 영상 커널이 헤더를 쓸 때마다 붙이는 `IRAF-TLM`, `DATE`, `ORIGIN`, `EXTEND`는 표에서 뺍니다. 출력이 `pass`뿐이면 표준 출력(`$stdout`)도 함께 둡니다. 예: `giraf/schemas/imutil-hedit.json`.
+
+```json
+{
+  "version": 2,
+  "task": "images.imutil.hedit",
+  "outputs": { "result": { "kind": "image", "mode": "pass", "from": "images", "label": "결과" } },
+  "parameters": { "update": { "default": "yes" }, "verify": { "fixed": "no" } }
+}
+```
+
+전용 어댑터 작업 ccdhedit은 출력 방식 `edit`으로 같은 규칙을 따릅니다. 고친 사본이 입력과 같은 이름의 결과가 되고, 출력 이름 칸은 없습니다.
 
 ### 파라미터 필드
 
@@ -111,8 +124,8 @@ pset 파라미터는 `datapars.fwhmpsf`처럼 pset 이름을 앞에 붙입니다
 
 | 종류 | 분류 | 상태 | 용도 |
 | --- | --- | --- | --- |
-| `cursor` | 작업 확장 | 지원 | 대화형 실행(`interactive=yes`)의 커서 키에 이름과 아이콘을 붙임. 동작은 추가하지 않음 |
-| `image-cursor` | 작업 확장 | 예정 | 영상을 클릭해 커서 명령으로 측정 (daoedit) |
+| `cursor` | 작업 확장 | 지원 | 대화형 실행의 커서 키에 이름과 아이콘을 붙임. `interactive` 파라미터가 없는 작업은 이 구성 요소가 있으면 대화형으로 실행 |
+| `image-cursor` | 작업 확장 | 대신함 | `cursor`로 대신함 (daoedit) |
 | `value-output` | 작업 확장 | 지원 | 작업의 출력에서 측정값을 읽어 값 출력(마름모 연결점)으로 내보냄 |
 | `value-input` | 작업 확장 | 예정 | |
 | `ccd-preprocess` | 작업 확장 | 예정 | ccdred 계열 전처리 |
@@ -182,6 +195,9 @@ pset 노드의 값 출력은 노드에 저장한 값을 파라미터의 IRAF 타
 - 입력 탭: 안쪽 작업의 입력 탭은 입력마다 받는 방식과 회차별 파일을 보여 줍니다. 모든 회차가 같으면 한 줄(`모든 회차 Zero.fits`), 앞 작업이 아직 실행되지 않았으면 `실행하면 정해집니다`입니다.
 - 진단: 기준이 없거나 잘못된 경우(식, 범위, 조건), 나눌 파일이 없는 경우는 영역의 오류입니다. 회차에 맞는 파일이 없거나, `all`인 출처가 영역 기준에 없는 꼬리표로 나뉘어 있거나, `all`인 연결이 `multiple`이 아닌 입력에 여러 장을 주면 칩과 받는 작업의 경고로 알립니다. 맞는 파일이 없는 회차는 그 입력 없이 실행합니다.
 - 겹침: 영역 작업의 `subflowId`가 바깥 영역(그룹)의 id입니다. 위치는 모두 캔버스 좌표로 저장합니다.
+- 대화형 단계: 회차의 작업이 커서를 사람에게서 읽으면(위 `cursor`) 실행이 멈추고 그 작업은 `사용자 입력 대기`가 됩니다. 실행 기록과 위쪽 실행 상태에 작업 이름과 회차(`daoedit B`)가 나오고, 측정 창이 그 회차의 영상으로 열립니다. 끝내기 버튼(`finish`)이 실행을 이어 가고 다음 회차가 같은 방식으로 열립니다. 창을 닫아도 실행은 멈춘 채 기다리며, 실행 상태 캡슐 끝의 `측정 창 열기`로 다시 엽니다. 실행을 그치는 것은 중단뿐입니다. 서버는 기존 대화형 실행처럼 작업의 커서 요청(`interaction.json`, `/api/task-respond`)을 기다리고, 워크플로 상태는 그동안 `waiting`입니다.
+- 지난 측정: 회차마다 완료한 측정을 노드 id와 회차 이름으로 기억합니다(`giraf/measurements.py`, 데이터 폴더의 `.workflow/measurements.json`). 다음 실행에서 그 회차의 입력 파일 해시가 같으면 창을 열지 않고 지난 측정의 결과로 새 실행 기록을 만들며, 로그에 `daoedit B 지난 측정 사용`과 파일, 측정 수, 측정 시각을 적습니다. 인스펙터 설정 탭의 `측정` 구역이 회차별 측정을 보여 주고, `다시 측정`이 고른 회차(또는 `모든 회차`)를 지워 다음 실행에서 다시 묻습니다(`GET /api/measurements?instance=`, `POST /api/measurements {instance, rounds}`).
+- 실행 이름: 워크플로 실행의 작업은 노드 이름으로, 영역 안에서는 회차 이름을 붙여(`daoedit B`, `RDNOISE B`) 실행 기록에 나옵니다. 서버가 작업 기록(`manifest.round`, `manifest.nodeLabel`)에 회차와 영역을 남깁니다.
 - 예전 문서: 묶음 포트나 보정 그룹 포트에서 한 값만 받던 연결은 열 때 일반 연결이 되고 `Connection.widened: true`가 붙습니다. 칩에서 받는 방식을 고를 때까지 경고합니다.
 
 `save-files` 노드는 출력 탭에서 저장 위치와 같은 이름 처리를 정합니다. 저장 위치는 폴더 선택기로 고르며, 비우면 프로젝트 폴더입니다. 프로젝트 안의 폴더는 상대 경로로 기록하고, 프로젝트 밖 폴더는 워크플로 내보내기에서 제외합니다. 같은 이름이 있으면 첫 점 앞에 번호를 붙이거나(`m67.mag.1` → `m67_1.mag.1`) 덮어씁니다.
@@ -214,7 +230,11 @@ GIRAF 노드는 작업 추가 목록에서 IRAF 패키지 위에 타일로 표�
 }
 ```
 
-`cursor`는 작업이 IRAF 커서 모드에서 이미 읽는 키를 처음 쓰는 사람도 따라갈 수 있게 이름 붙입니다. 하나만 둘 수 있습니다. 예: `giraf/schemas/daophot-psf.json`.
+`cursor`는 작업이 IRAF 커서 모드에서 이미 읽는 키를 처음 쓰는 사람도 따라갈 수 있게 이름 붙입니다. 하나만 둘 수 있습니다. 예: `giraf/schemas/daophot-psf.json`, `daophot-daoedit.json`.
+
+실행이 커서를 사람에게서 읽는지는 이렇게 정합니다. IRAF의 `interactive` 파라미터가 있는 작업(psf)은 그 값을 따릅니다. 없는 작업(daoedit)은 `cursor` 구성 요소가 있고, 커서 파라미터(`*imcur`, `*gcur`)에 기록한 커서 명령이나 파일을 주지 않았을 때 대화형으로 실행합니다. daoedit은 한 실행에서 별마다 `a`를 보내고 `q`로 끝나므로, 표준 출력과 값 출력(`fwhm`, `sky`, `skysigma`)에 측정한 별이 모두 들어갑니다.
+
+영상 창은 제목에 영상 파일, 부제목에 `count`(`측정한 별 3개`)를 보여 줍니다. `graphics.accept`가 없는 작업은 클릭한 별이 IRAF가 다시 영상 커서를 읽을 때 표시로 남습니다. 작업이 지금까지 쓴 표준 출력이 표(`#` 머리줄과 수치 행)이면 영상 아래에 작업 이름, 회차와 함께 표로 보여 줍니다.
 
 | 필드 | 설명 |
 | --- | --- |
@@ -251,6 +271,7 @@ ccdred 계열처럼 전용 어댑터(`task_catalog.py`의 `TASKS`)로 실행하�
 - `giraf/file_nodes.py`: `pass-files`, `save-files` 실행
 - `giraf/flows.py`, `giraf/workflow.py`: 컨테이너 설정 검사와 회차 실행
 - `web/src/lib/containers.ts`, `web/src/lib/flow-graph.ts`: 컨테이너 포트, 연결 규칙, 실행 요청
+- `giraf/measurements.py`: 대화형 단계의 회차별 측정 기억과 다시 쓰기
 - `giraf/values.py`: 값 출력 읽기, 값 노드 계산, 파라미터 값 해석(`/api/values`, 워크플로 실행)
 - `web/src/lib/values.ts`: 고정 파라미터, 값과 pset 연결, 값 요청
 - `giraf/task_discovery/definition.py`: 자동 생성 스키마에 계층 적용

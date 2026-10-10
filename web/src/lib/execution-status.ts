@@ -4,6 +4,8 @@ export type ExecutionStatus = {
   executionId?: string
   stepKey?: string
   name: string
+  /** What the step waits for, after its name (`측정 기다리는 중`). */
+  detail?: string
   label: string
   state: 'running' | 'waiting' | 'completed' | 'failed' | 'cancelled'
   progressCount?: number

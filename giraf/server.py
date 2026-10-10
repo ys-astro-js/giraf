@@ -222,6 +222,14 @@ def job_info(job):
         result.update(operation='task',task=manifest['task'],backend=manifest['backend'],manifest=manifest)
     for key,file in [('outcomes','outcomes.json'),('headerDiff','header-diff.json'),('effective','effective.json'),('interaction','interaction.json')]:
         if (job/file).exists():result[key]=json.loads((job/file).read_text())
+    if manifest.get('interactive'):
+        from .measurements import cursor_count
+        result['measured']=cursor_count(job,manifest)
+        # What the task has printed so far (daoedit's table, one row per star).
+        live=job/'live.json'
+        if result['state'] in ('running','waiting') and live.exists():
+            files=[job/f for f in json.loads(live.read_text())]
+            result['liveOutput']=''.join(f.read_text(errors='replace')[:200000] for f in files if f.is_file())
     return result
 
 
@@ -262,9 +270,24 @@ def with_run_records(values):
 
 
 from .workflow import WorkflowManager
+from .measurements import Measurements
+measurements = Measurements(DATA / '.workflow' / 'measurements.json', RUNS, lambda job: job_info(job))
 workflow_manager = WorkflowManager(DATA / '.workflow', workflow_prepare,
     lambda manifest: job_info(start_task(manifest, manifest.get('workingDirectory', workspace['folder']))),
-    lambda id: job_info(RUNS / id), workflow_cancel_job, resolve_file=lambda id: get_file(id))
+    lambda id: job_info(RUNS / id), workflow_cancel_job, resolve_file=lambda id: get_file(id),
+    measurements=measurements)
+
+
+async def measurements_endpoint(request: Request):
+    """What a node's interactive step measured in each round; POST clears rounds."""
+    if request.method == 'GET':
+        return JSONResponse(measurements.list(request.query_params.get('instance', '')))
+    payload = await request_payload(request)
+    rounds = payload.get('rounds')
+    if not isinstance(payload.get('instance'), str) or not (rounds is None or (isinstance(rounds, list) and all(isinstance(r, str) for r in rounds))):
+        raise ValueError('다시 측정할 회차를 선택해 주세요.')
+    measurements.clear(payload['instance'], rounds)
+    return JSONResponse(measurements.list(payload['instance']))
 
 
 def catalog_endpoint(request: Request):
@@ -672,6 +695,7 @@ api_routes = [
     Route('/reveal', reveal_endpoint, methods=['POST'], name='reveal'),
     Route('/download', download_endpoint, methods=['GET'], name='download'),
     Route('/display', display_endpoint, methods=['GET'], name='display'),
+    Route('/measurements', measurements_endpoint, methods=['GET', 'POST'], name='measurements'),
     Route('/display-close', display_close_endpoint, methods=['POST'], name='display-close'),
 ]
 

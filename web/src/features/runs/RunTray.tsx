@@ -34,7 +34,9 @@ import { useLayout } from "@/features/workbench/layout-store"
 import { groupExecutions, type ExecutionGroup } from "@/lib/execution-history"
 import { runLabel } from "@/lib/file-library"
 import { stateLabel } from "@/lib/task-map"
-import { api, taskDisplayName, type Job } from "@/lib/workbench"
+import { api, jobTitle, taskDisplayName, type Job } from "@/lib/workbench"
+import { roundText } from "@/lib/containers"
+import { waitingCursor } from "@/lib/cursor-session"
 import "@/styles/library/history.css"
 
 const ACTIVE = ["queued", "running", "waiting"]
@@ -73,7 +75,7 @@ function runTime(id: string) {
     : runLabel(id)
 }
 
-const jobName = (job: Job) => taskDisplayName(job.task || job.name)
+const jobName = jobTitle
 const groupName = (group: ExecutionGroup) =>
   group.workflow ? "워크플로우 실행" : `${jobName(group.jobs[0])} 실행`
 
@@ -180,6 +182,19 @@ function RunList({
   )
 }
 
+/**
+ * A step paused for a measurement: which round, which task on which image,
+ * and that it waits (the run's log continues once it is measured).
+ */
+function waitingText(job: Job, round: string) {
+  const image = job.manifest?.rows.find((r) => r.id === job.manifest?.cursorImage)
+  return [
+    [round, job.manifest?.round?.name].filter(Boolean).join(" "),
+    [taskDisplayName(job.task || job.name), image?.label].filter(Boolean).join(" "),
+    "측정 기다리는 중",
+  ].filter(Boolean).join("\n")
+}
+
 type Detail = "log" | "products" | "settings"
 
 /** The selected job: its log, what it produced, and how it ran. */
@@ -265,7 +280,11 @@ function RunDetail({
       >
         {detail === "log" ? (
           <>
-            <pre>{job.log || job.message || "로그가 없습니다."}</pre>
+            <pre>
+              {waitingCursor(job)
+                ? waitingText(job, w.catalog ? roundText(w.map, w.catalog, job.manifest?.round) : "")
+                : job.log || job.message || "로그가 없습니다."}
+            </pre>
             {job.outcomes?.map((outcome, i) => (
               <details key={i}>
                 <summary>{outcome.label}</summary>

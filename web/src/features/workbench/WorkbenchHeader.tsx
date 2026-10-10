@@ -52,6 +52,7 @@ export function WorkbenchHeader() {
       loading={!w.ready && !w.loadError}
       onHome={() => w.setHome(true)}
       executionStatus={w.executionStatus}
+      onMeasure={w.measurement?.open}
       workflowBusy={w.workflowBusy}
       runDisabled={
         !w.ready ||
