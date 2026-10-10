@@ -14,6 +14,7 @@ from .task_catalog import TASKS, SNAPSHOT, CAPABILITIES
 from .task_jobs import output_paths
 from .products import product_name, publish_product, header_changes
 from .task_expressions import split_image
+from .staging import staged_names
 from .task_session import run_process, read_log_since, Cancelled
 
 
@@ -55,8 +56,10 @@ class TaskRun:
         p=Path(path).expanduser()
         if not p.is_absolute():p=base/p
         if not p.is_file():raise ValueError(f'{key}: 참조 파일이 없습니다: {p}')
-        alias='references/r'+str(len(self.references))+p.suffix
-        shutil.copy2(p,self.job/alias)
+        staged=[r for r in self.references if 'original' in r]
+        wanted=[(r['original'],Path(r['alias']).name,'') for r in staged]+[('mask:'+t,Path(t).name,'') for _,t in self.mask_conversions]+[(str(p.resolve()),p.name,'r'+str(len(self.references))+p.suffix)]
+        alias='references/'+staged_names(self.job/'references',wanted)[-1]
+        if not any(r['alias']==alias for r in staged):shutil.copy2(p,self.job/alias)
         self.references.append(dict(parameter=key,original=str(p.resolve()),alias=alias,sha256=checksum(p)))
         return marker+alias+section
     def package_path(self,value,key):
@@ -94,13 +97,18 @@ class TaskRun:
         editor.write_text(f'#!{sys.executable}\nimport sys\nfrom giraf.task_session import edit_file\nedit_file({str(self.job)!r},sys.argv[-1])\n')
         editor.chmod(0o700)
         if self.direct and not self.m.get('fileAuthorized'):raise ValueError('직접 파일 변경 계획을 확인해 주세요.')
-        sources=[]
+        sources=[];wanted=[]
         for index,row in enumerate(self.m['rows']):
             path=Path(row['path'])
             label=row.get('label') or path.name
             if not path.is_file():raise ValueError(f'{label}: 입력 파일이 없습니다.')
             if row.get('sha256') and checksum(path)!=row['sha256']:raise ValueError(f'{label}: 검증 이후 파일이 변경되었습니다. 다시 실행해 주세요.')
-            ext=path.suffix.lower();alias=f'input/s{index:05d}'+(ext if ext else '.fits')
+            ext=path.suffix.lower() or '.fits'
+            wanted.append((str(path.resolve()),(path.stem if path.suffix else path.name)+ext,f's{index:05d}'+ext))
+        # IRAF records the names it opens (IMCMB*, ZEROCOR...): copies keep the sources' names.
+        names=staged_names(self.job/'input',wanted)
+        for row,name in zip(self.m['rows'],names):
+            path=Path(row['path']);alias='input/'+name
             shutil.copy2(path,self.job/alias)
             if self.direct and self.m.get('filePolicy',{}).get('backup',True):shutil.copy2(path,self.job/'backup'/Path(alias).name)
             self.aliases[row['id']]=(str(path) if self.direct else alias)+row.get('section','')
@@ -112,7 +120,11 @@ class TaskRun:
                     if bpm:
                         ref=self.stage_reference(str(bpm),path.parent,'BPM')
                         if Path(ref).suffix.lower() in ('.fits','.fit','.fts'):
-                            converted=str(Path(ref).with_suffix('.pl'));self.mask_conversions.append((ref,converted));ref=converted
+                            converted=str(Path(ref).with_suffix('.pl'))
+                            # Another mask staged as x.pl keeps its name; x.fits converts to x_fits.pl.
+                            if any(r['alias']==converted for r in self.references):converted=str(Path(ref).with_name(Path(ref).stem+'_'+Path(ref).suffix[1:]+'.pl'))
+                            if (ref,converted) not in self.mask_conversions:self.mask_conversions.append((ref,converted))
+                            ref=converted
                         fits.setval(self.job/alias,'BPM',value=ref)
         atomic_json(self.job/'sources.json',sources)
 

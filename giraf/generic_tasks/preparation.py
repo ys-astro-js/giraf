@@ -5,6 +5,7 @@ import shutil
 from ..image_lists import check_input_lists
 from ..jobs import atomic_json
 from ..products import IMAGE_SUFFIXES
+from ..staging import staged_names
 from ..task_discovery import file_hash
 from ..task_schema import file_extension
 
@@ -18,6 +19,7 @@ def stage_inputs(job, manifest):
         (job / folder).mkdir(exist_ok=True)
     aliases = {}
     sources = []
+    wanted = []
     for index, row in enumerate(manifest['rows']):
         path = Path(row['path'])
         label = row.get('label') or path.name
@@ -25,12 +27,16 @@ def stage_inputs(job, manifest):
             raise ValueError(f'{label}: 입력 파일이 없습니다.')
         if file_hash(path) != row['sha256']:
             raise ValueError(f'{label}: 입력 파일이 검증 이후 변경되었습니다.')
-        suffix = path.suffix
+        name, suffix = path.name, path.suffix
         if row.get('asset') == 'image' and suffix.lower() not in IMAGE_SUFFIXES:
-            suffix = '.fits'  # IRAF cannot open a FITS image named e.g. `M67b.psf.1`
-        alias = f'input/s{index:05d}' + suffix
+            # IRAF cannot open a FITS image named e.g. `M67b.psf.1`
+            name, suffix = name + '.fits', '.fits'
+        wanted.append((str(path.resolve()), name, f's{index:05d}' + suffix))
+    names = staged_names(job / 'input', wanted)
+    for row, name in zip(manifest['rows'], names):
+        alias = 'input/' + name
         if not (job / alias).exists():
-            shutil.copy2(path, job / alias)
+            shutil.copy2(row['path'], job / alias)
         aliases[row['id']] = alias + row.get('section', '')
         sources.append(dict(id=row['id'], original=row['path'], alias=alias, sha256=row['sha256']))
     atomic_json(job / 'sources.json', sources)

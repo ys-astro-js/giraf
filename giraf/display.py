@@ -71,7 +71,8 @@ class DisplayServer:
         self.lock = threading.Lock()
         self.socket = None
         self.palette = palette()
-        # Jobs display staged copies (input/s00000.fits); map back to the original name.
+        # Jobs display staged copies (input/<name>, or input/s00000.fits for a name IRAF
+        # cannot take); map back to the original name.
         self.source_name = source_name or (lambda alias, directory: None)
         # The run whose IRAF process loads a frame, from its working folder.
         self.writer_job = writer_job or (lambda directory: None)
@@ -172,7 +173,7 @@ class DisplayServer:
     def title(self, wcs, directory=lambda: None):
         """IRAF writes `name[section] - image title`; untitled images end in ' -'."""
         title = re.sub(r'\s+-\s*$', '', describe(wcs)['title'])
-        match = re.match(r'(input/s\d{5}\.\w+)(.*)', title)
+        match = re.match(r'(input/[^\[\s]+)(.*)', title)
         original = self.source_name(match[1], directory()) if match else None
         return original + match[2] if original else title
 
