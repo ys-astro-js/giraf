@@ -10,7 +10,7 @@ export type ParameterSet = { name:string; task:string; parameters:Param[]; fixed
 export type SchemaIssue = { severity:'warning'|'error'; message:string }
 /** A task's `value-output` component (node schema): numbers read from one of its outputs. */
 export type ValueOutputSpec = { name:string; kind:string; from:string; column?:string|number; keyword?:string }
-export type Spec = { run?:'pass-files'|'save-files'|'value-constant'|'value-header'|'value-compute'|'pset'|'foreach'; values?:ValueOutputSpec[]; pinned?:string[]; icon?:string; fixed?:Values; groups?:{label:string;parameters:string[]}[]; schemaProvenance?:Record<string,string>; schemaIssues?:SchemaIssue[]; taskName?:string; adapter?:'generic'; runnable?:boolean; reason?:string; description?:string; outputs?:OutputSlot[]; parameterSets?:ParameterSet[]; name:string; title:string; package:string; parameters:Param[]; inputs:Slot[]; output:{ name:string; mode:string; default:string } | null; kind:string; preprocess?:boolean }
+export type Spec = { cursor?:CursorComponent; run?:'pass-files'|'save-files'|'value-constant'|'value-header'|'value-compute'|'pset'|'foreach'; values?:ValueOutputSpec[]; pinned?:string[]; icon?:string; fixed?:Values; groups?:{label:string;parameters:string[]}[]; schemaProvenance?:Record<string,string>; schemaIssues?:SchemaIssue[]; taskName?:string; adapter?:'generic'; runnable?:boolean; reason?:string; description?:string; outputs?:OutputSlot[]; parameterSets?:ParameterSet[]; name:string; title:string; package:string; parameters:Param[]; inputs:Slot[]; output:{ name:string; mode:string; default:string } | null; kind:string; preprocess?:boolean }
 export type Catalog = { version:string; tasks:Spec[]; ccdproc:{parameters:Param[];inputs:Slot[]}; ccdred:Param[]; exam:Record<string,Param[]>; capabilities?:{version:string;schemaFingerprint:string;fallback:string[];limits:Record<string,string>} }
 export type Frame = { calibrationMetadata?:{filter:string;exposure:number}; role?:string; id:string; label:string; path?:string; name?:string; asset?:string; filter?:string; exposure?:number; shape?:string; width?:number; height?:number; detected_kind?:string; group?:string; job?:string; error?:string; history?:Record<string,string>;headers?:Record<string,string>;labels?:Record<string,string>;source?:string;viewer_supported?:boolean }
 export type AlignmentBinding = {reference:string[];input:string[]}
@@ -24,8 +24,10 @@ export type Home = { startup:'home'|'resume'; recent:RecentFolder[]; engines:{ c
 export type Preferences = { _document?:WorkflowDocument; parameterSets?:Record<string,Record<string,Values>>; drafts:Record<string,Draft>; backend:string; mapping:Values; instrument:string[]; packageValues:Values; taskMap?:import('./task-map').TaskMap }
 export type Workspace = { folder:string; files:Frame[]; sets:{name:string;ids:string[];folder:string}[] }
 export type CursorKeyGroup = { cursor:'image'|'graphics'; files:string[]; keys:{key:string;description:string}[]; colon:{command:string;description:string}[] }
-export type Manifest = { interactive?:boolean; cursorKeys?:CursorKeyGroup[]; cursorImage?:string|null; cursor?:CursorComponent|null; workflowId?:string; workflowStep?:number; textInputs?:Record<string,string>; alignmentBinding?:AlignmentBinding; inputSelections?:Record<string,string[]>; cursorCommands?:Record<string,string>; outputs?:Record<string,string>; parameterSets?:Record<string,Values>; task:string; backend:string; parameters:Values; inputs:Record<string,string[]>; output:{name:string}; ccdproc:Values; ccdred:Values; mapping:Values; section:string; exam:Draft['exam']; rows:Frame[] }
-export type Job = {createdAt?:number;execution?:{id:string;step:number}|null;id:string;name:string;task?:string;backend?:string;state:string;message:string;count:number;progress:number;products:Frame[];manifest?:Manifest & {instanceId?:string};log?:string;commands?:string;operation?:string;outcomes?:{source:string;label:string;state:string;message:string}[];headerDiff?:{source:string;key:string;before:string|null;after:string|null}[];effective?:unknown;interaction?:{id:string;kind:string;prompt:string;state:string;wcs?:number[][];initial?:string}}
+/** The round of a loop region a workflow job ran in (giraf/workflow.py). */
+export type JobRound = { name:string; regions:{ id:string; label:string; name:string; index:number; total:number }[] }
+export type Manifest = { round?:JobRound; nodeLabel?:string; reused?:{ job:string; at:number; count:number }; interactive?:boolean; cursorKeys?:CursorKeyGroup[]; cursorImage?:string|null; cursor?:CursorComponent|null; workflowId?:string; workflowStep?:number; textInputs?:Record<string,string>; alignmentBinding?:AlignmentBinding; inputSelections?:Record<string,string[]>; cursorCommands?:Record<string,string>; outputs?:Record<string,string>; parameterSets?:Record<string,Values>; task:string; backend:string; parameters:Values; inputs:Record<string,string[]>; output:{name:string}; ccdproc:Values; ccdred:Values; mapping:Values; section:string; exam:Draft['exam']; rows:Frame[] }
+export type Job = {createdAt?:number;execution?:{id:string;step:number}|null;id:string;name:string;task?:string;backend?:string;state:string;message:string;count:number;progress:number;products:Frame[];manifest?:Manifest & {instanceId?:string};log?:string;commands?:string;operation?:string;outcomes?:{source:string;label:string;state:string;message:string}[];headerDiff?:{source:string;label?:string;key:string;before:string|null;after:string|null}[];measured?:number;liveOutput?:string;effective?:unknown;interaction?:{id:string;kind:string;prompt:string;state:string;wcs?:number[][];initial?:string}}
 export const defaults=(params:Param[]):Values=>Object.fromEntries(params.map(p=>[p.name,p.default]))
 export function makeDraft(spec:Spec | undefined, saved?:Partial<Draft>):Draft {
   const parameters = {...defaults(spec?.parameters || []), ...saved?.parameters}
@@ -72,6 +74,8 @@ export function plannedOutputs(task:Spec,draft:Draft,rows:Frame[],_mapping:Value
     const outputs=(task.outputs||[]).flatMap(slot=>{
       const value=draft.outputs?.[slot.name]??slot.default
       if(slot.optional&&!value)return []
+      // Edited copies keep their input's names (a pass output of an IRAF task).
+      if(slot.mode==='pass')return (draft.inputs[slot.from||'']||[]).map(id=>{const label=rows.find(r=>r.id===id)?.label||id;return {input:label,output:label}})
       const each = slot.eachWhen ? draft.parameters[slot.eachWhen] === 'yes' : slot.mode === 'each'
       return each?ids.map(id=>{
         const row=rows.find(r=>r.id===id),source=outputBasename(row?.label||row?.name||id),ext=outputExtension(source)
@@ -87,9 +91,11 @@ export function plannedOutputs(task:Spec,draft:Draft,rows:Frame[],_mapping:Value
   if(!ids.length)return []
   const selected=ids.map(id=>headerFrame(rows.find(f=>f.id===id)||{id,label:id}))
   // List contents are resolved by the server's preview endpoint.
+  // An edited copy keeps its input's name (ccdhedit).
+  if(task.output.mode==='edit')return selected.map(row=>({input:row.label,output:row.label}))
   if(name.startsWith('@'))return []
   if(name.includes(','))return name.split(',').map((n,i)=>({input:selected[i]?.label||task.name,output:productName(n.trim(),task.kind)}))
-  if(['each','edit'].includes(task.output.mode)){
+  if(task.output.mode==='each'){
     return selected.map(row=>{
       const ext=outputExtension(row.label),templated=eachOutputName(name,ext?row.label.slice(0,-ext.length):row.label,ext)
       const output=!name.includes('{name}')&&selected.length===1&&!name.endsWith('/')&&(outputExtension(name)||name.includes('/'))?name:templated
@@ -128,6 +134,12 @@ export const primaryParameters=new Set(['combine', 'reject', 'ccdtype', 'process
 
 export function taskDisplayName(identity: string): string {
   return identity.split('.').at(-1) || identity
+}
+/** A job's name in run lists: its node's name and its round (`daoedit B`). */
+export function jobTitle(job: Job): string {
+  // A workflow run names its jobs by their nodes.
+  const name = job.manifest?.nodeLabel || taskDisplayName(job.task || job.name)
+  return [name, job.manifest?.round?.name].filter(Boolean).join(" ")
 }
 
 export function acceptsAsset(kind: string, asset: string | undefined): boolean {

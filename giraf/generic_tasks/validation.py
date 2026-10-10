@@ -68,6 +68,29 @@ def without_fixed(supplied, fixed, prefix, warnings):
     return {k: v for k, v in supplied.items() if k not in fixed}
 
 
+def interactive_run(spec, params, payload):
+    """Does the run read the cursor from the person running it?
+
+    A task with IRAF's `interactive` parameter decides by it. A task without
+    one reads its cursor parameter (`*imcur`) interactively when its node
+    schema names the cursor keys (a `cursor` component) and no recorded
+    commands or command file are given for it (daoedit).
+    """
+    if any(p['name'] == 'interactive' for p in spec.get('allParameters', spec['parameters'])):
+        return params.get('interactive') == 'yes'
+    if not spec.get('cursor'):
+        return False
+    roles = [s['name'] for s in spec['inputs'] if s.get('valueType') == 'cursor']
+    commands, inputs, expressions = (payload.get(k) or {} for k in ('cursorCommands', 'inputs', 'expressions'))
+    return not any(str(commands.get(r, '')).strip() or inputs.get(r) or str(expressions.get(r, '')).strip() for r in roles)
+
+
+def edits_inputs(spec):
+    """Image inputs a task edits and passes on: the `from` of its `pass` outputs."""
+    images = {s['name'] for s in spec['inputs'] if s.get('kind') == 'image'}
+    return [o['from'] for o in spec['outputs'] if o.get('mode') == 'pass' and o.get('from') in images] if not spec.get('run') else []
+
+
 def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles=frozenset()):
     if not spec['runnable']: raise ValueError(spec['reason'])
     from ..node_schema import VALUE_RUNS
@@ -99,15 +122,20 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
             for s in spec['parameterSets']}
     # The task's own cursor loop runs through IRAF's text cursor mode; parameter
     # sets and verify/update queries still have no interactive adapter.
-    interactive = params.get('interactive') == 'yes'
+    cursor_commands = payload.get('cursorCommands', {})
+    interactive = interactive_run(spec, params, payload)
+    # A task that passes its edited inputs on (a `pass` output) writes to the
+    # copies it is given, so it may update them (hedit update=yes).
+    edits = edits_inputs(spec)
     for values in [params, *sets.values()]:
         for key in ('verify', 'update') if values is params else ('interactive', 'verify', 'update'):
+            if key == 'update' and values is params and edits:
+                continue
             if values.get(key) == 'yes' and spec.get('fixed', {}).get(key) != 'no':
                 raise ValueError(f'{key}: 범용 실행에서는 no를 선택해 주세요.')
     if interactive and backend != 'cl':
         backend = 'cl'
         schema_warnings.append('interactive: 대화형 실행은 IRAF CL에서 진행합니다.')
-    cursor_commands = payload.get('cursorCommands', {})
     cursor_roles = {s['name'] for s in spec['inputs'] if s.get('valueType') == 'cursor' and accepts_source(s, 'cursor')}
     if not isinstance(cursor_commands, dict) or set(cursor_commands) - cursor_roles:
         raise ValueError('알 수 없는 커서 입력입니다.')

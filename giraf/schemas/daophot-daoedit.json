@@ -2,6 +2,20 @@
   "version": 2,
   "task": "noao.digiphot.daophot.daoedit",
   "components": [
+    {
+      "type": "cursor",
+      "image": {
+        "click": "a",
+        "count": "측정한 별 {n}개",
+        "finish": {
+          "label": "측정 끝내기",
+          "icon": "check",
+          "keys": [
+            "q"
+          ]
+        }
+      }
+    },
     { "type": "value-output", "name": "fwhm", "kind": "real", "from": "$stdout", "column": "FWHM" },
     { "type": "value-output", "name": "sky", "kind": "real", "from": "$stdout", "column": "SKY" },
     { "type": "value-output", "name": "skysigma", "kind": "real", "from": "$stdout", "column": "SKYSIGMA" }

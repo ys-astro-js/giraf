@@ -9,7 +9,6 @@ import {
   useCursorSession,
   waitingCursor,
 } from "@/lib/cursor-session"
-import { DaoeditViewer } from "@/features/viewer/DaoeditViewer"
 import { useWorkbench } from "./context"
 
 /** Modal flows that sit above every panel. */
@@ -60,13 +59,6 @@ export function WorkbenchDialogs() {
         }}
         pendingPayload={w.pendingPayload}
       />
-      {w.daoedit && (
-        <DaoeditViewer
-          session={w.daoedit}
-          onClose={() => w.setDaoedit(null)}
-          onStart={w.start}
-        />
-      )}
       {/* Only the run the user is looking at (its node or the run log). */}
       <CursorSessionWatcher
         job={interactiveRun(currentJob) ? currentJob : undefined}

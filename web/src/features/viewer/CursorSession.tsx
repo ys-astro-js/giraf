@@ -49,7 +49,11 @@ import {
   type Point,
 } from "@/lib/cursor-session"
 import { displayQueryOptions, displayRow, frameToImage } from "@/lib/display"
-import type { Job } from "@/lib/workbench"
+import { outputTable } from "@/lib/output-table"
+import { roundText } from "@/lib/containers"
+import { jobTitle, type Job } from "@/lib/workbench"
+import { useWorkbench } from "@/features/workbench/context"
+import { OutputTableView } from "./OutputTableView"
 
 /** The node schema's cursor icons (giraf/node_schema.py CURSOR_ICONS). */
 const ICONS = {
@@ -410,11 +414,14 @@ export function CursorImage({ job }: { job: Job }) {
     return { view, image: image ?? undefined }
   }
   const image = cursor?.image
+  // Marks of this window, or what the run counted before it was opened.
+  const count = used.length || job.measured || 0
   const subtitle = !interaction
     ? "IRAF 처리 중"
-    : used.length && image?.count
-      ? image.count.replace("{n}", String(used.length))
+    : image?.count
+      ? image.count.replace("{n}", String(count))
       : undefined
+  const table = job.liveOutput ? outputTable(job.liveOutput) : undefined
   const reply = useReply(interaction)
   const commandOpen = useCursorSession((state) => state.command)
   const markers = [
@@ -476,6 +483,7 @@ export function CursorImage({ job }: { job: Job }) {
           selectedMarker={pending ? String(used.length + 1) : undefined}
         />
       </div>
+      {table && <CursorResults job={job} table={table} />}
       <div ref={commandAnchor} className="cursor-command-anchor" />
       {reply && !commandOpen && (
         <output key={reply.id} className="cursor-status glass-surface">
@@ -493,6 +501,33 @@ export function CursorImage({ job }: { job: Job }) {
         />
       )}
     </div>
+  )
+}
+
+/**
+ * What the task has printed while it runs (daoedit's row per star), under
+ * the image: which task and round is measuring, and its table so far.
+ */
+function CursorResults({
+  job,
+  table,
+}: {
+  job: Job
+  table: NonNullable<ReturnType<typeof outputTable>>
+}) {
+  const { map, catalog } = useWorkbench()
+  const title = jobTitle(job)
+  const round = catalog ? roundText(map, catalog, job.manifest?.round) : ""
+  return (
+    <section className="cursor-results" aria-label={`${title} 결과`}>
+      <header className="cursor-results-header">
+        <h2>{title}</h2>
+        {round && <span className="truncate text-muted-foreground">{round}</span>}
+      </header>
+      <div className="cursor-results-table">
+        <OutputTableView table={table} label={`${title} 결과`} />
+      </div>
+    </section>
   )
 }
 

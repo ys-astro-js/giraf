@@ -139,10 +139,16 @@ export function finish(job: Job, keys: string[]) {
 export function advance(job: Job) {
   const interaction = job.interaction
   if (!interaction || interaction.state !== "waiting") return
-  const { queue, answered, pending } = session()
+  const { queue, answered, pending, used } = session()
   if (answered === interaction.id) return
-  // The task went back to the image without asking about the star.
-  if (interaction.kind === "imcur" && pending) set({ pending: null })
+  // Back at the image: a task that never asks about the star (no graphics
+  // accept, daoedit) has taken it; one that does has dropped it.
+  if (interaction.kind === "imcur" && pending)
+    set(
+      job.manifest?.cursor?.graphics?.accept
+        ? { pending: null }
+        : { used: [...used, pending], pending: null }
+    )
   if (!queue.length) return
   const [key, ...rest] = queue
   set({ queue: rest })

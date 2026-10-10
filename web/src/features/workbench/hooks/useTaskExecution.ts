@@ -5,8 +5,7 @@ import {
 } from "@/features/workbench/types"
 import { type ExecutionReference } from "@/lib/execution-status"
 import { useRef, useState } from "react"
-import { api, type Catalog, type Workspace, type Job, type Manifest } from "@/lib/workbench"
-import { daoeditSession, type DaoeditSession } from "@/lib/daoedit"
+import { api, type Catalog, type Workspace, type Job } from "@/lib/workbench"
 import { payloadFor, type TaskMap } from "@/lib/task-map"
 import { valueRequest, type ValueResponse, type ValueScalar } from "@/lib/values"
 import { toggleTray } from "@/features/dock/store"
@@ -41,7 +40,6 @@ export function useTaskExecution({
   const [preparingName, setPreparingName] = useState("")
   const [checking, setChecking] = useState(false)
   const runLock = useRef(false)
-  const [daoedit, setDaoedit] = useState<DaoeditSession | null>(null)
 
   async function start(payload: unknown) {
     setLastExecution(undefined)
@@ -88,11 +86,6 @@ export function useTaskExecution({
         workingDirectory: workspace.folder,
       }
       const p = await api<Plan>("task-validate", payload)
-      const viewer = daoeditSession(payload, p.effective as Manifest)
-      if (viewer) {
-        setDaoedit(viewer)
-        return
-      }
       if (p.filePlan.destructive) {
         setPendingPayload(payload)
         setPlan(p)
@@ -119,7 +112,5 @@ export function useTaskExecution({
     setPlan,
     start,
     pendingPayload,
-    daoedit,
-    setDaoedit,
   }
 }

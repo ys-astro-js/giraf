@@ -24,7 +24,7 @@ import { fitGroups } from "./group-nesting"
 import { evaluateExpression, expressionText } from "./flow-expression"
 import { isValueRole, VALUE_HANDLE } from "./values"
 import { withMeans, withSubject } from "./korean"
-import type { Catalog, Draft, Frame, Preferences, Spec } from "./workbench"
+import { type Catalog, type Draft, type Frame, type JobRound, type Preferences, type Spec } from "./workbench"
 
 export { isContainerId }
 export const FLOW_RUNS = ["foreach"] as const
@@ -819,3 +819,16 @@ export function flowProgress(run: FlowRun | undefined, progress: { index: number
   const { index, total } = progress
   return { text: `${index}/${total}`, label: `${total}회 중 ${index}번째` }
 }
+
+/**
+ * Where a workflow job ran: each region around it, outermost first, as its
+ * heading shows it and which round (`Photometry SUBSET마다 2회 중 1번째`).
+ */
+export function roundText(map: TaskMap, catalog: Catalog, round: JobRound | undefined): string {
+  return (round?.regions ?? []).map((region) => {
+    const task = map.tasks.find((t) => t.id === region.id)
+    const heading = task ? flowHeading(map, catalog, task) : { title: region.label }
+    return [heading.title, heading.statement, `${region.total}회 중 ${region.index}번째`].filter(Boolean).join(" ")
+  }).join(" ")
+}
+
