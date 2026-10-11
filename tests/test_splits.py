@@ -215,6 +215,34 @@ class CommandTests(unittest.TestCase):
         self.assertFalse(differs('3', 3.0))
         self.assertTrue(differs('median', 'average'))
 
+    def test_draft_whose_input_list_is_missing_still_reads_as_its_line(self):
+        """A list the upstream task has not written yet stops validation, not the line."""
+        import tempfile
+        from giraf import server
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = dict(task='images.immatch.imcombine', expressions={'input': '@input.list'},
+                           parameters={'combine': 'median'}, outputs={'output': 'Bias.fits'}, workingDirectory=tmp)
+            with self.assertRaisesRegex(ValueError, '목록 파일이 없습니다'):
+                server.validate_task(payload, lambda id: None, diagnostics=True)
+            group = server.task_commands(dict(node='n', payload=payload, values={}))['groups'][0]
+        line = group['lines'][0]
+        self.assertTrue(line['text'].startswith('imcombine @input.list output=Bias.fits'), line['text'])
+        self.assertIn('combine=median', line['text'])
+        [issue] = line['issues']
+        self.assertEqual((issue['name'], issue['severity'], issue['message']), ('input', 'error', 'input.list: 목록 파일이 없습니다.'))
+        self.assertEqual(line['text'][issue['start']:issue['end']], '@input.list')
+        self.assertNotIn('problem', group)
+
+    def test_spans_cover_each_value_and_pending_inputs_read_as_lists(self):
+        from giraf.commands import command_lines, draft_manifest, marked
+        manifest = draft_manifest(dict(task='images.immatch.imcombine', parameters={'combine': 'median', 'lthreshold': 'x'},
+                                       outputs={'output': 'Bias.fits'}), lambda id: None)
+        [(line, tokens)] = command_lines(manifest, frozenset({'input'}))
+        spans = {t['name']: line[t['start']:t['end']] for t in tokens}
+        self.assertEqual((spans['input'], spans['output'], spans['combine'], spans['lthreshold']), ('@input.list', 'Bias.fits', 'median', 'x'))
+        issue = marked(line, tokens, [('error', 'lthreshold: 유효한 수치와 범위를 확인해 주세요.'), ('warning', '다른 문제')])['issues']
+        self.assertEqual([(i['name'], line[i['start']:i['end']]) for i in issue], [('lthreshold', 'x')])
+
 
 class Runner:
     """Each run makes one product named after its first input."""

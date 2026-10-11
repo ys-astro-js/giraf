@@ -1,18 +1,54 @@
 /**
  * One CL line of the 명령 section, edited in place: Enter or leaving the
  * line reads it with the node's task (POST /api/parse-commands) and sets
- * what changed (lib/command-edit). Esc puts the line back.
+ * what changed (lib/command-edit). Esc puts the line back. Not being edited,
+ * a token with a problem is marked in place, its message the node's
+ * diagnostic (giraf/commands.py marked).
  */
-import { useEffect, useRef, useState } from "react"
+import { Fragment, useEffect, useRef, useState } from "react"
 import { applyCommandEdit } from "@/lib/command-edit"
 import type { ParsedCommands } from "@/lib/command-workflow"
 import type { Instance } from "@/lib/task-map"
 import { api, type Catalog, type Spec } from "@/lib/workbench"
 
+/** A problem of one token of a line: its span and the diagnostic's message. */
+export type CommandIssue = { name: string; start: number; end: number; severity: "error" | "warning"; message: string }
+
 const oneLine = (text: string) => text.replace(/\s*\n\s*/g, " ").replace(/\\\s*$/, "").trim()
 
-export function CommandLine({ line, task, spec, catalog, group, edit }: {
+/** The line as text runs, each marked run carrying the problems of its token. */
+export function markedRuns(line: string, issues: CommandIssue[]) {
+  const runs: { text: string; issues: CommandIssue[] }[] = []
+  const spans = [...issues].filter((i) => i.start < i.end && i.end <= line.length).sort((a, b) => a.start - b.start)
+  let at = 0
+  for (const span of spans) {
+    if (span.start < at) {
+      // The same token again: one mark with every problem it has.
+      const last = runs[runs.length - 1]
+      if (last?.issues.length && span.start >= at - last.text.length) last.issues.push(span)
+      continue
+    }
+    if (span.start > at) runs.push({ text: line.slice(at, span.start), issues: [] })
+    runs.push({ text: line.slice(span.start, span.end), issues: [span] })
+    at = span.end
+  }
+  if (at < line.length) runs.push({ text: line.slice(at), issues: [] })
+  return runs
+}
+
+/** The line with each token that has a problem marked, its messages as the mark's title. */
+export function MarkedText({ line, issues }: { line: string; issues: CommandIssue[] }) {
+  return markedRuns(line, issues).map((run, i) =>
+    run.issues.length ? (
+      <mark key={i} className="command-issue" data-severity={run.issues.some((p) => p.severity === "error") ? "error" : "warning"}
+        title={run.issues.map((p) => p.message).join("\n")}>{run.text}</mark>
+    ) : <Fragment key={i}>{run.text}</Fragment>
+  )
+}
+
+export function CommandLine({ line, issues = [], task, spec, catalog, group, edit }: {
   line: string
+  issues?: CommandIssue[]
   task: Instance
   spec: Spec
   catalog: Catalog
@@ -21,10 +57,12 @@ export function CommandLine({ line, task, spec, catalog, group, edit }: {
   edit: (fn: (task: Instance) => Instance) => void
 }) {
   const [draft, setDraft] = useState(line)
+  const [editing, setEditing] = useState(false)
   const committing = useRef(false)
   const cancelled = useRef(false)
   useEffect(() => setDraft(line), [line])
   async function commit() {
+    setEditing(false)
     const edited = oneLine(draft)
     if (cancelled.current || committing.current || edited === line) {
       cancelled.current = false
@@ -41,6 +79,14 @@ export function CommandLine({ line, task, spec, catalog, group, edit }: {
       committing.current = false
     }
   }
+  if (!editing && issues.length && draft === line)
+    return (
+      <div className="font-mono command-line command-edit command-marked" role="textbox" tabIndex={0}
+        aria-label={`${task.label} 명령`} aria-readonly={false}
+        onFocus={() => setEditing(true)}>
+        <MarkedText line={line} issues={issues} />
+      </div>
+    )
   return (
     <textarea
       className="font-mono command-line command-edit"
@@ -48,8 +94,10 @@ export function CommandLine({ line, task, spec, catalog, group, edit }: {
       spellCheck={false}
       autoCapitalize="off"
       autoCorrect="off"
+      autoFocus={editing}
       rows={1}
       value={draft}
+      onFocus={() => setEditing(true)}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={commit}
       onKeyDown={(event) => {

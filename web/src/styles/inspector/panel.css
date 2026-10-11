@@ -392,3 +392,7 @@
 .commands .command-edit { grid-column: 1 / -1; field-sizing: content; width: 100%; min-height: 0; margin: -2px -4px; padding: 2px 4px; resize: none; border: 0; border-radius: 6px; background: transparent; color: inherit; outline: none; }
 .commands .command-edit:hover { background: color-mix(in oklch, var(--input) 30%, transparent); }
 .commands .command-edit:focus-visible { background: color-mix(in oklch, var(--input) 50%, transparent); box-shadow: 0 0 0 2px var(--ring); }
+/* Not being edited, a token with a problem is marked in place; the message is the node's diagnostic. */
+.commands .command-marked { display: block; white-space: pre-wrap; cursor: text; }
+.command-issue { background: none; color: inherit; text-decoration: underline wavy var(--destructive); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.command-issue[data-severity="warning"] { text-decoration-color: var(--warning); }

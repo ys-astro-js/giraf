@@ -416,8 +416,9 @@ def resolve_values(payload):
 def task_commands(request):
     """The CL command each group of a task runs (giraf/splits.py), built as a
     workflow run builds them: its groups, paired inputs, values and formulas,
-    then the validated plan (giraf/commands.py)."""
-    from .commands import command_lines
+    then the validated plan (giraf/commands.py). Each line carries the
+    problems of its tokens for marking; the messages are the diagnostics'."""
+    from .commands import command_lines, draft_manifest, marked
     from .splits import Files, SplitError, apply_formulas, group_runs, without_fields
     from .task_catalog import TASKS
     from .values import apply_parameters
@@ -432,10 +433,12 @@ def task_commands(request):
     def resolve(id):
         path = get_file(id)
         return register(path, registry[id].get('label'), registry[id].get('job'), registry[id].get('asset'))
+    pending = frozenset(request.get('pending') or ())
     try:
         runs = group_runs(payload, files, TASKS.get(payload.get('task')))
-    except SplitError as exc:
-        return dict(groups=[], problem=str(exc))
+    except SplitError:
+        # The split's problems are the diagnostics' (giraf/workflow_diagnostics.py); the task still reads as one line.
+        runs = [(None, payload)]
     result = []
     for group, each in runs:
         entry = dict(id=group['id'], name=group['name'], files=group['files']) if group else dict(id='', name='', files=[])
@@ -443,11 +446,24 @@ def task_commands(request):
             scoped = graph.scoped(group_scope({}, values['groupRuns'], group), group['id']) if group else graph
             incoming = [link for link in scoped.links if link['target'] == node]
             apply_parameters(each, incoming, scoped.parameters(node))
-            manifest = validate_task(without_fields(apply_formulas(each)), resolve, diagnostics=True,
-                                     pending_roles=frozenset(request.get('pending') or ()))
-            entry['commands'] = command_lines(manifest)
+            each = without_fields(apply_formulas(each))
+        except (ValueError, KeyError, TypeError, OSError):
+            each = without_fields(each)
+        # A problem stops validation, not the line: it reads as the draft holds it,
+        # the problem marked on its token and listed by the diagnostics alone.
+        try:
+            manifest = validate_task(each, resolve, diagnostics=True, pending_roles=pending)
+            issues = [('warning', w) for w in manifest.get('warnings', [])]
         except (ValueError, KeyError, TypeError, OSError) as exc:
-            entry['problem'] = str(exc)
+            issues = [('error', str(exc))]
+            try:
+                manifest = draft_manifest(each, resolve)
+            except (ValueError, KeyError, TypeError, OSError):
+                manifest = None
+        try:
+            entry['lines'] = [marked(line, tokens, issues) for line, tokens in command_lines(manifest, pending)] if manifest else []
+        except (ValueError, KeyError, TypeError, OSError):
+            entry['lines'] = []
         result.append(entry)
     return dict(groups=result)
 
