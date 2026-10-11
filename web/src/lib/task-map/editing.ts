@@ -121,7 +121,8 @@ export function restoreRun(
 
 export function migrateMap(prefs: Preferences, catalog: Catalog): TaskMap {
   if (prefs.taskMap?.version === 1 || prefs.taskMap?.version === 2) {
-    const map = clone(prefs.taskMap)
+    // Older loop regions first, while their settings are still on the drafts makeDraft trims.
+    const map = migrateRegions(clone(prefs.taskMap), catalog)
     map.view = migrateHelperView(map.view)
     map.connections = map.connections.filter(
       (c) => c.source.kind !== "files" || c.source.ids.length > 0
@@ -145,7 +146,7 @@ export function migrateMap(prefs: Preferences, catalog: Catalog): TaskMap {
           }
         : t
     })
-    return migrateRegions(map, catalog)
+    return map
   }
   let m = emptyMap()
   for (const spec of catalog.tasks)

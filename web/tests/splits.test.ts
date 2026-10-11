@@ -146,20 +146,18 @@ test("a region around one task becomes its split; others are unwrapped with a wa
   expect(migrated.subflows).toEqual([])
   expect(migrated.connections.every((c) => !("flow" in c))).toBe(true)
   expect(splitIssues(migrated)).toEqual([])
-  // Two tasks, or an expression, cannot become one split: the tasks stay and warn.
-  const two: TaskMap = {
-    ...map,
-    tasks: [...map.tasks, task("other", { subflowId: "r" })],
-  }
+  // A task the region's files do not reach, an expression or N번 cannot be said: the tasks stay and warn.
+  const two: TaskMap = { ...map, tasks: [...map.tasks, task("other", { subflowId: "r" })] }
   const unwrapped = migrateRegions(two, catalog)
-  expect(unwrapped.tasks.filter((t) => t.migrated).map((t) => t.id)).toEqual(["dc", "other"])
-  expect(unwrapped.tasks.find((t) => t.id === "dc")!.draft.split).toBeUndefined()
-  expect(splitIssues(unwrapped).map((i) => i.nodeId)).toEqual(["dc", "other"])
+  expect(unwrapped.tasks.filter((t) => t.migrated).map((t) => t.id)).toEqual(["other"])
+  expect(splitIssues(unwrapped).map((i) => i.nodeId)).toEqual(["other"])
   // Setting the split settles the warning.
-  expect(setSplit(unwrapped.tasks.find((t) => t.id === "dc")!, { input: "input", by: [{ key: "EXPTIME" }] }).migrated).toBeUndefined()
-  const expression = migrateRegions({ ...map, tasks: map.tasks.map((t) => (t.id === "r" ? region("r", { criteria: [{ expression: "EXPTIME > 10", name: "long" }], split: { taskId: "darks" } }) : t)) }, catalog)
-  expect(expression.tasks.find((t) => t.id === "dc")!.migrated).toBe(true)
-  // Nested regions migrate inside out.
+  expect(setSplit(unwrapped.tasks.find((t) => t.id === "other")!, { input: "input", by: [{ key: "EXPTIME" }] }).migrated).toBeUndefined()
+  for (const criteria of [[{ expression: "EXPTIME > 10", name: "long" }], [{ times: 3 }]]) {
+    const odd = migrateRegions({ ...map, tasks: map.tasks.map((t) => (t.id === "r" ? region("r", { criteria, split: { taskId: "darks" } }) : t)) }, catalog)
+    expect(odd.tasks.find((t) => t.id === "dc")!.migrated).toBe(true)
+  }
+  // Nested regions on one source split by the outer criteria, then the inner.
   const nested: TaskMap = {
     ...map,
     tasks: [task("darks"), task("zero"), { ...dc, subflowId: "inner" }, region("inner", { criteria: [{ count: 5 }], split: { taskId: "darks" } }, "outer"),
@@ -168,6 +166,6 @@ test("a region around one task becomes its split; others are unwrapped with a wa
   }
   const flat = migrateRegions(nested, catalog)
   expect(flat.tasks.map((t) => [t.id, t.draft.split?.by, t.migrated])).toEqual([
-    ["darks", undefined, undefined], ["zero", undefined, undefined], ["dc", [{ per: 5 }], true],
+    ["darks", undefined, undefined], ["zero", undefined, undefined], ["dc", [{ key: "EXPTIME" }, { per: 5 }], undefined],
   ])
 })
