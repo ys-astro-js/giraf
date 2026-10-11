@@ -91,6 +91,33 @@
 .library-task-flag {
   margin-right: 8px;
 }
+/* An IRAF task's row: the task, and its star while hovered or focused. */
+.library-task-row {
+  display: flex;
+  align-items: center;
+  border-radius: 10px;
+}
+.library-task-row:hover,
+.library-task-row:has(:focus-visible) {
+  background: var(--muted);
+}
+.library-task-row > .library-option {
+  flex: 1;
+  min-width: 0;
+}
+.library-favorite {
+  visibility: hidden;
+  flex-shrink: 0;
+  margin-inline-end: 2px;
+  color: var(--muted-foreground);
+}
+.library-favorite[data-favorite] {
+  color: var(--foreground);
+}
+.library-task-row:hover .library-favorite,
+.library-task-row:has(:focus-visible) .library-favorite {
+  visibility: visible;
+}
 .library-chevron {
   transition: rotate var(--motion-quick) ease-out;
 }

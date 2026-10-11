@@ -1,5 +1,6 @@
 import { useRef, useState, type ReactNode } from "react"
-import { ChevronLeft, ChevronRight, Folder, Plus, Terminal } from "lucide-react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { ChevronLeft, ChevronRight, Folder, Plus, Star, Terminal } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Collapsible,
@@ -16,8 +17,10 @@ import { NodeIcon } from "@/components/node-icon"
 import { SearchField } from "@/components/search-field"
 import { ToolbarButton, ToolbarCluster, ToolbarGroup } from "@/components/toolbar"
 import { nodeTiles } from "@/lib/node-chunks"
+import { apiQueryOptions } from "@/lib/queries"
+import { favoriteName, favoriteTasks, toggleFavorite } from "@/lib/task-favorites"
 import { taskPackageTree, taskRowText, type TaskPackage } from "@/lib/task-tree"
-import { isGirafNode, type Spec } from "@/lib/workbench"
+import { api, isGirafNode, type Home, type Spec } from "@/lib/workbench"
 import { useWorkbench } from "@/features/workbench/context"
 import { CommandEntry } from "./CommandEntry"
 import { ListSkeleton, NoFiles, RefreshButton } from "./shared"
@@ -54,6 +57,35 @@ function TaskOption({ task, onAdd, showPackage = true }: { task: Spec; onAdd: ()
         )}
       </span>
     </button>
+  )
+}
+
+/** An IRAF task's row with its star, shown while the row is hovered or focused. */
+function FavoriteTaskOption({
+  task,
+  favorite,
+  onAdd,
+  onToggle,
+  showPackage,
+}: {
+  task: Spec
+  favorite: boolean
+  onAdd: () => void
+  onToggle: () => void
+  showPackage?: boolean
+}) {
+  return (
+    <div className="library-task-row">
+      <TaskOption task={task} showPackage={showPackage} onAdd={onAdd} />
+      <ToolbarButton
+        label={favorite ? "즐겨찾기에서 빼기" : "즐겨찾기에 추가"}
+        data-favorite={favorite || undefined}
+        className="library-favorite size-7"
+        onClick={onToggle}
+      >
+        <Star fill={favorite ? "currentColor" : "none"} />
+      </ToolbarButton>
+    </div>
   )
 }
 
@@ -101,6 +133,31 @@ export function AddTaskButton() {
     : []
   const found = [...foundNodes, ...foundTasks]
   const add = (task: Spec) => w.add(task.name)
+  const queryClient = useQueryClient()
+  const home = apiQueryOptions<Home>("home")
+  const favorites = useQuery(home).data?.favorites ?? []
+  async function toggle(task: Spec) {
+    const before = queryClient.getQueryData(home.queryKey)
+    const next = toggleFavorite(before?.favorites ?? [], favoriteName(task))
+    queryClient.setQueryData(home.queryKey, (data) => data && { ...data, favorites: next })
+    try {
+      queryClient.setQueryData(home.queryKey, await api<Home>("home", { favorites: next }))
+    } catch (e) {
+      queryClient.setQueryData(home.queryKey, before)
+      w.setError((e as Error).message)
+    }
+  }
+  const option = (task: Spec, showPackage = true) => (
+    <FavoriteTaskOption
+      key={task.name}
+      task={task}
+      favorite={favorites.includes(favoriteName(task))}
+      showPackage={showPackage}
+      onAdd={() => add(task)}
+      onToggle={() => void toggle(task)}
+    />
+  )
+  const starred = favoriteTasks(favorites, irafTasks)
 
   function branch(node: TaskPackage) {
     return (
@@ -121,9 +178,7 @@ export function AddTaskButton() {
         </CollapsibleTrigger>
         <CollapsibleContent className="library-branch">
           {node.children.map(branch)}
-          {node.tasks.map((task) => (
-            <TaskOption key={task.name} task={task} showPackage={false} onAdd={() => add(task)} />
-          ))}
+          {node.tasks.map((task) => option(task, false))}
         </CollapsibleContent>
       </Collapsible>
     )
@@ -219,13 +274,7 @@ export function AddTaskButton() {
                       ))}
                     </div>
                   )}
-                  {foundTasks.map((task) => (
-                    <TaskOption
-                      key={task.name}
-                      task={task}
-                      onAdd={() => add(task)}
-                    />
-                  ))}
+                  {foundTasks.map((task) => option(task))}
                 </>
               ) : (
                 <NoFiles>검색 결과가 없습니다.</NoFiles>
@@ -249,6 +298,11 @@ export function AddTaskButton() {
                     onClick={() => setCommands(true)}
                   />
                 </div>
+                {!!starred.length && (
+                  <div className="library-nodes">
+                    {starred.map((task) => option(task))}
+                  </div>
+                )}
                 {taskPackageTree(irafTasks).map(branch)}
               </>
             )}

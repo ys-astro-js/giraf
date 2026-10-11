@@ -1,4 +1,5 @@
 import asyncio
+import json
 import shutil
 import tempfile
 import unittest
@@ -95,6 +96,13 @@ class ApiRouteTests(unittest.TestCase):
                 self.assertEqual(asyncio.run(request('POST', 'home', {'startup': 'resume'}))[1]['startup'], 'resume')
                 self.assertEqual(asyncio.run(request('POST', 'home', {'startup': 'other'}))[0], 400)
                 self.assertEqual(state['startup'], 'resume')
+                self.assertEqual(data['favorites'], [])
+                favorites = ['images.imutil.imarith', 'noao.imred.ccdred.ccdproc']
+                code, data = asyncio.run(request('POST', 'home', {'favorites': favorites}))
+                self.assertEqual((code, data['favorites'], data['startup']), (200, favorites, 'resume'))
+                self.assertEqual(asyncio.run(request('POST', 'home', {'favorites': 'ccdproc'}))[0], 400)
+                self.assertEqual(asyncio.run(request('POST', 'home', {}))[0], 400)
+                self.assertEqual(json.loads((root / 'state.json').read_text())['favorites'], favorites)
 
     def test_origin_guard_still_blocks_mutation(self):
         with patch.object(server.workflow_manager, 'cancel') as cancel:

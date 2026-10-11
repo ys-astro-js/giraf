@@ -539,6 +539,7 @@ def home_state():
         recent = list(workspace.get('recent', []))
         selected = workspace.get('workflow_documents', {})
         startup = workspace.get('startup', 'home')
+        favorites = list(workspace.get('favorites', []))
         names = {row['path']: ((selected.get(row['path']) or {}).get('_document') or {}).get('name') for row in recent}
     rows = []
     for row in recent:
@@ -550,16 +551,26 @@ def home_state():
             parent = str(Path('~') / path.parent.relative_to(HOME))
         rows.append(dict(path=str(path), name=path.name or str(path), parent=parent, opened=row['opened'], workflow=names[row['path']]))
     engines = dict(cl=bool(shutil.which('irafcl') or shutil.which('cl')), pyraf=importlib.util.find_spec('pyraf') is not None)
-    return dict(startup=startup, recent=rows, engines=engines)
+    return dict(startup=startup, favorites=favorites, recent=rows, engines=engines)
 
 
 async def home_endpoint(request: Request):
     if request.method == 'POST':
         payload = await request_payload(request)
-        if payload.get('startup') not in STARTUP:
+        if 'startup' in payload and payload['startup'] not in STARTUP:
+            raise ValueError('시작 화면 설정을 확인해 주세요.')
+        # Favorite tasks by full catalog name, kept for the user across folders.
+        favorites = payload.get('favorites', [])
+        if not isinstance(favorites, list) or not all(isinstance(name, str) for name in favorites):
+            raise ValueError('즐겨찾기를 확인해 주세요.')
+        if not {'startup', 'favorites'} & payload.keys():
             raise ValueError('시작 화면 설정을 확인해 주세요.')
         with lock:
-            workspace['startup'] = payload['startup']; save()
+            if 'startup' in payload:
+                workspace['startup'] = payload['startup']
+            if 'favorites' in payload:
+                workspace['favorites'] = list(dict.fromkeys(favorites))
+            save()
     return JSONResponse(await run_in_threadpool(home_state))
 
 
