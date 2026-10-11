@@ -44,7 +44,7 @@ export function InspectorFileSource({
   compact: boolean
   limit: number
   setExpanded: React.Dispatch<React.SetStateAction<Record<string, number>>>
-  summary: string
+  summary: React.ReactNode
   expression: string
   links: Connection[]
   pick: (

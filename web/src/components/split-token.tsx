@@ -4,13 +4,13 @@
  * `Split File`, `Link EXPTIME`. Icons use the node's file icon metrics
  * (.node-input-file); words and explanations stay in the inspector.
  */
-import { Crosshair, File, Files, Filter, Link, Merge, Sigma, Split, Tag } from "lucide-react"
+import { Crosshair, File, Files, Filter, Link, Sigma, Split, Tag } from "lucide-react"
 import type { PairRule, SelectRule, SplitPart } from "@/lib/splits"
 
-const ICONS = { select: Filter, split: Split, file: File, files: Files, link: Link, merge: Merge, formula: Sigma, measure: Crosshair, header: Tag }
+const ICONS = { select: Filter, split: Split, file: File, files: Files, link: Link, formula: Sigma, measure: Crosshair, header: Tag }
 export type TokenIcon = keyof typeof ICONS
 const NAMES: Record<TokenIcon, string> = {
-  select: "고르기", split: "나누기", file: "파일", files: "파일", link: "짝 맞추기", merge: "모으기", formula: "식", measure: "측정값", header: "헤더",
+  select: "고르기", split: "나누기", file: "파일", files: "파일", link: "짝 맞추기", formula: "식", measure: "측정값", header: "헤더",
 }
 
 export function TokenIcon({ icon }: { icon: TokenIcon }) {

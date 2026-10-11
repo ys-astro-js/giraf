@@ -2,6 +2,7 @@ import { assigned } from "@/lib/task-map/inputs"
 import { InspectorAlignmentSource } from "./AlignmentSource"
 import { InspectorFileSource } from "./FileSource"
 import { CursorInput } from "@/components/cursor-input"
+import { File } from "lucide-react"
 
 import { isGirafNode, type Catalog, type Spec, type Frame, type Slot } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
@@ -77,9 +78,9 @@ export function InspectorInputSlot({
     (sources.length
       ? [...new Set(sources)].join(", ") + (fromFiles ? "" : " 출력")
       : ids.length === 1
-        ? rows.find((r) => r.id === ids[0])?.label || "파일 1개"
+        ? rows.find((r) => r.id === ids[0])?.label || <><File className="node-input-file" aria-hidden="true" />1</>
         : ids.length
-          ? `파일 ${ids.length}개`
+          ? <><File className="node-input-file" aria-hidden="true" />{ids.length}</>
           : "선택…")
   const replace = (next: string[]) => {
     onInputSource?.(s.name, { kind: "files", ids: next, label: s.label })

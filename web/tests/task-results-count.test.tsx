@@ -26,6 +26,6 @@ test("the results heading counts what the node's output counts, not logs", () =>
       <TaskResults map={map} task={task} spec={spec} />
     </QueryClientProvider>
   )
-  expect(html).toContain("결과 2개")
+  expect(html).toContain('aria-label="결과 2개"')
   expect(html).toContain("imcombine-results.txt")
 })

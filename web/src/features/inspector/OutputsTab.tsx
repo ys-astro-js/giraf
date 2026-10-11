@@ -6,7 +6,7 @@ import { Field, FieldLabel, FieldDescription } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Choice, ParameterHelp } from "@/components/workbench-controls"
 import { Button } from "@/components/ui/button"
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, File } from "lucide-react"
 import { useWorkbench } from "@/features/workbench/context"
 import { OutputPortEditor } from "@/components/output-port-editor"
 import { TaskResults } from "@/components/task-results"
@@ -168,7 +168,16 @@ export function InspectorOutputs({
                   {planned.map((p, i) => (
                     <TableRow key={i}>
                       {grouped && <TableCell>{p.group}</TableCell>}
-                      <TableCell>{p.input}</TableCell>
+                      <TableCell>
+                        {p.input}
+                        {p.count !== undefined && (
+                          <>
+                            {p.input && " "}
+                            <File className="node-input-file" aria-hidden="true" />
+                            {p.count}
+                          </>
+                        )}
+                      </TableCell>
                       <TableCell>{p.output}</TableCell>
                     </TableRow>
                   ))}

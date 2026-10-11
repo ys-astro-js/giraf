@@ -66,7 +66,7 @@ function productName(name:string,kind:string) {
   const base=outputBasename(name)
   return base&&kind==='image'&&!outputExtension(base)?base+'.fits':base
 }
-export function plannedOutputs(task:Spec,draft:Draft,rows:Frame[],_mapping:Values={}):{input:string;output:string}[]{
+export function plannedOutputs(task:Spec,draft:Draft,rows:Frame[],_mapping:Values={}):{input:string;output:string;count?:number}[]{
   // Pass and save components keep the files' own names; there is nothing to preview.
   if(task.run)return []
   if(task.adapter==='generic'){
@@ -104,13 +104,13 @@ export function plannedOutputs(task:Spec,draft:Draft,rows:Frame[],_mapping:Value
   }
   if(draft.parameters.subsets==='yes')return [...new Set(selected.map(f=>f.filter||''))].map(filter=>{
     const base=outputBasename(name),ext=outputExtension(base)
-    return {input:`${filter||'Subset 없음'} 영상 ${selected.filter(f=>(f.filter||'')===filter).length}개`,output:(ext?base.slice(0,-ext.length):base)+filter+(ext||'.fits')}
+    return {input:filter||'Subset 없음',count:selected.filter(f=>(f.filter||'')===filter).length,output:(ext?base.slice(0,-ext.length):base)+filter+(ext||'.fits')}
   })
   if(draft.parameters.project==='yes'&&ids.length>1){
     const base=outputBasename(name),ext=outputExtension(base),stem=ext?base.slice(0,-ext.length):base
     return selected.map((row,i)=>({input:row.label,output:stem+`_${i+1}`+(ext||'.fits')}))
   }
-  return [{input:`${ids.length}개`,output:productName(name,task.kind)}]
+  return [{input:'',count:ids.length,output:productName(name,task.kind)}]
 }
 export async function api<T>(action:string,payload?:unknown,signal?:AbortSignal):Promise<T>{
   const nodeId = payload && typeof payload === "object" && "instanceId" in payload && typeof payload.instanceId === "string" ? payload.instanceId : undefined

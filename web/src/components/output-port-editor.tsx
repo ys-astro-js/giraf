@@ -5,7 +5,7 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "./ui/accordion"
-import { Plus, Trash2, ChevronDown } from "lucide-react"
+import { Plus, Trash2, ChevronDown, File } from "lucide-react"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Textarea } from "./ui/textarea"
@@ -151,6 +151,7 @@ function OutputFileSelector({
   )
   const selected = available.filter((p) => matchesFiles(p, port.files))
   const patterns = port.files.map((p) => p.trim()).filter(Boolean)
+  const several = patterns.length > 1 && !patterns.some((p) => /[?*]/.test(p))
   const summary =
     patterns.length === 0
       ? "선택 없음"
@@ -176,7 +177,17 @@ function OutputFileSelector({
         title={label}
         onClick={() => setExpanded(!expanded)}
       >
-        <span className="truncate">{label}</span>
+        <span className="truncate">
+          {several ? (
+            <>
+              {port.outputRole && `${port.outputRole}: `}
+              <File className="node-input-file" aria-hidden="true" />
+              {patterns.length}
+            </>
+          ) : (
+            label
+          )}
+        </span>
         <ChevronDown />
       </Button>
       {expanded && (

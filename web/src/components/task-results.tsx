@@ -1,7 +1,7 @@
 import { RevealFile, ViewerToolButton } from "@/features/viewer/controls"
 import { matchesFileName } from "@/lib/file-library"
 import { useEffect, useState, type ReactNode } from "react"
-import { Check, Maximize2, X } from "lucide-react"
+import { Check, File, Maximize2, X } from "lucide-react"
 import {
   Dialog,
   DialogClose,
@@ -175,8 +175,11 @@ export function TaskResults({
     <section className="task-results" aria-label={`${task.label} 결과 패널`}>
       <header className="result-heading">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="flex items-center gap-2">
-            {`결과 ${count}개`}
+          <h3 className="flex items-center gap-2" aria-label={`결과 ${count}개`}>
+            <span>
+              <File className="node-input-file" aria-hidden="true" />
+              {count}
+            </span>
           </h3>
           <span className="text-muted-foreground">
             {state ? stateLabel(state) : "실행 전"}

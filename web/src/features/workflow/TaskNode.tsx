@@ -1,7 +1,7 @@
 import { customOutput, customPortHandle } from "@/lib/output-ports"
 import { ccdTasks, calibrationLabels } from "@/lib/calibration"
 import { acceptsSource, isGirafNode, taskDisplayName } from "@/lib/workbench"
-import { memo, useContext, useEffect, useRef, useState } from "react"
+import { Fragment, memo, useContext, useEffect, useRef, useState } from "react"
 import {
   Position,
   useConnection,
@@ -55,10 +55,10 @@ import { WorkflowContext } from "./context"
 import { Handle } from "./Handle"
 import { StatusIcon } from "./StatusIcon"
 
-const count = (source: Source) =>
-  source.kind === "result" ? `${source.ids.length}개` : ""
 /** A file count as split rows show it: the file icon and a bare number. */
 const files = (n: number) => <><TokenIcon icon="file" />{n}</>
+const count = (source: Source) =>
+  source.kind === "result" ? files(source.ids.length) : ""
 
 const activate = (e: React.KeyboardEvent<HTMLElement>) => {
   if (e.key === "Enter" || e.key === " ") {
@@ -355,7 +355,7 @@ export const TaskNode = memo(function TaskNode({
     </Handle>
   )
 
-  // Every group's results gather on one output: its first group's name, then the merge icon.
+  // Every group's results gather on one output: its first group's name, then the file count.
   const gathered = !!split && (groups?.length ?? 0) > 1
   const outputRow = (
     handleId: string,
@@ -373,8 +373,7 @@ export const TaskNode = memo(function TaskNode({
         </span>
         {gathered ? (
           <span className="node-output-count split-value">
-            <TokenIcon icon="merge" />
-            {result.kind === "result" ? result.ids.length : first ? groups!.length : ""}
+            {result.kind === "result" ? count(result) : first ? files(groups!.length) : ""}
           </span>
         ) : (
           <span className="node-output-count">{count(result)}</span>
@@ -513,18 +512,20 @@ export const TaskNode = memo(function TaskNode({
                   task.expressions[slot.role] ||
                   (links.length
                     ? links
-                        .map((c) =>
-                          c.source.kind === "files"
-                            ? `파일 ${c.source.ids.length}개`
-                            : map.tasks.find((t) => "taskId" in c.source && t.id === c.source.taskId)
-                                ?.label ?? "실행 결과"
-                        )
-                        .join(", ")
+                        .map((c, i) => (
+                          <Fragment key={i}>
+                            {i > 0 && ", "}
+                            {c.source.kind === "files"
+                              ? files(c.source.ids.length)
+                              : map.tasks.find((t) => "taskId" in c.source && t.id === c.source.taskId)
+                                  ?.label ?? "실행 결과"}
+                          </Fragment>
+                        ))
                     : a.ids.length === 1
                       ? rows.find((f) => f.id === a.ids[0])?.label ||
-                        "파일 1개"
+                        files(1)
                       : a.ids.length
-                        ? `파일 ${a.ids.length}개`
+                        ? files(a.ids.length)
                         : "미지정")
                 const enabled = roleActive(task, slot.role, catalog)
                 const fromFiles = links.some((c) => {
@@ -543,7 +544,7 @@ export const TaskNode = memo(function TaskNode({
                   ? calibrationLabels[slot.role] || slot.role
                   : slot.role
                 const about = slot.label || slot.name
-                const shown = pending ? `${summary} 출력 대기` : summary
+                const shown = pending ? <>{summary} 출력 대기</> : summary
                 // The split input names how it splits; another input of a split task how it pairs.
                 const splitting = split?.input === slot.role
                 const rule = split && !splitting ? task.draft.pairing?.[slot.role] : undefined
