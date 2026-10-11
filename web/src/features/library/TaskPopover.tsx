@@ -19,18 +19,13 @@ import { ToolbarButton, ToolbarCluster, ToolbarGroup } from "@/components/toolba
 import { nodeTiles } from "@/lib/node-chunks"
 import { apiQueryOptions } from "@/lib/queries"
 import { favoriteName, favoriteTasks, toggleFavorite } from "@/lib/task-favorites"
-import { taskPackageTree, taskRowText, type TaskPackage } from "@/lib/task-tree"
+import { searchTasks, taskPackageTree, taskRowText, type TaskPackage } from "@/lib/task-tree"
 import { api, isGirafNode, type Home, type Spec } from "@/lib/workbench"
 import { useWorkbench } from "@/features/workbench/context"
 import { CommandEntry } from "./CommandEntry"
 import { ListSkeleton, NoFiles, RefreshButton } from "./shared"
 import { useRefresh } from "./useRefresh"
 import "@/styles/library/popovers.css"
-
-const matches = (task: Spec, query: string) =>
-  `${task.name} ${task.taskName ?? ""} ${task.title} ${task.package}`
-    .toLowerCase()
-    .includes(query.trim().toLowerCase())
 
 /** One task to add: its name and package, and what it does. */
 function TaskOption({ task, onAdd, showPackage = true }: { task: Spec; onAdd: () => void; showPackage?: boolean }) {
@@ -125,13 +120,8 @@ export function AddTaskButton() {
   // The 값 node's other 가져오기 runs have no tile but are found by search.
   const nodes = tasks.filter((task) => isGirafNode(task) && task.run !== "pset")
   const irafTasks = tasks.filter((task) => !isGirafNode(task))
-  const foundNodes = query.trim()
-    ? nodes.filter((task) => matches(task, query))
-    : []
-  const foundTasks = query.trim()
-    ? irafTasks.filter((task) => matches(task, query))
-    : []
-  const found = [...foundNodes, ...foundTasks]
+  // GIRAF's nodes and IRAF's tasks in one ranking, so a name match comes first.
+  const found = searchTasks([...nodes, ...irafTasks], query)
   const add = (task: Spec) => w.add(task.name)
   const queryClient = useQueryClient()
   const home = apiQueryOptions<Home>("home")
@@ -262,20 +252,13 @@ export function AddTaskButton() {
               <ListSkeleton />
             ) : query.trim() ? (
               found.length ? (
-                <>
-                  {!!foundNodes.length && (
-                    <div className="library-nodes">
-                      {foundNodes.map((task) => (
-                        <TaskOption
-                          key={task.name}
-                          task={task}
-                          onAdd={() => add(task)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                  {foundTasks.map((task) => option(task))}
-                </>
+                found.map((task) =>
+                  isGirafNode(task) ? (
+                    <TaskOption key={task.name} task={task} onAdd={() => add(task)} />
+                  ) : (
+                    option(task)
+                  )
+                )
               ) : (
                 <NoFiles>검색 결과가 없습니다.</NoFiles>
               )

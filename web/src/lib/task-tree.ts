@@ -48,3 +48,33 @@ export function taskRowText(task: Spec): { name: string; package?: string; descr
     .find((text) => text && text.toLowerCase() !== name.toLowerCase())
   return { name, ...(isGirafNode(task) ? {} : { package: task.package }), ...(description ? { description } : {}) }
 }
+
+/**
+ * How well a task matches a search, best first: its name is the query,
+ * starts with it, or contains it; then its package; then what it does.
+ * Undefined when it does not match at all.
+ */
+function searchTier(task: Spec, query: string): number | undefined {
+  const { name, package: path } = taskRowText(task)
+  const text = (value?: string) => value?.toLowerCase() ?? ''
+  const tiers = [
+    text(name) === query,
+    text(name).startsWith(query),
+    text(name).includes(query) || text(task.taskName).includes(query),
+    text(`${path ?? task.package}.${name}`).includes(query),
+    [task.description, task.title].some((value) => text(value).includes(query)),
+  ]
+  const tier = tiers.indexOf(true)
+  return tier < 0 ? undefined : tier
+}
+
+/** The tasks a search finds, the name weighing most; tasks of one tier keep their order. */
+export function searchTasks(tasks: Spec[], query: string): Spec[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+  return tasks
+    .map((task) => ({ task, tier: searchTier(task, q) }))
+    .filter((row): row is { task: Spec; tier: number } => row.tier !== undefined)
+    .sort((a, b) => a.tier - b.tier)
+    .map((row) => row.task)
+}
