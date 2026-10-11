@@ -18,9 +18,11 @@ import { Button } from "@/components/ui/button"
 import { SearchField } from "@/components/search-field"
 import { ImageViewer } from "@/features/viewer/ImageViewer"
 import { Blank, Failure } from "@/components/workbench-controls"
-import { api, type Frame, type Job } from "@/lib/workbench"
+import { api, type Frame, type Job, type Spec } from "@/lib/workbench"
 import { latestRuns, runState, stateLabel, type TaskMap, type Instance } from "@/lib/task-map"
 import { taskGroups } from "@/lib/splits"
+import { nodeOutput } from "@/lib/node-interaction"
+import { primaryOutputRole } from "@/lib/output-ports"
 
 function ResultPreview({
   frame,
@@ -123,11 +125,13 @@ function ResultPreview({
 export function TaskResults({
   map,
   task,
+  spec,
   job,
   rows = [],
 }: {
   map: TaskMap
   task: Instance
+  spec?: Spec
   job?: Job
   rows?: Frame[]
 }) {
@@ -142,6 +146,9 @@ export function TaskResults({
   const run = runs.at(-1)
   const state = recorded.length ? runState(map, task.id) : run?.state
   const products = runs.flatMap((r) => r.products || [])
+  // The count the node shows: logs and other kinds of files don't count.
+  const output = nodeOutput(map, task.id, primaryOutputRole(spec, task))
+  const count = output.kind === "result" ? output.ids.length : products.length
   const names = new Map((taskGroups(map, task, rows).groups ?? []).map((g) => [g.id, g.name]))
   const groupName = (group = "") => names.get(group) ?? group
   const [selection, setSelection] = useState(""),
@@ -169,7 +176,7 @@ export function TaskResults({
       <header className="result-heading">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="flex items-center gap-2">
-            {`결과 ${products.length}개`}
+            {`결과 ${count}개`}
           </h3>
           <span className="text-muted-foreground">
             {state ? stateLabel(state) : "실행 전"}

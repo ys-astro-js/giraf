@@ -147,6 +147,7 @@ export function InspectorOutputs({
         key={task.id + ":" + latestRuns(map, task.id).map((r) => r.id).join(",")}
         map={map}
         task={task}
+        spec={spec}
         job={job}
         rows={rows}
       />
