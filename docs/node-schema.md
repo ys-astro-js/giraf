@@ -210,6 +210,8 @@ pset 노드의 값 출력은 노드에 저장한 값을 파라미터의 IRAF 타
 
 **명령.** `POST /api/task-commands {node, payload, values, pending}`은 실행과 같은 함수로 그룹을 나누고 짝을 맞추고 값을 넣은 뒤 검증한 계획에서 그룹마다 CL 명령 한 줄을 만듭니다(`giraf/commands.py`). 인스펙터의 `명령` 구역이 이것을 보여 줍니다. 여러 파일의 입력은 `@<입력>.list`, 출력은 실행이 붙일 이름이며, IRAF 기본값과 다른 파라미터만 적습니다.
 
+**명령 고치기.** `명령`의 각 줄은 그 자리에서 고칩니다. Enter나 줄을 벗어나면 서버가 원래 줄과 고친 줄을 노드의 작업으로 읽고(`POST /api/parse-commands {text, task, resolve: false}`), 달라진 파라미터만 노드에 넣습니다. 줄에서 뺀 파라미터는 IRAF 기본값이 됩니다(줄은 기본값과 다른 것만 적으므로). 나눈 작업은 그룹마다 줄이 있고, 고친 그룹의 값만 `groupValues[<파라미터>][<그룹 id>]`가 됩니다. 모든 그룹이 같은 값이 되면 공통 값으로 바꾸고 그룹 값을 지웁니다. 입력 이름이 연결된 입력과 다르면 연결을 바꾸지 않고 경고합니다. 출력 이름은 나누지 않은 작업의 출력 하나(`single`, `combine`)만 바꾸고, 나머지는 출력 탭에서 바꾸라고 경고합니다. 읽지 못한 줄은 아무것도 바꾸지 않습니다. 경고는 `Instance.commandIssues`로 남아 기존 진단에 나오고 다음 고치기에서 사라집니다(`web/src/lib/command-edit.ts`).
+
 **실행.** 워크플로 실행은 그룹마다 작업 하나(`job`)를 실행하고, 작업 기록에 `manifest.group = {id, name}`과 `manifest.nodeLabel`을 남깁니다. 실행 기록은 노드 이름에 그룹 이름을 붙여(`daoedit B`) 보여 줍니다. 나눈 작업을 혼자 실행하면 작업 하나의 워크플로로 그룹마다 실행합니다.
 
 - 대화형 단계: 워크플로의 작업이 커서를 사람에게서 읽으면(위 `cursor`) 실행이 멈추고 그 작업은 `사용자 입력 대기`가 됩니다. 실행 기록과 위쪽 실행 상태에 작업 이름과 그룹(`daoedit B`)이 나오고, 측정 창이 그 그룹의 영상으로 열립니다. 끝내기 버튼(`finish`)이 실행을 이어 가고 다음 그룹이 같은 방식으로 열립니다. 창을 닫아도 실행은 멈춘 채 기다리며, 실행 상태 캡슐 끝의 `측정 창 열기`로 다시 엽니다. 실행을 그치는 것은 중단뿐입니다. 서버는 기존 대화형 실행처럼 작업의 커서 요청(`interaction.json`, `/api/task-respond`)을 기다리고, 워크플로 상태는 그동안 `waiting`입니다.
@@ -229,6 +231,39 @@ pset 노드의 값 출력은 노드에 저장한 값을 파라미터의 IRAF 타
 - 옮기기는 작업 정의로 초안을 다듬기 전에 합니다. 작업 목록이 아직 반복 노드를 갖고 있어도 영역 설정을 잃지 않습니다.
 
 `save-files` 노드는 출력 탭에서 저장 위치와 같은 이름 처리를 정합니다. 저장 위치는 폴더 선택기로 고르며, 비우면 프로젝트 폴더입니다. 프로젝트 안의 폴더는 상대 경로로 기록하고, 프로젝트 밖 폴더는 워크플로 내보내기에서 제외합니다. 같은 이름이 있으면 첫 점 앞에 번호를 붙이거나(`m67.mag.1` → `m67_1.mag.1`) 덮어씁니다.
+
+### 명령에서 노드 만들기
+
+작업 추가의 `명령` 타일은 IRAF CL 명령을 받아 노드를 만듭니다. 읽기는 서버가 합니다(`POST /api/parse-commands {text}`, `giraf/command_parse.py`). 실제 명령을 만드는 쪽(`giraf/commands.py`)과 같은 설치된 `.par` 정보를 씁니다. 작업 이름으로 분기하는 코드는 없습니다.
+
+읽는 규칙은 CL의 command mode(`pkg/language/doc/commands.hlp`, `cl.hlp`)를 따릅니다.
+
+| 규칙 | 예 |
+| --- | --- |
+| `작업 위치인자… par=값… 스위치` | `zerocomb @Bias1.list out=Zero1 combine=median` |
+| 위치 인자는 숨김이 아닌 파라미터를 `.par`(procedure 선언) 순서로 채움. 남는 인자는 문제 | `phot NGC2420b NGC2420b.coo.1 NGC2420b.mag.1` |
+| 숨김 파라미터는 키워드로만 | `darkc a b`는 문제 |
+| `par+`, `par-`는 yes/no. 예/아니요 파라미터가 아니면 문제 | `process+ subsets+` |
+| 작업, 파라미터, pset 이름은 하나로 정해지면 줄여 씀(`abbreviate = yes`). 정확한 이름이 우선. 여럿이면 문제 | `darkc`, `fi+`, `oversc-`, `fitskypars.dannulu` |
+| 선택지가 있는 값도 줄여 씀 | `combine=med` |
+| `pset.par=값` 키워드, 줄 하나짜리 `pset.par = 값`, `작업.par = 값` | `datapars.fwhmpsf = 7.8`, `ccdproc.zero = "Zero.fits"` |
+| 따옴표, `\` 줄 잇기, `#` 주석, `> 파일`(표준 출력), 끝의 `&` | `txdump 'a.mag.1' 'ID,MAG' > 'a.dat'` |
+| `@목록`, 쉼표 목록, `*` `?` `[1-5]` 파일 템플릿 | `Zero1,Zero2`, `flat_B_*` |
+
+- 줄 하나짜리 할당은 뒤에 오는 줄 가운데 그 pset이나 작업을 쓰는 작업에 들어갑니다. 줄의 키워드가 우선합니다. 전용 어댑터 CCD 작업은 먼저 돌리는 ccdproc(`preprocess`)와 패키지 파라미터를 pset처럼 받습니다. 아무 작업도 쓰지 않은 할당은 문제입니다. `unlearn 작업`은 그 작업과 pset의 할당을 지웁니다.
+- 같은 이름의 작업이 여러 패키지에 있으면 앞 줄에서 불러온 패키지 가운데 나중 것을 씁니다(`daophot` 뒤의 `phot`). 불러온 패키지가 없으면 문제입니다.
+- 패키지를 불러오는 줄(`noao.imred`, `noao.digi`)은 말없이 건너뜁니다. `!`로 시작하는 줄, 그 이름의 프로그램이 있는 줄(`vi`, `ds9`), CL 명령(`pkg/language/doc`의 `unlearn` 등), `system` 패키지 작업(`del`, 실행 폴더가 따로 있어 쓸 일이 없음)은 이유와 함께 건너뜁니다.
+- `ls 패턴… > X.list`는 목록을 정합니다. 뒤의 `@X.list`는 그 줄 시점에 셸 glob이 고를 파일, 곧 폴더의 파일과 앞 줄의 출력입니다. 맞는 파일이 없으면 문제입니다. 정해지지 않은 목록은 폴더에 그 파일이 있으면 그 내용을 읽습니다.
+- 출력 값은 노드의 출력 이름이 됩니다. `p@X.list`는 접두사 `p`, 입력마다 만드는 출력의 이름은 입력 이름을 `{name}`으로 바꾼 것(`NGC2420b.coo.1` → `{name}.coo.1`)입니다. 입력 이름으로 만들 수 없으면 문제입니다.
+
+응답은 줄마다 `{index, line, text, kind, issues}`이고 `kind`는 `task`, `assign`, `list`, `skip`, `package`, `unknown`입니다. 작업 줄은 `task`, `parameters`, `parameterSets`, `preprocess`, `packageValues`, `inputs: {입력: {text, items}}`, `outputs: {출력: {text, value, labels}}`를 가집니다. 입력의 `items`는 폴더 파일(`file`), 앞 줄의 출력(`from: {line, role, label}`), 찾지 못한 이름(`missing`)입니다. 이름은 `.fits`를 붙이거나 떼고도 비교합니다.
+
+편집기(`web/src/lib/command-workflow.ts`)는 이것으로 노드를 만듭니다.
+
+- 작업 줄 하나가 노드 하나입니다. 파라미터는 설정 탭이 넣는 자리에 넣습니다.
+- `from` 입력은 그 줄의 노드 출력에 연결하고, 폴더 파일은 파일 입력 노드로 들어갑니다. 같은 파일을 가진 파일 입력 노드가 있으면 그것을 씁니다. 찾지 못한 이름은 표현식을 받는 입력이면 글자 그대로 두고, 그 줄의 문제로 보여 줍니다. 작업 설정상 쓰지 않는 보정 입력(process=no의 zero)은 연결하지 않습니다.
+- 새 노드는 자동 배치로 왼쪽에서 오른쪽으로 놓고, 이미 있는 노드 아래에 둡니다.
+- 연달아 오는 같은 작업의 줄이 입력 하나의 파일과 출력 이름만 다르면 미리보기에 `노드 하나로 합치기`를 둡니다. 기본은 줄마다 노드입니다. 고르면 파일을 모두 받은 노드 하나에 `split`을 정합니다. 기준은 차례로 헤더 키워드, 파일 순서의 `per N`, 키워드와 `per N`, 파일마다를 시도해 줄들의 묶음과 똑같이 나뉘는 첫 것입니다(실제 헤더는 파일 목록이 읽은 값). 합친 노드의 출력은 그룹의 키워드 값을 가진다고 보고 다음 합치기에 씁니다. 출력 이름의 뿌리는 그룹 접미사를 붙이면 줄들의 출력 이름이 되는 이름이고, 없으면 공통 앞부분입니다(`Dark` + `15-1`). 맞는 기준이 없으면 이유와 함께 고를 수 없습니다. 합친 노드의 결과 일부만 받는 줄은 문제로 보여 줍니다.
 
 ### GIRAF 노드
 
@@ -299,6 +334,8 @@ ccdred 계열처럼 전용 어댑터(`task_catalog.py`의 `TASKS`)로 실행하�
 - `giraf/file_nodes.py`: `pass-files`, `save-files` 실행
 - `giraf/splits.py`, `giraf/workflow.py`: 나누기, 짝 맞추기, 출력 이름, 식과 그룹마다의 실행
 - `giraf/commands.py`: 검증한 계획의 CL 명령(`/api/task-commands`)
+- `giraf/command_parse.py`: CL 명령 읽기(`/api/parse-commands`), `tests/fixtures/course-commands/`의 수업 명령으로 검사
+- `web/src/lib/command-workflow.ts`, `web/src/lib/command-edit.ts`: 명령에서 노드 만들기, 명령 줄 고치기
 - `web/src/lib/splits.ts`, `web/src/lib/group-values.ts`: 편집기의 그룹 미리보기, 짝, 그룹마다의 값
 - `web/src/lib/region-migration.ts`: 예전 문서의 반복 영역 옮기기
 - `giraf/measurements.py`: 대화형 단계의 그룹별 측정 기억과 다시 쓰기
