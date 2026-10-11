@@ -459,6 +459,19 @@ async def task_commands_endpoint(request: Request):
     return JSONResponse(await run_in_threadpool(task_commands, payload))
 
 
+async def parse_commands_endpoint(request: Request):
+    """CL command text read with the installed task knowledge (giraf/command_parse.py);
+    file names resolve against the workspace folder. Nothing runs."""
+    from .command_parse import parse_commands
+    payload = await request_payload(request)
+    if not isinstance(payload, dict) or not isinstance(payload.get('text'), str):
+        raise ValueError('명령 형식이 올바르지 않습니다.')
+    task = payload.get('task') if isinstance(payload.get('task'), str) else None
+    return JSONResponse(await run_in_threadpool(
+        partial(parse_commands, payload['text'], folder=workspace['folder'], task=task,
+                resolve=payload.get('resolve', True) is not False)))
+
+
 async def values_endpoint(request: Request):
     """Current values of value outputs and the parameter values their links give."""
     payload = await request_payload(request)
@@ -744,6 +757,7 @@ api_routes = [
     Route('/header', header_endpoint, methods=['GET'], name='header'),
     Route('/values', values_endpoint, methods=['POST'], name='values'),
     Route('/task-commands', task_commands_endpoint, methods=['POST'], name='task-commands'),
+    Route('/parse-commands', parse_commands_endpoint, methods=['POST'], name='parse-commands'),
     Route('/task-respond', partial(task_respond_endpoint, action='task-respond'), methods=['POST'], name='task-respond'),
     Route('/task-cancel', partial(task_respond_endpoint, action='task-cancel'), methods=['POST'], name='task-cancel'),
     Route('/task-graphics', partial(task_respond_endpoint, action='task-graphics'), methods=['GET'], name='task-graphics'),
