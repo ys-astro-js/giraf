@@ -2,7 +2,6 @@ import { assigned } from "@/lib/task-map/inputs"
 import { InspectorAlignmentSource } from "./AlignmentSource"
 import { InspectorFileSource } from "./FileSource"
 import { CursorInput } from "@/components/cursor-input"
-import { File } from "lucide-react"
 
 import { isGirafNode, type Catalog, type Spec, type Frame, type Slot } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
@@ -73,14 +72,15 @@ export function InspectorInputSlot({
         map.tasks.find((t) => "taskId" in c.source && t.id === c.source.taskId)
           ?.passed
     )
+  // How many files the input holds shows once, at the end of the button (after 고르기).
   const summary =
     expression ||
     (sources.length
       ? [...new Set(sources)].join(", ") + (fromFiles ? "" : " 출력")
       : ids.length === 1
-        ? rows.find((r) => r.id === ids[0])?.label || <><File className="node-input-file" aria-hidden="true" />1</>
+        ? rows.find((r) => r.id === ids[0])?.label || "파일"
         : ids.length
-          ? <><File className="node-input-file" aria-hidden="true" />{ids.length}</>
+          ? "파일"
           : "선택…")
   const replace = (next: string[]) => {
     onInputSource?.(s.name, { kind: "files", ids: next, label: s.label })
