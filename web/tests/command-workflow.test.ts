@@ -51,6 +51,9 @@ test("each line is a node, set as the inspector sets it, and connected by file n
   expect(dark.preprocess.parameters).toMatchObject({ zerocor: "yes", darkcor: "no", flatcor: "no", trim: "no", fixpix: "no", overscan: "no" })
   expect(into(dark.id, "zero")).toEqual(["zerocombine 3"])
   expect(into(tasks[11].id, "input")).toEqual(["darkcombine", "darkcombine 2"])
+  // The masters combine with process=no: ccdproc's zero is not run there, so nothing connects to it.
+  expect(into(tasks[11].id, "zero")).toEqual([])
+  expect(built.inactive[lineOf("darkc Dark15-1,").index]).toEqual(["zero"])
   expect(built.issues).toEqual({})
 })
 

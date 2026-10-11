@@ -10,6 +10,7 @@
  * grouping; it is offered, never done silently.
  */
 import { normalizeFileInputs } from "./file-nodes"
+import { roleActive } from "./node-interaction"
 import { splitGroups, keyChoices, withSuffix, type SplitPart, type SplitSettings } from "./splits"
 import { connect, connectionRoles, emptyMap, makeInstance, type Instance, type Source, type TaskMap } from "./task-map"
 import { autoLayoutMap } from "./workflow-layout"
@@ -221,6 +222,8 @@ export type BuiltCommands = {
   added: string[]
   /** Problems the editor finds, by line. */
   issues: Record<number, string[]>
+  /** Inputs a line names that its task's settings do not use, by line. */
+  inactive: Record<number, string[]>
 }
 
 /**
@@ -233,6 +236,7 @@ export function buildCommandNodes(map: TaskMap, catalog: Catalog, prefs: Prefere
   const runOf = new Map(runs.flatMap((r) => r.lines.map((i) => [i, r] as const)))
   const nodes: Record<number, string> = {}
   const issues: Record<number, string[]> = {}
+  const inactive: Record<number, string[]> = {}
   const created: { task: Instance; lines: ParsedLine[]; run?: CommandRun }[] = []
   let next = map
   for (const line of parsed.lines) {
@@ -267,7 +271,12 @@ export function buildCommandNodes(map: TaskMap, catalog: Catalog, prefs: Prefere
     const spec = specOf(catalog, task.task)!
     for (const slot of connectionRoles(spec, catalog)) {
       const items = lines.flatMap((l) => lineItems(l, slot.name, rows))
+      // A calibration the task's settings do not run (ccdproc.zero with process=no) takes nothing.
       if (!items.length) continue
+      if (!roleActive(task, slot.name, catalog)) {
+        for (const l of lines) (inactive[l.index] ??= []).push(slot.name)
+        continue
+      }
       const ids = [...new Set(items.filter((i) => !i.key.startsWith("out:") && !i.key.startsWith("missing:")).map((i) => i.key))]
       const sources: Source[] = []
       const taken = new Map<string, Set<string>>()
@@ -295,6 +304,7 @@ export function buildCommandNodes(map: TaskMap, catalog: Catalog, prefs: Prefere
     nodes,
     added: created.map((c) => c.task.id),
     issues,
+    inactive,
   }
 }
 

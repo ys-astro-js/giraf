@@ -25,7 +25,7 @@ const imageStem = (name: string) => name.replace(/\.(fits?|fts|imh)$/i, "")
 type Status = "added" | "skipped" | "issue"
 
 /** What one line becomes, as a row: the task, what it sets, what it reads. */
-function LineRow({ line, issues }: { line: ParsedLine; issues: string[] }) {
+function LineRow({ line, issues, inactive = [] }: { line: ParsedLine; issues: string[]; inactive?: string[] }) {
   const status: Status = issues.length ? "issue" : line.kind === "skip" ? "skipped" : "added"
   const Icon = { added: CircleCheck, skipped: CircleMinus, issue: CircleAlert }[status]
   let name = line.text.split(/\s+/)[0]
@@ -39,9 +39,10 @@ function LineRow({ line, issues }: { line: ParsedLine; issues: string[] }) {
       ...Object.entries(line.packageValues ?? {}),
     ].map(([key, value]) => `${key}=${value === "" ? '""' : value}`)
     const outputs = Object.values(line.outputs ?? {}).flatMap((o) => o.labels.map(imageStem))
-    const from = [...new Set(Object.values(line.inputs ?? {}).flatMap((input) =>
+    const inputs = Object.entries(line.inputs ?? {}).filter(([role]) => !inactive.includes(role)).map(([, input]) => input)
+    const from = [...new Set(inputs.flatMap((input) =>
       input.items.flatMap((item) => (item.from ? [imageStem(item.from.label)] : []))))]
-    const files = Object.values(line.inputs ?? {}).flatMap((input) => input.items.filter((item) => item.file)).length
+    const files = inputs.flatMap((input) => input.items.filter((item) => item.file)).length
     detail = (
       <>
         {(!!from.length || !!files) && (
@@ -164,7 +165,7 @@ export function CommandEntry({ inputRef, onDone }: { inputRef: RefObject<HTMLTex
                     })}
                   />
                 )}
-                <LineRow line={line} issues={[...line.issues, ...(built?.issues[line.index] ?? [])]} />
+                <LineRow line={line} inactive={built?.inactive[line.index]} issues={[...line.issues, ...(built?.issues[line.index] ?? [])]} />
               </Fragment>
             )
           })}

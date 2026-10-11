@@ -655,7 +655,7 @@ class Parser:
         if '@' in value:
             # `p@objB90.list`: one output per listed file, prefixed (ccdproc's course use).
             prefix, _, listed = value.partition('@')
-            names = [i['name'] for i in self.list_items(listed, entry)] if self.resolve else []
+            names = [i['name'] for i in self.list_items(listed, entry) if not i.get('missing')] if self.resolve else []
             if prefix:
                 result['value'] = prefix
                 result['labels'] = [product_label(prefix + Path(n).name, kind) for n in names]
