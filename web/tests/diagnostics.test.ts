@@ -138,6 +138,13 @@ test("API captures HTTP, network and invalid JSON failures while preserving reje
       .getSnapshot()
       .some((d) => d.source.includes("diagnostic-network"))
   ).toBe(true)
+  // A server started before a route existed answers 404 Not Found: say what to do.
+  globalThis.fetch = (async () =>
+    new Response(JSON.stringify({ error: "Not Found" }), { status: 404 })) as typeof fetch
+  await expect(api("diagnostic-missing")).rejects.toThrow("앱을 다시 시작해 주세요.")
+  expect(
+    diagnostics.getSnapshot().filter((d) => d.source.includes("diagnostic-missing")).map((d) => d.message)
+  ).toEqual(["실행 중인 서버에 이 기능이 없습니다. 앱을 다시 시작해 주세요."])
   globalThis.fetch = (async () => new Response("not json")) as typeof fetch
   await expect(api("diagnostic-json")).rejects.toThrow()
   expect(

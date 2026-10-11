@@ -120,6 +120,8 @@ export async function api<T>(action:string,payload?:unknown,signal?:AbortSignal)
     signal?.throwIfAborted()
     if (response.ok && !data?.error && !(Array.isArray(data?.errors) && data.errors.length)) diagnostics.resolveScope(requestDiagnosticScope(action, nodeId))
     collectResponseDiagnostics(action, data, diagnostics, {nodeId, ok: response.ok})
+    // A route the running server lacks: it was started before this page's code.
+    if(response.status===404&&data?.error==='Not Found')throw new Error('실행 중인 서버에 이 기능이 없습니다. 앱을 다시 시작해 주세요.')
     if(!response.ok)throw new Error(data.error||data.errors?.join('\n')||'요청 실패')
     return data
   } catch (error) {

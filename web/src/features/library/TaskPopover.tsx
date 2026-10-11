@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/popover"
 import { NodeIcon } from "@/components/node-icon"
 import { SearchField } from "@/components/search-field"
-import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
+import { ToolbarButton, ToolbarCluster, ToolbarGroup } from "@/components/toolbar"
 import { nodeTiles } from "@/lib/node-chunks"
 import { taskPackageTree, type TaskPackage } from "@/lib/task-tree"
 import { isGirafNode, taskDisplayName, type Spec } from "@/lib/workbench"
@@ -160,9 +160,13 @@ export function AddTaskButton() {
           {commands ? (
             <>
               <div className="library-popover-bar">
-                <ToolbarButton label="목록으로" onClick={() => setCommands(false)}>
-                  <ChevronLeft />
-                </ToolbarButton>
+                <ToolbarCluster edge="start">
+                  <ToolbarGroup label="이동">
+                    <ToolbarButton label="목록으로" onClick={() => setCommands(false)}>
+                      <ChevronLeft />
+                    </ToolbarButton>
+                  </ToolbarGroup>
+                </ToolbarCluster>
                 <span className="library-option-name">명령</span>
               </div>
               <CommandEntry

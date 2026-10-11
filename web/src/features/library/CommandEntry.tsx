@@ -5,8 +5,8 @@
  */
 import { Fragment, useEffect, useMemo, useState, type RefObject } from "react"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
-import { CircleAlert, CircleCheck, CircleMinus, File } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Check, CircleAlert, CircleCheck, CircleMinus, File, Rows3 } from "lucide-react"
+import { ToolbarButton, ToolbarCluster, ToolbarGroup } from "@/components/toolbar"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -85,7 +85,9 @@ function MergeRow({ run, merged, onChange }: { run: CommandRun; merged: boolean;
         <Checkbox checked={merged} disabled={!!run.disabled} onCheckedChange={(checked) => onChange(!!checked)} />
         <span className="library-option-name">노드 하나로 합치기</span>
       </label>
-      <span className="library-option-detail">{run.disabled ?? `${run.lines.length}줄`}</span>
+      <span className="library-option-detail">
+        {run.disabled ?? <span className="command-files"><Rows3 aria-label="명령" />{run.lines.length}</span>}
+      </span>
     </li>
   )
 }
@@ -101,14 +103,15 @@ export function CommandEntry({ inputRef, onDone }: { inputRef: RefObject<HTMLTex
     const timer = setTimeout(() => setDeferred(text), 250)
     return () => clearTimeout(timer)
   }, [text])
-  const { data } = useQuery({
+  const { data, error } = useQuery({
     queryKey: ["api", "parse-commands", deferred, w.workspace.folder],
     queryFn: ({ signal }) => api<ParsedCommands>("parse-commands", { text: deferred }, signal),
     enabled: !!deferred.trim(),
     placeholderData: keepPreviousData,
     retry: false,
   })
-  const parsed = deferred.trim() ? data : undefined
+  // A failed read goes to 경고 및 오류 (api); the entry shows nothing stale to add.
+  const parsed = deferred.trim() && !error ? data : undefined
   const folder = w.workspace.files
   const runs = useMemo(() => (parsed ? commandRuns(parsed, folder, merged) : []), [parsed, folder, merged])
   const built = useMemo(
@@ -116,8 +119,9 @@ export function CommandEntry({ inputRef, onDone }: { inputRef: RefObject<HTMLTex
     [parsed, w.map, w.catalog, w.prefs, w.rows, merged]
   )
   const shown = parsed?.lines.filter((line) => line.kind !== "package") ?? []
+  const count = built?.added.length ?? 0
   async function add() {
-    if (!built || !w.catalog || !built.added.length) return
+    if (!built || !w.catalog || !count || adding) return
     setAdding(true)
     try {
       const before = w.map
@@ -146,6 +150,12 @@ export function CommandEntry({ inputRef, onDone }: { inputRef: RefObject<HTMLTex
         placeholder="zerocombine @bias.list output=Zero"
         value={text}
         onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && !event.nativeEvent.isComposing) {
+            event.preventDefault()
+            void add()
+          }
+        }}
       />
       {shown.length > 0 && (
         <ul className="command-preview scroll-fade scroll-fade-4" aria-label="명령 미리보기">
@@ -172,9 +182,18 @@ export function CommandEntry({ inputRef, onDone }: { inputRef: RefObject<HTMLTex
         </ul>
       )}
       <div className="command-actions">
-        <Button size="sm" disabled={!built?.added.length || adding} onClick={add}>
-          추가
-        </Button>
+        {count > 0 && (
+          <span className="text-sm text-muted-foreground" role="status" aria-label={`노드 ${count}`}>
+            {count}
+          </span>
+        )}
+        <ToolbarCluster edge="end">
+          <ToolbarGroup label="추가">
+            <ToolbarButton prominent label="추가" disabled={!count || adding} onClick={add}>
+              <Check />
+            </ToolbarButton>
+          </ToolbarGroup>
+        </ToolbarCluster>
       </div>
     </div>
   )

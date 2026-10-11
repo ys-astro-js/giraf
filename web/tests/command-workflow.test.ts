@@ -57,6 +57,17 @@ test("each line is a node, set as the inspector sets it, and connected by file n
   expect(built.issues).toEqual({})
 })
 
+test("one line naming no folder file and no earlier output is still a node, its input kept as written", () => {
+  const line = { index: 0, line: 1, text: "zerocombine AutosaveImage-0001bias.fits output=Zero", kind: "task" as const,
+    issues: ["AutosaveImage-0001bias.fits: 폴더의 파일이나 앞 줄의 출력이 아닙니다."], task: "zerocombine", taskName: "zerocombine",
+    inputs: { input: { text: "AutosaveImage-0001bias.fits", items: [{ name: "AutosaveImage-0001bias.fits", missing: true as const }] } },
+    outputs: { output: { text: "Zero", value: "Zero", labels: ["Zero.fits"] } } }
+  const built = buildCommandNodes(emptyMap(), catalog, prefs, [], { lines: [line] })
+  expect(built.added.length).toBe(1)
+  const [task] = built.map.tasks
+  expect([task.draft.output.name, task.expressions?.input]).toEqual(["Zero", "AutosaveImage-0001bias.fits"])
+})
+
 test("a run of lines that differ only in files is offered as one node, with the split that makes their lists", () => {
   const runs = commandRuns(commands, rows)
   expect(runs.map((r) => [r.lines.map((i) => commands.lines[i].text.split(" ")[1]), r.input, r.output, r.split?.by, r.root])).toEqual([
