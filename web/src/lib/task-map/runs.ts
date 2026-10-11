@@ -193,6 +193,20 @@ export function replacePending(
   }
 }
 
+/**
+ * Whether a run belongs to this document: its task is here and runs the same
+ * IRAF task. Runs of a document opened earlier keep being followed after
+ * another opens, and must not land in it.
+ */
+export function ownsRun(
+  map: Pick<TaskMap, "tasks">,
+  instanceId: string,
+  run: Pick<Job, "manifest">
+): boolean {
+  const task = map.tasks.find((t) => t.id === instanceId)
+  return !!task && (!run.manifest?.task || run.manifest.task === task.task)
+}
+
 export function publishRun(map: TaskMap, instanceId: string, run: RunJob): TaskMap {
   const workflow = workflowOf(run)
   const group = groupOf(run)

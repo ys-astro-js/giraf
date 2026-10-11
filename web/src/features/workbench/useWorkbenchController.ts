@@ -26,6 +26,7 @@ import {
   disconnect,
   type Source,
   emptyMap,
+  ownsRun,
 } from "@/lib/task-map"
 import { resolveDiagnosticNode, type Diagnostic } from "@/lib/diagnostics"
 import { activeJob, apiQueryOptions } from "@/lib/queries"
@@ -164,6 +165,7 @@ export function useWorkbenchController() {
   )
   const publishJob = useCallback(
     (instanceId: string, job: Job, catalog?: Catalog) => {
+      if (!ownsRun(editor.getMap(), instanceId, job)) return
       if (editor.publishRun(instanceId, job, catalog)) queueSave()
     },
     [editor, queueSave]
