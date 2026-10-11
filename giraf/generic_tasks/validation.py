@@ -11,47 +11,62 @@ from ..task_capabilities import parameter_number
 from ..products import product_name
 from .inputs import accepts_source, resolve_generic_inputs, validate_cursor_records, alignment_pairs
 from .preview import preview_generic
-from ..field_issues import FieldError, FieldWarning, in_field
+from ..field_issues import FieldError, FieldWarning, Issues
 
 
-def checked_values(parameters, supplied, prefix=''):
-    """Checked values; a problem names its field as `prefix + name`."""
+def checked_values(parameters, supplied, prefix='', issues=None):
+    """Checked values; a problem names its field as `prefix + name`. With
+    collecting `issues` every parameter is checked and a bad one is left out."""
+    issues = issues or Issues()
     allowed = {p['name']: p for p in parameters}
     if not isinstance(supplied, dict) or set(supplied) - set(allowed):
-        raise ValueError('알 수 없는 파라미터가 있습니다.')
+        issues.error(ValueError('알 수 없는 파라미터가 있습니다.'))
+        supplied = {k: v for k, v in supplied.items() if k in allowed} if isinstance(supplied, dict) else {}
     values = {}
     for name, p in allowed.items():
-        value = supplied.get(name, p['default'])
-        if isinstance(value, str) and value.startswith(')') and value == p.get('indirect'):
-            continue
-        if name not in supplied and value == '' and p.get('hasDefault') is False and 'h' in p.get('mode', ''):
-            continue
-        # An untouched numeric field with no IRAF default stays unset (display z1/z2).
-        if value == '' and p['type'] in ('i', 'r', 'd') and p['default'] in ('', None):
-            continue
-        if p['type'] == 'b':
-            if value not in (True, False, 'yes', 'no'):
-                raise FieldError(prefix + name, f'{name}: yes 또는 no를 선택해 주세요.')
-            value = 'yes' if value in (True, 'yes') else 'no'
-        elif p['type'] in ('i', 'r', 'd'):
-            if str(value).upper() == 'INDEF': value = 'INDEF'
-            else:
-                try:
-                    number = parameter_number(value)
-                    if not math.isfinite(number) or (p['type'] == 'i' and int(number) != number): raise ValueError()
-                    value = int(number) if p['type'] == 'i' else number
-                    if p['min'] != '' and value < parameter_number(p['min']): raise ValueError()
-                    if p['max'] != '' and value > parameter_number(p['max']): raise ValueError()
-                except (TypeError, ValueError, OverflowError):
-                    raise FieldError(prefix + name, f'{name}: 유효한 수치와 범위를 입력해 주세요.') from None
-        else:
-            value = str(value)
-            if len(value) > 20000 or any(ch in value for ch in '\n\r\x00'):
-                raise FieldError(prefix + name, f'{name}: 한 줄의 값을 입력해 주세요.')
-        if p['choices'] and str(value) not in p['choices']:
-            raise FieldError(prefix + name, f'{name}: 허용된 값을 선택해 주세요.')
-        values[name] = value
+        checked = SKIP
+        with issues.check():
+            checked = checked_value(name, p, supplied, prefix)
+        if checked is not SKIP:
+            values[name] = checked
     return values
+
+
+SKIP = object()
+
+
+def checked_value(name, p, supplied, prefix):
+    """One parameter's checked value, or SKIP when it stays unset."""
+    value = supplied.get(name, p['default'])
+    if isinstance(value, str) and value.startswith(')') and value == p.get('indirect'):
+        return SKIP
+    if name not in supplied and value == '' and p.get('hasDefault') is False and 'h' in p.get('mode', ''):
+        return SKIP
+    # An untouched numeric field with no IRAF default stays unset (display z1/z2).
+    if value == '' and p['type'] in ('i', 'r', 'd') and p['default'] in ('', None):
+        return SKIP
+    if p['type'] == 'b':
+        if value not in (True, False, 'yes', 'no'):
+            raise FieldError(prefix + name, f'{name}: yes 또는 no를 선택해 주세요.')
+        value = 'yes' if value in (True, 'yes') else 'no'
+    elif p['type'] in ('i', 'r', 'd'):
+        if str(value).upper() == 'INDEF': value = 'INDEF'
+        else:
+            try:
+                number = parameter_number(value)
+                if not math.isfinite(number) or (p['type'] == 'i' and int(number) != number): raise ValueError()
+                value = int(number) if p['type'] == 'i' else number
+                if p['min'] != '' and value < parameter_number(p['min']): raise ValueError()
+                if p['max'] != '' and value > parameter_number(p['max']): raise ValueError()
+            except (TypeError, ValueError, OverflowError):
+                raise FieldError(prefix + name, f'{name}: 유효한 수치와 범위를 입력해 주세요.') from None
+    else:
+        value = str(value)
+        if len(value) > 20000 or any(ch in value for ch in '\n\r\x00'):
+            raise FieldError(prefix + name, f'{name}: 한 줄의 값을 입력해 주세요.')
+    if p['choices'] and str(value) not in p['choices']:
+        raise FieldError(prefix + name, f'{name}: 허용된 값을 선택해 주세요.')
+    return value
 
 
 def same_value(a, b):
@@ -93,34 +108,41 @@ def edits_inputs(spec):
     return [o['from'] for o in spec['outputs'] if o.get('mode') == 'pass' and o.get('from') in images] if not spec.get('run') else []
 
 
-def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles=frozenset()):
+def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles=frozenset(), issues=None):
+    """The run's manifest. A run refuses on the first problem; collecting
+    `issues` (giraf/field_issues.py) check every input and parameter first."""
+    issues = issues or Issues()
     if not spec['runnable']: raise ValueError(spec['reason'])
     from ..node_schema import VALUE_RUNS
     if spec.get('run') in VALUE_RUNS:
         raise ValueError('값과 pset 노드는 연결한 작업을 실행할 때 함께 계산합니다.')
     backend = payload.get('backend', 'cl')
-    if backend not in ('cl', 'pyraf'): raise ValueError('CL 또는 PyRAF를 선택해 주세요.')
-    if payload.get('filePolicy', {}).get('mode', 'copy') != 'copy':
-        raise ValueError('범용 작업은 사본에서 실행합니다. 파일 처리를 사본으로 선택해 주세요.')
+    with issues.check():
+        if backend not in ('cl', 'pyraf'): raise ValueError('CL 또는 PyRAF를 선택해 주세요.')
+    with issues.check():
+        if payload.get('filePolicy', {}).get('mode', 'copy') != 'copy':
+            raise ValueError('범용 작업은 사본에서 실행합니다. 파일 처리를 사본으로 선택해 주세요.')
     directory = str(Path(payload.get('workingDirectory') or DATA).expanduser().resolve())
     # Retired empty controls may now be managed output destinations.
     output_roles = {s['name'] for s in spec['outputs']}
-    schema_warnings = []
+    schema_warnings = issues.warnings
     supplied = without_fixed({k: v for k, v in payload.get('parameters', {}).items()
                               if k not in output_roles or v != ''}, spec.get('fixed', {}), '', schema_warnings)
     # A file can replace a numeric operand, so do not require an unused scalar.
     scalar_names = {s['name'] for s in spec['inputs'] if s.get('scalar')}
     ordinary = [p for p in spec['parameters'] if p['name'] not in scalar_names]
-    if set(supplied) - {p['name'] for p in spec['parameters']}: raise ValueError('알 수 없는 파라미터가 있습니다.')
-    params = checked_values(ordinary, {k: v for k, v in supplied.items() if k not in scalar_names})
+    with issues.check():
+        if set(supplied) - {p['name'] for p in spec['parameters']}: raise ValueError('알 수 없는 파라미터가 있습니다.')
+    params = checked_values(ordinary, {k: v for k, v in supplied.items() if k not in scalar_names}, issues=issues)
     spec = deepcopy(spec)
     for slot in spec['outputs']:
         if slot.get('eachWhen'):
             slot['mode'] = 'each' if params.get(slot['eachWhen']) == 'yes' else 'single'
     supplied_sets = payload.get('parameterSets', {})
-    if set(supplied_sets) - {s['name'] for s in spec['parameterSets']}: raise ValueError('알 수 없는 파라미터 세트입니다.')
+    with issues.check():
+        if set(supplied_sets) - {s['name'] for s in spec['parameterSets']}: raise ValueError('알 수 없는 파라미터 세트입니다.')
     sets = {s['name']: {**checked_values(s['parameters'], without_fixed(
-                supplied_sets.get(s['name'], {}), s.get('fixed', {}), s['name'] + '.', schema_warnings), s['name'] + '.'), **s.get('fixed', {})}
+                supplied_sets.get(s['name'], {}), s.get('fixed', {}), s['name'] + '.', schema_warnings), s['name'] + '.', issues), **s.get('fixed', {})}
             for s in spec['parameterSets']}
     # The task's own cursor loop runs through IRAF's text cursor mode; parameter
     # sets and verify/update queries still have no interactive adapter.
@@ -134,17 +156,17 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
             if key == 'update' and values is params and edits:
                 continue
             if values.get(key) == 'yes' and spec.get('fixed', {}).get(key) != 'no':
-                raise FieldError(prefix + key, f'{key}: 범용 실행에서는 no를 선택해 주세요.')
+                issues.error(FieldError(prefix + key, f'{key}: 범용 실행에서는 no를 선택해 주세요.'))
     if interactive and backend != 'cl':
         backend = 'cl'
-        schema_warnings.append(FieldWarning('interactive', 'interactive: 대화형 실행은 IRAF CL에서 진행합니다.'))
+        issues.warn(FieldWarning('interactive', 'interactive: 대화형 실행은 IRAF CL에서 진행합니다.'))
     cursor_roles = {s['name'] for s in spec['inputs'] if s.get('valueType') == 'cursor' and accepts_source(s, 'cursor')}
     if not isinstance(cursor_commands, dict) or set(cursor_commands) - cursor_roles:
         raise ValueError('알 수 없는 커서 입력입니다.')
     for name, records in cursor_commands.items():
-        if not isinstance(records, str) or len(records) > 1_000_000 or '\x00' in records:
-            raise FieldError(name, f'{name}: 올바른 커서 명령을 입력해 주세요.')
-        with in_field(name):
+        with issues.check(name):
+            if not isinstance(records, str) or len(records) > 1_000_000 or '\x00' in records:
+                raise FieldError(name, f'{name}: 올바른 커서 명령을 입력해 주세요.')
             validate_cursor_records(records, name)
     text_inputs = payload.get('textInputs', {})
     allowed_text = {'coords', 'shifts'} if spec['name'] == 'images.immatch.imalign' else set()
@@ -154,21 +176,23 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
         raise ValueError('지원하지 않는 직접 텍스트 입력입니다.')
     pairs = {}
     for name, value in text_inputs.items():
-        with in_field(name):
+        with issues.check(name):
             pairs[name] = alignment_pairs(value, name)
     inputs, sources, input_lists, supplied_inputs, expressions, scalar_values = resolve_generic_inputs(
         spec, payload, supplied, directory, resolve, hash_file=file_hash,
-        diagnostics=diagnostics, pending_roles=pending_roles)
+        diagnostics=diagnostics, pending_roles=pending_roles, issues=issues)
     params.update(scalar_values)
-    if pairs.get('shifts') and len(pairs['shifts']) != len(inputs.get('input', [])):
-        raise FieldError('shifts', 'shifts: 입력 영상 순서대로 영상마다 한 행을 입력해 주세요.')
-    warnings = schema_warnings
+    # Checks of an input's files skip an input that could not be read.
+    if pairs.get('shifts') and not issues.failed('input') and len(pairs['shifts']) != len(inputs.get('input', [])):
+        issues.error(FieldError('shifts', 'shifts: 입력 영상 순서대로 영상마다 한 행을 입력해 주세요.'))
+    warnings = issues.warnings
     binding = payload.get('alignmentBinding')
-    if binding and any(text_inputs.get(k, '').strip() for k in ('coords', 'shifts')):
+    if binding and not (issues.failed('reference') or issues.failed('input')) and any(text_inputs.get(k, '').strip() for k in ('coords', 'shifts')):
         if not isinstance(binding, dict) or binding.get('reference') != inputs.get('reference') or (text_inputs.get('shifts', '').strip() and binding.get('input') != inputs.get('input')):
-            warnings.append('영상 선택 또는 순서가 변경되었습니다. 기준별 좌표와 이동량을 다시 확인해 주세요.')
+            issues.warn('영상 선택 또는 순서가 변경되었습니다. 기준별 좌표와 이동량을 다시 확인해 주세요.')
     provided_outputs = payload.get('outputs', {})
-    if set(provided_outputs) - {s['name'] for s in spec['outputs']}: raise ValueError('알 수 없는 출력 역할입니다.')
+    with issues.check():
+        if set(provided_outputs) - {s['name'] for s in spec['outputs']}: raise ValueError('알 수 없는 출력 역할입니다.')
     outputs = {}
     for slot in spec['outputs']:
         name = str(provided_outputs.get(slot['name'], slot['default']))
@@ -179,9 +203,10 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
         if slot.get('optional') and not name:
             outputs[slot['name']] = ''
             continue
-        product_name(name)
-        if len(name) > 180 or name.startswith('@'):
-            raise ValueError(f'{slot["name"]}: 경로 대신 결과 파일 이름 또는 접두사를 입력해 주세요.')
+        with issues.check():
+            product_name(name)
+            if len(name) > 180 or name.startswith('@'):
+                raise ValueError(f'{slot["name"]}: 경로 대신 결과 파일 이름 또는 접두사를 입력해 주세요.')
         outputs[slot['name']] = name
     m = dict(operation='task', adapter='generic', task=spec['name'], name=spec['name'], backend=backend,
              definition=deepcopy(spec), mapping=payload.get('mapping', {}), parameters=params, parameterSets=sets, inputs=inputs, outputs=outputs,
@@ -191,7 +216,8 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
     if input_lists: m['inputSelections']=deepcopy(supplied_inputs)
     if spec.get('run') == 'save-files':
         from ..file_nodes import checked_destination
-        m['destination'] = checked_destination(payload.get('destination'), directory)
+        with issues.check():
+            m['destination'] = checked_destination(payload.get('destination'), directory)
     if interactive:
         from ..cursor_keys import cursor_keys
         image = next((inputs[slot['name']][0] for slot in spec['inputs'] if slot['kind'] == 'image' and inputs.get(slot['name'])), None)
@@ -200,8 +226,11 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
     if active_each and spec['inputs']:
         count = len(inputs.get(spec['inputs'][0]['name'], []))
         for slot in spec['inputs'][1:]:
-            if slot['multiple'] and slot['name'] not in pending_roles and spec['inputs'][0]['name'] not in pending_roles and len(inputs[slot['name']]) not in (0, 1, count):
-                raise FieldError(slot['name'], f'{slot["name"]}: 입력 파일은 한 개 또는 주 입력과 같은 {count}개여야 합니다.')
+            if slot['multiple'] and slot['name'] not in pending_roles and spec['inputs'][0]['name'] not in pending_roles \
+                    and slot['name'] in inputs and spec['inputs'][0]['name'] in inputs and len(inputs[slot['name']]) not in (0, 1, count):
+                issues.error(FieldError(slot['name'], f'{slot["name"]}: 입력 파일은 한 개 또는 주 입력과 같은 {count}개여야 합니다.'))
+    # The output names need every input's files.
+    issues.halt()
     previews = preview_generic(m)
     labels = [r['output'] for r in previews]
     if diagnostics:

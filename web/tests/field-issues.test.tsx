@@ -2,6 +2,7 @@ import { expect, test } from "bun:test"
 import { renderToStaticMarkup } from "react-dom/server"
 import { ReactFlowProvider } from "@xyflow/react"
 import { createDiagnosticStore, fieldIssues } from "../src/lib/diagnostics"
+import { createWorkflowDiagnosticsController } from "../src/lib/live-diagnostics"
 import { ParameterTable } from "../src/components/parameter-fields"
 import { InspectorFileSource } from "../src/features/inspector/FileSource"
 import { CommandList, tokenIssues } from "../src/features/inspector/SplitSections"
@@ -95,4 +96,68 @@ test("the same problems are marked on the inspector field, the node row and the 
   const line = renderToStaticMarkup(<CommandList groups={[{ id: "", name: "", files: [], lines: [{ text, tokens }] }]} catalog={catalog} task={task} issues={issues} />)
   expect(line).toMatch(/<mark class="command-issue" data-severity="error"[^>]*>@input.list<\/mark>/)
   expect(line).toMatch(/<mark class="command-issue" data-severity="warning"[^>]*>-1<\/mark>/)
+})
+
+test("every problem the diagnostics find on one node is listed and marked at once", async () => {
+  // The server reports each input's and parameter's problem together (giraf/workflow_diagnostics.py).
+  const interactive: Param = { name: "interactive", type: "b", default: "no", prompt: "Fit overscan interactively?", choices: [], min: "", max: "" }
+  const both: Spec = { ...spec, parameters: [maxCache, interactive] }
+  const withBoth: Catalog = { ...catalog, tasks: [both] }
+  const pyraf = "interactive: 대화형 실행은 IRAF CL에서 진행합니다."
+  const s = createDiagnosticStore()
+  const controller = createWorkflowDiagnosticsController(s, async () => ({ diagnostics: [
+    { id: "1", severity: "error", message: images, nodeId: "n", field: "images" },
+    { id: "2", severity: "error", message: cache, nodeId: "n", field: "max_cache" },
+    { id: "3", severity: "warning", message: pyraf, nodeId: "n", field: "interactive" },
+  ] }), 0)
+  try {
+    controller.change("doc", { nodes: [{ id: "n", label: "ccdproc" }], connections: [] }, true)
+    await Bun.sleep(10)
+  } finally {
+    controller.dispose()
+  }
+  // 경고 및 오류: all three, errors first.
+  expect(s.currentForNode("n").map((d) => [d.severity, d.message])).toEqual([["error", images], ["error", cache], ["warning", pyraf]])
+  const issues = s.fieldIssues("n")
+  expect([...issues.keys()]).toEqual(["images", "max_cache", "interactive"])
+
+  // Inspector: the input and both parameters at once.
+  const task = makeInstance(both, withBoth, prefs, "n")
+  task.expressions.images = "@input.list"
+  const input = renderToStaticMarkup(
+    <InspectorFileSource s={both.inputs[0]} prefix="" compact={false} limit={0} setExpanded={() => {}} summary="@input.list"
+      expression="@input.list" links={[]} pick={() => {}} ids={[]} replace={() => {}} rows={[]} onOpen={() => {}}
+      onInputSource={undefined} map={emptyMap()} task={task} issue={issues.get("images")} />)
+  expect(input).toMatch(/aria-label="images 입력 변경"[^>]*aria-invalid="true"[^>]*data-severity="error"/)
+  const settings = renderToStaticMarkup(
+    <ParameterTable parameters={[maxCache, interactive]} values={{ max_cache: "-1", interactive: "yes" }} change={() => {}} scope="editor-task" keyPrefix="" issues={issues} />)
+  expect(settings).toMatch(/id="editor-task-max_cache"[^>]*aria-invalid="true"[^>]*data-severity="error"/)
+  expect(settings).toMatch(/role="switch"[^>]*aria-label="interactive"[^>]*aria-invalid="true"[^>]*data-severity="warning"/)
+
+  // Node: the images row and both pinned parameter rows.
+  const map = addTask(emptyMap(), { ...task, pinned: ["max_cache", "interactive"] })
+  const [node] = flowNodes(map, withBoth) as TaskFlowNode[]
+  const context = {
+    map, catalog: withBoth, rows: [], currentIssues: s.getSnapshot(), choose: () => {}, duplicate: () => {}, setCollapsed: () => {},
+    setGroupCollapsed: () => {}, editGroup: () => {}, hiddenNodes: new Set<string>(), valueLabel: () => "", edges: [],
+    selectingGroup: false, dragPreview: {}, validateConnection: () => ({ valid: true }),
+  } as unknown as React.ContextType<typeof WorkflowContext>
+  const html = renderToStaticMarkup(
+    <ReactFlowProvider>
+      <WorkflowContext.Provider value={context}>
+        <TaskNode id="n" data={node.data} selected={false} dragging={false} isConnectable type="task" zIndex={0}
+          selectable draggable deletable positionAbsoluteX={0} positionAbsoluteY={0} />
+      </WorkflowContext.Provider>
+    </ReactFlowProvider>)
+  expect(html).toMatch(/class="node-input-row"[^>]*data-severity="error"[^>]*>(?:(?!node-input-row).)*data-input-role="images"/)
+  expect(html).toMatch(/class="node-input-row node-param-row"[^>]*data-severity="error"[^>]*>(?:(?!node-input-row).)*max_cache/)
+  expect(html).toMatch(/class="node-input-row node-param-row"[^>]*data-severity="warning"[^>]*>(?:(?!node-input-row).)*interactive/)
+
+  // 명령: every field's token.
+  const text = "ccdproc @input.list max_cache=-1 interactive=yes"
+  const tokens = [{ name: "images", start: 8, end: 19 }, { name: "max_cache", start: 30, end: 32 }, { name: "interactive", start: 45, end: 48 }]
+  const line = renderToStaticMarkup(<CommandList groups={[{ id: "", name: "", files: [], lines: [{ text, tokens }] }]} catalog={withBoth} task={task} issues={issues} />)
+  expect([...line.matchAll(/<mark class="command-issue" data-severity="(\w+)"[^>]*>([^<]*)<\/mark>/g)].map((m) => [m[2], m[1]])).toEqual([
+    ["@input.list", "error"], ["-1", "error"], ["yes", "warning"],
+  ])
 })

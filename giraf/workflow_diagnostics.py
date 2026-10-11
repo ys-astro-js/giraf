@@ -8,7 +8,7 @@ from .task_catalog import TASKS, CALIBRATIONS
 from .task_jobs import validate_task, values
 from .image_lists import accepts_asset
 from .splits import apply_select, group_runs, split_problems, without_fields
-from .field_issues import field_of
+from .field_issues import Issues, IssuesFound, field_of
 
 
 def connection_components(connections):
@@ -63,12 +63,21 @@ def workflow_diagnostics(request, resolve):
     if len(by_id) != len(nodes):
         raise ValueError('중복된 노드 ID가 있습니다.')
     result = []
+    seen = set()
+    # Inputs a connection already reports as wrong, per node.
+    wired = {}
 
     def add(severity, message, node_id, connection_id=None, field=None):
         """`field` is the input role or parameter key the problem is about
         (giraf/field_issues.py), for marking it where it is shown."""
         identity = [node_id, connection_id, severity, message]
-        result.append(dict(id=json.dumps(identity, ensure_ascii=False), severity=severity,
+        key = json.dumps(identity, ensure_ascii=False)
+        if key in seen:
+            return
+        seen.add(key)
+        if field and connection_id and severity == 'error':
+            wired.setdefault(node_id, set()).add(field)
+        result.append(dict(id=key, severity=severity,
                            message=str(message), nodeId=node_id,
                            **({'connectionId': connection_id} if connection_id else {}),
                            **({'field': field} if field else {})))
@@ -78,8 +87,14 @@ def workflow_diagnostics(request, resolve):
     checked = {}
 
     def fresh(file_id):
+        # A file read once per pass, a missing one too: every check asking reuses it.
         if file_id not in checked:
-            checked[file_id] = inspected(file_id)
+            try:
+                checked[file_id] = inspected(file_id)
+            except (ValueError, OSError) as exc:
+                checked[file_id] = exc
+        if isinstance(checked[file_id], Exception):
+            raise checked[file_id]
         return checked[file_id]
 
     def inspected(file_id):
@@ -110,13 +125,21 @@ def workflow_diagnostics(request, resolve):
             # The split's problems are reported above; check the task with one file of each other input.
             split = (payload.get('split') or {}).get('input')
             runs = [(None, {**payload, 'inputs': {role: ids if role == split else ids[:1] for role, ids in payload.get('inputs', {}).items()}})]
+        # Every independent problem of the node, not only the first (giraf/field_issues.py).
+        issues = Issues(collect=True)
         try:
             # The first group stands for the others: they differ only in files and values.
-            manifest = validate_task(without_fields(runs[0][1]), fresh, diagnostics=True, pending_roles=pending[node_id])
+            validate_task(without_fields(runs[0][1]), fresh, diagnostics=True, pending_roles=pending[node_id], issues=issues)
+        except IssuesFound:
+            pass
         except (ValueError, KeyError, TypeError, OSError) as exc:
-            add('error', str(exc), node_id, field=field_of(exc))
-            continue
-        for warning in manifest.get('warnings', []):
+            issues.errors.append(exc)
+        # An input a connection already reports is not reported again from its files.
+        reported = wired.get(node_id, set())
+        for problem in issues.errors:
+            if field_of(problem) not in reported:
+                add('error', str(problem), node_id, field=field_of(problem))
+        for warning in issues.warnings:
             add('warning', warning, node_id, field=field_of(warning))
     return result
 

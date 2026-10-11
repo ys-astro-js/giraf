@@ -97,6 +97,35 @@ class WorkflowDiagnosticsTests(unittest.TestCase):
         unknown["payload"]["parameters"]["nosuch"] = 1
         self.assertEqual([d.get("field") for d in self.inspect([unknown]) if d["severity"] == "error"], [None])
 
+    def test_every_problem_of_a_node_is_reported_at_once(self):
+        """Diagnostics collect each input's and parameter's problem; a run still refuses on the first."""
+        from giraf.task_jobs import validate_task
+        payload = {"task": "ccdproc", "backend": "pyraf", "inputs": {}, "expressions": {"images": "@input.list"},
+                   "parameters": {"zerocor": "no", "darkcor": "no", "flatcor": "no", "overscan": "no", "trim": "no",
+                                  "fixpix": "no", "max_cache": -1, "interactive": "yes"},
+                   "workingDirectory": str(self.folder)}
+        node = {"id": "p", "label": "p", "payload": payload}
+        found = {(d["severity"], d.get("field"), d["message"]) for d in self.inspect([node])}
+        self.assertEqual(found, {
+            ("error", "images", "input.list: 목록 파일이 없습니다."),
+            ("error", "max_cache", "max_cache: 유효한 수치와 범위를 입력해 주세요."),
+            ("warning", "interactive", "interactive: 대화형 실행은 IRAF CL에서 진행합니다."),
+        })
+        with self.assertRaises(ValueError) as raised:
+            validate_task(payload, lambda id: None)
+        self.assertEqual((getattr(raised.exception, "field", None), str(raised.exception)),
+                         ("max_cache", "max_cache: 유효한 수치와 범위를 입력해 주세요."))
+
+    def test_a_problem_is_reported_once(self):
+        """An input a connection already reports is not reported again from its files."""
+        single = self.node("single", {"input": [self.row["id"]], "reference": [self.row["id"], self.row["id"]]})
+        single["payload"]["task"] = "images.immatch.imalign"
+        edges = [{"id": f"e{n}", "source": {"kind": "files", "ids": [self.row["id"]]}, "target": "single", "role": "reference"} for n in (1, 2)]
+        issues = [d for d in self.inspect([single], edges) if d["severity"] == "error"]
+        self.assertTrue(issues)
+        self.assertTrue(all(d.get("connectionId") for d in issues if d.get("field") == "reference"), issues)
+        self.assertEqual(len({d["id"] for d in issues}), len(issues))
+
     def test_external_file_changes_and_recovers_without_hash_or_mutation(self):
         nodes = [self.node("a", {"input": [self.row["id"]]}), self.node(inputs={"input": [self.row["id"]]})]
         edge = {"id": "result-edge", "source": {"kind": "result", "taskId": "a", "runId": "completed", "ids": [self.row["id"]]}, "target": "n", "role": "input"}

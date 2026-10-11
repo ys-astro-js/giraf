@@ -37,13 +37,61 @@ def field_of(problem):
     return getattr(problem, 'field', None)
 
 
-@contextmanager
-def in_field(field):
-    """A problem raised while checking one field names that field, unless it
-    already names its own."""
-    try:
-        yield
-    except FieldError:
-        raise
-    except ValueError as exc:
-        raise FieldError(field, str(exc)) from exc
+class IssuesFound(ValueError):
+    """Raised by Issues.halt when collected errors stop the check; it reads as
+    the first of them."""
+
+
+class Issues:
+    """The problems of one node's check.
+
+    A run refuses on its first error: `check` lets it through unchanged. The
+    diagnostics collect instead (`collect=True`): each `check` block is one
+    independent check, its error is kept and the next check goes on. A check
+    that needs an earlier one's result asks `failed(field)` or `halt()`s.
+    """
+
+    def __init__(self, collect=False):
+        self.collect = collect
+        self.errors = []
+        self.warnings = []
+        self.failed_fields = set()
+
+    @contextmanager
+    def check(self, field=None):
+        """One independent check; its problem names `field` unless it names its own."""
+        try:
+            yield
+        except IssuesFound:
+            raise
+        except ValueError as exc:
+            if field and not isinstance(exc, FieldError):
+                problem = FieldError(field, str(exc))
+                if not self.collect:
+                    raise problem from exc
+            else:
+                problem = exc
+                if not self.collect:
+                    raise
+            self.error(problem)
+            self.failed_fields.add(field or field_of(problem))
+
+    def error(self, problem):
+        """A problem found without raising: a run refuses on it."""
+        if not self.collect:
+            raise problem
+        if not any(str(e) == str(problem) and field_of(e) == field_of(problem) for e in self.errors):
+            self.errors.append(problem)
+
+    def warn(self, warning):
+        if warning not in self.warnings:
+            self.warnings.append(warning)
+
+    def failed(self, field):
+        """Did a check of `field` fail? Checks needing its files skip it."""
+        return field in self.failed_fields
+
+    def halt(self):
+        """Stop here when the rest needs what failed."""
+        if self.errors:
+            raise IssuesFound(str(self.errors[0]))

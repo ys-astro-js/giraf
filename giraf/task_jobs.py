@@ -17,7 +17,7 @@ from .task_inputs import resolve_task_inputs
 from .task_catalog import TASKS, parameters, CALIBRATIONS
 from .products import each_output_name, product_name
 from .request_schema import TaskRequest
-from .field_issues import FieldError
+from .field_issues import FieldError, Issues
 
 def digest(path):
     with Path(path).open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
@@ -30,105 +30,124 @@ def authorize_file_plan(manifest,token):
 DEFAULT_MAPPING = {'imagetyp':'IMAGETYP', 'exptime':'EXPTIME', 'darktime':'DARKTIME', 'subset':'FILTER'}
 
 
-def values(name, supplied, prefix=''):
+def values(name, supplied, prefix='', issues=None):
     """Checked values of a parameter group; a problem names its field as
-    `prefix + key` (giraf/field_issues.py)."""
+    `prefix + key` (giraf/field_issues.py). With collecting `issues` every
+    parameter is checked and a bad one is left out."""
+    issues = issues or Issues()
     allowed = {p['name']:p for p in parameters(name)}
     if set(supplied) - set(allowed):
-        raise ValueError(f'{name}: 알 수 없는 파라미터입니다: {", ".join(set(supplied)-set(allowed))}')
+        issues.error(ValueError(f'{name}: 알 수 없는 파라미터입니다: {", ".join(set(supplied)-set(allowed))}'))
     result = {}
     for key, p in allowed.items():
-        value = supplied.get(key, p['default'])
-        if p['type'] == 'b':
-            if value not in (True, False, 'yes', 'no'):
-                raise FieldError(prefix + key, f'{key}: yes 또는 no를 선택해 주세요.')
-            value = 'yes' if value in (True, 'yes') else 'no'
-        elif p['type'] in ('i','r','d'):
-            if str(value).upper() == 'INDEF':
-                value = 'INDEF'
-            else:
-                try:
-                    number = float(value)
-                    if not math.isfinite(number) or (p['type']=='i' and number != int(number)):
-                        raise ValueError()
-                    value = int(number) if p['type']=='i' else number
-                    if p['min'] != '' and value < float(p['min']): raise ValueError()
-                    if p['max'] != '' and value > float(p['max']): raise ValueError()
-                except (ValueError, TypeError, OverflowError):
-                    raise FieldError(prefix + key, f'{key}: 유효한 {"정수" if p["type"]=="i" else "수치"}와 범위를 확인해 주세요.')
-        else:
-            value = str(value)
-            if len(value)>500 or any(c in value for c in '\n\r\x00'):
-                raise FieldError(prefix + key, f'{key}: 한 줄의 값을 입력해 주세요.')
-        if p['choices'] and value not in p['choices']:
-            raise FieldError(prefix + key, f'{key}: 허용되지 않은 값입니다.')
-        result[key] = value
+        with issues.check():
+            result[key] = checked_value(key, p, supplied.get(key, p['default']), prefix)
     return result
 
 
-def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozenset()):
+def checked_value(key, p, value, prefix):
+    """One legacy parameter's checked value."""
+    if p['type'] == 'b':
+        if value not in (True, False, 'yes', 'no'):
+            raise FieldError(prefix + key, f'{key}: yes 또는 no를 선택해 주세요.')
+        value = 'yes' if value in (True, 'yes') else 'no'
+    elif p['type'] in ('i','r','d'):
+        if str(value).upper() == 'INDEF':
+            value = 'INDEF'
+        else:
+            try:
+                number = float(value)
+                if not math.isfinite(number) or (p['type']=='i' and number != int(number)):
+                    raise ValueError()
+                value = int(number) if p['type']=='i' else number
+                if p['min'] != '' and value < float(p['min']): raise ValueError()
+                if p['max'] != '' and value > float(p['max']): raise ValueError()
+            except (ValueError, TypeError, OverflowError):
+                raise FieldError(prefix + key, f'{key}: 유효한 {"정수" if p["type"]=="i" else "수치"}와 범위를 확인해 주세요.')
+    else:
+        value = str(value)
+        if len(value)>500 or any(c in value for c in '\n\r\x00'):
+            raise FieldError(prefix + key, f'{key}: 한 줄의 값을 입력해 주세요.')
+    if p['choices'] and value not in p['choices']:
+        raise FieldError(prefix + key, f'{key}: 허용되지 않은 값입니다.')
+    return value
+
+
+def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozenset(), issues=None):
+    """The run's manifest. A run refuses on the first problem; collecting
+    `issues` (giraf/field_issues.py) check every input and parameter first."""
+    issues = issues or Issues()
     payload = TaskRequest.model_validate(payload).model_dump(exclude_unset=True)
     name = payload.get('task')
     if name not in TASKS: raise ValueError('지원하는 IRAF task를 선택해 주세요.')
     spec = TASKS[name]
     if spec.get('adapter') == 'generic':
         from .generic_tasks import validate_generic
-        return validate_generic(spec, payload, resolve, diagnostics=diagnostics, pending_roles=pending_roles)
-    params = values(name, payload.get('parameters', {}))
-    prep = values('ccdproc', payload.get('ccdproc', {}), 'ccdproc.')
-    package = values('ccdred', payload.get('ccdred', {}), 'ccdred.')
+        return validate_generic(spec, payload, resolve, diagnostics=diagnostics, pending_roles=pending_roles, issues=issues)
+    params = values(name, payload.get('parameters', {}), issues=issues)
+    prep = values('ccdproc', payload.get('ccdproc', {}), 'ccdproc.', issues)
+    package = values('ccdred', payload.get('ccdred', {}), 'ccdred.', issues)
     backend = payload.get('backend','cl')
-    if backend not in ('cl','pyraf'): raise ValueError('CL 또는 PyRAF를 선택해 주세요.')
+    with issues.check():
+        if backend not in ('cl','pyraf'): raise ValueError('CL 또는 PyRAF를 선택해 주세요.')
     directory = str(Path(payload.get('workingDirectory') or DATA).expanduser().resolve())
     inputs, sources, input_lists, expressions = resolve_task_inputs(
         spec, payload, directory, resolve, digest, CALIBRATIONS,
-        diagnostics=diagnostics, pending_roles=pending_roles)
-    main = inputs[spec['inputs'][0]['name']]
+        diagnostics=diagnostics, pending_roles=pending_roles, issues=issues)
+    # Checks of an input's files or a parameter's value skip one that failed.
+    first = spec['inputs'][0]['name']
+    main = inputs.get(first, [])
     corrections = params if name=='ccdproc' else prep
     uses_prep = name=='ccdproc' or (spec.get('preprocess') and (params.get('process')=='yes' or name.startswith('mk')))
-    if name=='mkskyflat' and not inputs.get('flat') and 'flat' not in pending_roles:
-        raise FieldError('flat', 'mkskyflat: sky 영상에 사용한 원래 flat 기준 영상을 선택해 주세요.')
+    def missing(role):
+        return not inputs.get(role) and role not in pending_roles and not issues.failed(role)
+    if name=='mkskyflat' and missing('flat'):
+        issues.error(FieldError('flat', 'mkskyflat: sky 영상에 사용한 원래 flat 기준 영상을 선택해 주세요.'))
     if uses_prep:
         for flag, role in [('zerocor','zero'),('darkcor','dark'),('flatcor','flat'),('illumcor','illum'),('fringecor','fringe')]:
-            if corrections[flag]=='yes' and not inputs.get(role) and role not in pending_roles:
-                raise FieldError(role, f'ccdproc.{flag}=yes: {role} 기준 영상을 선택하거나 해당 보정을 꺼 주세요.')
-        if corrections['fixpix']=='yes' and not inputs.get('fixfile') and 'fixfile' not in pending_roles:
-            raise FieldError('fixfile', 'ccdproc.fixpix=yes: 불량 픽셀 영역 파일을 선택해 주세요.')
+            if corrections.get(flag)=='yes' and missing(role):
+                issues.error(FieldError(role, f'ccdproc.{flag}=yes: {role} 기준 영상을 선택하거나 해당 보정을 꺼 주세요.'))
+        if corrections.get('fixpix')=='yes' and missing('fixfile'):
+            issues.error(FieldError('fixfile', 'ccdproc.fixpix=yes: 불량 픽셀 영역 파일을 선택해 주세요.'))
         for flag, field in [('overscan','biassec'),('trim','trimsec')]:
-            if corrections[flag]=='yes' and not corrections[field]:
+            if corrections.get(flag)=='yes' and field in corrections and not corrections[field]:
                 # Header regions remain valid IRAF input; no invented geometry.
                 from astropy.io import fits
                 if main and any(not fits.getheader(sources[id]['path']).get(field.upper()) for id in main):
-                    raise FieldError(('' if name=='ccdproc' else 'ccdproc.')+field, f'ccdproc.{flag}=yes: {field} 영역을 지정해 주세요. 입력 헤더에도 영역이 없습니다.')
-    if name=='ccdhedit' and not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,67}', params['parameter']):
-        raise FieldError('parameter', '편집할 헤더 parameter를 입력해 주세요. 예: subset')
-    if params.get('clobber')=='yes':raise FieldError('clobber', 'clobber=yes: 설치 IRAF combine에서 폐기된 옵션입니다. 새 출력 경로를 사용해 주세요.')
+                    issues.error(FieldError(('' if name=='ccdproc' else 'ccdproc.')+field, f'ccdproc.{flag}=yes: {field} 영역을 지정해 주세요. 입력 헤더에도 영역이 없습니다.'))
+    if name=='ccdhedit' and 'parameter' in params and not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,67}', params['parameter']):
+        issues.error(FieldError('parameter', '편집할 헤더 parameter를 입력해 주세요. 예: subset'))
+    if params.get('clobber')=='yes':issues.error(FieldError('clobber', 'clobber=yes: 설치 IRAF combine에서 폐기된 옵션입니다. 새 출력 경로를 사용해 주세요.'))
     output = payload.get('output', {})
     output_name = str(output.get('name', spec['output']['default'] if spec['output'] else ''))
     inplace=name=='ccdproc' and payload.get('filePolicy',{}).get('mode')=='direct' and not output_name
     if spec['output'] and ((not output_name and not inplace) or len(output_name)>20000 or any(c in output_name for c in '\n\r\x00') or output_name in ('.','..')):
-        raise ValueError('출력 이름 또는 IRAF 출력 목록을 한 줄로 입력해 주세요.')
+        issues.error(ValueError('출력 이름 또는 IRAF 출력 목록을 한 줄로 입력해 주세요.'))
     mapping = payload.get('mapping', DEFAULT_MAPPING)
     if set(mapping)!=set(DEFAULT_MAPPING) or any(not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,67}', str(v)) for v in mapping.values()):
-        raise ValueError('헤더 매핑에 FITS 키워드를 입력해 주세요.')
+        issues.error(ValueError('헤더 매핑에 FITS 키워드를 입력해 주세요.'))
     exam = payload.get('exam', {})
-    if name=='imexamine' and diagnostics and not main and spec['inputs'][0]['name'] in pending_roles:
-        if exam.get('key') not in ('r','a','m','l','c'): raise ValueError('지원하는 조사 동작을 선택해 주세요.')
+    waiting = diagnostics and not main and first in pending_roles
+    if name=='imexamine' and waiting:
+        if exam.get('key') not in ('r','a','m','l','c'): issues.error(ValueError('지원하는 조사 동작을 선택해 주세요.'))
         for group in ('rimexam','limexam','cimexam'):
-            values(group, exam.get('parameters', {}).get(group, {}), group + '.')
-    if name=='imexamine' and not (diagnostics and not main and spec['inputs'][0]['name'] in pending_roles):
-        try:
-            x,y=float(exam['x']),float(exam['y'])
-            row = sources[main[0]]
-            if not (math.isfinite(x) and math.isfinite(y) and 1<=x<=row['width'] and 1<=y<=row['height']): raise ValueError()
-        except (ValueError, KeyError, TypeError): raise ValueError('영상 안의 조사할 위치를 클릭해 주세요.')
-        if exam.get('key') not in ('r','a','m','l','c'): raise ValueError('지원하는 조사 동작을 선택해 주세요.')
-        exam = dict(x=x,y=y,key=exam['key'], parameters={n:values(n,exam.get('parameters',{}).get(n,{}),n+'.') for n in ('rimexam','limexam','cimexam')})
+            values(group, exam.get('parameters', {}).get(group, {}), group + '.', issues)
+    if name=='imexamine' and not waiting and not issues.failed(first):
+        with issues.check():
+            try:
+                x,y=float(exam['x']),float(exam['y'])
+                row = sources[main[0]]
+                if not (math.isfinite(x) and math.isfinite(y) and 1<=x<=row['width'] and 1<=y<=row['height']): raise ValueError()
+            except (ValueError, KeyError, TypeError): raise ValueError('영상 안의 조사할 위치를 클릭해 주세요.')
+            if exam.get('key') not in ('r','a','m','l','c'): raise ValueError('지원하는 조사 동작을 선택해 주세요.')
+            exam = dict(x=x,y=y,key=exam['key'], parameters={n:values(n,exam.get('parameters',{}).get(n,{}),n+'.',issues) for n in ('rimexam','limexam','cimexam')})
     section = str(payload.get('section','')).strip()
     if section and not re.fullmatch(r'(?:\[[\w*,:+ -]+\])+', section):
-        raise ValueError('영상 영역 형식을 확인해 주세요. 예: [500:1500,500:1500]')
+        issues.error(ValueError('영상 영역 형식을 확인해 주세요. 예: [500:1500,500:1500]'))
     policy=payload.get('filePolicy',{'mode':'copy','backup':True})
-    if policy.get('mode') not in ('copy','direct'):raise ValueError('파일 대상 모드를 선택해 주세요.')
+    if policy.get('mode') not in ('copy','direct'):issues.error(ValueError('파일 대상 모드를 선택해 주세요.'))
+    # The output names need every input's files.
+    issues.halt()
     m=dict(operation='task', task=name, name=name, backend=backend, parameters=params,
                 ccdproc=prep, ccdred=package, inputs=inputs, rows=list(sources.values()),
                 output=dict(name=output_name), mapping=mapping, exam=exam, section=section,

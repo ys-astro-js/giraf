@@ -3,10 +3,12 @@ from copy import deepcopy
 from pathlib import Path
 import hashlib
 from .task_expressions import resolve_expression, inspect_expression
-from .field_issues import FieldError, in_field
+from .field_issues import FieldError, Issues
 
 
-def resolve_task_inputs(spec, payload, directory, resolve, digest, calibrations, *, diagnostics, pending_roles):
+def resolve_task_inputs(spec, payload, directory, resolve, digest, calibrations, *, diagnostics, pending_roles, issues=None):
+    """Each role checked on its own; a role that fails is left out of `inputs`."""
+    issues = issues or Issues()
     inputs = {}
     sources = {}
     roles = list(spec['inputs'])
@@ -15,13 +17,16 @@ def resolve_task_inputs(spec, payload, directory, resolve, digest, calibrations,
     supplied = deepcopy(payload.get('inputs', {}))
     expressions=payload.get('expressions',{})
     allowed = {r['name'] for r in roles}
-    if set(supplied)-allowed: raise ValueError('지원하지 않는 입력 역할입니다.')
-    if set(expressions)-allowed:raise ValueError('지원하지 않는 표현식 역할입니다.')
+    with issues.check():
+        if set(supplied)-allowed: raise ValueError('지원하지 않는 입력 역할입니다.')
+    with issues.check():
+        if set(expressions)-allowed:raise ValueError('지원하지 않는 표현식 역할입니다.')
     expression_rows={}
     for role in roles:
         expression=expressions.get(role['name'],'')
         if not expression:continue
-        with in_field(role['name']):
+        expanded=None
+        with issues.check(role['name']):
             if role['kind']=='image':
                 expanded=(inspect_expression if diagnostics else resolve_expression)(expression,directory)
             else:
@@ -29,21 +34,26 @@ def resolve_task_inputs(spec, payload, directory, resolve, digest, calibrations,
                 if not path.is_absolute():path=Path(directory)/path
                 path=path.resolve()
                 expanded=[dict(id=hashlib.sha256(str(path).encode()).hexdigest()[:20],path=str(path),name=path.name,label=path.name,asset='text')]
+        if expanded is None:continue
         supplied[role['name']]=[r['id'] for r in expanded]
         expression_rows.update({r['id']:r for r in expanded})
     from .image_lists import expand_image_selection, accepts_asset
     input_lists = {}
     for role in roles:
+        if issues.failed(role['name']):continue
         selection = supplied.get(role['name'], [])
-        if not isinstance(selection, list) or any(not isinstance(i, str) for i in selection):
-            raise FieldError(role['name'], '파일 ID 목록을 선택해 주세요.')
-        with in_field(role['name']):
+        expanded=None
+        with issues.check(role['name']):
+            if not isinstance(selection, list) or any(not isinstance(i, str) for i in selection):
+                raise FieldError(role['name'], '파일 ID 목록을 선택해 주세요.')
             expanded, list_sources = expand_image_selection(role, selection, lambda id: expression_rows[id] if id in expression_rows else resolve(id), directory, inspection=diagnostics)
+        if expanded is None:continue
         supplied[role['name']] = [row['id'] for row in expanded]
         expression_rows.update({row['id']: row for row in expanded})
         input_lists.update({row['path']: row for row in list_sources})
     for role in roles:
-        with in_field(role['name']):
+        if issues.failed(role['name']):continue
+        with issues.check(role['name']):
             ids = supplied.get(role['name'], [])
             if not isinstance(ids, list) or any(not isinstance(i,str) for i in ids): raise ValueError('파일 ID 목록을 선택해 주세요.')
             if role.get('required') and not ids and role['name'] not in pending_roles: raise ValueError(role['label']+'을 선택해 주세요.')
@@ -58,4 +68,5 @@ def resolve_task_inputs(spec, payload, directory, resolve, digest, calibrations,
                     raise ValueError(row['name']+': 텍스트 파일을 선택해 주세요.')
                 if not diagnostics: row['sha256']=digest(row['path'])
                 sources[id] = row
+        if issues.failed(role['name']):inputs.pop(role['name'],None)
     return inputs, sources, input_lists, expressions

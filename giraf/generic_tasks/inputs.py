@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 from ..task_capabilities import parameter_number
 from ..task_expressions import resolve_expression, inspect_expression
-from ..field_issues import in_field
+from ..field_issues import Issues
 
 
 def validate_cursor_file(path, name):
@@ -60,7 +60,9 @@ def accepts_source(slot, source):
     return source in slot.get('sources', (source,))
 
 
-def resolve_generic_inputs(spec, payload, supplied, directory, resolve, *, hash_file, diagnostics, pending_roles):
+def resolve_generic_inputs(spec, payload, supplied, directory, resolve, *, hash_file, diagnostics, pending_roles, issues=None):
+    """Each input checked on its own; an input that fails is left out of `inputs`."""
+    issues = issues or Issues()
     cursor_commands = payload.get('cursorCommands', {})
     text_inputs = payload.get('textInputs', {})
     output_roles = {slot['name'] for slot in spec['outputs']}
@@ -76,10 +78,11 @@ def resolve_generic_inputs(spec, payload, supplied, directory, resolve, *, hash_
                        if k not in parameter_roles or v != []}
     expressions = {k: v for k, v in expressions.items()
                    if k not in parameter_roles or v != ''}
-    if set(supplied_inputs) - roles or set(expressions) - roles: raise ValueError('지원하지 않는 입력 역할입니다.')
+    with issues.check():
+        if set(supplied_inputs) - roles or set(expressions) - roles: raise ValueError('지원하지 않는 입력 역할입니다.')
     scalar_values = {}
     for slot in spec['inputs']:
-        with in_field(slot['name']):
+        with issues.check(slot['name']):
             name = slot['name']; ids = supplied_inputs.get(name, [])
             if not isinstance(ids, list) or any(not isinstance(i, str) for i in ids): raise ValueError(f'{name}: 파일 목록을 선택해 주세요.')
             expanded = {}
@@ -122,4 +125,6 @@ def resolve_generic_inputs(spec, payload, supplied, directory, resolve, *, hash_
                     validate_cursor_file(path, name)
                 if not diagnostics: row['sha256'] = hash_file(path)
                 sources[id] = row
+        if issues.failed(slot['name']):
+            inputs.pop(slot['name'], None)
     return inputs, sources, input_lists, supplied_inputs, expressions, scalar_values
