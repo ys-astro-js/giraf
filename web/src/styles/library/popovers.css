@@ -75,6 +75,22 @@
   font-size: 12px;
   color: var(--muted-foreground);
 }
+.library-task-text {
+  flex: 1;
+}
+.library-task-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.library-task-package {
+  margin-left: auto;
+  font-size: 11px;
+}
+.library-task-flag {
+  margin-right: 8px;
+}
 .library-chevron {
   transition: rotate var(--motion-quick) ease-out;
 }

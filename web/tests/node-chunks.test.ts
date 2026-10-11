@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { isModeOnly, nodeTiles } from "../src/lib/node-chunks"
-import { taskPackageTree } from "../src/lib/task-tree"
+import { taskPackageTree, taskRowText } from "../src/lib/task-tree"
 import type { Spec } from "../src/lib/workbench"
 
 const node = (name: string, run?: string) =>
@@ -33,4 +33,18 @@ test("the package tree leaves out superseded packages", () => {
     { name: "images.imcopy", package: "images" },
   ] as Spec[]
   expect(taskPackageTree(tasks).map((n) => n.label)).toEqual(["images"])
+})
+
+test("a task row names the task and its package, and says what it does only when that is not the name again", () => {
+  const daofind = (pkg: string, description?: string) =>
+    ({ name: `${pkg}.daofind`, taskName: "daofind", title: "daofind", package: pkg, description }) as Spec
+  expect(taskRowText(daofind("noao.digiphot.apphot", "Find stars in an image"))).toEqual(
+    { name: "daofind", package: "noao.digiphot.apphot", description: "Find stars in an image" })
+  // No description: nothing under the name, not the name twice.
+  expect(taskRowText(daofind("noao.digiphot.daophot"))).toEqual({ name: "daofind", package: "noao.digiphot.daophot" })
+  expect(taskRowText({ name: "zerocombine", title: "zerocombine", package: "noao.imred.ccdred", description: "ZeroCombine" } as Spec))
+    .toEqual({ name: "zerocombine", package: "noao.imred.ccdred" })
+  // A GIRAF node is named by its title and has no package to show.
+  expect(taskRowText({ name: "giraf.file_input", taskName: "파일 입력", title: "파일 입력", package: "giraf", description: "고른 파일을 넘김" } as Spec))
+    .toEqual({ name: "파일 입력", description: "고른 파일을 넘김" })
 })

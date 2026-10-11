@@ -1,4 +1,4 @@
-import type { Spec } from './workbench'
+import { isGirafNode, taskDisplayName, type Spec } from './workbench'
 
 export type TaskPackage = { label: string; path: string; children: TaskPackage[]; tasks: Spec[] }
 
@@ -35,4 +35,16 @@ export function taskPackageTree(tasks: Spec[]): TaskPackage[] {
   }
   sort(roots)
   return roots
+}
+
+/**
+ * What a task's row says: its name, the package it is in (IRAF tasks share
+ * names across packages), and what it does, left out when that only repeats
+ * the name.
+ */
+export function taskRowText(task: Spec): { name: string; package?: string; description?: string } {
+  const name = isGirafNode(task) ? task.title || task.taskName || task.name : task.taskName || taskDisplayName(task.name)
+  const description = [task.description, task.title].map((text) => text?.trim())
+    .find((text) => text && text.toLowerCase() !== name.toLowerCase())
+  return { name, ...(isGirafNode(task) ? {} : { package: task.package }), ...(description ? { description } : {}) }
 }

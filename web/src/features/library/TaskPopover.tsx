@@ -16,8 +16,8 @@ import { NodeIcon } from "@/components/node-icon"
 import { SearchField } from "@/components/search-field"
 import { ToolbarButton, ToolbarCluster, ToolbarGroup } from "@/components/toolbar"
 import { nodeTiles } from "@/lib/node-chunks"
-import { taskPackageTree, type TaskPackage } from "@/lib/task-tree"
-import { isGirafNode, taskDisplayName, type Spec } from "@/lib/workbench"
+import { taskPackageTree, taskRowText, type TaskPackage } from "@/lib/task-tree"
+import { isGirafNode, type Spec } from "@/lib/workbench"
 import { useWorkbench } from "@/features/workbench/context"
 import { CommandEntry } from "./CommandEntry"
 import { ListSkeleton, NoFiles, RefreshButton } from "./shared"
@@ -29,27 +29,29 @@ const matches = (task: Spec, query: string) =>
     .toLowerCase()
     .includes(query.trim().toLowerCase())
 
-/** One task to add: its name and what it does. */
-function TaskOption({ task, onAdd }: { task: Spec; onAdd: () => void }) {
-  const name = task.taskName || taskDisplayName(task.name)
+/** One task to add: its name and package, and what it does. */
+function TaskOption({ task, onAdd, showPackage = true }: { task: Spec; onAdd: () => void; showPackage?: boolean }) {
+  const { name, package: path, description } = taskRowText(task)
   return (
     <button
       type="button"
       className="library-option"
-      title={`${task.package}.${name}`}
+      title={path ? `${path}.${name}` : name}
       aria-label={`${name} 추가`}
       onClick={onAdd}
     >
       <NodeIcon icon={task.icon} run={task.run} />
-      <span className="library-option-text">
-        <span className="library-option-name">{name}</span>
-        <span className="library-option-detail">
-          {task.runnable === false
-            ? `실행 미지원 · ${task.package}`
-            : (isGirafNode(task) && task.description) ||
-              task.title ||
-              task.package}
+      <span className="library-option-text library-task-text">
+        <span className="library-task-title">
+          <span className="library-option-name">{name}</span>
+          {showPackage && path && <span className="library-option-detail library-task-package">{path}</span>}
         </span>
+        {(task.runnable === false || description) && (
+          <span className="library-option-detail">
+            {task.runnable === false && <span className="library-task-flag">실행 미지원</span>}
+            {description}
+          </span>
+        )}
       </span>
     </button>
   )
@@ -120,7 +122,7 @@ export function AddTaskButton() {
         <CollapsibleContent className="library-branch">
           {node.children.map(branch)}
           {node.tasks.map((task) => (
-            <TaskOption key={task.name} task={task} onAdd={() => add(task)} />
+            <TaskOption key={task.name} task={task} showPackage={false} onAdd={() => add(task)} />
           ))}
         </CollapsibleContent>
       </Collapsible>
@@ -234,8 +236,8 @@ export function AddTaskButton() {
                   {nodeTiles(nodes).map((task) => (
                     <Tile
                       key={task.name}
-                      label={task.title}
-                      description={task.description}
+                      label={taskRowText(task).name}
+                      description={taskRowText(task).description}
                       icon={<NodeIcon icon={task.icon} run={task.run} />}
                       onClick={() => add(task)}
                     />
