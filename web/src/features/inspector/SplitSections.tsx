@@ -14,6 +14,7 @@ import { groupedValue } from "@/lib/group-values"
 import { taskGroups } from "@/lib/splits"
 import { commandsRequest, type Instance, type TaskMap } from "@/lib/task-map"
 import { pinnedKeys } from "@/lib/values"
+import { CommandLine } from "./CommandLine"
 import { api, type Catalog, type Frame } from "@/lib/workbench"
 
 type Props = { map: TaskMap; catalog: Catalog; task: Instance; rows: Frame[] }
@@ -60,9 +61,11 @@ export function GroupValuesSection({ map, catalog, task, rows }: Props) {
 
 type CommandGroup = { id: string; name: string; files: string[]; commands?: string[]; problem?: string }
 
-/** 명령: the CL line each group runs. */
+/** 명령: the CL line each group runs, each editable in place (CommandLine). */
 export function CommandsSection({ map, catalog, task }: Omit<Props, "rows">) {
-  const folder = useContext(WorkbenchContext)?.workspace.folder ?? ""
+  const workbench = useContext(WorkbenchContext)
+  const folder = workbench?.workspace.folder ?? ""
+  const spec = catalog.tasks.find((s) => s.name === task.task)
   const request = commandsRequest(map, catalog, task.id, folder)
   const key = JSON.stringify(request ?? null)
   const { data } = useQuery({
@@ -72,14 +75,23 @@ export function CommandsSection({ map, catalog, task }: Omit<Props, "rows">) {
     placeholderData: keepPreviousData,
     retry: false,
   })
-  const lines = (data?.groups ?? []).flatMap((g) => g.commands?.map((line) => ({ key: `${g.id}:${line}`, line })) ?? [])
+  const groups = (data?.groups ?? []).map((g) => g.id)
+  const lines = (data?.groups ?? []).flatMap((g) => g.commands?.map((line, i) => ({ key: `${g.id}:${i}`, line, group: g.id })) ?? [])
   const problems = [...new Set([data?.problem, ...(data?.groups ?? []).map((g) => g.problem && (g.name ? `${g.name}: ${g.problem}` : g.problem))].filter(Boolean))] as string[]
   if (!lines.length && !problems.length) return null
   return (
     <section className="inspector-section" aria-label="명령">
       <h3>명령</h3>
       <ul className="input-files pass-files commands" aria-label="명령">
-        {lines.map(({ key, line }) => <li key={key}><span className="font-mono command-line">{line}</span></li>)}
+        {lines.map(({ key, line, group }) => (
+          <li key={key}>
+            {workbench && spec ? (
+              <CommandLine line={line} task={task} spec={spec} catalog={catalog}
+                group={groups.length > 1 ? { id: group, groups } : undefined}
+                edit={(fn) => workbench.edit(fn, task.id)} />
+            ) : <span className="font-mono command-line">{line}</span>}
+          </li>
+        ))}
         {problems.map((message) => <li key={message}><span className="pass-value" data-missing="">{message}</span></li>)}
       </ul>
     </section>

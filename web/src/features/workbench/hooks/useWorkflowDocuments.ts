@@ -1,6 +1,7 @@
 import type { createDocumentAutosave } from "@/lib/document-autosave"
 import type { createWorkflowDiagnosticsController } from "@/lib/live-diagnostics"
 import { splitIssues } from "@/lib/splits"
+import { commandIssues } from "@/lib/command-edit"
 import { initialPreferences } from "@/features/workbench/types"
 import { createEditorStore } from "@/lib/edit-history"
 import { valueIssues } from "@/lib/value-modes"
@@ -93,6 +94,7 @@ export function useWorkflowDocuments({
       [
         ...valueIssues(nextMap, catalog),
         ...splitIssues(nextMap),
+        ...commandIssues(nextMap),
       ]
     )
     replacePreferences(next)

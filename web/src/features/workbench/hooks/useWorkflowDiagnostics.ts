@@ -2,6 +2,7 @@ import { diagnostics } from "@/lib/diagnostics"
 import { createWorkflowDiagnosticsController } from "@/lib/live-diagnostics"
 import { valueIssues } from "@/lib/value-modes"
 import { splitIssues } from "@/lib/splits"
+import { commandIssues } from "@/lib/command-edit"
 import { useEffect, useRef, useState } from "react"
 import { type Catalog, type Preferences, type Workspace } from "@/lib/workbench"
 import {
@@ -48,7 +49,7 @@ export function useWorkflowDiagnostics({
       documentId,
       workflowDiagnosticRequest(map, catalog, workspace.folder),
       false,
-      [...valueIssues(map, catalog), ...splitIssues(map)]
+      [...valueIssues(map, catalog), ...splitIssues(map), ...commandIssues(map)]
     )
     // The signature excludes position, selection, zoom and other view changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps

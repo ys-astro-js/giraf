@@ -57,6 +57,8 @@ export type Instance = {
   passed?: Record<string, string[]>
   /** An older document's loop region around it was unwrapped; warns until its split is set (lib/region-migration). */
   migrated?: true
+  /** What its last edited command line could not set (lib/command-edit); warns until the next edit. */
+  commandIssues?: string[]
   subflowId?: string
 }
 
