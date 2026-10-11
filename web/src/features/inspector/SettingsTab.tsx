@@ -23,6 +23,7 @@ import { isValueNode } from "@/lib/values"
 import { type ParameterGroup } from "@/lib/parameter-presentation"
 import { MeasurementsSection } from "./Measurements"
 import { CommandsSection, GroupValuesSection } from "./SplitSections"
+import { consumerGroups } from "@/lib/splits"
 import { isGirafNode } from "@/lib/workbench"
 
 export function InspectorSettings({
@@ -71,7 +72,7 @@ export function InspectorSettings({
         {spec.run === "value-compute" ? (
           <ComputeRowsEditor map={map} catalog={catalog} task={task} edit={edit} />
         ) : (
-          <ValueRowsEditor spec={spec} task={task} edit={edit} />
+          <ValueRowsEditor spec={spec} task={task} edit={edit} groups={consumerGroups(map, task.id, rows)} />
         )}
         {!isGirafNode(spec) && <GroupValuesSection map={map} catalog={catalog} task={task} rows={rows} />}
         {(!isValueNode(spec) || groups.length > 0) && (

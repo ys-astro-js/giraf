@@ -415,7 +415,7 @@ export function valueRequest(map: TaskMap, catalog: Catalog, inRun: Set<string> 
     const groups = groupsOf?.(target)
     return groups && groups.length > 1 ? { groups } : {}
   }
-  type ValueNodeRequest = { id: string; run: string; rows: { name: string; value: string; type?: string }[]
+  type ValueNodeRequest = { id: string; run: string; rows: { name: string; value: string; type?: string }[]; groupValues?: Record<string, Record<string, string>>
     files: string[]; fileLinks: Record<string, unknown>[]; inputs: Record<string, Ref> }
   const nodes = map.tasks.flatMap((task): ValueNodeRequest[] => {
     const spec = specOf(catalog, task)
@@ -451,6 +451,8 @@ export function valueRequest(map: TaskMap, catalog: Catalog, inRun: Set<string> 
       return ref ? [[c.role.slice(PARAM_HANDLE.length), ref]] : []
     }))
     return [{ id: task.id, run: spec.run, rows: rowsOf(task).filter((r) => r.name.trim()).map((r): { name: string; value: string; type?: string } => ({ name: r.name, value: r.value })),
+      // A constant's value per group of the split tasks it feeds (lib/splits).
+      ...(spec.run === "value-constant" && task.draft.groupValues ? { groupValues: task.draft.groupValues } : {}),
       files, fileLinks, inputs }]
   })
   const links: ValueLink[] = []

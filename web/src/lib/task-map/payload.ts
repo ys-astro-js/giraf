@@ -107,7 +107,8 @@ function taskPayload(t: Instance, inputs: Record<string, string[]>) {
     exam: t.draft.exam,
     expressions: t.expressions,
     filePolicy: t.filePolicy,
-    // Split execution (lib/splits, giraf/splits.py).
+    // Selection and split execution (lib/splits, giraf/splits.py).
+    ...(t.draft.select && Object.keys(t.draft.select).length ? { select: t.draft.select } : {}),
     ...(t.draft.split?.by?.length ? { split: t.draft.split } : {}),
     ...(t.draft.pairing && Object.keys(t.draft.pairing).length ? { pairing: t.draft.pairing } : {}),
     ...(t.draft.groupValues && Object.keys(t.draft.groupValues).length ? { groupValues: t.draft.groupValues } : {}),

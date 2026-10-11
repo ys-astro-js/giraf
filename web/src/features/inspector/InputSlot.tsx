@@ -5,8 +5,8 @@ import { CursorInput } from "@/components/cursor-input"
 
 import { isGirafNode, type Catalog, type Spec, type Frame, type Slot } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
-import { splitOf } from "@/lib/splits"
-import { PairControl, SplitControl } from "./SplitControls"
+import { inputFiles, splitOf } from "@/lib/splits"
+import { PairControl, SelectControl, SplitControl } from "./SplitControls"
 
 import type { Source } from "@/lib/task-map"
 import type * as React from "react"
@@ -112,8 +112,9 @@ export function InspectorInputSlot({
       onInputSource={onInputSource}
       map={map}
       task={task}
-      count={!expression && (links.length || ids.length) && !pending ? ids.length : undefined}
+      count={!expression && (links.length || ids.length) && !pending ? inputFiles(map, task, role, rows).ids.length : undefined}
     >
+      {several && !expression && s.multiple && <SelectControl map={map} task={task} role={role} rows={rows} edit={edit} />}
       {control}
     </InspectorFileSource>
   )

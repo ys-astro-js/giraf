@@ -44,6 +44,11 @@ class SplitPart(RequestModel):
     each: bool | None = None
 
 
+class Select(RequestModel):
+    key: str
+    values: list[str] = Field(default_factory=list)
+
+
 class Split(RequestModel):
     input: str
     by: list[SplitPart] = Field(default_factory=list)
@@ -80,6 +85,7 @@ class TaskRequest(RequestModel):
     instanceId: str | None = None
     fileConfirmation: str | None = None
     # Split execution (giraf/splits.py); IRAF validation never reads these.
+    select: dict[str, Select] = Field(default_factory=dict)
     split: Split | None = None
     pairing: dict[str, PairRule] = Field(default_factory=dict)
     groupValues: dict[str, dict[str, ParameterValue]] = Field(default_factory=dict)
@@ -120,6 +126,8 @@ class ValueNode(RequestModel):
     id: str
     run: Literal['value-constant', 'value-header', 'value-compute', 'pset']
     rows: list[ValueRow] = Field(default_factory=list)
+    # A constant's value per group of the split tasks it feeds: {row: {group id: value}}.
+    groupValues: dict[str, dict[str, str]] = Field(default_factory=dict)
     files: list[str] = Field(default_factory=list)
     fileLinks: list[dict[str, ParameterValue | list[str] | dict[str, str] | None]] = Field(default_factory=list)
     inputs: dict[str, ValueRef] = Field(default_factory=dict)

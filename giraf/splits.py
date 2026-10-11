@@ -4,6 +4,7 @@ A task may split ONE of its file-list inputs into groups; each group is one
 IRAF invocation with that group's files as the input list. The settings are
 part of the task's payload:
 
+  select:      {<input>: {key, values: [value]}}
   split:       {input, by: [part]}
   part:        {key: <header keyword>} | {per: N} | {each: true}
   pairing:     {<input>: rule}
@@ -11,7 +12,8 @@ part of the task's payload:
   groupValues: {<parameter>: {<group id>: value}}   ('pset.name' for a pset parameter)
   formulas:    {<parameter>: <IRAF expression of the task's other parameters>}
 
-Parts refine the groups in order: a key groups by the real FITS header value,
+A selection (고르기) keeps only an input's files whose real header value is
+one of `values`; it applies before splitting. Parts refine the groups in order: a key groups by the real FITS header value,
 `per` chunks each group's files in file-name order, `each` makes a group of
 every file. Another input with several files reaches each group by its rule;
 one file (or none) goes to every group, as IRAF lists do. Nothing is guessed:
@@ -24,7 +26,7 @@ import re
 from .values import _number, evaluate_expression, expression_names, pass_value, same_value
 
 # Fields of a payload that only GIRAF reads; IRAF validation never sees them.
-FIELDS = ('split', 'pairing', 'groupValues', 'formulas')
+FIELDS = ('select', 'split', 'pairing', 'groupValues', 'formulas')
 NAME = re.compile(r'^[^\W\d][\w-]*$')
 MAX_GROUPS = 1000
 PAIR_MISSING = '짝 맞추기를 정하세요'
@@ -257,12 +259,31 @@ def split_problems(payload, files, pending=frozenset()):
     return problems
 
 
+def selected(ids, rule, files):
+    """The files whose header `rule['key']` reads one of `rule['values']` (15 is 15.0)."""
+    values = [str(v) for v in rule.get('values') or []]
+    return [id for id in ids if any(same_value(files.text(id, rule['key']), v) for v in values)]
+
+
+def apply_select(payload, files):
+    """The payload with each selected input reduced to the files its rule keeps."""
+    rules = {role: rule for role, rule in (payload.get('select') or {}).items() if rule and rule.get('key')}
+    if not rules:
+        return payload
+    inputs = dict(payload.get('inputs') or {})
+    for role, rule in rules.items():
+        if role in inputs:
+            inputs[role] = selected(inputs[role], rule, files)
+    return {**payload, 'inputs': inputs}
+
+
 def group_runs(payload, files, spec=None):
-    """[(group or None, payload)] of one task: a split makes one payload per
-    group with that group's files, its paired inputs, its parameter values and
-    its output names. Formulas are left to apply_formulas, after value
-    connections are applied."""
+    """[(group or None, payload)] of one task: a selection first keeps the
+    files it names; a split makes one payload per group with that group's
+    files, its paired inputs, its parameter values and its output names.
+    Formulas are left to apply_formulas, after value connections are applied."""
     from copy import deepcopy
+    payload = apply_select(payload, files)
     split = payload.get('split')
     if not split or not (split.get('by') or []):
         return [(None, deepcopy(payload))]

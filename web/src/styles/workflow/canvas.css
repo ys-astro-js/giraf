@@ -202,3 +202,4 @@ div:has(> [data-slot="tooltip-content"] .connection-port-feedback) { pointer-eve
 .split-token .node-input-file { margin-right:0; }
 .split-token-count { display:inline-flex; align-items:center; gap:2px; }
 .node-output-count.split-value { display:inline-flex; color:var(--muted-foreground); }
+.node-output-count:has(.split-columns) { display:flex; justify-content:flex-end; overflow:visible; }

@@ -147,8 +147,16 @@ def task_value(job, name, resolve_file):
     return dict(kind=kind, values=values, origin=definition.get('taskName') or None)
 
 
-def constant_value(row):
-    """A user-typed value."""
+def constant_value(row, groups=None, group=None):
+    """A user-typed value. A value set per group (`groups`, {group id: value})
+    gives the group's own in that group's run, and outside one every group's."""
+    groups = {k: v for k, v in (groups or {}).items() if str(v).strip()}
+    if groups:
+        if group in groups:
+            row = dict(row, value=groups[group])
+        elif not str(row.get('value', '')).strip():
+            typed = [_number(v) if _number(v) is not None else str(v).strip() for v in groups.values()]
+            return dict(kind='real' if all(isinstance(v, float) for v in typed) else 'string', values=typed)
     number = _number(row.get('value'))
     text = str(row.get('value', '')).strip()
     return dict(kind='real' if number is not None else 'string',
@@ -337,16 +345,18 @@ class ValueGraph:
     `resolve_file(id)` returns the path of a library file or product.
     """
 
-    def __init__(self, request, job_of, resolve_file):
-        self.request = request
+    def __init__(self, request, job_of, resolve_file, group=None):
+        self.request, self.group = request, group
         self.nodes = {n['id']: n for n in request.get('nodes', [])}
         self.links = list(request.get('links', []))
         self.job_of, self.resolve_file = job_of, resolve_file
         self.cache = {}
 
-    def scoped(self, jobs):
-        """The same values read from other runs of some tasks (a group's own, giraf/workflow.py group_scope)."""
-        return ValueGraph(self.request, lambda id: jobs[id] if id in jobs else self.job_of(id), self.resolve_file)
+    def scoped(self, jobs, group=None):
+        """The same values in one group of a split task (giraf/splits.py): read
+        from other runs of some tasks (its own, giraf/workflow.py group_scope),
+        and a value node's value set for that group id."""
+        return ValueGraph(self.request, lambda id: jobs[id] if id in jobs else self.job_of(id), self.resolve_file, group)
 
     def output(self, ref, seen=()):
         key = (ref['node'], ref['output'])
@@ -371,7 +381,7 @@ class ValueGraph:
             raise ValueError(f'{name}: 노드에 없는 값입니다.')
         run = node['run']
         if run == 'value-constant':
-            return constant_value(rows[name])
+            return constant_value(rows[name], (node.get('groupValues') or {}).get(name), self.group)
         if run == 'value-header':
             return header_values(self.files(node), name)
         if run == 'value-compute':
@@ -445,7 +455,7 @@ class ValueGraph:
                 continue
             result[link['id']] = self._parameter(link)
             for group in link.get('groups') or []:
-                scoped = self.scoped({id: jobs[group] for id, jobs in (groups or {}).items() if group in jobs})
+                scoped = self.scoped({id: jobs[group] for id, jobs in (groups or {}).items() if group in jobs}, group)
                 result[f"{link['id']}@{group}"] = scoped._parameter(link)
         return result
 

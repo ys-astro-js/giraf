@@ -19,6 +19,8 @@ import type { Frame } from "./workbench"
 
 export type SplitPart = { key: string } | { per: number } | { each: true }
 export type SplitSettings = { input: string; by: SplitPart[] }
+/** 고르기: keep only an input's files whose header `key` reads one of `values`. */
+export type SelectRule = { key: string; values: string[] }
 export type PairRule = { by: string } | { order: true } | { iraf: true } | { manual: Record<string, string> }
 type PartKind = "key" | "per" | "each"
 export type SplitGroup = {
@@ -190,6 +192,20 @@ export function splitOf(task: Instance | undefined): SplitSettings | undefined {
 export const framesOf = (map: TaskMap, rows: Frame[]) =>
   new Map([...rows, ...map.runs.flatMap((r) => r.products)].map((f) => [f.id, f]))
 
+/** The files a selection keeps (giraf/splits.py selected); a file whose header the list did not read stays. */
+export function selectFiles(ids: string[], rule: SelectRule | undefined, frames: Map<string, Frame>): string[] {
+  if (!rule?.key) return ids
+  const read = headerReader(ids, frames, rule.key)
+  if (!read) return ids
+  return ids.filter((id) => rule.values.some((v) => sameValue(read(id), v)))
+}
+
+/** What an input holds now, after its selection. */
+export function inputFiles(map: TaskMap, task: Instance, role: string, rows: Frame[]): { ids: string[]; pending: string[] } {
+  const { ids, pending } = assigned(map, task, role)
+  return { ids: selectFiles(ids, task.draft.select?.[role], framesOf(map, rows)), pending }
+}
+
 /**
  * A split task's groups known now: `waiting` while the split input's source
  * has not run, `groups` undefined when its headers do not tell.
@@ -197,7 +213,7 @@ export const framesOf = (map: TaskMap, rows: Frame[]) =>
 export function taskGroups(map: TaskMap, task: Instance, rows: Frame[]): { groups?: SplitGroup[]; waiting: boolean } {
   const split = splitOf(task)
   if (!split) return { waiting: false }
-  const { ids, pending } = assigned(map, task, split.input)
+  const { ids, pending } = inputFiles(map, task, split.input, rows)
   if (pending.length) return { waiting: true }
   return { groups: splitGroups(ids, split.by, framesOf(map, rows)), waiting: false }
 }
@@ -205,7 +221,7 @@ export function taskGroups(map: TaskMap, task: Instance, rows: Frame[]): { group
 /** What each other input gives each group: one file or none goes to all; several follow the input's rule. */
 export function groupInputs(map: TaskMap, task: Instance, rows: Frame[], role: string, groups: SplitGroup[]):
   { all: string[] } | Paired | { waiting: true } {
-  const { ids, pending } = assigned(map, task, role)
+  const { ids, pending } = inputFiles(map, task, role, rows)
   if (pending.length) return { waiting: true }
   if (ids.length < 2 || groups.length < 2) return { all: ids }
   return pairFiles(role, task.draft.pairing?.[role], ids, groups, framesOf(map, rows))
@@ -229,6 +245,13 @@ export function setSplit(task: Instance, split: SplitSettings | undefined): Inst
   const { migrated: _m, ...rest } = task
   void _m
   return { ...rest, draft: split?.by.length ? { ...draft, split, ...(groupValues ? { groupValues } : {}) } : draft }
+}
+
+export function setSelect(task: Instance, role: string, rule: SelectRule | undefined): Instance {
+  const select = { ...task.draft.select }
+  if (rule?.values.length) select[role] = rule
+  else delete select[role]
+  return { ...task, draft: { ...task.draft, select } }
 }
 
 export function setPairing(task: Instance, role: string, rule: PairRule | undefined): Instance {
@@ -314,7 +337,15 @@ export type SplitView = {
 }
 export function splitView(map: TaskMap, task: Instance, rows: Frame[]): SplitView | undefined {
   const split = splitOf(task)
-  if (!split) return undefined
+  if (!split) {
+    // A value node holding values per group shows them under the same chips.
+    const ids = valueGroupIds(task)
+    if (!ids.length) return undefined
+    const groups = ids.map((id): SplitGroup => ({ id, name: id, names: [id], files: [], keys: {}, suffix: id }))
+    const fits = ids.length <= MAX_COLUMNS
+    return { groups, waiting: false, strip: { heads: ids.slice(0, fits ? ids.length : MAX_COLUMNS - 1), more: fits ? 0 : ids.length },
+      columns: fits && ids.length > 1 ? ids.length : 0 }
+  }
   const { groups, waiting } = taskGroups(map, task, rows)
   if (!groups?.length) return { groups, waiting, columns: 0 }
   if (split.by.length === 2) {
@@ -354,4 +385,37 @@ export function firstOutputName(task: Instance, spec: import("./workbench").Spec
   }
   if (!spec.output || ["each", "edit"].includes(spec.output.mode)) return undefined
   return groupOutputName(task.draft.output.name || spec.output.default, group, groups)
+}
+
+/** The group ids a value node holds values for (`draft.groupValues` on a node with value rows). */
+export function valueGroupIds(task: Instance): string[] {
+  if (!task.draft.valueRows) return []
+  const ids: string[] = []
+  for (const values of Object.values(task.draft.groupValues ?? {}))
+    for (const id of Object.keys(values)) if (!ids.includes(id)) ids.push(id)
+  return ids
+}
+
+/**
+ * The groups a value node's values can be set for: those it holds, then
+ * those of the split tasks its values reach, through other value and pset nodes.
+ */
+export function consumerGroups(map: TaskMap, nodeId: string, rows: Frame[]): { id: string; name: string }[] {
+  const node = map.tasks.find((t) => t.id === nodeId)
+  const found = new Map<string, string>((node ? valueGroupIds(node) : []).map((id) => [id, id]))
+  const seen = new Set<string>()
+  const stack = [nodeId]
+  while (stack.length) {
+    const id = stack.pop()!
+    if (seen.has(id)) continue
+    seen.add(id)
+    for (const c of map.connections) {
+      if (c.source.kind === "files" || c.source.taskId !== id) continue
+      const target = map.tasks.find((t) => t.id === c.target)
+      if (!target) continue
+      if (splitOf(target)) for (const g of taskGroups(map, target, rows).groups ?? []) if (!found.has(g.id)) found.set(g.id, g.name)
+      if (c.role.startsWith("p:") || c.role.startsWith("pset:") || c.source.outputRole === "pset") stack.push(target.id)
+    }
+  }
+  return [...found].map(([id, name]) => ({ id, name }))
 }

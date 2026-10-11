@@ -46,9 +46,9 @@ import {
 } from "@/lib/values"
 import type { Source } from "@/lib/task-map"
 import { valueDescription } from "@/lib/value-modes"
-import { firstOutputName, groupInputs, splitOf, stem } from "@/lib/splits"
+import { firstOutputName, groupInputs, inputFiles, splitOf, stem } from "@/lib/splits"
 import { groupedValue } from "@/lib/group-values"
-import { PairToken, SplitToken, TokenIcon } from "@/components/split-token"
+import { PairToken, SelectToken, SplitToken, TokenIcon } from "@/components/split-token"
 import { GroupStrip, GroupValues } from "./SplitRows"
 
 import { WorkflowContext } from "./context"
@@ -547,7 +547,11 @@ export const TaskNode = memo(function TaskNode({
                 // The split input names how it splits; another input of a split task how it pairs.
                 const splitting = split?.input === slot.role
                 const rule = split && !splitting ? task.draft.pairing?.[slot.role] : undefined
-                const token = splitting ? <SplitToken parts={split.by} /> : rule ? <PairToken rule={rule} /> : null
+                const chosen = task.draft.select?.[slot.role]
+                const token = <>
+                  {chosen && <SelectToken rule={chosen} />}
+                  {splitting ? <SplitToken parts={split.by} /> : rule ? <PairToken rule={rule} /> : null}
+                </>
                 const perGroup = !pending && groups?.length && columns
                   ? splitting
                     ? <GroupValues values={groups.map((g) => g.files.length)} icon="file" />
@@ -561,7 +565,7 @@ export const TaskNode = memo(function TaskNode({
                         })} />
                       })()
                   : null
-                const total = splitting && !pending && !perGroup ? a.ids.length : undefined
+                const total = (splitting || chosen) && !pending && !perGroup ? inputFiles(map, task, slot.role, rows).ids.length : undefined
                 return (
                   <div
                     className="node-input-row"
@@ -683,11 +687,14 @@ export const TaskNode = memo(function TaskNode({
               )}
               {rowValues.map((row) => {
                 const value = formatValue(values?.outputs[`${id}:${row.name}`])
+                // A value set per group shows one value under each group chip.
+                const own = task.draft.groupValues?.[row.name]
+                const plain = task.draft.valueRows?.find((r) => r.name === row.name)?.value ?? ""
                 return (
                   <div className="node-output-row" key={row.handleId}>
                     <span className="node-output-name" data-full-text={row.name}>{row.name}</span>
                     <span className="node-output-count node-value-text" data-full-text={value}>
-                      {value}
+                      {own && groups && columns ? <GroupValues values={groups.map((g) => own[g.id] ?? plain)} /> : value}
                     </span>
                     {valueHandle(row.handleId, row.name)}
                   </div>

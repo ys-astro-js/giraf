@@ -18,7 +18,7 @@ def matches_files(product, patterns):
 ACTIVE = {'running', 'waiting', 'confirmation', 'cancelling'}
 
 
-def value_graph(graph, completed=None, resolve_file=None):
+def value_graph(graph, completed=None, resolve_file=None, group=None):
     from .values import ValueGraph
     runs = graph.get('values', {}).get('runs', {})
     def job_of(id):
@@ -26,7 +26,7 @@ def value_graph(graph, completed=None, resolve_file=None):
             return completed[id]
         # A value from a task outside this run reads its latest run, sent by the client.
         return runs.get(id) if isinstance(runs.get(id), dict) else None
-    return ValueGraph(graph.get('values') or {}, job_of, resolve_file or (lambda id: id))
+    return ValueGraph(graph.get('values') or {}, job_of, resolve_file or (lambda id: id), group)
 
 
 CYCLE = '순환 연결이 있습니다. 되돌아가는 연결을 해제해 주세요.'
@@ -155,7 +155,7 @@ def execute_workflow(graph, run, cancelled, report, resolve_file=None, describe_
             if group:
                 state['message'] = f"{node['label']} {group['name']}"
             # Values are read once their sources finished, so B's group gets B's value.
-            values = value_graph(graph, group_scope(done, groups, group), resolve_file)
+            values = value_graph(graph, group_scope(done, groups, group), resolve_file, group and group['id'])
             incoming = [link for link in values.links if link['target'] == id]
             apply_parameters(each, incoming, values.parameters(id))
             report(deepcopy(state))

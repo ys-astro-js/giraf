@@ -7,7 +7,7 @@ from .model import inspect_file
 from .task_catalog import TASKS, CALIBRATIONS
 from .task_jobs import validate_task, values
 from .image_lists import accepts_asset
-from .splits import group_runs, split_problems, without_fields
+from .splits import apply_select, group_runs, split_problems, without_fields
 
 
 def connection_components(connections):
@@ -99,7 +99,7 @@ def workflow_diagnostics(request, resolve):
             if issue['severity'] == 'warning':
                 add('warning', '노드 스키마 ' + issue['message'], node_id)
         try:
-            for severity, message in split_problems(payload, known, pending[node_id]):
+            for severity, message in split_problems(apply_select(payload, known), known, pending[node_id]):
                 add(severity, message, node_id)
             runs = group_runs(payload, known, TASKS.get(payload.get('task')))
         except (ValueError, KeyError, TypeError, OSError):

@@ -19,20 +19,23 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Choice } from "@/components/workbench-controls"
-import { PairToken, SplitToken, TokenIcon } from "@/components/split-token"
+import { PairToken, SelectToken, SplitToken, TokenIcon } from "@/components/split-token"
 import { assigned } from "@/lib/task-map/inputs"
 import type { Instance, TaskMap } from "@/lib/task-map"
 import type { Frame } from "@/lib/workbench"
 import {
   fileLabel,
   framesOf,
+  inputFiles,
   keyChoices,
   setPairing,
+  setSelect,
   setSplit,
   splitOf,
   taskGroups,
   toggledParts,
   type PairRule,
+  type SelectRule,
   type SplitPart,
 } from "@/lib/splits"
 
@@ -59,7 +62,7 @@ const chipClass = "split-chip nodrag"
 export function SplitControl({ map, task, role, rows, edit }: Props) {
   const split = splitOf(task)
   const own = split?.input === role ? split.by : []
-  const { ids } = assigned(map, task, role)
+  const { ids } = inputFiles(map, task, role, rows)
   const frames = framesOf(map, rows)
   const keys = keyChoices(ids, frames, own.flatMap((p) => ("key" in p ? [p.key] : [])))
   const per = own.find((p): p is { per: number } => "per" in p)
@@ -173,6 +176,47 @@ export function PairControl({ map, task, role, rows, edit }: Props) {
           />
         </Row>
       ))}
+    </ul>
+  )
+}
+
+/** 고르기: keep only the files whose header keyword reads the chosen values. */
+export function SelectControl({ map, task, role, rows, edit }: Props) {
+  const rule = task.draft.select?.[role]
+  const { ids } = assigned(map, task, role)
+  const keys = keyChoices(ids, framesOf(map, rows), rule ? [rule.key] : []).filter((c) => c.values.length > 1 || c.key === rule?.key)
+  const set = (next: SelectRule | undefined) => edit((t) => setSelect(t, role, next))
+  const toggle = (key: string, value: string) => {
+    const values = rule?.key === key ? rule.values : []
+    set({ key, values: values.includes(value) ? values.filter((v) => v !== value) : [...values, value] })
+  }
+  if (!rule && !keys.length) return null
+  return (
+    <ul className="input-files pass-files split-controls" aria-label={`${role} 고르기`}>
+      <Row label="고르기">
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<button type="button" />} className={chipClass} aria-label={`${role} 고르기`}>
+            {rule ? <SelectToken rule={rule} /> : <span className="split-token"><TokenIcon icon="select" /><span>모두</span></span>}
+            <ChevronDown aria-hidden="true" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent aria-label={`${role} 고르기`} align="end">
+            <DropdownMenuGroup>
+              <DropdownMenuItem onClick={() => set(undefined)}>모두</DropdownMenuItem>
+            </DropdownMenuGroup>
+            {keys.map(({ key, values }) => (
+              <DropdownMenuGroup key={key}>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>{key}</DropdownMenuLabel>
+                {values.map((value) => (
+                  <DropdownMenuCheckboxItem key={value} checked={rule?.key === key && rule.values.includes(value)} onCheckedChange={() => toggle(key, value)}>
+                    {value}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuGroup>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </Row>
     </ul>
   )
 }

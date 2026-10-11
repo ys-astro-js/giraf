@@ -393,9 +393,10 @@ async def task_validate_endpoint(request: Request, *, action):
         path=get_file(id)
         return register(path,registry[id].get('label'),registry[id].get('job'),registry[id].get('asset'))
     # A task run alone takes its formulas here; a split task runs as a workflow (giraf/splits.py).
-    from .splits import apply_formulas, without_fields
+    from .splits import Files, apply_formulas, apply_select, without_fields
     if isinstance(payload, dict):
-        payload = without_fields(apply_formulas(dict(payload)))
+        files = Files(get_file, lambda id: describe_file(id).get('label'), lambda id: describe_file(id).get('headers'))
+        payload = without_fields(apply_formulas(apply_select(dict(payload), files)))
     manifest=await run_in_threadpool(validate_task,payload,resolve)
     for row in manifest['rows']:registry[row['id']]=row
     if action=='task-validate':
@@ -439,7 +440,7 @@ def task_commands(request):
     for group, each in runs:
         entry = dict(id=group['id'], name=group['name'], files=group['files']) if group else dict(id='', name='', files=[])
         try:
-            scoped = graph.scoped(group_scope({}, values['groupRuns'], group)) if group else graph
+            scoped = graph.scoped(group_scope({}, values['groupRuns'], group), group['id']) if group else graph
             incoming = [link for link in scoped.links if link['target'] == node]
             apply_parameters(each, incoming, scoped.parameters(node))
             manifest = validate_task(without_fields(apply_formulas(each)), resolve, diagnostics=True,

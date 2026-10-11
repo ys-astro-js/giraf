@@ -176,6 +176,35 @@ class GroupRunTests(unittest.TestCase):
         self.assertAlmostEqual(done['parameterSets']['fitskypars']['dannulus'], 24.4)
 
 
+class SelectTests(unittest.TestCase):
+    def test_a_selection_keeps_files_by_header_before_splitting(self):
+        files = headers(SCIENCE)
+        payload = {'inputs': {'image': list(SCIENCE)}, 'select': {'image': {'key': 'FILTER', 'values': ['B']}}}
+        [(group, only)] = group_runs(payload, files)
+        self.assertIsNone(group)
+        self.assertEqual(only['inputs']['image'], ['b1.fits', 'b2.fits'])
+        payload['split'] = {'input': 'image', 'by': [{'key': 'EXPTIME'}]}
+        payload['select'] = {'image': {'key': 'EXPTIME', 'values': ['60', '90.0']}}
+        self.assertEqual([g['id'] for g, _ in group_runs(payload, files)], ['60', '90'])
+
+
+class GroupValueTests(unittest.TestCase):
+    def test_a_value_set_per_group_reaches_that_groups_run(self):
+        from giraf.values import ValueGraph
+        request = {'nodes': [{'id': 'm', 'run': 'value-constant', 'rows': [{'name': 'fwhm', 'value': ''}],
+                              'groupValues': {'fwhm': {'B': '3.4', 'V': '3.1'}}},
+                             {'id': 'c', 'run': 'value-compute', 'rows': [{'name': 'ap', 'value': '3 * fwhm'}],
+                              'inputs': {'fwhm': {'node': 'm', 'output': 'fwhm'}}}],
+                   'links': [{'id': 'l', 'target': 'phot', 'parameter': 'apertures', 'type': 'r', 'source': {'node': 'c', 'output': 'ap'}}]}
+        graph = ValueGraph(request, lambda id: None, str)
+        self.assertIn('2개', graph.parameters('phot')['l']['error'])
+        self.assertAlmostEqual(graph.scoped({}, 'B').parameters('phot')['l']['value'], 10.2)
+        self.assertAlmostEqual(graph.scoped({}, 'V').parameters('phot')['l']['value'], 9.3)
+        # A plain value stands for groups the node has no value for.
+        request['nodes'][0]['rows'][0]['value'] = '3.0'
+        self.assertAlmostEqual(ValueGraph(request, lambda id: None, str).scoped({}, 'R').parameters('phot')['l']['value'], 9.0)
+
+
 class CommandTests(unittest.TestCase):
     def test_cl_arguments_read_as_cl(self):
         from giraf.commands import argument, differs, literal
