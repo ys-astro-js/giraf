@@ -4,8 +4,10 @@ import {
   groupInputs,
   groupOutputName,
   keyChoices,
+  keyRows,
   outputSuffix,
   pairFiles,
+  searchKeys,
   setSplit,
   splitGroups,
   splitIssues,
@@ -168,4 +170,45 @@ test("a region around one task becomes its split; others are unwrapped with a wa
   expect(flat.tasks.map((t) => [t.id, t.draft.split?.by, t.migrated])).toEqual([
     ["darks", undefined, undefined], ["zero", undefined, undefined], ["dc", [{ key: "EXPTIME" }, { per: 5 }], undefined],
   ])
+})
+
+test("menus list keywords that group the files, one row for keywords that group them the same way", () => {
+  const files = [
+    frame("b15", { SUBSET: "B", FILTERS: "b", EXPTIME: "15", EXPOSURE: "15", OBJECT: "M67", "DATE-OBS": "1" }),
+    frame("b30", { SUBSET: "B", FILTERS: "b", EXPTIME: "30", EXPOSURE: "30", OBJECT: "M67", "DATE-OBS": "2" }),
+    frame("v15", { SUBSET: "V", FILTERS: "v", EXPTIME: "15", EXPOSURE: "15.0", OBJECT: "M67", "DATE-OBS": "3" }),
+    frame("v30", { SUBSET: "V", FILTERS: "v", EXPTIME: "30", EXPOSURE: "30", OBJECT: "M67", "DATE-OBS": "4" }),
+  ]
+  const frames = framesOf(files)
+  const ids = files.map((f) => f.id)
+  // OBJECT has one value and DATE-OBS a value for every file: neither is listed.
+  expect(keyRows(ids, frames)).toEqual({
+    rows: [
+      { key: "SUBSET", aliases: ["FILTERS"], values: ["B", "V"] },
+      { key: "EXPTIME", aliases: ["EXPOSURE"], values: ["15", "30"] },
+    ],
+    hidden: true,
+  })
+  // A chosen keyword stays listed and names its row.
+  expect(keyRows(ids, frames, ["FILTERS", "DATE-OBS"]).rows.map((r) => [r.key, r.aliases, r.values])).toEqual([
+    ["FILTERS", ["SUBSET"], ["b", "v"]],
+    ["EXPTIME", ["EXPOSURE"], ["15", "30"]],
+    ["DATE-OBS", [], ["1", "2", "3", "4"]],
+  ])
+  // Two chosen keywords keep their own rows.
+  expect(keyRows(ids, frames, ["SUBSET", "FILTERS"]).rows.map((r) => r.key)).toEqual(["SUBSET", "FILTERS", "EXPTIME"])
+  // Search covers every keyword the files hold.
+  expect(searchKeys(ids, frames, "obj")).toEqual([{ key: "OBJECT", aliases: [], values: ["M67"] }])
+  expect(searchKeys(ids, frames, "EXP").map((r) => r.key)).toEqual(["EXPTIME", "EXPOSURE"])
+})
+
+test("a keyword that groups the files differently keeps its own row; nothing hidden hides the search", () => {
+  const files = [
+    frame("a", { FILTER: "B", EXPTIME: "15" }), frame("b", { FILTER: "B", EXPTIME: "30" }),
+    frame("c", { FILTER: "V", EXPTIME: "15" }), frame("d", { FILTER: "V", EXPTIME: "15" }),
+  ]
+  expect(keyRows(files.map((f) => f.id), framesOf(files))).toEqual({
+    rows: [{ key: "FILTER", aliases: [], values: ["B", "V"] }, { key: "EXPTIME", aliases: [], values: ["15", "30"] }],
+    hidden: false,
+  })
 })

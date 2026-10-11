@@ -179,7 +179,17 @@
 .split-chip > svg:last-child { width: 14px; height: 14px; color: var(--muted-foreground); }
 .split-chip .split-token { color: inherit; }
 .split-count { width: 64px; height: 24px; text-align: right; }
-.split-choice-values { margin-left: auto; padding-left: 12px; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.split-choice-values { display: inline-flex; flex-shrink: 0; gap: 6px; max-width: 50%; overflow: hidden; margin-left: auto; padding-left: 12px; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.split-choice-values > span { max-width: 44px; overflow: hidden; text-overflow: ellipsis; }
+/* The 나누기, 고르기 and 짝 맞추기 menus keep one width; a keyword's values never widen them. */
+.split-menu { width: 240px; }
+.split-menu-search { padding: 4px 4px 6px; }
+/* Aliases give way first, so values and chips stay readable. */
+.split-key-alias { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--muted-foreground); }
+.select-chips { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; flex-shrink: 0; gap: 4px; max-width: 60%; margin-left: auto; }
+.select-chip { min-width: 24px; max-width: 72px; cursor: pointer; outline: none; }
+.select-chip[data-checked] { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.select-chip[data-highlighted] { outline: 2px solid var(--ring); outline-offset: 1px; }
 .input-count { display: inline-flex; align-items: center; margin-left: auto; color: var(--muted-foreground); font-size: 12px; font-variant-numeric: tabular-nums; }
 .inspector-connection {
   display: flex;
