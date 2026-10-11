@@ -17,6 +17,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import type { ToolbarOverflow } from "@/components/toolbar-overflow"
+import { ShortcutKeys } from "@/components/shortcut-keys"
+import { ariaShortcut, type Shortcut } from "@/lib/shortcuts"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -225,6 +227,7 @@ export function ToolbarItem({
 
 export function ToolbarButton({
   label,
+  shortcut,
   tooltipSide,
   variant = "ghost",
   prominent = false,
@@ -232,6 +235,8 @@ export function ToolbarButton({
   ...props
 }: Omit<ComponentProps<typeof Button>, "title" | "aria-label" | "size"> & {
   label: string
+  /** Shown after the label in the tooltip. */
+  shortcut?: Shortcut
   tooltipSide?: ComponentProps<typeof TooltipContent>["side"]
   /**
    * The bar's primary action (HIG "prominent"): tinted with the accent and
@@ -269,12 +274,14 @@ export function ToolbarButton({
           />
         }
         aria-label={label}
+        aria-keyshortcuts={shortcut && ariaShortcut(shortcut)}
         data-slot="button"
       />
       <TooltipContent
         side={tooltipSide ?? (placement === "top" ? "bottom" : "top")}
       >
         {label}
+        {shortcut && <ShortcutKeys shortcut={shortcut} />}
       </TooltipContent>
     </Tooltip>
   )
@@ -319,6 +326,7 @@ export function ToolbarMorph({
   activeContent,
   label,
   activeLabel,
+  shortcut,
   variant = "ghost",
   className,
   style,
@@ -332,6 +340,8 @@ export function ToolbarMorph({
   activeContent: ReactNode
   label: string
   activeLabel: string
+  /** The idle face's shortcut, shown after its label in the tooltip. */
+  shortcut?: Shortcut
 }) {
   const { edge, placement } = useContext(ToolbarContext)
   const size = useToolbarButtonSize()
@@ -363,6 +373,7 @@ export function ToolbarMorph({
             data-edge={edge}
             data-size={size}
             aria-label={active ? activeLabel : label}
+            aria-keyshortcuts={!active && shortcut ? ariaShortcut(shortcut) : undefined}
             style={{ ...style, width: widths?.[active ? 1 : 0] }}
             {...props}
           >
@@ -389,6 +400,7 @@ export function ToolbarMorph({
       />
       <TooltipContent side={placement === "top" ? "bottom" : "top"}>
         {active ? activeLabel : label}
+        {!active && shortcut && <ShortcutKeys shortcut={shortcut} />}
       </TooltipContent>
     </Tooltip>
   )

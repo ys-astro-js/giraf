@@ -35,6 +35,8 @@ export type ValueResponse = {
 /** Value and pset nodes are evaluated with the tasks they feed, never run as jobs. */
 export const isValueNode = (spec: Spec | undefined) => !!spec?.run && VALUE_RUNS.has(spec.run)
 export const isJobNode = (spec: Spec | undefined) => !isValueNode(spec)
+/** A node its own run button runs: a job the catalog does not mark unrunnable. */
+export const runsAlone = (spec: Spec | undefined) => !!spec && spec.runnable !== false && isJobNode(spec)
 export const isValueRole = (role: string) => role.startsWith(PARAM_HANDLE) || role.startsWith(PSET_INPUT)
 export const isValueSource = (source: Source) =>
   source.kind !== "files" && !!source.outputRole &&

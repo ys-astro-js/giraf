@@ -6,6 +6,8 @@ import { useToolbarButtonSize } from "@/components/toolbar-context"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { EditEntry } from "@/lib/edit-history"
+import { ShortcutKeys } from "@/components/shortcut-keys"
+import { shortcuts } from "@/lib/shortcuts"
 
 type Props = {
   past: EditEntry[]
@@ -67,7 +69,10 @@ function HistoryButton({ direction, entries, disabled, onRestore }: {
         <Icon />
       </DropdownMenuTrigger>} />
       <TooltipContent side="bottom" className="flex-col items-start gap-0.5">
-        <span>{label} {direction === "undo" ? "⌘/Ctrl+Z" : "⌘/Ctrl+Shift+Z"}</span>
+        <span className="flex items-center gap-1.5">
+          {label}
+          <ShortcutKeys shortcut={shortcuts[direction]} />
+        </span>
         <span className="text-background/70">길게 누르거나 ↓ 키로 이력 선택</span>
       </TooltipContent>
       </Tooltip>

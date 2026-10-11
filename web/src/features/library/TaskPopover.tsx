@@ -17,6 +17,7 @@ import { NodeIcon } from "@/components/node-icon"
 import { SearchField } from "@/components/search-field"
 import { ToolbarButton, ToolbarCluster, ToolbarGroup } from "@/components/toolbar"
 import { nodeTiles } from "@/lib/node-chunks"
+import { shortcuts } from "@/lib/shortcuts"
 import { apiQueryOptions } from "@/lib/queries"
 import { favoriteName, favoriteTasks, toggleFavorite } from "@/lib/task-favorites"
 import { searchTasks, taskPackageTree, taskRowText, type TaskPackage } from "@/lib/task-tree"
@@ -193,7 +194,13 @@ export function AddTaskButton() {
         }}
       >
         <PopoverTrigger
-          render={<ToolbarButton label="작업 추가" disabled={!w.catalog} />}
+          render={
+            <ToolbarButton
+              label="작업 추가"
+              shortcut={shortcuts.addTask}
+              disabled={!w.catalog}
+            />
+          }
         >
           <Plus />
         </PopoverTrigger>

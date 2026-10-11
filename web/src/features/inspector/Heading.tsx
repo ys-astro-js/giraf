@@ -1,4 +1,4 @@
-import { isValueNode } from "@/lib/values"
+import { runsAlone } from "@/lib/values"
 import { useRef, useState } from "react"
 import { taskDisplayName } from "@/lib/workbench"
 import { Pencil, Check, X, Play } from "lucide-react"
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { type Spec } from "@/lib/workbench"
 import { type Instance } from "@/lib/task-map"
+import { shortcuts } from "@/lib/shortcuts"
 
 /**
  * The node's title, description and actions live in the window's top bar;
@@ -87,7 +88,8 @@ export function InspectorHeading({
           <ToolbarButton
             prominent
             label={checking ? "확인 중" : busy ? "실행 중" : "이 작업 실행"}
-            disabled={busy || checking || spec.runnable === false || isValueNode(spec)}
+            shortcut={shortcuts.run}
+            disabled={busy || checking || !runsAlone(spec)}
             onClick={onRun}
           >
             <Play />

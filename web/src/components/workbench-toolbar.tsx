@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/tooltip"
 
 import type { ExecutionStatus } from "@/lib/execution-status"
+import { shortcuts } from "@/lib/shortcuts"
 export type { ExecutionStatus } from "@/lib/execution-status"
 
 const statusIcons = {
@@ -122,6 +123,7 @@ export function WorkbenchToolbar(props: Props) {
               activeContent={<Square />}
               label="일괄 실행"
               activeLabel="중단"
+              shortcut={shortcuts.runAll}
               onClick={props.workflowBusy ? props.onCancel : props.onRun}
               disabled={!props.workflowBusy && props.runDisabled}
             />

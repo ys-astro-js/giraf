@@ -515,6 +515,11 @@ export function useWorkbenchController() {
     taskEditing.duplicate(id)
     setTaskError("")
   }
+  function paste() {
+    if (!taskEditing.paste()) return false
+    setTaskError("")
+    return true
+  }
   function removeLink(id: string) {
     update((m) => disconnect(m, id), "연결 삭제")
   }
@@ -536,6 +541,14 @@ export function useWorkbenchController() {
     documentBusy ||
     workflowStarting ||
     workflowBusy ||
+    busy ||
+    running
+  /** What keeps 일괄 실행 from starting, by its button or its shortcut. */
+  const workflowRunDisabled =
+    !ready ||
+    !catalog ||
+    !map.tasks.length ||
+    workflowStarting ||
     busy ||
     running
 
@@ -581,6 +594,8 @@ export function useWorkbenchController() {
     edit,
     remove,
     duplicate,
+    copy: taskEditing.copy,
+    paste,
     removeLink,
     link,
     linking,
@@ -604,6 +619,7 @@ export function useWorkbenchController() {
     workflowStarting,
     workflowMutation,
     runWorkflow,
+    workflowRunDisabled,
     cancelWorkflow,
     executionStatus,
     measurement,

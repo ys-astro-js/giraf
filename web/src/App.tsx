@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/toast"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { WorkbenchContext } from "@/features/workbench/context"
 import { useWorkbenchController } from "@/features/workbench/useWorkbenchController"
+import { useWorkbenchShortcuts } from "@/features/workbench/hooks/useWorkbenchShortcuts"
 import { WorkbenchHeader } from "@/features/workbench/WorkbenchHeader"
 import { WorkbenchDialogs } from "@/features/workbench/WorkbenchDialogs"
 import { HomeScreen } from "@/features/home/HomeScreen"
@@ -11,6 +12,7 @@ const editableField = "input:not([type=checkbox]):not([type=radio]), textarea"
 
 function App() {
   const workbench = useWorkbenchController()
+  useWorkbenchShortcuts(workbench)
   return (
     <WorkbenchContext value={workbench}>
       <TooltipProvider>

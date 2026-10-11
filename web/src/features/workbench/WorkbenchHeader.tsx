@@ -54,14 +54,7 @@ export function WorkbenchHeader() {
       executionStatus={w.executionStatus}
       onMeasure={w.measurement?.open}
       workflowBusy={w.workflowBusy}
-      runDisabled={
-        !w.ready ||
-        !w.catalog ||
-        !w.map.tasks.length ||
-        w.workflowStarting ||
-        w.busy ||
-        w.running
-      }
+      runDisabled={w.workflowRunDisabled}
       onRun={() => w.runWorkflow()}
       onCancel={w.cancelWorkflow}
       trayOpen={trayOpen}

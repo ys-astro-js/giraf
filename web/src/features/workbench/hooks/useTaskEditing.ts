@@ -3,14 +3,17 @@ import { autoLayoutMap } from "@/lib/subflow"
 import { isValueNode } from "@/lib/values"
 import { nextValueLabel } from "@/lib/value-take"
 import { updateOutputPort, removeOutputPort } from "@/lib/output-ports"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { moveTaskToSubflow } from "@/lib/subflow"
 import { type Catalog, type Preferences, type Frame } from "@/lib/workbench"
 import {
   removeTask,
   addTask,
   duplicateTask,
+  copyTasks,
+  pasteTasks,
   makeInstance,
+  type TaskClip,
   connect,
   type TaskMap,
   type Instance,
@@ -83,6 +86,28 @@ export function useTaskEditing({
       `${map.tasks.find((task) => task.id === id)?.label || "작업"} 복제`
     )
   }
+  // The app's own clipboard: a snapshot, so it pastes after the originals change or go.
+  const clipboard = useRef<TaskClip | null>(null)
+  function copy(ids: string[]) {
+    if (!catalog) return false
+    const layout = nodeLayout(map, catalog, rows)
+    const clip = copyTasks(map, ids, (id) => layout.find((node) => node.id === id))
+    if (clip) clipboard.current = clip
+    return !!clip
+  }
+  function paste() {
+    const clip = clipboard.current
+    if (!clip || !catalog) return false
+    const label =
+      clip.roots.length > 1
+        ? `작업 ${clip.roots.length}개`
+        : clip.tasks.find((t) => t.id === clip.roots[0])?.label || "작업"
+    update(
+      (m) => pasteTasks(m, clip, nodeLayout(m, catalog, rows)),
+      `${label} 붙여넣기`
+    )
+    return true
+  }
   function edit(fn: (t: Instance) => Instance, id = task?.id) {
     const target = map.tasks.find((t) => t.id === id)
     if (!id || !target) return
@@ -148,5 +173,7 @@ export function useTaskEditing({
     layoutBusy,
     remove,
     duplicate,
+    copy,
+    paste,
   }
 }
