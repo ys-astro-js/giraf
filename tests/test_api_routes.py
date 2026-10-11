@@ -12,7 +12,35 @@ from giraf import server
 from tests.test_workspace import request
 
 
+async def static_get(app, path, headers=()):
+    sent = []
+    async def receive(): return {'type': 'http.request', 'body': b'', 'more_body': False}
+    async def send(message): sent.append(message)
+    scope = {'type': 'http', 'method': 'GET', 'path': path, 'root_path': '', 'query_string': b'',
+             'headers': [(b'host', b'testserver'), *headers]}
+    await app(scope, receive, send)
+    start = next(m for m in sent if m['type'] == 'http.response.start')
+    return start['status'], {k.decode(): v.decode() for k, v in start['headers']}
+
+
 class ApiRouteTests(unittest.TestCase):
+    def test_pages_revalidate_and_hashed_assets_stay_cacheable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / 'assets').mkdir()
+            (Path(tmp) / 'index.html').write_text('<script src="/assets/index-a1.js"></script>')
+            (Path(tmp) / 'assets' / 'index-a1.js').write_text('')
+            files = server.AppFiles(directory=tmp, html=True)
+            for path in ('/', '/index.html'):
+                with self.subTest(path=path):
+                    code, headers = asyncio.run(static_get(files, path))
+                    self.assertEqual((code, headers.get('cache-control')), (200, 'no-cache'))
+            etag = asyncio.run(static_get(files, '/'))[1]['etag']
+            code, headers = asyncio.run(static_get(files, '/', [(b'if-none-match', etag.encode())]))
+            self.assertEqual((code, headers.get('cache-control')), (304, 'no-cache'))
+            code, headers = asyncio.run(static_get(files, '/assets/index-a1.js'))
+            self.assertEqual(code, 200)
+            self.assertNotIn('cache-control', headers)
+
     def test_methods_are_rejected_before_handlers_run(self):
         posts = ('workflow-diagnostics', 'workflow-run', 'workflow-cancel', 'workflow-confirm',
                  'task-run', 'task-validate', 'task-respond', 'task-cancel', 'folder',

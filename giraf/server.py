@@ -771,10 +771,20 @@ api_routes = [
     Route('/display-close', display_close_endpoint, methods=['POST'], name='display-close'),
 ]
 
+class AppFiles(StaticFiles):
+    """The built UI. Pages revalidate so a rebuild's new bundle loads; hashed assets stay cached."""
+
+    def file_response(self, full_path, stat_result, scope, status_code=200):
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        if str(full_path).endswith('.html'):
+            response.headers['Cache-Control'] = 'no-cache'
+        return response
+
+
 app = Starlette(
     lifespan=lifespan,
     routes=[Mount('/api', routes=api_routes),
-            Mount('/', StaticFiles(directory=ROOT / 'web' / 'dist', html=True, check_dir=False))],
+            Mount('/', AppFiles(directory=ROOT / 'web' / 'dist', html=True, check_dir=False))],
     exception_handlers={ValidationError: validation_error, ValueError: api_error,
                         KeyError: api_error, OSError: api_error, TypeError: api_error,
                         HTTPException: http_error},
