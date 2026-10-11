@@ -9,6 +9,7 @@ import { inputFiles, splitOf } from "@/lib/splits"
 import { PairControl, SelectControl, SplitControl } from "./SplitControls"
 
 import type { Source } from "@/lib/task-map"
+import type { FieldIssue } from "@/lib/diagnostics"
 import type * as React from "react"
 export function InspectorInputSlot({
   map,
@@ -25,6 +26,7 @@ export function InspectorInputSlot({
   s,
   compact = false,
   prefix = "",
+  issue,
 }: {
   map: TaskMap
   catalog: Catalog
@@ -49,6 +51,8 @@ export function InspectorInputSlot({
   s: Slot
   compact?: boolean
   prefix?: string
+  /** The input's problem (diagnostics fieldIssues), marked on its field. */
+  issue?: FieldIssue
 }) {
   const d = task.draft
 
@@ -114,6 +118,7 @@ export function InspectorInputSlot({
       map={map}
       task={task}
       count={!expression && (links.length || ids.length) && !pending ? inputFiles(map, task, role, rows).ids.length : undefined}
+      issue={issue}
     >
       {several && !expression && s.multiple && <SelectControl map={map} task={task} role={role} rows={rows} edit={edit} />}
       {control}

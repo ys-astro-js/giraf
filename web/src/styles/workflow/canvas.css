@@ -203,3 +203,8 @@ div:has(> [data-slot="tooltip-content"] .connection-port-feedback) { pointer-eve
 .split-token-count { display:inline-flex; align-items:center; gap:2px; }
 .node-output-count.split-value { display:inline-flex; color:var(--muted-foreground); }
 .node-output-count:has(.split-columns) { display:flex; justify-content:flex-end; overflow:visible; }
+/* An input or parameter with a problem (diagnostics fieldIssues): its row in the problem's colour. */
+.node-input-row[data-severity="error"] { --node-row-issue: var(--destructive); }
+.node-input-row[data-severity="warning"] { --node-row-issue: var(--warning); }
+.node-input-row[data-severity] :is(.node-input-label, .node-input-source, .node-param-name, .node-param-value) { color: var(--node-row-issue); }
+.map-viewport .node-input-row[data-severity] > .react-flow__handle:not([data-connection-state]) { border-color: var(--node-row-issue); }

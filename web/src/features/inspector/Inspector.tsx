@@ -8,6 +8,7 @@ import { InspectorInfo } from "./InfoTab"
 import { NodeDependencies } from "@/components/node-dependencies"
 import { ParameterGroupNav } from "@/components/parameter-editor"
 import { taskDisplayName } from "@/lib/workbench"
+import { fieldTab, useFieldIssues } from "@/lib/field-issues"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 import {
   Info,
@@ -158,6 +159,8 @@ export function TaskInspector({
     },
     d = task.draft
   const [localTab, setLocalTab] = useState("info")
+  // The node's problems by field, marked where each is edited.
+  const issues = useFieldIssues(task.id)
   const [query, setQuery] = useState("")
   const [expanded, setExpanded] = useState<Record<string, number>>({})
   const inspectorRef = useRef<HTMLElement>(null)
@@ -289,6 +292,7 @@ export function TaskInspector({
         reorderInput={reorderInput}
         expanded={expanded}
         setExpanded={setExpanded}
+        issue={issues.get(s.name)}
       />
     )
   }
@@ -309,6 +313,7 @@ export function TaskInspector({
             parameters: catalog.ccdproc.parameters,
             values: task.preprocess.parameters,
             change: changePrep,
+            fieldPrefix: "ccdproc.",
           },
         ]
       : []),
@@ -351,6 +356,7 @@ export function TaskInspector({
             label: "ccdred",
             parameters: catalog.ccdred,
             values: task.packageValues,
+            fieldPrefix: "ccdred.",
             change: (key: string, value: string) =>
               edit((t) => ({
                 ...t,
@@ -370,6 +376,11 @@ export function TaskInspector({
   const currentTab = tabs.includes(requestedTab as InspectorTab)
     ? requestedTab
     : tabs[0]
+  // A tab not shown marks itself when a field in it has a problem.
+  const tabSeverity = (tab: string) => {
+    const found = [...issues].filter(([field]) => fieldTab(spec, catalog, field) === tab).map(([, issue]) => issue.severity)
+    return found.includes("error") ? "error" : found[0]
+  }
   const valueLinks = valueLinksInto(map, task.id)
   // A split task's groups: a parameter may hold a value per group (lib/splits).
   const splitGroups = splitOf(task) ? taskGroups(map, task, rows).groups : undefined
@@ -475,7 +486,7 @@ export function TaskInspector({
                 const { label, icon: Icon } = TAB_LABELS[value]
                 return (
                   <Tooltip key={value}>
-                    <TooltipTrigger render={<TabsTrigger value={value} />}>
+                    <TooltipTrigger render={<TabsTrigger value={value} data-severity={value === currentTab ? undefined : tabSeverity(value)} />}>
                       <Icon />
                       <span className="sr-only">{label}</span>
                     </TooltipTrigger>
@@ -540,6 +551,7 @@ export function TaskInspector({
             setExpanded={setExpanded}
             catalog={catalog}
             onInputSource={onInputSource}
+            issues={issues}
           />}
           {tabs.includes("output") && <InspectorOutputs
             catalog={catalog}
@@ -565,6 +577,7 @@ export function TaskInspector({
             rows={rows}
             pinning={pinning}
             actions={psetActions}
+            issues={issues}
             valueSource={
               isValueNode(spec) && onValueMode && onPsetSource && (
                 <ValueSourceEditor

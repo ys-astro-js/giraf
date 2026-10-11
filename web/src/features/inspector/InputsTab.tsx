@@ -12,6 +12,8 @@ import { TabsContent } from "@/components/ui/tabs"
 import { type Catalog, type Spec, type Frame, type Slot } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
 import type * as React from "react"
+import type { FieldIssue } from "@/lib/diagnostics"
+import { IssueTooltip, invalidProps } from "@/components/field-issue"
 
 export function InspectorInputs({
   slot,
@@ -25,6 +27,7 @@ export function InspectorInputs({
   catalog,
   rows,
   onInputSource,
+  issues,
 }: {
   slot: (s: Slot, compact?: boolean, prefix?: string) => React.JSX.Element
   spec: Spec
@@ -41,6 +44,8 @@ export function InspectorInputs({
     source:
       import("@/lib/task-map").Source | { kind: "expression"; value: string }
   ) => void
+  /** The node's problems by field (diagnostics fieldIssues). */
+  issues?: Map<string, FieldIssue>
 }) {
   const d = task.draft
   const specialized = ccdTasks.has(spec.name)
@@ -123,14 +128,17 @@ export function InspectorInputs({
       {specialized && spec.preprocess && (
         <section className="inspector-section">
           <FieldGroup>
+            <IssueTooltip issue={issues?.get("process")}>
             <Field className="parameter-field">
               <FieldLabel htmlFor="combine-process">process</FieldLabel>
               <Switch
                 id="combine-process"
+                {...invalidProps(issues?.get("process"))}
                 checked={d.parameters.process === "yes"}
                 onCheckedChange={(v) => change("process", v ? "yes" : "no")}
               />
             </Field>
+            </IssueTooltip>
           </FieldGroup>
         </section>
       )}

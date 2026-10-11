@@ -2,14 +2,15 @@
  * One CL line of the 명령 section, edited in place: Enter or leaving the
  * line reads it with the node's task (POST /api/parse-commands) and sets
  * what changed (lib/command-edit). Esc puts the line back. Not being edited,
- * a token with a problem is marked in place, its message the node's
- * diagnostic (giraf/commands.py marked).
+ * the token of a field with a problem is marked in place, its message the
+ * node's diagnostic for that field (diagnostics fieldIssues).
  */
 import { Fragment, useEffect, useRef, useState } from "react"
 import { applyCommandEdit } from "@/lib/command-edit"
 import type { ParsedCommands } from "@/lib/command-workflow"
 import type { Instance } from "@/lib/task-map"
 import { api, type Catalog, type Spec } from "@/lib/workbench"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 /** A problem of one token of a line: its span and the diagnostic's message. */
 export type CommandIssue = { name: string; start: number; end: number; severity: "error" | "warning"; message: string }
@@ -36,12 +37,16 @@ export function markedRuns(line: string, issues: CommandIssue[]) {
   return runs
 }
 
-/** The line with each token that has a problem marked, its messages as the mark's title. */
+/** The line with each token that has a problem marked, its messages shown on hover. */
 export function MarkedText({ line, issues }: { line: string; issues: CommandIssue[] }) {
   return markedRuns(line, issues).map((run, i) =>
     run.issues.length ? (
-      <mark key={i} className="command-issue" data-severity={run.issues.some((p) => p.severity === "error") ? "error" : "warning"}
-        title={run.issues.map((p) => p.message).join("\n")}>{run.text}</mark>
+      <Tooltip key={i}>
+        <TooltipTrigger render={<mark className="command-issue" data-severity={run.issues.some((p) => p.severity === "error") ? "error" : "warning"} />}>
+          {run.text}
+        </TooltipTrigger>
+        <TooltipContent className="flex-col items-start whitespace-pre-line">{run.issues.map((p) => p.message).join("\n")}</TooltipContent>
+      </Tooltip>
     ) : <Fragment key={i}>{run.text}</Fragment>
   )
 }

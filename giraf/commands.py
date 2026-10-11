@@ -5,8 +5,10 @@ with staged copies and `task.param = value` lines. This renders the same plan
 as one command line per invocation: the task, its first input in place, then
 inputs, outputs and every parameter that differs from IRAF's default. Input
 lists read as `@<input>.list` and outputs by the names the run gives them.
-A draft that validation stops on still reads as its line (draft_manifest),
-with its problems marked on the tokens they name (marked).
+A draft that validation stops on still reads as its line (draft_manifest).
+Each line carries the span of each value, named by the field it sets (the
+input role, or `name` and `pset.name` for parameters; giraf/field_issues.py),
+so the editor marks the field's problems there.
 """
 import re
 
@@ -64,36 +66,35 @@ def input_text(slot, manifest, rows, pending):
 def command_lines(manifest, pending=frozenset()):
     """[(CL line, [token])] of a plan (giraf/task_jobs.py validate_task, or
     draft_manifest). A token is the span of one input, output or parameter
-    value in the line: {name, start, end, aliases}."""
+    value in the line: {name, start, end}, named by its field."""
     rows = {r['id']: r for r in manifest.get('rows', [])}
     built = (_generic if manifest.get('adapter') == 'generic' else _adapter)(manifest, rows, pending)
     if built is None:
         return []
     line, args, stdout = built
     tokens = []
-    for name, prefix, value, aliases in args:
+    for name, prefix, value in args:
         line += ' ' + prefix
-        tokens.append(dict(name=name, start=len(line), end=len(line) + len(value), aliases=aliases))
+        tokens.append(dict(name=name, start=len(line), end=len(line) + len(value)))
         line += value
     return [(line + (f' > {stdout}' if stdout else ''), tokens)]
 
 
 def _input(slot, value, first):
-    aliases = [slot['label']] if slot.get('label') else []
     if first:
-        return (slot['name'], '', literal(value) if value else '""', aliases)
-    return (slot['name'], slot['name'] + '=', literal(value), aliases)
+        return (slot['name'], '', literal(value) if value else '""')
+    return (slot['name'], slot['name'] + '=', literal(value))
 
 
-def _parameter(name, value, typ):
+def _parameter(name, value, typ, field=None):
     text = argument(name, value, typ)
     if text.startswith(name + '='):
-        return (name, name + '=', text[len(name) + 1:], [])
-    return (name, '', text, [])
+        return (field or name, name + '=', text[len(name) + 1:])
+    return (field or name, '', text)
 
 
 def _output(name, names, many):
-    return (name, name + '=', literal(names[0]) if len(names) == 1 else many, [])
+    return (name, name + '=', literal(names[0]) if len(names) == 1 else many)
 
 
 def _names(names, written):
@@ -142,7 +143,7 @@ def _generic(manifest, rows, pending):
         values = (manifest.get('parameterSets') or {}).get(pset['name'], {})
         for p in pset.get('allParameters', pset['parameters']):
             if p['name'] in values and differs(values[p['name']], p.get('default')):
-                args.append(_parameter(p['name'], values[p['name']], p.get('type', 's')))
+                args.append(_parameter(p['name'], values[p['name']], p.get('type', 's'), f'{pset["name"]}.{p["name"]}'))
     return spec.get('taskName') or spec['name'], args, stdout
 
 
@@ -199,18 +200,3 @@ def draft_manifest(payload, resolve):
                 parameterSets=dict(payload.get('parameterSets') or {}), textInputs=dict(payload.get('textInputs') or {}),
                 cursorCommands=dict(payload.get('cursorCommands') or {}))
 
-
-def marked(line, tokens, issues):
-    """{text, issues} of one line: each (severity, message) on the token its
-    leading `name:` names (a role, its label, a parameter, or a file the
-    token holds). An issue naming no token stays with the diagnostics alone."""
-    found = []
-    for severity, message in issues:
-        head = message.split(':', 1)[0].strip()
-        if not head:
-            continue
-        token = (next((t for t in tokens if head == t['name'] or head in t['aliases']), None)
-                 or next((t for t in tokens if head in line[t['start']:t['end']]), None))
-        if token:
-            found.append(dict(name=token['name'], start=token['start'], end=token['end'], severity=severity, message=message))
-    return dict(text=line, issues=found)

@@ -23,6 +23,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { runState, stateLabel } from "@/lib/task-map"
+import { fieldIssues } from "@/lib/diagnostics"
 import { assigned } from "@/lib/task-map/inputs"
 import {
   COLLAPSED_WIDTH,
@@ -98,6 +99,8 @@ export const TaskNode = memo(function TaskNode({
   const nodeIssues = currentIssues.filter((issue) => issue.nodeId === id)
   const nodeIssue =
     nodeIssues.find((issue) => issue.severity === "error") || nodeIssues[0]
+  // A problem with one input or parameter also marks its row.
+  const issues = fieldIssues(nodeIssues, id)
   const spec = catalog.tasks.find((s) => s.name === task.task)
   const sourceConnections = map.connections.filter(
     (connection) =>
@@ -577,6 +580,7 @@ export const TaskNode = memo(function TaskNode({
                       !!task.expressions[slot.role] || undefined
                     }
                     data-connection-target={connectionTarget === slot.name}
+                    data-severity={issues.get(slot.name)?.severity}
                   >
                     {inputHandle(slot)}
                     <Tooltip disabled={connecting}>
@@ -641,6 +645,7 @@ export const TaskNode = memo(function TaskNode({
                   className="node-input-row node-param-row"
                   key={row.handleId}
                   data-connection-target={connectionTarget === row.handleId}
+                  data-severity={row.pset ? undefined : issues.get(row.key)?.severity}
                 >
                   {paramHandle(row)}
                   <button

@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 from ..task_capabilities import parameter_number
 from ..task_expressions import resolve_expression, inspect_expression
+from ..field_issues import in_field
 
 
 def validate_cursor_file(path, name):
@@ -78,46 +79,47 @@ def resolve_generic_inputs(spec, payload, supplied, directory, resolve, *, hash_
     if set(supplied_inputs) - roles or set(expressions) - roles: raise ValueError('지원하지 않는 입력 역할입니다.')
     scalar_values = {}
     for slot in spec['inputs']:
-        name = slot['name']; ids = supplied_inputs.get(name, [])
-        if not isinstance(ids, list) or any(not isinstance(i, str) for i in ids): raise ValueError(f'{name}: 파일 목록을 선택해 주세요.')
-        expanded = {}
-        expr = expressions.get(name, '')
-        if expr and not accepts_source(slot, 'expression'):
-            raise ValueError(f'{name}: 표현식을 받지 않는 입력입니다. 파일을 선택해 주세요.')
-        if (cursor_commands.get(name, '').strip() or text_inputs.get(name, '').strip()) and (ids or expr):
-            raise ValueError(f'{name}: 직접 입력과 파일/노드 연결 중 하나를 선택해 주세요.')
-        if expr:
-            if slot['kind'] == 'image':
-                rows = (inspect_expression if diagnostics else resolve_expression)(expr, directory)
-            else:
-                path = Path(expr).expanduser(); path = path if path.is_absolute() else Path(directory) / path
-                rows = [dict(id=hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:20], name=path.name, label=path.name, path=str(path.resolve()), asset=slot['kind'])]
-            ids = [r['id'] for r in rows]; expanded = {r['id']: r for r in rows}
-        from ..image_lists import expand_image_selection, accepts_asset
-        selection_slot = slot
-        selected, list_sources = expand_image_selection(selection_slot, ids, lambda id: expanded[id] if id in expanded else resolve(id), directory, inspection=diagnostics)
-        ids = [r['id'] for r in selected]
-        expanded.update({r['id']: r for r in selected})
-        input_lists.update({r['path']: r for r in list_sources})
-        if slot['required'] and not ids and name not in pending_roles and not cursor_commands.get(name, '').strip() and not text_inputs.get(name, '').strip(): raise ValueError(f'{slot["label"]}: 입력 파일을 선택해 주세요.')
-        if not slot['multiple'] and len(ids) > 1: raise ValueError(f'{name}: 파일 한 개를 선택해 주세요.')
-        if slot.get('scalar') and not ids and name not in pending_roles:
-            try:
-                value = float(supplied.get(name, ''))
-                if not math.isfinite(value): raise ValueError()
-                scalar_values[name] = str(value)
-            except (TypeError, ValueError):
-                raise ValueError(f'{name}: 파일 또는 유한한 수치 상수를 지정해 주세요.') from None
-        inputs[name] = ids
-        for id in ids:
-            row = deepcopy(expanded[id] if id in expanded else resolve(id))
-            path = Path(row['path'])
-            if not path.is_file(): raise ValueError(f'{name}: {row.get("label") or path.name}: 입력 파일이 없습니다.')
-            if diagnostics and row.get('error'):
-                raise ValueError(f'{name}: {row["error"]}')
-            if not accepts_asset(slot['kind'], row.get('asset', 'image')): raise ValueError(f'{name}: {slot["kind"]} 파일을 선택해 주세요.')
-            if slot.get('valueType') == 'cursor':
-                validate_cursor_file(path, name)
-            if not diagnostics: row['sha256'] = hash_file(path)
-            sources[id] = row
+        with in_field(slot['name']):
+            name = slot['name']; ids = supplied_inputs.get(name, [])
+            if not isinstance(ids, list) or any(not isinstance(i, str) for i in ids): raise ValueError(f'{name}: 파일 목록을 선택해 주세요.')
+            expanded = {}
+            expr = expressions.get(name, '')
+            if expr and not accepts_source(slot, 'expression'):
+                raise ValueError(f'{name}: 표현식을 받지 않는 입력입니다. 파일을 선택해 주세요.')
+            if (cursor_commands.get(name, '').strip() or text_inputs.get(name, '').strip()) and (ids or expr):
+                raise ValueError(f'{name}: 직접 입력과 파일/노드 연결 중 하나를 선택해 주세요.')
+            if expr:
+                if slot['kind'] == 'image':
+                    rows = (inspect_expression if diagnostics else resolve_expression)(expr, directory)
+                else:
+                    path = Path(expr).expanduser(); path = path if path.is_absolute() else Path(directory) / path
+                    rows = [dict(id=hashlib.sha256(str(path.resolve()).encode()).hexdigest()[:20], name=path.name, label=path.name, path=str(path.resolve()), asset=slot['kind'])]
+                ids = [r['id'] for r in rows]; expanded = {r['id']: r for r in rows}
+            from ..image_lists import expand_image_selection, accepts_asset
+            selection_slot = slot
+            selected, list_sources = expand_image_selection(selection_slot, ids, lambda id: expanded[id] if id in expanded else resolve(id), directory, inspection=diagnostics)
+            ids = [r['id'] for r in selected]
+            expanded.update({r['id']: r for r in selected})
+            input_lists.update({r['path']: r for r in list_sources})
+            if slot['required'] and not ids and name not in pending_roles and not cursor_commands.get(name, '').strip() and not text_inputs.get(name, '').strip(): raise ValueError(f'{slot["label"]}: 입력 파일을 선택해 주세요.')
+            if not slot['multiple'] and len(ids) > 1: raise ValueError(f'{name}: 파일 한 개를 선택해 주세요.')
+            if slot.get('scalar') and not ids and name not in pending_roles:
+                try:
+                    value = float(supplied.get(name, ''))
+                    if not math.isfinite(value): raise ValueError()
+                    scalar_values[name] = str(value)
+                except (TypeError, ValueError):
+                    raise ValueError(f'{name}: 파일 또는 유한한 수치 상수를 지정해 주세요.') from None
+            inputs[name] = ids
+            for id in ids:
+                row = deepcopy(expanded[id] if id in expanded else resolve(id))
+                path = Path(row['path'])
+                if not path.is_file(): raise ValueError(f'{name}: {row.get("label") or path.name}: 입력 파일이 없습니다.')
+                if diagnostics and row.get('error'):
+                    raise ValueError(f'{name}: {row["error"]}')
+                if not accepts_asset(slot['kind'], row.get('asset', 'image')): raise ValueError(f'{name}: {slot["kind"]} 파일을 선택해 주세요.')
+                if slot.get('valueType') == 'cursor':
+                    validate_cursor_file(path, name)
+                if not diagnostics: row['sha256'] = hash_file(path)
+                sources[id] = row
     return inputs, sources, input_lists, supplied_inputs, expressions, scalar_values

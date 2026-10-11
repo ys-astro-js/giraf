@@ -15,6 +15,8 @@ import {
 } from "@/lib/workbench"
 import { type Instance, type TaskMap } from "@/lib/task-map"
 import type * as React from "react"
+import type { FieldIssue } from "@/lib/diagnostics"
+import { IssueTooltip, invalidProps } from "@/components/field-issue"
 
 export function InspectorFileSource({
   s,
@@ -36,6 +38,7 @@ export function InspectorFileSource({
   task,
   count,
   children,
+  issue,
 }: {
   s: Slot
   /** Shown instead of the slot name, which then needs no description. */
@@ -71,9 +74,12 @@ export function InspectorFileSource({
   count?: number
   /** Shown under the input: how it is split, or pairs to the groups (lib/splits). */
   children?: React.ReactNode
+  /** The input's problem (diagnostics fieldIssues): its button is marked invalid. */
+  issue?: FieldIssue
 }) {
   return (
-    <Field key={s.name} className="input-slot">
+    <IssueTooltip key={s.name} issue={issue}>
+    <Field className="input-slot">
       {s.valueType !== "cursor" && (
         <FieldLabel htmlFor={`${prefix}source-${s.name}`}>
           {label ?? s.name}
@@ -91,6 +97,7 @@ export function InspectorFileSource({
             : undefined
         }
         aria-expanded={limit > 0}
+        {...invalidProps(issue)}
         onClick={() => setExpanded((v) => ({ ...v, [s.name]: limit ? 0 : 5 }))}
       >
         <span className="truncate">{summary}</span>
@@ -223,6 +230,7 @@ export function InspectorFileSource({
             <Input
               id={`${prefix}expr-${s.name}`}
               aria-label={`${label ?? s.name} 표현식`}
+              {...invalidProps(issue)}
               placeholder="파일명 또는 표현식"
               value={expression}
               onChange={(e) =>
@@ -263,5 +271,6 @@ export function InspectorFileSource({
         </Tabs>
       )}
     </Field>
+    </IssueTooltip>
   )
 }

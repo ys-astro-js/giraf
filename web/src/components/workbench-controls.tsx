@@ -1,5 +1,7 @@
 import type { ReactNode } from "react"
 import { Button } from "@/components/ui/button"
+import { invalidProps } from "./field-issue"
+import type { FieldIssue } from "@/lib/diagnostics"
 import {
   Select,
   SelectContent,
@@ -98,6 +100,7 @@ export function Choice({
   id,
   describedBy,
   required,
+  issue,
 }: {
   value: string
   options: ChoiceOption[]
@@ -106,6 +109,8 @@ export function Choice({
   id?: string
   describedBy?: string
   required?: boolean
+  /** A problem with the value: marked on the trigger. */
+  issue?: FieldIssue
 }) {
   const selected = options.find((option) => option.value === value)
   return (
@@ -121,6 +126,7 @@ export function Choice({
         aria-label={label}
         aria-describedby={describedBy}
         aria-required={required || undefined}
+        {...invalidProps(issue)}
         className="w-full"
       >
         <SelectValue>

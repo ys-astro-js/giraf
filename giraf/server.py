@@ -416,9 +416,9 @@ def resolve_values(payload):
 def task_commands(request):
     """The CL command each group of a task runs (giraf/splits.py), built as a
     workflow run builds them: its groups, paired inputs, values and formulas,
-    then the validated plan (giraf/commands.py). Each line carries the
-    problems of its tokens for marking; the messages are the diagnostics'."""
-    from .commands import command_lines, draft_manifest, marked
+    then the validated plan (giraf/commands.py). Each line carries the span
+    of each field's value; the editor marks the field's diagnostics there."""
+    from .commands import command_lines, draft_manifest
     from .splits import Files, SplitError, apply_formulas, group_runs, without_fields
     from .task_catalog import TASKS
     from .values import apply_parameters
@@ -450,18 +450,16 @@ def task_commands(request):
         except (ValueError, KeyError, TypeError, OSError):
             each = without_fields(each)
         # A problem stops validation, not the line: it reads as the draft holds it,
-        # the problem marked on its token and listed by the diagnostics alone.
+        # the problem listed by the diagnostics and marked on its field's token.
         try:
             manifest = validate_task(each, resolve, diagnostics=True, pending_roles=pending)
-            issues = [('warning', w) for w in manifest.get('warnings', [])]
-        except (ValueError, KeyError, TypeError, OSError) as exc:
-            issues = [('error', str(exc))]
+        except (ValueError, KeyError, TypeError, OSError):
             try:
                 manifest = draft_manifest(each, resolve)
             except (ValueError, KeyError, TypeError, OSError):
                 manifest = None
         try:
-            entry['lines'] = [marked(line, tokens, issues) for line, tokens in command_lines(manifest, pending)] if manifest else []
+            entry['lines'] = [dict(text=line, tokens=tokens) for line, tokens in command_lines(manifest, pending)] if manifest else []
         except (ValueError, KeyError, TypeError, OSError):
             entry['lines'] = []
         result.append(entry)

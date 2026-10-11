@@ -134,7 +134,7 @@ class PairingTests(unittest.TestCase):
         payload = {'task': 'x', 'split': {'input': 'images', 'by': [{'key': 'FILTER'}]},
                    'inputs': {'images': list(SCIENCE), 'zero': ['Zero.fits'], 'flat': ['FlatB.fits', 'FlatV.fits'],
                               'dark': ['Dark90.fits']}}
-        self.assertEqual(split_problems(payload, self.files), [('warning', 'flat: 짝 맞추기를 정하세요')])
+        self.assertEqual(split_problems(payload, self.files), [('warning', 'flat: 짝 맞추기를 정하세요', 'flat')])
         payload['pairing'] = {'flat': {'by': 'EXPTIME'}}
         self.assertEqual(split_problems(payload, self.files)[0][0], 'error')
         payload['pairing'] = {'flat': {'by': 'FILTER'}}
@@ -228,20 +228,27 @@ class CommandTests(unittest.TestCase):
         line = group['lines'][0]
         self.assertTrue(line['text'].startswith('imcombine @input.list output=Bias.fits'), line['text'])
         self.assertIn('combine=median', line['text'])
-        [issue] = line['issues']
-        self.assertEqual((issue['name'], issue['severity'], issue['message']), ('input', 'error', 'input.list: 목록 파일이 없습니다.'))
-        self.assertEqual(line['text'][issue['start']:issue['end']], '@input.list')
+        # The problem is the diagnostics' (its field `input`); the line names where that field reads.
+        token = next(t for t in line['tokens'] if t['name'] == 'input')
+        self.assertEqual(line['text'][token['start']:token['end']], '@input.list')
+        self.assertNotIn('issues', line)
         self.assertNotIn('problem', group)
 
     def test_spans_cover_each_value_and_pending_inputs_read_as_lists(self):
-        from giraf.commands import command_lines, draft_manifest, marked
+        from giraf.commands import command_lines, draft_manifest
         manifest = draft_manifest(dict(task='images.immatch.imcombine', parameters={'combine': 'median', 'lthreshold': 'x'},
                                        outputs={'output': 'Bias.fits'}), lambda id: None)
         [(line, tokens)] = command_lines(manifest, frozenset({'input'}))
         spans = {t['name']: line[t['start']:t['end']] for t in tokens}
         self.assertEqual((spans['input'], spans['output'], spans['combine'], spans['lthreshold']), ('@input.list', 'Bias.fits', 'median', 'x'))
-        issue = marked(line, tokens, [('error', 'lthreshold: 유효한 수치와 범위를 확인해 주세요.'), ('warning', '다른 문제')])['issues']
-        self.assertEqual([(i['name'], line[i['start']:i['end']]) for i in issue], [('lthreshold', 'x')])
+
+    def test_pset_values_are_named_by_their_field(self):
+        """A parameter set's value reads under the key the editor gives it (`pset.name`)."""
+        from giraf.commands import command_lines, draft_manifest
+        manifest = draft_manifest(dict(task='noao.digiphot.apphot.phot', parameterSets={'datapars': {'fwhmpsf': '7.5'}}), lambda id: None)
+        [(line, tokens)] = command_lines(manifest)
+        token = next(t for t in tokens if t['name'] == 'datapars.fwhmpsf')
+        self.assertEqual(line[token['start']:token['end']], '7.5')
 
 
 class Runner:

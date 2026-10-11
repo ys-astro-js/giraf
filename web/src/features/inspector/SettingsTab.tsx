@@ -16,6 +16,7 @@ import { Choice } from "@/components/workbench-controls"
 import { type Catalog, type Frame, type Spec, type Slot, type Values } from "@/lib/workbench"
 import { type Instance, type TaskMap, resetInstanceParameters } from "@/lib/task-map"
 import { ParameterEditorFields } from "@/components/parameter-editor"
+import { invalidProps } from "@/components/field-issue"
 import { type ParameterPinning } from "@/components/parameter-fields"
 import { ValueRowsEditor } from "@/components/value-rows-editor"
 import { ComputeRowsEditor } from "@/components/compute-rows-editor"
@@ -25,6 +26,7 @@ import { MeasurementsSection } from "./Measurements"
 import { GroupValuesSection } from "./SplitSections"
 import { consumerGroups } from "@/lib/splits"
 import { isGirafNode } from "@/lib/workbench"
+import type { FieldIssue } from "@/lib/diagnostics"
 
 export function InspectorSettings({
   groups,
@@ -42,6 +44,7 @@ export function InspectorSettings({
   map,
   catalog,
   rows,
+  issues,
 }: {
   groups: ParameterGroup[]
   query: string
@@ -59,6 +62,8 @@ export function InspectorSettings({
   map: TaskMap
   catalog: Catalog
   rows: Frame[]
+  /** The node's problems by field (diagnostics fieldIssues). */
+  issues?: Map<string, FieldIssue>
 }) {
   const [resetValues, setResetValues] = useState<{
     parameters: Values
@@ -84,6 +89,7 @@ export function InspectorSettings({
             hasOtherResults={isValueNode(spec)}
             pinning={pinning}
             actions={actions}
+            issues={issues}
           />
         )}
 
@@ -98,12 +104,14 @@ export function InspectorSettings({
           <Accordion multiple>
             {spec.adapter !== "generic" && (
               <AccordionItem value="package">
-                <AccordionTrigger>instrument</AccordionTrigger>
+                {/* A closed section whose field has a problem marks its heading. */}
+                <AccordionTrigger data-severity={issues?.get("instrument")?.severity}>instrument</AccordionTrigger>
                 <AccordionContent>
                   <div className="flex items-center gap-2 py-4">
                     <Button
                       variant="outline"
                       size="sm"
+                      {...invalidProps(issues?.get("instrument"))}
                       onClick={() =>
                         pick(
                           {

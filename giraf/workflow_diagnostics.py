@@ -8,6 +8,7 @@ from .task_catalog import TASKS, CALIBRATIONS
 from .task_jobs import validate_task, values
 from .image_lists import accepts_asset
 from .splits import apply_select, group_runs, split_problems, without_fields
+from .field_issues import field_of
 
 
 def connection_components(connections):
@@ -63,11 +64,14 @@ def workflow_diagnostics(request, resolve):
         raise ValueError('중복된 노드 ID가 있습니다.')
     result = []
 
-    def add(severity, message, node_id, connection_id=None):
+    def add(severity, message, node_id, connection_id=None, field=None):
+        """`field` is the input role or parameter key the problem is about
+        (giraf/field_issues.py), for marking it where it is shown."""
         identity = [node_id, connection_id, severity, message]
         result.append(dict(id=json.dumps(identity, ensure_ascii=False), severity=severity,
-                           message=message, nodeId=node_id,
-                           **({'connectionId': connection_id} if connection_id else {})))
+                           message=str(message), nodeId=node_id,
+                           **({'connectionId': connection_id} if connection_id else {}),
+                           **({'field': field} if field else {})))
 
     pending = diagnose_connections(by_id, connections, add)
 
@@ -99,8 +103,8 @@ def workflow_diagnostics(request, resolve):
             if issue['severity'] == 'warning':
                 add('warning', '노드 스키마 ' + issue['message'], node_id)
         try:
-            for severity, message in split_problems(apply_select(payload, known), known, pending[node_id]):
-                add(severity, message, node_id)
+            for severity, message, field in split_problems(apply_select(payload, known), known, pending[node_id]):
+                add(severity, message, node_id, field=field)
             runs = group_runs(payload, known, TASKS.get(payload.get('task')))
         except (ValueError, KeyError, TypeError, OSError):
             # The split's problems are reported above; check the task with one file of each other input.
@@ -110,10 +114,10 @@ def workflow_diagnostics(request, resolve):
             # The first group stands for the others: they differ only in files and values.
             manifest = validate_task(without_fields(runs[0][1]), fresh, diagnostics=True, pending_roles=pending[node_id])
         except (ValueError, KeyError, TypeError, OSError) as exc:
-            add('error', str(exc), node_id)
+            add('error', str(exc), node_id, field=field_of(exc))
             continue
         for warning in manifest.get('warnings', []):
-            add('warning', warning, node_id)
+            add('warning', warning, node_id, field=field_of(warning))
     return result
 
 
@@ -156,22 +160,22 @@ def diagnose_connections(by_id, connections, add):
             except ValueError:
                 enabled = True  # The node's parameter check reports the invalid value.
             if not enabled:
-                add('error', '비활성 입력 역할에 연결되어 있습니다.', target_id, edge_id)
+                add('error', '비활성 입력 역할에 연결되어 있습니다.', target_id, edge_id, slot['name'])
                 continue
         if not slot.get('multiple', False) and input_counts[target_id, slot['name']] > 1:
-            add('error', '입력 연결은 하나만 선택해 주세요.', target_id, edge_id)
+            add('error', '입력 연결은 하나만 선택해 주세요.', target_id, edge_id, slot['name'])
             continue
         parent_id = source.get('taskId')
         if source.get('kind') in ('pending', 'result'):
             parent = by_id.get(parent_id)
             if not parent:
-                add('error', '출발 작업이 삭제되었습니다.', target_id, edge_id)
+                add('error', '출발 작업이 삭제되었습니다.', target_id, edge_id, slot['name'])
                 continue
             if components[target_id] == components[parent_id]:
-                add('error', '순환 연결은 만들 수 없습니다.', target_id, edge_id)
+                add('error', '순환 연결은 만들 수 없습니다.', target_id, edge_id, slot['name'])
                 continue
             if 'node' not in slot.get('sources', ('node',)):
-                add('error', '다른 노드의 출력을 받지 않는 입력입니다.', target_id, edge_id)
+                add('error', '다른 노드의 출력을 받지 않는 입력입니다.', target_id, edge_id, slot['name'])
                 continue
             parent_spec = TASKS.get(parent['payload'].get('task'))
             outputs = parent_spec.get('outputs', []) if parent_spec else []
@@ -180,13 +184,13 @@ def diagnose_connections(by_id, connections, add):
             if not kinds and not output_role and parent_spec and parent_spec.get('adapter') != 'generic':
                 kinds = [parent_spec.get('kind', 'image')]
             if not kinds or not any(accepts_asset(slot['kind'], k) for k in kinds):
-                add('error', '출력과 입력의 자료형 또는 출력 역할이 맞지 않습니다.', target_id, edge_id)
+                add('error', '출력과 입력의 자료형 또는 출력 역할이 맞지 않습니다.', target_id, edge_id, slot['name'])
                 continue
             if source.get('kind') == 'pending' and not target['payload'].get('expressions', {}).get(slot['name']):
                 pending[target_id].add(slot['name'])
         elif source.get('kind') not in ('files',):
-            add('error', '알 수 없는 연결 출처입니다.', target_id, edge_id)
+            add('error', '알 수 없는 연결 출처입니다.', target_id, edge_id, slot['name'])
         if source.get('kind') == 'files' and not slot.get('multiple', False) and len(source.get('ids', [])) > 1:
-            add('error', '입력 파일은 한 개만 선택해 주세요.', target_id, edge_id)
+            add('error', '입력 파일은 한 개만 선택해 주세요.', target_id, edge_id, slot['name'])
 
     return pending

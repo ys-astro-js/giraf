@@ -75,6 +75,28 @@ class WorkflowDiagnosticsTests(unittest.TestCase):
         single["payload"]["task"] = "images.immatch.imalign"
         self.assertTrue(any(d["nodeId"] == "single" and "한 개" in d["message"] for d in self.inspect([single])))
 
+    def test_problems_name_the_input_or_parameter_they_are_about(self):
+        """The editor marks a problem where it is shown: its input role or parameter key."""
+        def ccdproc(**payload):
+            node = self.node("p")
+            node["payload"] = {"task": "ccdproc", "inputs": {}, "parameters": {"zerocor": "no", "darkcor": "no", "flatcor": "no",
+                               "overscan": "no", "trim": "no", "fixpix": "no"}, "workingDirectory": str(self.folder), **payload}
+            return node
+        missing = ccdproc(expressions={"images": "@input.list"})
+        [issue] = [d for d in self.inspect([missing]) if d["severity"] == "error"]
+        self.assertEqual((issue["field"], issue["message"]), ("images", "input.list: 목록 파일이 없습니다."))
+        cache = ccdproc(inputs={"images": [self.row["id"]]})
+        cache["payload"]["parameters"]["max_cache"] = -1
+        [issue] = [d for d in self.inspect([cache]) if d["severity"] == "error"]
+        self.assertEqual((issue["field"], issue["message"]), ("max_cache", "max_cache: 유효한 수치와 범위를 입력해 주세요."))
+        phot = self.node("phot")
+        phot["payload"].update(task="noao.digiphot.apphot.phot", parameterSets={"datapars": {"fwhmpsf": "x"}})
+        self.assertIn("datapars.fwhmpsf", [d.get("field") for d in self.inspect([phot])])
+        # A problem about no one field keeps no field.
+        unknown = ccdproc(inputs={"images": [self.row["id"]]})
+        unknown["payload"]["parameters"]["nosuch"] = 1
+        self.assertEqual([d.get("field") for d in self.inspect([unknown]) if d["severity"] == "error"], [None])
+
     def test_external_file_changes_and_recovers_without_hash_or_mutation(self):
         nodes = [self.node("a", {"input": [self.row["id"]]}), self.node(inputs={"input": [self.row["id"]]})]
         edge = {"id": "result-edge", "source": {"kind": "result", "taskId": "a", "runId": "completed", "ids": [self.row["id"]]}, "target": "n", "role": "input"}

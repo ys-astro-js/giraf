@@ -1,7 +1,8 @@
 import type { createDiagnosticStore } from "./diagnostics"
 
 type Store = ReturnType<typeof createDiagnosticStore>
-export type WorkflowIssue = { id: string; severity: "warning" | "error"; message: string; nodeId: string; connectionId?: string }
+/** `field` names the input role or parameter key the problem is about (giraf/field_issues.py). */
+export type WorkflowIssue = { id: string; severity: "warning" | "error"; message: string; nodeId: string; connectionId?: string; field?: string }
 type Response = { diagnostics: WorkflowIssue[] }
 /** An issue the editor finds itself, shown with the server's; `label` names its node. */
 export type LocalIssue = WorkflowIssue & { label: string }
@@ -21,7 +22,8 @@ export async function requestWorkflowDiagnostics(payload: unknown, signal?: Abor
     "nodeId" in issue && typeof issue.nodeId === "string" &&
     "message" in issue && typeof issue.message === "string" &&
     "severity" in issue && (issue.severity === "error" || issue.severity === "warning") &&
-    (!("connectionId" in issue) || typeof issue.connectionId === "string")
+    (!("connectionId" in issue) || typeof issue.connectionId === "string") &&
+    (!("field" in issue) || typeof issue.field === "string")
   )) throw new Error("검사 응답 형식이 올바르지 않습니다.")
   return data
 }
@@ -63,7 +65,7 @@ export function createWorkflowDiagnosticsController(
       if (!disposed && inspectedDocument === documentId && inspectedVersion === version) {
         store.replaceCurrent(documentId, [
           ...result.diagnostics,
-          ...inspectedLocal.map(({ id, severity, message, nodeId, connectionId }) => ({ id, severity, message, nodeId, ...(connectionId ? { connectionId } : {}) })),
+          ...inspectedLocal.map(({ id, severity, message, nodeId, connectionId, field }) => ({ id, severity, message, nodeId, ...(connectionId ? { connectionId } : {}), ...(field ? { field } : {}) })),
         ], nodeLabels)
         setFailure("")
       }

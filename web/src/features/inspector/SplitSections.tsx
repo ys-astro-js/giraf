@@ -15,6 +15,8 @@ import { taskGroups } from "@/lib/splits"
 import { commandsRequest, type Instance, type TaskMap } from "@/lib/task-map"
 import { pinnedKeys } from "@/lib/values"
 import { CommandLine, MarkedText, type CommandIssue } from "./CommandLine"
+import type { FieldIssue } from "@/lib/diagnostics"
+import { useFieldIssues } from "@/lib/field-issues"
 import { api, type Catalog, type Frame } from "@/lib/workbench"
 
 type Props = { map: TaskMap; catalog: Catalog; task: Instance; rows: Frame[] }
@@ -59,8 +61,18 @@ export function GroupValuesSection({ map, catalog, task, rows }: Props) {
   )
 }
 
-/** A group's lines (giraf/server.py task_commands), each with its tokens' problems. */
-export type CommandGroup = { id: string; name: string; files: string[]; lines?: { text: string; issues: CommandIssue[] }[] }
+/** The span of one value in a line, named by the field it sets (giraf/commands.py). */
+export type CommandToken = { name: string; start: number; end: number }
+/** A group's lines (giraf/server.py task_commands), each with its values' spans. */
+export type CommandGroup = { id: string; name: string; files: string[]; lines?: { text: string; tokens: CommandToken[] }[] }
+
+/** The problems of a line: each field's problem on the token that sets it. */
+export function tokenIssues(tokens: CommandToken[], issues: Map<string, FieldIssue>): CommandIssue[] {
+  return tokens.flatMap((token) => {
+    const issue = issues.get(token.name)
+    return issue ? [{ ...token, ...issue }] : []
+  })
+}
 
 /** 명령: the CL line each group runs, each editable in place (CommandLine). */
 export function CommandsSection({ map, catalog, task }: Omit<Props, "rows">) {
@@ -75,14 +87,21 @@ export function CommandsSection({ map, catalog, task }: Omit<Props, "rows">) {
     placeholderData: keepPreviousData,
     retry: false,
   })
-  return <CommandList groups={data?.groups ?? []} catalog={catalog} task={task} />
+  const issues = useFieldIssues(task.id)
+  return <CommandList groups={data?.groups ?? []} catalog={catalog} task={task} issues={issues} />
 }
 
 /**
  * The lines as built, a token with a problem marked in place. The messages
  * are listed by the node's diagnostics alone; with no line, no section.
  */
-export function CommandList({ groups, catalog, task }: { groups: CommandGroup[]; catalog: Catalog; task: Instance }) {
+export function CommandList({ groups, catalog, task, issues }: {
+  groups: CommandGroup[]
+  catalog: Catalog
+  task: Instance
+  /** The node's problems by field (diagnostics fieldIssues). */
+  issues: Map<string, FieldIssue>
+}) {
   const workbench = useContext(WorkbenchContext)
   const spec = catalog.tasks.find((s) => s.name === task.task)
   const ids = groups.map((g) => g.id)
@@ -95,10 +114,10 @@ export function CommandList({ groups, catalog, task }: { groups: CommandGroup[];
         {lines.map(({ key, line, group }) => (
           <li key={key}>
             {workbench && spec ? (
-              <CommandLine line={line.text} issues={line.issues} task={task} spec={spec} catalog={catalog}
+              <CommandLine line={line.text} issues={tokenIssues(line.tokens, issues)} task={task} spec={spec} catalog={catalog}
                 group={ids.length > 1 ? { id: group, groups: ids } : undefined}
                 edit={(fn) => workbench.edit(fn, task.id)} />
-            ) : <span className="font-mono command-line"><MarkedText line={line.text} issues={line.issues} /></span>}
+            ) : <span className="font-mono command-line"><MarkedText line={line.text} issues={tokenIssues(line.tokens, issues)} /></span>}
           </li>
         ))}
       </ul>

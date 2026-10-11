@@ -42,3 +42,9 @@
 .segmented-choice input:checked + span { background:var(--background); color:var(--foreground); box-shadow:0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent); }
 .dark .segmented-choice input:checked + span { background:color-mix(in oklch, var(--input) 30%, transparent); box-shadow:0 0 0 1px var(--input); }
 .segmented-choice input:focus-visible + span { outline:2px solid var(--ring); outline-offset:2px; }
+
+/* A field with a problem (diagnostics fieldIssues): aria-invalid's shape, in the warning colour for a warning. */
+[aria-invalid="true"][data-severity="warning"] { border-color: var(--warning); --tw-ring-color: color-mix(in oklab, var(--warning) 20%, transparent); }
+/* Where that field is out of sight, its closed section or tab is tinted. */
+[data-slot="accordion-trigger"][data-severity="error"]:not([aria-expanded="true"]), [role="tab"][data-severity="error"] { color: var(--destructive); }
+[data-slot="accordion-trigger"][data-severity="warning"]:not([aria-expanded="true"]), [role="tab"][data-severity="warning"] { color: var(--warning); }

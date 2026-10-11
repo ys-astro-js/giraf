@@ -17,6 +17,7 @@ from .task_inputs import resolve_task_inputs
 from .task_catalog import TASKS, parameters, CALIBRATIONS
 from .products import each_output_name, product_name
 from .request_schema import TaskRequest
+from .field_issues import FieldError
 
 def digest(path):
     with Path(path).open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
@@ -29,7 +30,9 @@ def authorize_file_plan(manifest,token):
 DEFAULT_MAPPING = {'imagetyp':'IMAGETYP', 'exptime':'EXPTIME', 'darktime':'DARKTIME', 'subset':'FILTER'}
 
 
-def values(name, supplied):
+def values(name, supplied, prefix=''):
+    """Checked values of a parameter group; a problem names its field as
+    `prefix + key` (giraf/field_issues.py)."""
     allowed = {p['name']:p for p in parameters(name)}
     if set(supplied) - set(allowed):
         raise ValueError(f'{name}: 알 수 없는 파라미터입니다: {", ".join(set(supplied)-set(allowed))}')
@@ -38,7 +41,7 @@ def values(name, supplied):
         value = supplied.get(key, p['default'])
         if p['type'] == 'b':
             if value not in (True, False, 'yes', 'no'):
-                raise ValueError(f'{key}: yes 또는 no를 선택해 주세요.')
+                raise FieldError(prefix + key, f'{key}: yes 또는 no를 선택해 주세요.')
             value = 'yes' if value in (True, 'yes') else 'no'
         elif p['type'] in ('i','r','d'):
             if str(value).upper() == 'INDEF':
@@ -52,13 +55,13 @@ def values(name, supplied):
                     if p['min'] != '' and value < float(p['min']): raise ValueError()
                     if p['max'] != '' and value > float(p['max']): raise ValueError()
                 except (ValueError, TypeError, OverflowError):
-                    raise ValueError(f'{key}: 유효한 {"정수" if p["type"]=="i" else "수치"}와 범위를 확인해 주세요.')
+                    raise FieldError(prefix + key, f'{key}: 유효한 {"정수" if p["type"]=="i" else "수치"}와 범위를 확인해 주세요.')
         else:
             value = str(value)
             if len(value)>500 or any(c in value for c in '\n\r\x00'):
-                raise ValueError(f'{key}: 한 줄의 값을 입력해 주세요.')
+                raise FieldError(prefix + key, f'{key}: 한 줄의 값을 입력해 주세요.')
         if p['choices'] and value not in p['choices']:
-            raise ValueError(f'{key}: 허용되지 않은 값입니다.')
+            raise FieldError(prefix + key, f'{key}: 허용되지 않은 값입니다.')
         result[key] = value
     return result
 
@@ -72,8 +75,8 @@ def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozense
         from .generic_tasks import validate_generic
         return validate_generic(spec, payload, resolve, diagnostics=diagnostics, pending_roles=pending_roles)
     params = values(name, payload.get('parameters', {}))
-    prep = values('ccdproc', payload.get('ccdproc', {}))
-    package = values('ccdred', payload.get('ccdred', {}))
+    prep = values('ccdproc', payload.get('ccdproc', {}), 'ccdproc.')
+    package = values('ccdred', payload.get('ccdred', {}), 'ccdred.')
     backend = payload.get('backend','cl')
     if backend not in ('cl','pyraf'): raise ValueError('CL 또는 PyRAF를 선택해 주세요.')
     directory = str(Path(payload.get('workingDirectory') or DATA).expanduser().resolve())
@@ -84,22 +87,22 @@ def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozense
     corrections = params if name=='ccdproc' else prep
     uses_prep = name=='ccdproc' or (spec.get('preprocess') and (params.get('process')=='yes' or name.startswith('mk')))
     if name=='mkskyflat' and not inputs.get('flat') and 'flat' not in pending_roles:
-        raise ValueError('mkskyflat: sky 영상에 사용한 원래 flat 기준 영상을 선택해 주세요.')
+        raise FieldError('flat', 'mkskyflat: sky 영상에 사용한 원래 flat 기준 영상을 선택해 주세요.')
     if uses_prep:
         for flag, role in [('zerocor','zero'),('darkcor','dark'),('flatcor','flat'),('illumcor','illum'),('fringecor','fringe')]:
             if corrections[flag]=='yes' and not inputs.get(role) and role not in pending_roles:
-                raise ValueError(f'ccdproc.{flag}=yes: {role} 기준 영상을 선택하거나 해당 보정을 꺼 주세요.')
+                raise FieldError(role, f'ccdproc.{flag}=yes: {role} 기준 영상을 선택하거나 해당 보정을 꺼 주세요.')
         if corrections['fixpix']=='yes' and not inputs.get('fixfile') and 'fixfile' not in pending_roles:
-            raise ValueError('ccdproc.fixpix=yes: 불량 픽셀 영역 파일을 선택해 주세요.')
+            raise FieldError('fixfile', 'ccdproc.fixpix=yes: 불량 픽셀 영역 파일을 선택해 주세요.')
         for flag, field in [('overscan','biassec'),('trim','trimsec')]:
             if corrections[flag]=='yes' and not corrections[field]:
                 # Header regions remain valid IRAF input; no invented geometry.
                 from astropy.io import fits
                 if main and any(not fits.getheader(sources[id]['path']).get(field.upper()) for id in main):
-                    raise ValueError(f'ccdproc.{flag}=yes: {field} 영역을 지정해 주세요. 입력 헤더에도 영역이 없습니다.')
+                    raise FieldError(('' if name=='ccdproc' else 'ccdproc.')+field, f'ccdproc.{flag}=yes: {field} 영역을 지정해 주세요. 입력 헤더에도 영역이 없습니다.')
     if name=='ccdhedit' and not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,67}', params['parameter']):
-        raise ValueError('편집할 헤더 parameter를 입력해 주세요. 예: subset')
-    if params.get('clobber')=='yes':raise ValueError('clobber=yes: 설치 IRAF combine에서 폐기된 옵션입니다. 새 출력 경로를 사용해 주세요.')
+        raise FieldError('parameter', '편집할 헤더 parameter를 입력해 주세요. 예: subset')
+    if params.get('clobber')=='yes':raise FieldError('clobber', 'clobber=yes: 설치 IRAF combine에서 폐기된 옵션입니다. 새 출력 경로를 사용해 주세요.')
     output = payload.get('output', {})
     output_name = str(output.get('name', spec['output']['default'] if spec['output'] else ''))
     inplace=name=='ccdproc' and payload.get('filePolicy',{}).get('mode')=='direct' and not output_name
@@ -112,7 +115,7 @@ def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozense
     if name=='imexamine' and diagnostics and not main and spec['inputs'][0]['name'] in pending_roles:
         if exam.get('key') not in ('r','a','m','l','c'): raise ValueError('지원하는 조사 동작을 선택해 주세요.')
         for group in ('rimexam','limexam','cimexam'):
-            values(group, exam.get('parameters', {}).get(group, {}))
+            values(group, exam.get('parameters', {}).get(group, {}), group + '.')
     if name=='imexamine' and not (diagnostics and not main and spec['inputs'][0]['name'] in pending_roles):
         try:
             x,y=float(exam['x']),float(exam['y'])
@@ -120,7 +123,7 @@ def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozense
             if not (math.isfinite(x) and math.isfinite(y) and 1<=x<=row['width'] and 1<=y<=row['height']): raise ValueError()
         except (ValueError, KeyError, TypeError): raise ValueError('영상 안의 조사할 위치를 클릭해 주세요.')
         if exam.get('key') not in ('r','a','m','l','c'): raise ValueError('지원하는 조사 동작을 선택해 주세요.')
-        exam = dict(x=x,y=y,key=exam['key'], parameters={n:values(n,exam.get('parameters',{}).get(n,{})) for n in ('rimexam','limexam','cimexam')})
+        exam = dict(x=x,y=y,key=exam['key'], parameters={n:values(n,exam.get('parameters',{}).get(n,{}),n+'.') for n in ('rimexam','limexam','cimexam')})
     section = str(payload.get('section','')).strip()
     if section and not re.fullmatch(r'(?:\[[\w*,:+ -]+\])+', section):
         raise ValueError('영상 영역 형식을 확인해 주세요. 예: [500:1500,500:1500]')

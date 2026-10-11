@@ -8,11 +8,33 @@ export type Diagnostic = {
   runId?: string
   nodeId?: string
   connectionId?: string
+  /** The input role or parameter key the problem is about (giraf/field_issues.py). */
+  field?: string
   current?: boolean
   runCreatedAt?: number
   scope?: string
 }
 type Report = Omit<Diagnostic, "id" | "timestamp"> & { key?: string }
+/** A field's current problems: the worst severity and every message, one per line. */
+export type FieldIssue = { severity: DiagnosticSeverity; message: string }
+
+/**
+ * The current problems of a node by the field they name (its input role or
+ * parameter key). The one source for marking a problem where it is shown:
+ * the inspector's field, the node's row and the command's token.
+ */
+export function fieldIssues(entries: readonly Diagnostic[], nodeId: string): Map<string, FieldIssue> {
+  const found = new Map<string, FieldIssue>()
+  for (const entry of entries) {
+    if (!entry.current || entry.nodeId !== nodeId || !entry.field) continue
+    const had = found.get(entry.field)
+    if (had?.message.split("\n").includes(entry.message)) continue
+    found.set(entry.field, had
+      ? { severity: had.severity === "error" || entry.severity === "error" ? "error" : "warning", message: `${had.message}\n${entry.message}` }
+      : { severity: entry.severity, message: entry.message })
+  }
+  return found
+}
 type DiagnosticStorage = Pick<Storage, "getItem" | "setItem">
 type SuccessfulRun = { nodeId: string; runId: string; createdAt: number }
 const storageKey = "giraf-diagnostics-v1"
@@ -118,7 +140,8 @@ export function createDiagnosticStore(storage?: DiagnosticStorage) {
     getHistory: () => entries,
     currentForNode: (nodeId: string) => current.filter(entry => entry.nodeId === nodeId),
     currentForConnection: (connectionId: string) => current.filter(entry => entry.connectionId === connectionId),
-    replaceCurrent(documentId: string, issues: {id: string; severity: DiagnosticSeverity; message: string; nodeId: string; connectionId?: string}[], nodeLabels: Record<string, string> = {}) {
+    fieldIssues: (nodeId: string) => fieldIssues(current, nodeId),
+    replaceCurrent(documentId: string, issues: {id: string; severity: DiagnosticSeverity; message: string; nodeId: string; connectionId?: string; field?: string}[], nodeLabels: Record<string, string> = {}) {
       currentDocument = documentId
       const previous = new Map(current.map(entry => [entry.id, entry]))
       current = issues.map(issue => {

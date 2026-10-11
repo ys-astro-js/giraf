@@ -54,6 +54,8 @@ export type ParameterGroup = {
   change: (key: string, value: string) => void
   /** Pinnable rows: the node key is `keyPrefix + name` (task `""`, pset `"name."`). */
   keyPrefix?: string
+  /** Rows not pinnable: diagnostics name them `fieldPrefix + name` (`"ccdproc."`). */
+  fieldPrefix?: string
 }
 /**
  * Put schema-defined groups first. Keys are `name` for the task and

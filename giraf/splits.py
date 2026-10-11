@@ -232,21 +232,21 @@ def pair_files(role, rule, candidates, groups, files):
 
 
 def split_problems(payload, files, pending=frozenset()):
-    """[(severity, message)] of a split task whose files are known: settings,
-    and each input a rule cannot pair. Inputs still waiting on a run are left
-    to the run."""
+    """[(severity, message, field)] of a split task whose files are known:
+    settings, and each input a rule cannot pair, the field the input split or
+    paired. Inputs still waiting on a run are left to the run."""
     split = payload.get('split')
     if not split:
         return []
     errors = part_errors(split)
     if errors:
-        return [('error', message) for message in errors]
+        return [('error', message, split.get('input') or None) for message in errors]
     if split['input'] in pending:
         return []
     try:
         groups = split_groups(payload.get('inputs', {}).get(split['input'], []), split.get('by') or [], files)
     except SplitError as exc:
-        return [('error', str(exc))]
+        return [('error', str(exc), split['input'])]
     problems = []
     for role, ids in (payload.get('inputs') or {}).items():
         if role == split['input'] or role in pending or len(ids) < 2 or len(groups) < 2:
@@ -255,7 +255,7 @@ def split_problems(payload, files, pending=frozenset()):
             pair_files(role, (payload.get('pairing') or {}).get(role), ids, groups, files)
         except SplitError as exc:
             missing = not (payload.get('pairing') or {}).get(role)
-            problems.append(('warning' if missing else 'error', str(exc)))
+            problems.append(('warning' if missing else 'error', str(exc), role))
     return problems
 
 

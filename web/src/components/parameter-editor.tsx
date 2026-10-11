@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react"
 import { TableOfContents } from "lucide-react"
 import { ParameterTable, type ParameterPinning } from "./parameter-fields"
+import type { FieldIssue } from "@/lib/diagnostics"
 import {
   Select,
   SelectContent,
@@ -24,6 +25,7 @@ export function ParameterEditorFields({
   task,
   pinning,
   actions,
+  issues,
 }: {
   groups: ParameterGroup[]
   query: string
@@ -33,6 +35,8 @@ export function ParameterEditorFields({
   pinning?: ParameterPinning
   /** Buttons beside a group's heading (a pset's 노드로 꺼내기). */
   actions?: (group: ParameterGroup) => ReactNode
+  /** The node's problems by field, marked on their parameters (diagnostics fieldIssues). */
+  issues?: Map<string, FieldIssue>
 }) {
   const visible = filterParameterGroups(groups, query, changedOnly)
   return (
@@ -60,6 +64,8 @@ export function ParameterEditorFields({
             scope={`editor-${group.id}`}
             showInactive
             keyPrefix={group.keyPrefix}
+            fieldPrefix={group.fieldPrefix}
+            issues={issues}
             pinning={pinning}
           />
         </section>

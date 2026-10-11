@@ -11,9 +11,11 @@ from ..task_capabilities import parameter_number
 from ..products import product_name
 from .inputs import accepts_source, resolve_generic_inputs, validate_cursor_records, alignment_pairs
 from .preview import preview_generic
+from ..field_issues import FieldError, FieldWarning, in_field
 
 
-def checked_values(parameters, supplied):
+def checked_values(parameters, supplied, prefix=''):
+    """Checked values; a problem names its field as `prefix + name`."""
     allowed = {p['name']: p for p in parameters}
     if not isinstance(supplied, dict) or set(supplied) - set(allowed):
         raise ValueError('알 수 없는 파라미터가 있습니다.')
@@ -29,7 +31,7 @@ def checked_values(parameters, supplied):
             continue
         if p['type'] == 'b':
             if value not in (True, False, 'yes', 'no'):
-                raise ValueError(f'{name}: yes 또는 no를 선택해 주세요.')
+                raise FieldError(prefix + name, f'{name}: yes 또는 no를 선택해 주세요.')
             value = 'yes' if value in (True, 'yes') else 'no'
         elif p['type'] in ('i', 'r', 'd'):
             if str(value).upper() == 'INDEF': value = 'INDEF'
@@ -41,13 +43,13 @@ def checked_values(parameters, supplied):
                     if p['min'] != '' and value < parameter_number(p['min']): raise ValueError()
                     if p['max'] != '' and value > parameter_number(p['max']): raise ValueError()
                 except (TypeError, ValueError, OverflowError):
-                    raise ValueError(f'{name}: 유효한 수치와 범위를 입력해 주세요.') from None
+                    raise FieldError(prefix + name, f'{name}: 유효한 수치와 범위를 입력해 주세요.') from None
         else:
             value = str(value)
             if len(value) > 20000 or any(ch in value for ch in '\n\r\x00'):
-                raise ValueError(f'{name}: 한 줄의 값을 입력해 주세요.')
+                raise FieldError(prefix + name, f'{name}: 한 줄의 값을 입력해 주세요.')
         if p['choices'] and str(value) not in p['choices']:
-            raise ValueError(f'{name}: 허용된 값을 선택해 주세요.')
+            raise FieldError(prefix + name, f'{name}: 허용된 값을 선택해 주세요.')
         values[name] = value
     return values
 
@@ -64,7 +66,7 @@ def without_fixed(supplied, fixed, prefix, warnings):
     """Schema-fixed values win over values stored in an existing node."""
     for name, value in fixed.items():
         if name in supplied and not same_value(supplied[name], value):
-            warnings.append(f'{prefix}{name}: 노드 값 {supplied[name]} 대신 스키마 고정값 {value}을 사용합니다.')
+            warnings.append(FieldWarning(prefix + name, f'{prefix}{name}: 노드 값 {supplied[name]} 대신 스키마 고정값 {value}을 사용합니다.'))
     return {k: v for k, v in supplied.items() if k not in fixed}
 
 
@@ -118,7 +120,7 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
     supplied_sets = payload.get('parameterSets', {})
     if set(supplied_sets) - {s['name'] for s in spec['parameterSets']}: raise ValueError('알 수 없는 파라미터 세트입니다.')
     sets = {s['name']: {**checked_values(s['parameters'], without_fixed(
-                supplied_sets.get(s['name'], {}), s.get('fixed', {}), s['name'] + '.', schema_warnings)), **s.get('fixed', {})}
+                supplied_sets.get(s['name'], {}), s.get('fixed', {}), s['name'] + '.', schema_warnings), s['name'] + '.'), **s.get('fixed', {})}
             for s in spec['parameterSets']}
     # The task's own cursor loop runs through IRAF's text cursor mode; parameter
     # sets and verify/update queries still have no interactive adapter.
@@ -127,35 +129,39 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
     # A task that passes its edited inputs on (a `pass` output) writes to the
     # copies it is given, so it may update them (hedit update=yes).
     edits = edits_inputs(spec)
-    for values in [params, *sets.values()]:
+    for prefix, values in [('', params), *((name + '.', held) for name, held in sets.items())]:
         for key in ('verify', 'update') if values is params else ('interactive', 'verify', 'update'):
             if key == 'update' and values is params and edits:
                 continue
             if values.get(key) == 'yes' and spec.get('fixed', {}).get(key) != 'no':
-                raise ValueError(f'{key}: 범용 실행에서는 no를 선택해 주세요.')
+                raise FieldError(prefix + key, f'{key}: 범용 실행에서는 no를 선택해 주세요.')
     if interactive and backend != 'cl':
         backend = 'cl'
-        schema_warnings.append('interactive: 대화형 실행은 IRAF CL에서 진행합니다.')
+        schema_warnings.append(FieldWarning('interactive', 'interactive: 대화형 실행은 IRAF CL에서 진행합니다.'))
     cursor_roles = {s['name'] for s in spec['inputs'] if s.get('valueType') == 'cursor' and accepts_source(s, 'cursor')}
     if not isinstance(cursor_commands, dict) or set(cursor_commands) - cursor_roles:
         raise ValueError('알 수 없는 커서 입력입니다.')
     for name, records in cursor_commands.items():
         if not isinstance(records, str) or len(records) > 1_000_000 or '\x00' in records:
-            raise ValueError(f'{name}: 올바른 커서 명령을 입력해 주세요.')
-        validate_cursor_records(records, name)
+            raise FieldError(name, f'{name}: 올바른 커서 명령을 입력해 주세요.')
+        with in_field(name):
+            validate_cursor_records(records, name)
     text_inputs = payload.get('textInputs', {})
     allowed_text = {'coords', 'shifts'} if spec['name'] == 'images.immatch.imalign' else set()
     allowed_text = {s['name'] for s in spec['inputs'] if 'text' in s.get('sources', ())} | {
         name for name in allowed_text if accepts_source(next((s for s in spec['inputs'] if s['name'] == name), {}), 'text')}
     if not isinstance(text_inputs, dict) or set(text_inputs) - allowed_text:
         raise ValueError('지원하지 않는 직접 텍스트 입력입니다.')
-    pairs = {name: alignment_pairs(value, name) for name, value in text_inputs.items()}
+    pairs = {}
+    for name, value in text_inputs.items():
+        with in_field(name):
+            pairs[name] = alignment_pairs(value, name)
     inputs, sources, input_lists, supplied_inputs, expressions, scalar_values = resolve_generic_inputs(
         spec, payload, supplied, directory, resolve, hash_file=file_hash,
         diagnostics=diagnostics, pending_roles=pending_roles)
     params.update(scalar_values)
     if pairs.get('shifts') and len(pairs['shifts']) != len(inputs.get('input', [])):
-        raise ValueError('shifts: 입력 영상 순서대로 영상마다 한 행을 입력해 주세요.')
+        raise FieldError('shifts', 'shifts: 입력 영상 순서대로 영상마다 한 행을 입력해 주세요.')
     warnings = schema_warnings
     binding = payload.get('alignmentBinding')
     if binding and any(text_inputs.get(k, '').strip() for k in ('coords', 'shifts')):
@@ -195,7 +201,7 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
         count = len(inputs.get(spec['inputs'][0]['name'], []))
         for slot in spec['inputs'][1:]:
             if slot['multiple'] and slot['name'] not in pending_roles and spec['inputs'][0]['name'] not in pending_roles and len(inputs[slot['name']]) not in (0, 1, count):
-                raise ValueError(f'{slot["name"]}: 입력 파일은 한 개 또는 주 입력과 같은 {count}개여야 합니다.')
+                raise FieldError(slot['name'], f'{slot["name"]}: 입력 파일은 한 개 또는 주 입력과 같은 {count}개여야 합니다.')
     previews = preview_generic(m)
     labels = [r['output'] for r in previews]
     if diagnostics:

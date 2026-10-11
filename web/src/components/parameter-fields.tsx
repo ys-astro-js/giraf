@@ -7,6 +7,8 @@ import { Choice, ParameterHelp } from "./workbench-controls"
 import type { Param, Values } from "@/lib/workbench"
 import { TvmarkParameterControl } from "./tvmark-parameter-control"
 import { takesValue } from "@/lib/value-take"
+import type { FieldIssue } from "@/lib/diagnostics"
+import { IssueTooltip, invalidProps } from "./field-issue"
 
 const label = (p: Param) => p.label || p.name
 export function ParamControl({
@@ -15,12 +17,15 @@ export function ParamControl({
   onChange,
   id,
   task,
+  issue,
 }: {
   p: Param
   value: unknown
   onChange: (value: string) => void
   id: string
   task?: string
+  /** A problem with the value (diagnostics fieldIssues): the control is marked invalid. */
+  issue?: FieldIssue
 }) {
   const v = String(value ?? "")
   if (task === "images.tv.tvmark" && ["mark", "color", "frame", "pointsize", "txsize", "nxoffset", "nyoffset", "tolerance"].includes(p.name)) {
@@ -32,6 +37,7 @@ export function ParamControl({
       aria-label={label(p)}
       aria-describedby={`${id}-description`}
       aria-required={p.required || undefined}
+      {...invalidProps(issue)}
       checked={v === "yes"}
       onCheckedChange={(v) => onChange(v ? "yes" : "no")}
     />
@@ -41,6 +47,7 @@ export function ParamControl({
       label={label(p)}
       describedBy={`${id}-description`}
       required={p.required}
+      issue={issue}
       value={v}
       options={p.choices.map((v) => ({ value: v, label: v }))}
       onChange={onChange}
@@ -51,6 +58,7 @@ export function ParamControl({
       aria-label={label(p)}
       aria-describedby={`${id}-description`}
       aria-required={p.required || undefined}
+      {...invalidProps(issue)}
       value={v}
       onChange={(e) => onChange(e.target.value)}
       inputMode={["i", "r", "d"].includes(p.type) ? "decimal" : undefined}
@@ -87,6 +95,8 @@ export function ParameterTable({
   showInactive = false,
   task,
   keyPrefix,
+  fieldPrefix,
+  issues,
   pinning,
 }: {
   parameters: Param[]
@@ -98,6 +108,10 @@ export function ParameterTable({
   task?: string
   /** Parameters can be pinned under `keyPrefix + name` (`name` or `pset.name`). */
   keyPrefix?: string
+  /** A parameter's field is `fieldPrefix + name` (`keyPrefix` when not given), as diagnostics name it. */
+  fieldPrefix?: string
+  /** The node's problems by field (diagnostics fieldIssues). */
+  issues?: Map<string, FieldIssue>
   pinning?: ParameterPinning
 }) {
   const dependencies: Record<string, string> = {
@@ -144,9 +158,11 @@ export function ParameterTable({
         const formula = key && !linked ? pinning!.formula?.(key) : undefined
         const numeric = ["i", "r", "d"].includes(p.type)
         const current = String(values[p.name] ?? p.default ?? "")
+        const issue = issues?.get((fieldPrefix ?? keyPrefix ?? "") + p.name)
+        const invalid = invalidProps(issue)
         return (
+          <IssueTooltip key={p.name} issue={issue}>
           <Field
-            key={p.name}
             className="parameter-field"
             data-boolean={p.type === "b" && !linked}
             data-parameter-key={key}
@@ -229,13 +245,14 @@ export function ParameterTable({
               </span>
             </div>
             {linked ? (
-              <Input id={id} value={linked} readOnly aria-label={label(p)} aria-describedby={`${id}-description`} />
+              <Input id={id} value={linked} readOnly aria-label={label(p)} aria-describedby={`${id}-description`} {...invalid} />
             ) : formula !== undefined ? (
               <Input
                 id={id}
                 className="font-mono"
                 aria-label={`${label(p)} 식`}
                 aria-describedby={`${id}-description`}
+                {...invalid}
                 placeholder="3 * fwhmpsf"
                 value={formula}
                 onChange={(e) => pinning!.setFormula!(key!, e.target.value)}
@@ -250,6 +267,7 @@ export function ParameterTable({
                       p={{ ...p, label: `${label(p)} ${g.name}` }}
                       id={`${id}-${g.id}`}
                       value={grouped[g.id] ?? current}
+                      issue={issue}
                       onChange={(v) => pinning!.setGrouped!(key!, { ...grouped, [g.id]: v })}
                     />
                   </li>
@@ -261,11 +279,13 @@ export function ParameterTable({
                 p={p}
                 id={id}
                 value={values[p.name] ?? p.default}
+                issue={issue}
                 onChange={(v) => change(p.name, v)}
               />
             )}
             <ParameterHelp p={p} id={`${id}-description`} />
           </Field>
+          </IssueTooltip>
         )
       })}
       {!shown.length && (
