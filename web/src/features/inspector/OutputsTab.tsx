@@ -1,4 +1,5 @@
-import { connectionRoles } from "@/lib/task-map"
+import { connectionRoles, latestRuns } from "@/lib/task-map"
+import { groupDraft, splitOf, taskGroups } from "@/lib/splits"
 import { assigned } from "@/lib/task-map/inputs"
 import type { Catalog } from "@/lib/workbench"
 import { Field, FieldLabel, FieldDescription } from "@/components/ui/field"
@@ -63,6 +64,16 @@ export function InspectorOutputs({
       ])
     ),
   }
+  // A split task runs once per group, each naming its outputs (lib/splits groupDraft).
+  const split = splitOf(task)
+  const groups = split ? (taskGroups(map, task, rows).groups ?? []) : []
+  const planned =
+    split && groups.length > 1
+      ? groups.flatMap((g) =>
+          plannedOutputs(spec, groupDraft(spec, previewDraft, split.input, g, groups.length), allRows, task.mapping).map((p) => ({ ...p, group: g.name }))
+        )
+      : plannedOutputs(spec, previewDraft, allRows, task.mapping).map((p) => ({ ...p, group: "" }))
+  const grouped = planned.some((p) => p.group)
   // Pass-through outputs carry their input files and edited copies keep their
   // input's names: neither has a name to edit.
   const outputFields: OutputSlot[] = spec.outputs?.length
@@ -133,16 +144,13 @@ export function InspectorOutputs({
         />
       )}
       <TaskResults
-        key={
-          task.id +
-          ":" +
-          (map.runs.filter((r) => r.instanceId === task.id).at(-1)?.id || "")
-        }
+        key={task.id + ":" + latestRuns(map, task.id).map((r) => r.id).join(",")}
         map={map}
         task={task}
         job={job}
+        rows={rows}
       />
-      {plannedOutputs(spec, previewDraft, allRows, task.mapping).length > 0 && (
+      {planned.length > 0 && (
         <Accordion>
           <AccordionItem value="planned">
             <AccordionTrigger>출력 이름 미리보기</AccordionTrigger>
@@ -150,18 +158,15 @@ export function InspectorOutputs({
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {grouped && <TableHead>그룹</TableHead>}
                     <TableHead>입력</TableHead>
                     <TableHead>출력</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {plannedOutputs(
-                    spec,
-                    previewDraft,
-                    allRows,
-                    task.mapping
-                  ).map((p, i) => (
+                  {planned.map((p, i) => (
                     <TableRow key={i}>
+                      {grouped && <TableCell>{p.group}</TableCell>}
                       <TableCell>{p.input}</TableCell>
                       <TableCell>{p.output}</TableCell>
                     </TableRow>

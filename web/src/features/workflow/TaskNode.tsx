@@ -22,7 +22,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { stateLabel } from "@/lib/task-map"
+import { runState, stateLabel } from "@/lib/task-map"
 import { assigned } from "@/lib/task-map/inputs"
 import {
   COLLAPSED_WIDTH,
@@ -107,11 +107,11 @@ export const TaskNode = memo(function TaskNode({
     sourceConnections.some(
       (connection) => outputHandle(connection.source, spec, task) === handle
     )
-  const run = map.runs.filter((r) => r.instanceId === id).at(-1)
+  const state = runState(map, id)
   const nodeStatus = nodeIssue
     ? `${nodeIssue.severity === "error" ? "오류" : "경고"}: ${nodeIssues.map((issue) => issue.message).join("; ")}`
-    : run
-      ? stateLabel(run.state)
+    : state
+      ? stateLabel(state)
       : "실행 전"
   const output = nodeOutput(map, id, geometry.primaryOutputRole)
   const primaryName =
@@ -206,13 +206,13 @@ export const TaskNode = memo(function TaskNode({
     <span
       className="node-state"
       data-severity={nodeIssue?.severity}
-      data-failed={!nodeIssue && run?.state === "failed"}
-      data-running={run?.state === "running" || run?.state === "queued"}
+      data-failed={!nodeIssue && state === "failed"}
+      data-running={state === "running" || state === "queued"}
       role="img"
       aria-label={nodeStatus}
       title={nodeStatus}
     >
-      <StatusIcon severity={nodeIssue?.severity} state={run?.state} />
+      <StatusIcon severity={nodeIssue?.severity} state={state} />
     </span>
   )
 
@@ -399,7 +399,7 @@ export const TaskNode = memo(function TaskNode({
       aria-label={`${task.label} 노드`}
       data-collapsed={collapsed}
       data-selected={selected}
-      data-running={run?.state === "running"}
+      data-running={state === "running"}
       data-dragging={dragging}
       data-connection-target={connectionTarget !== null}
       data-diagnostic={nodeIssue?.severity}

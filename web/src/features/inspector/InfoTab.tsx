@@ -19,9 +19,10 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table"
-import { type Spec } from "@/lib/workbench"
+import { type Catalog, type Spec } from "@/lib/workbench"
 import { fixedParameters } from "@/lib/parameter-presentation"
 import { type Instance, type TaskMap } from "@/lib/task-map"
+import { CommandsSection } from "./SplitSections"
 
 function NodeErrors({ map, nodeId }: { map: TaskMap; nodeId: string }) {
   const entries = useSyncExternalStore(
@@ -60,6 +61,7 @@ function NodeErrors({ map, nodeId }: { map: TaskMap; nodeId: string }) {
 }
 export function InspectorInfo({
   map,
+  catalog,
   task,
   spec,
   changedParameters,
@@ -69,6 +71,7 @@ export function InspectorInfo({
   onRemove,
 }: {
   map: TaskMap
+  catalog: Catalog
   task: Instance
   spec: Spec
   changedParameters: { name: string; value: string }[]
@@ -156,6 +159,7 @@ export function InspectorInfo({
             </Table>
           </section>
         )}
+        {!isGirafNode(spec) && <CommandsSection map={map} catalog={catalog} task={task} />}
       </div>
       {/* The node's own actions sit in the window's bottom bar. */}
       <WindowToolbar placement="bottom">

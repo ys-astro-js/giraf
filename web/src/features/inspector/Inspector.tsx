@@ -519,6 +519,7 @@ export function TaskInspector({
           )}
           <InspectorInfo
             map={map}
+            catalog={catalog}
             task={task}
             spec={spec}
             changedParameters={changedParameters}

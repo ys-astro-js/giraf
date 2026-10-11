@@ -2,6 +2,7 @@ import type { Edge } from "@xyflow/react"
 import type { Instance, Subflow, TaskMap } from "@/lib/task-map"
 import type { Diagnostic } from "./diagnostics"
 import { NODE_METRICS } from "./node-interaction"
+import { runState } from "./task-map/runs"
 import { collapsedAround, groupContents } from "./group-nesting"
 /** Matches .subflow-heading, so a group looks the same collapsed and expanded. */
 export const COMPOUND_HEADER = 56
@@ -107,7 +108,7 @@ export function memberConnection<C extends { source: string; target: string; sou
 export function compoundStatus(map: TaskMap, members: string[], issues: Diagnostic[]) {
   const own = issues.filter((issue) => issue.nodeId && members.includes(issue.nodeId))
   const severity = own.some((issue) => issue.severity === "error") ? "error" : own.length ? "warning" : undefined
-  const states = members.map((id) => map.runs.filter((r) => r.instanceId === id).at(-1)?.state)
+  const states = members.map((id) => runState(map, id))
   const state = states.some((s) => s === "running" || s === "queued")
     ? "running"
     : members.length && states.every((s) => s === "completed")

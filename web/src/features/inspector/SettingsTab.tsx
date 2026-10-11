@@ -22,7 +22,7 @@ import { ComputeRowsEditor } from "@/components/compute-rows-editor"
 import { isValueNode } from "@/lib/values"
 import { type ParameterGroup } from "@/lib/parameter-presentation"
 import { MeasurementsSection } from "./Measurements"
-import { CommandsSection, GroupValuesSection } from "./SplitSections"
+import { GroupValuesSection } from "./SplitSections"
 import { consumerGroups } from "@/lib/splits"
 import { isGirafNode } from "@/lib/workbench"
 
@@ -87,7 +87,6 @@ export function InspectorSettings({
           />
         )}
 
-        {!isGirafNode(spec) && task.draft.split && <CommandsSection map={map} catalog={catalog} task={task} />}
         {spec.name === "ccdhedit" && String(d.parameters.value) === "" && (
           <Alert>
             <AlertDescription>

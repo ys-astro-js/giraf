@@ -19,7 +19,8 @@ import { SearchField } from "@/components/search-field"
 import { ImageViewer } from "@/features/viewer/ImageViewer"
 import { Blank, Failure } from "@/components/workbench-controls"
 import { api, type Frame, type Job } from "@/lib/workbench"
-import { stateLabel, type TaskMap, type Instance } from "@/lib/task-map"
+import { latestRuns, runState, stateLabel, type TaskMap, type Instance } from "@/lib/task-map"
+import { taskGroups } from "@/lib/splits"
 
 function ResultPreview({
   frame,
@@ -123,20 +124,46 @@ export function TaskResults({
   map,
   task,
   job,
+  rows = [],
 }: {
   map: TaskMap
   task: Instance
   job?: Job
+  rows?: Frame[]
 }) {
-  const recorded = map.runs.filter((r) => r.instanceId === task.id).at(-1)
+  // A split task's run of every group (lib/task-map/runs latestRuns).
+  const recorded = latestRuns(map, task.id)
   // A supplied job may still be an older selection in the global history tray.
-  const run =
-    recorded || (job?.manifest?.instanceId === task.id ? job : undefined)
-  const products = run?.products || []
+  const runs: { id: string; state: string; products?: Frame[]; group?: string }[] = recorded.length
+    ? recorded
+    : job?.manifest?.instanceId === task.id
+      ? [job]
+      : []
+  const run = runs.at(-1)
+  const state = recorded.length ? runState(map, task.id) : run?.state
+  const products = runs.flatMap((r) => r.products || [])
+  const names = new Map((taskGroups(map, task, rows).groups ?? []).map((g) => [g.id, g.name]))
+  const groupName = (group = "") => names.get(group) ?? group
   const [selection, setSelection] = useState(""),
     [query, setQuery] = useState("")
   const selected = products.find((p) => p.id === selection) || products[0]
   const visible = products.filter((p) => matchesFileName(p, query))
+  const file = (p: Frame) => (
+    <Button
+      key={p.id}
+      variant={selected?.id === p.id ? "secondary" : "ghost"}
+      className="result-file"
+      aria-pressed={selected?.id === p.id}
+      onClick={() => setSelection(p.id)}
+      title={p.label}
+    >
+      <Check
+        data-icon="inline-start"
+        className={selected?.id === p.id ? "" : "invisible"}
+      />
+      <span className="truncate">{p.label}</span>
+    </Button>
+  )
   return (
     <section className="task-results" aria-label={`${task.label} 결과 패널`}>
       <header className="result-heading">
@@ -145,10 +172,10 @@ export function TaskResults({
             {`결과 ${products.length}개`}
           </h3>
           <span className="text-muted-foreground">
-            {run ? stateLabel(run.state) : "실행 전"}
+            {state ? stateLabel(state) : "실행 전"}
           </span>
         </div>
-        {run && (
+        {runs.length === 1 && run && (
           <p className="result-run" title={run.id}>
             {run.id}
           </p>
@@ -178,22 +205,17 @@ export function TaskResults({
               />
             )}
             <div className="result-files" aria-label="결과 파일 목록">
-              {visible.map((p) => (
-                <Button
-                  key={p.id}
-                  variant={selected?.id === p.id ? "secondary" : "ghost"}
-                  className="result-file"
-                  aria-pressed={selected?.id === p.id}
-                  onClick={() => setSelection(p.id)}
-                  title={p.label}
-                >
-                  <Check
-                    data-icon="inline-start"
-                    className={selected?.id === p.id ? "" : "invisible"}
-                  />
-                  <span className="truncate">{p.label}</span>
-                </Button>
-              ))}
+              {runs.length > 1
+                ? runs.map((r) => {
+                    const shown = (r.products || []).filter((p) => matchesFileName(p, query))
+                    return shown.length ? (
+                      <div key={r.id} role="group" aria-label={groupName(r.group)} className="contents">
+                        <h4 className="result-run" title={r.id}>{groupName(r.group)}</h4>
+                        {shown.map(file)}
+                      </div>
+                    ) : null
+                  })
+                : visible.map(file)}
             </div>
             {!visible.length && (
               <p role="status">검색 조건에 맞는 결과가 없습니다.</p>

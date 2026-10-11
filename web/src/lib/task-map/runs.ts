@@ -99,6 +99,20 @@ export function latestRuns(map: TaskMap, taskId: string | undefined): MapRun[] {
 }
 
 /**
+ * A task's run state. A split task's groups of its last workflow run count
+ * together: it runs while any group runs and failed when any group failed.
+ */
+export function runState(map: TaskMap, taskId: string | undefined): string | undefined {
+  const own = map.runs.filter((r) => r.instanceId === taskId)
+  const last = own.at(-1)
+  if (!last?.workflow || last.group === undefined) return last?.state
+  const groups = new Map<string, string>()
+  for (const run of own) if (run.workflow === last.workflow && run.group !== undefined) groups.set(run.group, run.state)
+  const states = [...groups.values()]
+  return states.find((s) => ["running", "queued", "waiting"].includes(s)) ?? (states.includes("failed") ? "failed" : last.state)
+}
+
+/**
  * Saved documents retain run snapshots; the execution library is authoritative.
  * With `catalog`, a connection holding the last group's results of a workflow
  * run takes every group's.

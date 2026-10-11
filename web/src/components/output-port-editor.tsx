@@ -17,7 +17,7 @@ import {
   editableOutputPorts,
   type CustomOutputPort,
 } from "@/lib/output-ports"
-import type { Instance, TaskMap } from "@/lib/task-map"
+import { latestRun, type Instance, type TaskMap } from "@/lib/task-map"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs"
 import type { Frame, Spec } from "@/lib/workbench"
 
@@ -37,7 +37,7 @@ export function OutputPortEditor({
   const ports = editableOutputPorts(task, spec, map)
   void rows
   const [open, setOpen] = useState<string[]>([])
-  const run = map.runs.filter((r) => r.instanceId === task.id).at(-1)
+  const run = latestRun(map, task.id)
   const products =
     run?.state === "completed"
       ? run.products.filter((p) => p.role !== "$log")

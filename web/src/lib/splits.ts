@@ -15,7 +15,7 @@
 import type { Instance, TaskMap } from "./task-map/model"
 import { assigned } from "./task-map/inputs"
 import { evaluateExpression } from "./expression"
-import type { Frame } from "./workbench"
+import type { Draft, Frame, Spec } from "./workbench"
 
 export type SplitPart = { key: string } | { per: number } | { each: true }
 export type SplitSettings = { input: string; by: SplitPart[] }
@@ -237,6 +237,27 @@ export function formulaValue(text: string, values: (name: string) => string | un
 /** A task's output name in a group: a single output's name with the group's suffix. */
 export const groupOutputName = (name: string, group: SplitGroup | undefined, groups: number) =>
   group && groups > 1 && name && !name.includes("{name}") && !name.startsWith("@") && !name.includes(",") ? withSuffix(name, group.suffix) : name
+
+/**
+ * The draft one group runs (giraf/splits.py group_runs): the split input
+ * holds the group's files and each single output takes the group's suffix
+ * (group_outputs); per-file, passed and edited outputs keep their names.
+ */
+export function groupDraft(spec: Spec, draft: Draft, input: string, group: SplitGroup, groups: number): Draft {
+  const inputs = { ...draft.inputs, [input]: group.files }
+  if (spec.adapter === "generic") {
+    if (spec.run) return { ...draft, inputs }
+    const outputs = { ...draft.outputs }
+    for (const slot of spec.outputs ?? []) {
+      const mode = slot.eachWhen ? (draft.parameters[slot.eachWhen] === "yes" ? "each" : "single") : slot.mode
+      const name = draft.outputs?.[slot.name] ?? slot.default
+      if (!(mode && ["each", "pass", "edit"].includes(mode)) && name) outputs[slot.name] = groupOutputName(name, group, groups)
+    }
+    return { ...draft, inputs, outputs }
+  }
+  if (!spec.output || ["each", "edit"].includes(spec.output.mode)) return { ...draft, inputs }
+  return { ...draft, inputs, output: { ...draft.output, name: groupOutputName(draft.output.name || spec.output.default, group, groups) } }
+}
 
 /** Set or clear the split; clearing also drops what was set per group. Settles a migrated region's warning. */
 export function setSplit(task: Instance, split: SplitSettings | undefined): Instance {
