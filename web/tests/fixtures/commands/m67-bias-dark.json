@@ -1,0 +1,1453 @@
+{
+ "lines": [
+  {
+   "index": 0,
+   "line": 2,
+   "text": "noao",
+   "issues": [],
+   "kind": "package",
+   "package": "noao"
+  },
+  {
+   "index": 1,
+   "line": 3,
+   "text": "imred",
+   "issues": [],
+   "kind": "package",
+   "package": "noao.imred"
+  },
+  {
+   "index": 2,
+   "line": 4,
+   "text": "ccdred",
+   "issues": [],
+   "kind": "package",
+   "package": "noao.imred.ccdred"
+  },
+  {
+   "index": 3,
+   "line": 6,
+   "text": "ls AutosaveImage-000[1-5]bias.fits > Bias1.list",
+   "issues": [],
+   "kind": "list",
+   "list": "Bias1.list",
+   "patterns": [
+    "AutosaveImage-000[1-5]bias.fits"
+   ],
+   "files": [
+    "AutosaveImage-0001bias.fits",
+    "AutosaveImage-0002bias.fits",
+    "AutosaveImage-0003bias.fits",
+    "AutosaveImage-0004bias.fits",
+    "AutosaveImage-0005bias.fits"
+   ]
+  },
+  {
+   "index": 4,
+   "line": 7,
+   "text": "ls AutosaveImage-000[6-9]bias.fits AutosaveImage-0010bias.fits > Bias2.list",
+   "issues": [],
+   "kind": "list",
+   "list": "Bias2.list",
+   "patterns": [
+    "AutosaveImage-000[6-9]bias.fits",
+    "AutosaveImage-0010bias.fits"
+   ],
+   "files": [
+    "AutosaveImage-0006bias.fits",
+    "AutosaveImage-0007bias.fits",
+    "AutosaveImage-0008bias.fits",
+    "AutosaveImage-0009bias.fits",
+    "AutosaveImage-0010bias.fits"
+   ]
+  },
+  {
+   "index": 5,
+   "line": 8,
+   "text": "zerocomb @Bias1.list out=Zero1 combine=median reject=none ccdtype=\"\" scale=none rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "zerocombine",
+   "taskName": "zerocombine",
+   "parameters": {
+    "combine": "median",
+    "reject": "none",
+    "ccdtype": "",
+    "scale": "none",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {},
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "@Bias1.list",
+     "items": [
+      {
+       "name": "AutosaveImage-0001bias.fits",
+       "file": "AutosaveImage-0001bias.fits"
+      },
+      {
+       "name": "AutosaveImage-0002bias.fits",
+       "file": "AutosaveImage-0002bias.fits"
+      },
+      {
+       "name": "AutosaveImage-0003bias.fits",
+       "file": "AutosaveImage-0003bias.fits"
+      },
+      {
+       "name": "AutosaveImage-0004bias.fits",
+       "file": "AutosaveImage-0004bias.fits"
+      },
+      {
+       "name": "AutosaveImage-0005bias.fits",
+       "file": "AutosaveImage-0005bias.fits"
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Zero1",
+     "value": "Zero1",
+     "labels": [
+      "Zero1.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 6,
+   "line": 9,
+   "text": "zerocomb @Bias2.list out=Zero2 combine=median reject=none ccdtype=\"\" scale=none rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "zerocombine",
+   "taskName": "zerocombine",
+   "parameters": {
+    "combine": "median",
+    "reject": "none",
+    "ccdtype": "",
+    "scale": "none",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {},
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "@Bias2.list",
+     "items": [
+      {
+       "name": "AutosaveImage-0006bias.fits",
+       "file": "AutosaveImage-0006bias.fits"
+      },
+      {
+       "name": "AutosaveImage-0007bias.fits",
+       "file": "AutosaveImage-0007bias.fits"
+      },
+      {
+       "name": "AutosaveImage-0008bias.fits",
+       "file": "AutosaveImage-0008bias.fits"
+      },
+      {
+       "name": "AutosaveImage-0009bias.fits",
+       "file": "AutosaveImage-0009bias.fits"
+      },
+      {
+       "name": "AutosaveImage-0010bias.fits",
+       "file": "AutosaveImage-0010bias.fits"
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Zero2",
+     "value": "Zero2",
+     "labels": [
+      "Zero2.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 7,
+   "line": 10,
+   "text": "zerocomb Zero1,Zero2 out=Zero combine=average reject=none ccdtype=\"\" scale=none rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "zerocombine",
+   "taskName": "zerocombine",
+   "parameters": {
+    "combine": "average",
+    "reject": "none",
+    "ccdtype": "",
+    "scale": "none",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {},
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "Zero1,Zero2",
+     "items": [
+      {
+       "name": "Zero1",
+       "from": {
+        "line": 5,
+        "role": "output",
+        "label": "Zero1.fits"
+       }
+      },
+      {
+       "name": "Zero2",
+       "from": {
+        "line": 6,
+        "role": "output",
+        "label": "Zero2.fits"
+       }
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Zero",
+     "value": "Zero",
+     "labels": [
+      "Zero.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 8,
+   "line": 12,
+   "text": "ls AutosaveImage-000[1-5]dark15.fits > Dark15-1.list",
+   "issues": [],
+   "kind": "list",
+   "list": "Dark15-1.list",
+   "patterns": [
+    "AutosaveImage-000[1-5]dark15.fits"
+   ],
+   "files": [
+    "AutosaveImage-0001dark15.fits",
+    "AutosaveImage-0002dark15.fits",
+    "AutosaveImage-0003dark15.fits",
+    "AutosaveImage-0004dark15.fits",
+    "AutosaveImage-0005dark15.fits"
+   ]
+  },
+  {
+   "index": 9,
+   "line": 13,
+   "text": "ls AutosaveImage-000[6-9]dark15.fits AutosaveImage-0010dark15.fits > Dark15-2.list",
+   "issues": [],
+   "kind": "list",
+   "list": "Dark15-2.list",
+   "patterns": [
+    "AutosaveImage-000[6-9]dark15.fits",
+    "AutosaveImage-0010dark15.fits"
+   ],
+   "files": [
+    "AutosaveImage-0006dark15.fits",
+    "AutosaveImage-0007dark15.fits",
+    "AutosaveImage-0008dark15.fits",
+    "AutosaveImage-0009dark15.fits",
+    "AutosaveImage-0010dark15.fits"
+   ]
+  },
+  {
+   "index": 10,
+   "line": 14,
+   "text": "ls AutosaveImage-000[1-5]dark30.fits > Dark30-1.list",
+   "issues": [],
+   "kind": "list",
+   "list": "Dark30-1.list",
+   "patterns": [
+    "AutosaveImage-000[1-5]dark30.fits"
+   ],
+   "files": [
+    "AutosaveImage-0001dark30.fits",
+    "AutosaveImage-0002dark30.fits",
+    "AutosaveImage-0003dark30.fits",
+    "AutosaveImage-0004dark30.fits",
+    "AutosaveImage-0005dark30.fits"
+   ]
+  },
+  {
+   "index": 11,
+   "line": 15,
+   "text": "ls AutosaveImage-000[6-9]dark30.fits AutosaveImage-0010dark30.fits > Dark30-2.list",
+   "issues": [],
+   "kind": "list",
+   "list": "Dark30-2.list",
+   "patterns": [
+    "AutosaveImage-000[6-9]dark30.fits",
+    "AutosaveImage-0010dark30.fits"
+   ],
+   "files": [
+    "AutosaveImage-0006dark30.fits",
+    "AutosaveImage-0007dark30.fits",
+    "AutosaveImage-0008dark30.fits",
+    "AutosaveImage-0009dark30.fits",
+    "AutosaveImage-0010dark30.fits"
+   ]
+  },
+  {
+   "index": 12,
+   "line": 16,
+   "text": "ls AutosaveImage-000[1-5]dark60.fits > Dark60-1.list",
+   "issues": [],
+   "kind": "list",
+   "list": "Dark60-1.list",
+   "patterns": [
+    "AutosaveImage-000[1-5]dark60.fits"
+   ],
+   "files": [
+    "AutosaveImage-0001dark60.fits",
+    "AutosaveImage-0002dark60.fits",
+    "AutosaveImage-0003dark60.fits",
+    "AutosaveImage-0004dark60.fits",
+    "AutosaveImage-0005dark60.fits"
+   ]
+  },
+  {
+   "index": 13,
+   "line": 17,
+   "text": "ls AutosaveImage-000[6-9]dark60.fits AutosaveImage-0010dark60.fits > Dark60-2.list",
+   "issues": [],
+   "kind": "list",
+   "list": "Dark60-2.list",
+   "patterns": [
+    "AutosaveImage-000[6-9]dark60.fits",
+    "AutosaveImage-0010dark60.fits"
+   ],
+   "files": [
+    "AutosaveImage-0006dark60.fits",
+    "AutosaveImage-0007dark60.fits",
+    "AutosaveImage-0008dark60.fits",
+    "AutosaveImage-0009dark60.fits",
+    "AutosaveImage-0010dark60.fits"
+   ]
+  },
+  {
+   "index": 14,
+   "line": 18,
+   "text": "ls AutosaveImage-000[1-5]dark90.fits > Dark90-1.list",
+   "issues": [],
+   "kind": "list",
+   "list": "Dark90-1.list",
+   "patterns": [
+    "AutosaveImage-000[1-5]dark90.fits"
+   ],
+   "files": [
+    "AutosaveImage-0001dark90.fits",
+    "AutosaveImage-0002dark90.fits",
+    "AutosaveImage-0003dark90.fits",
+    "AutosaveImage-0004dark90.fits",
+    "AutosaveImage-0005dark90.fits"
+   ]
+  },
+  {
+   "index": 15,
+   "line": 19,
+   "text": "ls AutosaveImage-000[6-9]dark90.fits AutosaveImage-0010dark90.fits > Dark90-2.list",
+   "issues": [],
+   "kind": "list",
+   "list": "Dark90-2.list",
+   "patterns": [
+    "AutosaveImage-000[6-9]dark90.fits",
+    "AutosaveImage-0010dark90.fits"
+   ],
+   "files": [
+    "AutosaveImage-0006dark90.fits",
+    "AutosaveImage-0007dark90.fits",
+    "AutosaveImage-0008dark90.fits",
+    "AutosaveImage-0009dark90.fits",
+    "AutosaveImage-0010dark90.fits"
+   ]
+  },
+  {
+   "index": 16,
+   "line": 21,
+   "text": "ccdproc.zerocor = yes",
+   "issues": [],
+   "kind": "assign",
+   "target": "ccdproc",
+   "parameter": "zerocor",
+   "value": "yes",
+   "applied": [
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34
+   ]
+  },
+  {
+   "index": 17,
+   "line": 22,
+   "text": "ccdproc.darkcor = no",
+   "issues": [],
+   "kind": "assign",
+   "target": "ccdproc",
+   "parameter": "darkcor",
+   "value": "no",
+   "applied": [
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34
+   ]
+  },
+  {
+   "index": 18,
+   "line": 23,
+   "text": "ccdproc.flatcor = no",
+   "issues": [],
+   "kind": "assign",
+   "target": "ccdproc",
+   "parameter": "flatcor",
+   "value": "no",
+   "applied": [
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34
+   ]
+  },
+  {
+   "index": 19,
+   "line": 24,
+   "text": "ccdproc.trim = no",
+   "issues": [],
+   "kind": "assign",
+   "target": "ccdproc",
+   "parameter": "trim",
+   "value": "no",
+   "applied": [
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34
+   ]
+  },
+  {
+   "index": 20,
+   "line": 25,
+   "text": "ccdproc.fixpix = no",
+   "issues": [],
+   "kind": "assign",
+   "target": "ccdproc",
+   "parameter": "fixpix",
+   "value": "no",
+   "applied": [
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34
+   ]
+  },
+  {
+   "index": 21,
+   "line": 26,
+   "text": "ccdproc.zero = \"Zero.fits\"",
+   "issues": [],
+   "kind": "assign",
+   "target": "ccdproc",
+   "parameter": "zero",
+   "value": "Zero.fits",
+   "applied": [
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34
+   ]
+  },
+  {
+   "index": 22,
+   "line": 27,
+   "text": "ccdproc.oversca = no",
+   "issues": [],
+   "kind": "assign",
+   "target": "ccdproc",
+   "parameter": "overscan",
+   "value": "no",
+   "applied": [
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34
+   ]
+  },
+  {
+   "index": 23,
+   "line": 29,
+   "text": "darkc @Dark15-1.list out=Dark15-1 combine=median reject=none ccdtype=\"\" process=yes scale=exposure rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "darkcombine",
+   "taskName": "darkcombine",
+   "parameters": {
+    "combine": "median",
+    "reject": "none",
+    "ccdtype": "",
+    "process": "yes",
+    "scale": "exposure",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {
+    "zerocor": "yes",
+    "darkcor": "no",
+    "flatcor": "no",
+    "trim": "no",
+    "fixpix": "no",
+    "overscan": "no"
+   },
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "@Dark15-1.list",
+     "items": [
+      {
+       "name": "AutosaveImage-0001dark15.fits",
+       "file": "AutosaveImage-0001dark15.fits"
+      },
+      {
+       "name": "AutosaveImage-0002dark15.fits",
+       "file": "AutosaveImage-0002dark15.fits"
+      },
+      {
+       "name": "AutosaveImage-0003dark15.fits",
+       "file": "AutosaveImage-0003dark15.fits"
+      },
+      {
+       "name": "AutosaveImage-0004dark15.fits",
+       "file": "AutosaveImage-0004dark15.fits"
+      },
+      {
+       "name": "AutosaveImage-0005dark15.fits",
+       "file": "AutosaveImage-0005dark15.fits"
+      }
+     ]
+    },
+    "zero": {
+     "text": "Zero.fits",
+     "items": [
+      {
+       "name": "Zero.fits",
+       "from": {
+        "line": 7,
+        "role": "output",
+        "label": "Zero.fits"
+       }
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Dark15-1",
+     "value": "Dark15-1",
+     "labels": [
+      "Dark15-1.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 24,
+   "line": 30,
+   "text": "darkc @Dark15-2.list out=Dark15-2 combine=median reject=none ccdtype=\"\" process=yes scale=exposure rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "darkcombine",
+   "taskName": "darkcombine",
+   "parameters": {
+    "combine": "median",
+    "reject": "none",
+    "ccdtype": "",
+    "process": "yes",
+    "scale": "exposure",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {
+    "zerocor": "yes",
+    "darkcor": "no",
+    "flatcor": "no",
+    "trim": "no",
+    "fixpix": "no",
+    "overscan": "no"
+   },
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "@Dark15-2.list",
+     "items": [
+      {
+       "name": "AutosaveImage-0006dark15.fits",
+       "file": "AutosaveImage-0006dark15.fits"
+      },
+      {
+       "name": "AutosaveImage-0007dark15.fits",
+       "file": "AutosaveImage-0007dark15.fits"
+      },
+      {
+       "name": "AutosaveImage-0008dark15.fits",
+       "file": "AutosaveImage-0008dark15.fits"
+      },
+      {
+       "name": "AutosaveImage-0009dark15.fits",
+       "file": "AutosaveImage-0009dark15.fits"
+      },
+      {
+       "name": "AutosaveImage-0010dark15.fits",
+       "file": "AutosaveImage-0010dark15.fits"
+      }
+     ]
+    },
+    "zero": {
+     "text": "Zero.fits",
+     "items": [
+      {
+       "name": "Zero.fits",
+       "from": {
+        "line": 7,
+        "role": "output",
+        "label": "Zero.fits"
+       }
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Dark15-2",
+     "value": "Dark15-2",
+     "labels": [
+      "Dark15-2.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 25,
+   "line": 31,
+   "text": "darkc @Dark30-1.list out=Dark30-1 combine=median reject=none ccdtype=\"\" process=yes scale=exposure rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "darkcombine",
+   "taskName": "darkcombine",
+   "parameters": {
+    "combine": "median",
+    "reject": "none",
+    "ccdtype": "",
+    "process": "yes",
+    "scale": "exposure",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {
+    "zerocor": "yes",
+    "darkcor": "no",
+    "flatcor": "no",
+    "trim": "no",
+    "fixpix": "no",
+    "overscan": "no"
+   },
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "@Dark30-1.list",
+     "items": [
+      {
+       "name": "AutosaveImage-0001dark30.fits",
+       "file": "AutosaveImage-0001dark30.fits"
+      },
+      {
+       "name": "AutosaveImage-0002dark30.fits",
+       "file": "AutosaveImage-0002dark30.fits"
+      },
+      {
+       "name": "AutosaveImage-0003dark30.fits",
+       "file": "AutosaveImage-0003dark30.fits"
+      },
+      {
+       "name": "AutosaveImage-0004dark30.fits",
+       "file": "AutosaveImage-0004dark30.fits"
+      },
+      {
+       "name": "AutosaveImage-0005dark30.fits",
+       "file": "AutosaveImage-0005dark30.fits"
+      }
+     ]
+    },
+    "zero": {
+     "text": "Zero.fits",
+     "items": [
+      {
+       "name": "Zero.fits",
+       "from": {
+        "line": 7,
+        "role": "output",
+        "label": "Zero.fits"
+       }
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Dark30-1",
+     "value": "Dark30-1",
+     "labels": [
+      "Dark30-1.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 26,
+   "line": 32,
+   "text": "darkc @Dark30-2.list out=Dark30-2 combine=median reject=none ccdtype=\"\" process=yes scale=exposure rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "darkcombine",
+   "taskName": "darkcombine",
+   "parameters": {
+    "combine": "median",
+    "reject": "none",
+    "ccdtype": "",
+    "process": "yes",
+    "scale": "exposure",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {
+    "zerocor": "yes",
+    "darkcor": "no",
+    "flatcor": "no",
+    "trim": "no",
+    "fixpix": "no",
+    "overscan": "no"
+   },
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "@Dark30-2.list",
+     "items": [
+      {
+       "name": "AutosaveImage-0006dark30.fits",
+       "file": "AutosaveImage-0006dark30.fits"
+      },
+      {
+       "name": "AutosaveImage-0007dark30.fits",
+       "file": "AutosaveImage-0007dark30.fits"
+      },
+      {
+       "name": "AutosaveImage-0008dark30.fits",
+       "file": "AutosaveImage-0008dark30.fits"
+      },
+      {
+       "name": "AutosaveImage-0009dark30.fits",
+       "file": "AutosaveImage-0009dark30.fits"
+      },
+      {
+       "name": "AutosaveImage-0010dark30.fits",
+       "file": "AutosaveImage-0010dark30.fits"
+      }
+     ]
+    },
+    "zero": {
+     "text": "Zero.fits",
+     "items": [
+      {
+       "name": "Zero.fits",
+       "from": {
+        "line": 7,
+        "role": "output",
+        "label": "Zero.fits"
+       }
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Dark30-2",
+     "value": "Dark30-2",
+     "labels": [
+      "Dark30-2.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 27,
+   "line": 33,
+   "text": "darkc @Dark60-1.list out=Dark60-1 combine=median reject=none ccdtype=\"\" process=yes scale=exposure rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "darkcombine",
+   "taskName": "darkcombine",
+   "parameters": {
+    "combine": "median",
+    "reject": "none",
+    "ccdtype": "",
+    "process": "yes",
+    "scale": "exposure",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {
+    "zerocor": "yes",
+    "darkcor": "no",
+    "flatcor": "no",
+    "trim": "no",
+    "fixpix": "no",
+    "overscan": "no"
+   },
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "@Dark60-1.list",
+     "items": [
+      {
+       "name": "AutosaveImage-0001dark60.fits",
+       "file": "AutosaveImage-0001dark60.fits"
+      },
+      {
+       "name": "AutosaveImage-0002dark60.fits",
+       "file": "AutosaveImage-0002dark60.fits"
+      },
+      {
+       "name": "AutosaveImage-0003dark60.fits",
+       "file": "AutosaveImage-0003dark60.fits"
+      },
+      {
+       "name": "AutosaveImage-0004dark60.fits",
+       "file": "AutosaveImage-0004dark60.fits"
+      },
+      {
+       "name": "AutosaveImage-0005dark60.fits",
+       "file": "AutosaveImage-0005dark60.fits"
+      }
+     ]
+    },
+    "zero": {
+     "text": "Zero.fits",
+     "items": [
+      {
+       "name": "Zero.fits",
+       "from": {
+        "line": 7,
+        "role": "output",
+        "label": "Zero.fits"
+       }
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Dark60-1",
+     "value": "Dark60-1",
+     "labels": [
+      "Dark60-1.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 28,
+   "line": 34,
+   "text": "darkc @Dark60-2.list out=Dark60-2 combine=median reject=none ccdtype=\"\" process=yes scale=exposure rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "darkcombine",
+   "taskName": "darkcombine",
+   "parameters": {
+    "combine": "median",
+    "reject": "none",
+    "ccdtype": "",
+    "process": "yes",
+    "scale": "exposure",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {
+    "zerocor": "yes",
+    "darkcor": "no",
+    "flatcor": "no",
+    "trim": "no",
+    "fixpix": "no",
+    "overscan": "no"
+   },
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "@Dark60-2.list",
+     "items": [
+      {
+       "name": "AutosaveImage-0006dark60.fits",
+       "file": "AutosaveImage-0006dark60.fits"
+      },
+      {
+       "name": "AutosaveImage-0007dark60.fits",
+       "file": "AutosaveImage-0007dark60.fits"
+      },
+      {
+       "name": "AutosaveImage-0008dark60.fits",
+       "file": "AutosaveImage-0008dark60.fits"
+      },
+      {
+       "name": "AutosaveImage-0009dark60.fits",
+       "file": "AutosaveImage-0009dark60.fits"
+      },
+      {
+       "name": "AutosaveImage-0010dark60.fits",
+       "file": "AutosaveImage-0010dark60.fits"
+      }
+     ]
+    },
+    "zero": {
+     "text": "Zero.fits",
+     "items": [
+      {
+       "name": "Zero.fits",
+       "from": {
+        "line": 7,
+        "role": "output",
+        "label": "Zero.fits"
+       }
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Dark60-2",
+     "value": "Dark60-2",
+     "labels": [
+      "Dark60-2.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 29,
+   "line": 35,
+   "text": "darkc @Dark90-1.list out=Dark90-1 combine=median reject=none ccdtype=\"\" process=yes scale=exposure rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "darkcombine",
+   "taskName": "darkcombine",
+   "parameters": {
+    "combine": "median",
+    "reject": "none",
+    "ccdtype": "",
+    "process": "yes",
+    "scale": "exposure",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {
+    "zerocor": "yes",
+    "darkcor": "no",
+    "flatcor": "no",
+    "trim": "no",
+    "fixpix": "no",
+    "overscan": "no"
+   },
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "@Dark90-1.list",
+     "items": [
+      {
+       "name": "AutosaveImage-0001dark90.fits",
+       "file": "AutosaveImage-0001dark90.fits"
+      },
+      {
+       "name": "AutosaveImage-0002dark90.fits",
+       "file": "AutosaveImage-0002dark90.fits"
+      },
+      {
+       "name": "AutosaveImage-0003dark90.fits",
+       "file": "AutosaveImage-0003dark90.fits"
+      },
+      {
+       "name": "AutosaveImage-0004dark90.fits",
+       "file": "AutosaveImage-0004dark90.fits"
+      },
+      {
+       "name": "AutosaveImage-0005dark90.fits",
+       "file": "AutosaveImage-0005dark90.fits"
+      }
+     ]
+    },
+    "zero": {
+     "text": "Zero.fits",
+     "items": [
+      {
+       "name": "Zero.fits",
+       "from": {
+        "line": 7,
+        "role": "output",
+        "label": "Zero.fits"
+       }
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Dark90-1",
+     "value": "Dark90-1",
+     "labels": [
+      "Dark90-1.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 30,
+   "line": 36,
+   "text": "darkc @Dark90-2.list out=Dark90-2 combine=median reject=none ccdtype=\"\" process=yes scale=exposure rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "darkcombine",
+   "taskName": "darkcombine",
+   "parameters": {
+    "combine": "median",
+    "reject": "none",
+    "ccdtype": "",
+    "process": "yes",
+    "scale": "exposure",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {
+    "zerocor": "yes",
+    "darkcor": "no",
+    "flatcor": "no",
+    "trim": "no",
+    "fixpix": "no",
+    "overscan": "no"
+   },
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "@Dark90-2.list",
+     "items": [
+      {
+       "name": "AutosaveImage-0006dark90.fits",
+       "file": "AutosaveImage-0006dark90.fits"
+      },
+      {
+       "name": "AutosaveImage-0007dark90.fits",
+       "file": "AutosaveImage-0007dark90.fits"
+      },
+      {
+       "name": "AutosaveImage-0008dark90.fits",
+       "file": "AutosaveImage-0008dark90.fits"
+      },
+      {
+       "name": "AutosaveImage-0009dark90.fits",
+       "file": "AutosaveImage-0009dark90.fits"
+      },
+      {
+       "name": "AutosaveImage-0010dark90.fits",
+       "file": "AutosaveImage-0010dark90.fits"
+      }
+     ]
+    },
+    "zero": {
+     "text": "Zero.fits",
+     "items": [
+      {
+       "name": "Zero.fits",
+       "from": {
+        "line": 7,
+        "role": "output",
+        "label": "Zero.fits"
+       }
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Dark90-2",
+     "value": "Dark90-2",
+     "labels": [
+      "Dark90-2.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 31,
+   "line": 38,
+   "text": "darkc Dark15-1,Dark15-2 out=Dark15 combine=average reject=none ccdtype=\"\" process=no scale=exposure rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "darkcombine",
+   "taskName": "darkcombine",
+   "parameters": {
+    "combine": "average",
+    "reject": "none",
+    "ccdtype": "",
+    "process": "no",
+    "scale": "exposure",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {
+    "zerocor": "yes",
+    "darkcor": "no",
+    "flatcor": "no",
+    "trim": "no",
+    "fixpix": "no",
+    "overscan": "no"
+   },
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "Dark15-1,Dark15-2",
+     "items": [
+      {
+       "name": "Dark15-1",
+       "from": {
+        "line": 23,
+        "role": "output",
+        "label": "Dark15-1.fits"
+       }
+      },
+      {
+       "name": "Dark15-2",
+       "from": {
+        "line": 24,
+        "role": "output",
+        "label": "Dark15-2.fits"
+       }
+      }
+     ]
+    },
+    "zero": {
+     "text": "Zero.fits",
+     "items": [
+      {
+       "name": "Zero.fits",
+       "from": {
+        "line": 7,
+        "role": "output",
+        "label": "Zero.fits"
+       }
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Dark15",
+     "value": "Dark15",
+     "labels": [
+      "Dark15.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 32,
+   "line": 39,
+   "text": "darkc Dark30-1,Dark30-2 out=Dark30 combine=average reject=none ccdtype=\"\" process=no scale=exposure rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "darkcombine",
+   "taskName": "darkcombine",
+   "parameters": {
+    "combine": "average",
+    "reject": "none",
+    "ccdtype": "",
+    "process": "no",
+    "scale": "exposure",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {
+    "zerocor": "yes",
+    "darkcor": "no",
+    "flatcor": "no",
+    "trim": "no",
+    "fixpix": "no",
+    "overscan": "no"
+   },
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "Dark30-1,Dark30-2",
+     "items": [
+      {
+       "name": "Dark30-1",
+       "from": {
+        "line": 25,
+        "role": "output",
+        "label": "Dark30-1.fits"
+       }
+      },
+      {
+       "name": "Dark30-2",
+       "from": {
+        "line": 26,
+        "role": "output",
+        "label": "Dark30-2.fits"
+       }
+      }
+     ]
+    },
+    "zero": {
+     "text": "Zero.fits",
+     "items": [
+      {
+       "name": "Zero.fits",
+       "from": {
+        "line": 7,
+        "role": "output",
+        "label": "Zero.fits"
+       }
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Dark30",
+     "value": "Dark30",
+     "labels": [
+      "Dark30.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 33,
+   "line": 40,
+   "text": "darkc Dark60-1,Dark60-2 out=Dark60 combine=average reject=none ccdtype=\"\" process=no scale=exposure rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "darkcombine",
+   "taskName": "darkcombine",
+   "parameters": {
+    "combine": "average",
+    "reject": "none",
+    "ccdtype": "",
+    "process": "no",
+    "scale": "exposure",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {
+    "zerocor": "yes",
+    "darkcor": "no",
+    "flatcor": "no",
+    "trim": "no",
+    "fixpix": "no",
+    "overscan": "no"
+   },
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "Dark60-1,Dark60-2",
+     "items": [
+      {
+       "name": "Dark60-1",
+       "from": {
+        "line": 27,
+        "role": "output",
+        "label": "Dark60-1.fits"
+       }
+      },
+      {
+       "name": "Dark60-2",
+       "from": {
+        "line": 28,
+        "role": "output",
+        "label": "Dark60-2.fits"
+       }
+      }
+     ]
+    },
+    "zero": {
+     "text": "Zero.fits",
+     "items": [
+      {
+       "name": "Zero.fits",
+       "from": {
+        "line": 7,
+        "role": "output",
+        "label": "Zero.fits"
+       }
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Dark60",
+     "value": "Dark60",
+     "labels": [
+      "Dark60.fits"
+     ]
+    }
+   }
+  },
+  {
+   "index": 34,
+   "line": 41,
+   "text": "darkc Dark90-1,Dark90-2 out=Dark90 combine=average reject=none ccdtype=\"\" process=no scale=exposure rdnoise=15 gain=1.4",
+   "issues": [],
+   "kind": "task",
+   "task": "darkcombine",
+   "taskName": "darkcombine",
+   "parameters": {
+    "combine": "average",
+    "reject": "none",
+    "ccdtype": "",
+    "process": "no",
+    "scale": "exposure",
+    "rdnoise": "15",
+    "gain": "1.4"
+   },
+   "parameterSets": {},
+   "preprocess": {
+    "zerocor": "yes",
+    "darkcor": "no",
+    "flatcor": "no",
+    "trim": "no",
+    "fixpix": "no",
+    "overscan": "no"
+   },
+   "packageValues": {},
+   "inputs": {
+    "input": {
+     "text": "Dark90-1,Dark90-2",
+     "items": [
+      {
+       "name": "Dark90-1",
+       "from": {
+        "line": 29,
+        "role": "output",
+        "label": "Dark90-1.fits"
+       }
+      },
+      {
+       "name": "Dark90-2",
+       "from": {
+        "line": 30,
+        "role": "output",
+        "label": "Dark90-2.fits"
+       }
+      }
+     ]
+    },
+    "zero": {
+     "text": "Zero.fits",
+     "items": [
+      {
+       "name": "Zero.fits",
+       "from": {
+        "line": 7,
+        "role": "output",
+        "label": "Zero.fits"
+       }
+      }
+     ]
+    }
+   },
+   "outputs": {
+    "output": {
+     "text": "Dark90",
+     "value": "Dark90",
+     "labels": [
+      "Dark90.fits"
+     ]
+    }
+   }
+  }
+ ]
+}

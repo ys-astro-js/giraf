@@ -1,5 +1,6 @@
-import { useRef, useState } from "react"
-import { ChevronRight, Folder, Plus } from "lucide-react"
+import { useRef, useState, type ReactNode } from "react"
+import { ChevronLeft, ChevronRight, Folder, Plus, Terminal } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Collapsible,
   CollapsibleContent,
@@ -14,10 +15,11 @@ import {
 import { NodeIcon } from "@/components/node-icon"
 import { SearchField } from "@/components/search-field"
 import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
-import { nodeChunks } from "@/lib/node-chunks"
+import { nodeTiles } from "@/lib/node-chunks"
 import { taskPackageTree, type TaskPackage } from "@/lib/task-tree"
 import { isGirafNode, taskDisplayName, type Spec } from "@/lib/workbench"
 import { useWorkbench } from "@/features/workbench/context"
+import { CommandEntry } from "./CommandEntry"
 import { ListSkeleton, NoFiles, RefreshButton } from "./shared"
 import { useRefresh } from "./useRefresh"
 import "@/styles/library/popovers.css"
@@ -53,36 +55,37 @@ function TaskOption({ task, onAdd }: { task: Spec; onAdd: () => void }) {
   )
 }
 
-/** A workflow node as a tile above the package tree. */
-function NodeTile({ task, onAdd }: { task: Spec; onAdd: () => void }) {
-  return (
-    <button
-      type="button"
-      className="library-option library-tile"
-      aria-label={`${task.title} 추가`}
-      title={task.description}
-      onClick={onAdd}
-    >
-      <NodeIcon icon={task.icon} run={task.run} />
-      <span className="library-option-text">
-        <span className="library-option-name">{task.title}</span>
-        <span className="library-option-detail">{task.description}</span>
-      </span>
+/** A small tile above the package tree: an icon and a name, what it does in the tooltip. */
+function Tile({ label, description, icon, onClick }: { label: string; description?: string; icon: ReactNode; onClick: () => void }) {
+  const tile = (
+    <button type="button" className="library-option library-tile" onClick={onClick}>
+      {icon}
+      <span className="library-option-name">{label}</span>
     </button>
+  )
+  if (!description) return tile
+  return (
+    <Tooltip>
+      <TooltipTrigger render={tile} />
+      <TooltipContent side="bottom">{description}</TooltipContent>
+    </Tooltip>
   )
 }
 
 /**
  * The toolbar's way to add a task: a search over IRAF's tasks, or with no
- * query, the package tree to browse. The workflow canvas, the node window
- * and other places open it through `setAddOpen`.
+ * query, GIRAF's node tiles and the package tree to browse. The 명령 tile
+ * turns the body into CL command entry (CommandEntry). The workflow canvas,
+ * the node window and other places open it through `setAddOpen`.
  */
 export function AddTaskButton() {
   const w = useWorkbench()
   const [query, setQuery] = useState("")
+  const [commands, setCommands] = useState(false)
   const [packageOpen, setPackageOpen] = useState<Record<string, boolean>>({})
   const { refreshing, refresh } = useRefresh(w.refreshCatalog, w.setError)
   const search = useRef<HTMLInputElement>(null)
+  const entry = useRef<HTMLTextAreaElement>(null)
   const tasks = w.catalog?.tasks ?? []
   // A pset node is taken out of a task's pset (inspector), not added empty.
   // The 값 node's other 가져오기 runs have no tile but are found by search.
@@ -128,9 +131,18 @@ export function AddTaskButton() {
     <ToolbarGroup label="작업 추가">
       <Popover
         open={w.addOpen}
-        onOpenChange={(open) => {
+        onOpenChange={(open, details) => {
+          // Esc in command entry goes back to the list.
+          if (!open && commands && details.reason === "escape-key") {
+            details.cancel()
+            setCommands(false)
+            return
+          }
           w.setAddOpen(open)
-          if (!open) setQuery("")
+          if (!open) {
+            setQuery("")
+            setCommands(false)
+          }
         }}
       >
         <PopoverTrigger
@@ -141,10 +153,28 @@ export function AddTaskButton() {
         <PopoverContent
           align="start"
           sideOffset={8}
-          className="library-popover"
-          initialFocus={search}
+          className={commands ? "library-popover library-popover-wide" : "library-popover"}
+          initialFocus={commands ? entry : search}
         >
           <PopoverTitle className="sr-only">작업 추가</PopoverTitle>
+          {commands ? (
+            <>
+              <div className="library-popover-bar">
+                <ToolbarButton label="목록으로" onClick={() => setCommands(false)}>
+                  <ChevronLeft />
+                </ToolbarButton>
+                <span className="library-option-name">명령</span>
+              </div>
+              <CommandEntry
+                inputRef={entry}
+                onDone={() => {
+                  setCommands(false)
+                  w.setAddOpen(false)
+                }}
+              />
+            </>
+          ) : (
+          <>
           <div className="library-popover-bar">
             <SearchField
               inputRef={search}
@@ -196,32 +226,29 @@ export function AddTaskButton() {
               )
             ) : (
               <>
-                {!!nodes.length && (
-                  <div className="library-nodes library-chunks">
-                    {nodeChunks(nodes).map((chunk) => (
-                      <section
-                        key={chunk.id}
-                        aria-label={chunk.label}
-                        className="library-chunk"
-                      >
-                        <h3 className="library-chunk-label">{chunk.label}</h3>
-                        <div className="library-tiles">
-                          {chunk.nodes.map((task) => (
-                            <NodeTile
-                              key={task.name}
-                              task={task}
-                              onAdd={() => add(task)}
-                            />
-                          ))}
-                        </div>
-                      </section>
-                    ))}
-                  </div>
-                )}
+                <div className="library-nodes library-tiles">
+                  {nodeTiles(nodes).map((task) => (
+                    <Tile
+                      key={task.name}
+                      label={task.title}
+                      description={task.description}
+                      icon={<NodeIcon icon={task.icon} run={task.run} />}
+                      onClick={() => add(task)}
+                    />
+                  ))}
+                  <Tile
+                    label="명령"
+                    description="IRAF 명령으로 노드 만들기"
+                    icon={<Terminal aria-hidden="true" />}
+                    onClick={() => setCommands(true)}
+                  />
+                </div>
                 {taskPackageTree(irafTasks).map(branch)}
               </>
             )}
           </div>
+          </>
+          )}
         </PopoverContent>
       </Popover>
     </ToolbarGroup>

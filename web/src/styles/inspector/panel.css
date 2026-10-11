@@ -388,3 +388,7 @@
 .group-inputs li { align-items: center; }
 .group-inputs .partition-chip { justify-self: start; }
 .commands .command-line { white-space: normal; overflow-wrap: anywhere; font-size: 12px; line-height: 18px; }
+/* The same line, edited in place: no box until it has focus. */
+.commands .command-edit { grid-column: 1 / -1; field-sizing: content; width: 100%; min-height: 0; margin: -2px -4px; padding: 2px 4px; resize: none; border: 0; border-radius: 6px; background: transparent; color: inherit; outline: none; }
+.commands .command-edit:hover { background: color-mix(in oklch, var(--input) 30%, transparent); }
+.commands .command-edit:focus-visible { background: color-mix(in oklch, var(--input) 50%, transparent); box-shadow: 0 0 0 2px var(--ring); }
