@@ -18,3 +18,19 @@
 ## 커밋 제목
 
 커밋 제목은 개발 기록입니다. `feat`/`fix`는 사용자에게 보이는 변경에만 쓰고, 빌드·CI는 `ci`/`build`, 구조 변경은 `refactor`로 씁니다.
+
+## 데스크톱 앱 직접 빌드하기
+
+Python 런타임과 의존성, 웹 화면을 담은 독립 실행형 앱(Electron)을 만듭니다. IRAF는 앱에 포함되지 않으며, 로그인 셸의 환경(`iraf`, `PATH`)을 그대로 씁니다.
+
+```sh
+cd desktop
+bun install
+bun run dist
+```
+
+`desktop/dist/`에 현재 OS용 설치 파일(macOS `.dmg`, Linux `.AppImage`)이 생깁니다. 로컬 빌드는 서명하지 않으므로 다른 Mac에서는 처음 열 때 우클릭 → 열기가 필요합니다.
+
+- 앱의 실행 기록과 상태는 `~/Documents/GIRAF`에 저장됩니다(로그: `giraf.log`).
+- Mac 앱은 GitHub Secrets의 Developer ID 인증서로 서명·공증해야 스스로 업데이트할 수 있습니다(`MAC_CERTIFICATE`, `MAC_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`). 없으면 서명하지 않고 빌드합니다.
+- Windows 앱(`.exe`)은 WSL 안의 IRAF를 씁니다. 앱에 담긴 Linux 백엔드를 처음 실행할 때 WSL의 `~/.giraf/runtime`에 풀어 실행합니다. 파일 바로가기와 실행 기록·상태(`문서\GIRAF`)는 Windows 사용자 폴더(WSL에서 `/mnt/c/Users/<이름>`)를 씁니다. Windows 설치 파일은 Linux에서 준비한 백엔드를 담기 때문에 GitHub Actions에서만 만듭니다.
