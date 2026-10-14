@@ -115,8 +115,8 @@ CL_TIMEOUT_SECONDS = 1800
 def cursor_fifo(job):
     """IRAF's native cursor FIFO for one run.
 
-    Not in the run folder: under WSL that is a Windows folder (/mnt/c/...),
-    where named pipes are not supported.
+    Not in the run folder, which may be on a file system without named pipes
+    (a Windows folder seen from WSL as /mnt/c/...).
     """
     return Path(tempfile.gettempdir()) / f'giraf-cursor-{Path(job).name}.fifo'
 

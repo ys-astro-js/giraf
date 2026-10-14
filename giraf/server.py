@@ -31,7 +31,7 @@ from .workflow_preferences import document_action, initial_preferences
 from .image_rendering import image_info, image_png, image_pixel
 from .display import display_number, start_display, stop_display
 from .workflow_documents import WorkflowDocuments
-from .jobs import ROOT, DATA, HOME, RUNS, start, status, atomic_json
+from .jobs import ROOT, DATA, FOLDER, HOME, RUNS, start, status, atomic_json
 from .model import HEADER_KEYS, Settings, inspect_file, listing, scan, validate
 from .combine import validate_combination
 from .task_catalog import catalog
@@ -42,7 +42,7 @@ from .request_schema import WorkflowRequest
 STATE = DATA / '.workspace.json'
 registry: dict[str, dict] = {}
 lock = threading.Lock()
-workspace = json.loads(STATE.read_text()) if STATE.exists() else {'folder': str(DATA), 'sets': [], 'overrides': {}}
+workspace = json.loads(STATE.read_text()) if STATE.exists() else {'folder': str(FOLDER), 'sets': [], 'overrides': {}}
 # Folders used before recent folders were recorded start the list with the last one.
 if STATE.exists() and 'recent' not in workspace:
     workspace['recent'] = [{'path': workspace['folder'], 'opened': STATE.stat().st_mtime}]
@@ -590,7 +590,9 @@ async def home_endpoint(request: Request):
 
 async def browse_endpoint(request: Request):
     q = request.query_params
-    path = Path(q.get('path', workspace['folder'])).expanduser().resolve()
+    # An empty path (the picker opened before the workspace loaded) is the
+    # workspace folder, never the backend's working directory.
+    path = Path(q.get('path') or workspace['folder']).expanduser().resolve()
     if not path.is_dir():
         raise ValueError('폴더를 찾을 수 없습니다.')
     folders, files = await run_in_threadpool(listing, path)
@@ -598,7 +600,7 @@ async def browse_endpoint(request: Request):
     count = sum(p.suffix.lower() in ('.fits', '.fit', '.fts') for p in files)
     extensions=('.fits','.fit','.fts','.pl','.txt','.dat','.list','.log','.gki','.bin')
     entries=await run_in_threadpool(lambda:[register(p) for p in sorted(files) if p.suffix.lower() in extensions])
-    roots=[('작업 폴더',DATA),('홈',HOME),('다운로드',HOME/'Downloads'),('문서',HOME/'Documents')]
+    roots=[('작업 폴더',FOLDER),('홈',HOME),('다운로드',HOME/'Downloads'),('문서',HOME/'Documents')]
     return JSONResponse(dict(path=str(path), parent=str(path.parent),
         breadcrumbs=[dict(name=p.name or '/',path=str(p)) for p in [*reversed(path.parents),path]],
         shortcuts=[dict(name=n,path=str(p)) for n,p in roots if p.is_dir()],
@@ -607,6 +609,8 @@ async def browse_endpoint(request: Request):
 
 async def folder_endpoint(request: Request):
     payload = await request_payload(request) if request.method == 'POST' else {}
+    if not str(payload.get('path') or '').strip():
+        raise ValueError('존재하는 데이터 폴더를 입력해 주세요.')
     folder = str(Path(payload['path']).expanduser().resolve())
     await run_in_threadpool(scan, folder)
     with lock:

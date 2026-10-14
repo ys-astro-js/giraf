@@ -13,6 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 # Runs and app state. The desktop app keeps them outside its read-only bundle.
 DATA = Path(os.environ.get('GIRAF_DATA') or ROOT).expanduser()
 RUNS = DATA / 'runs'
+# The user's default work folder. Under WSL, DATA stays on the Linux disk for
+# speed while this is the Windows Documents/GIRAF the user can see.
+FOLDER = Path(os.environ.get('GIRAF_FOLDER') or DATA).expanduser()
 # The user's home for file shortcuts. Under WSL the Windows app passes the
 # Windows profile (/mnt/c/Users/...), where the user's files are.
 HOME = Path(os.environ.get('GIRAF_HOME') or Path.home()).expanduser()
