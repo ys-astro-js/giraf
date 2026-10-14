@@ -15,7 +15,7 @@ from .task_jobs import output_paths
 from .products import product_name, publish_product, header_changes
 from .task_expressions import split_image
 from .staging import staged_names
-from .task_session import run_process, read_log_since, Cancelled
+from .task_session import run_process, read_log_since, Cancelled, cursor_fifo
 
 
 def checksum(path):
@@ -139,7 +139,7 @@ class TaskRun:
             p=Path(ss);p=p if p.is_absolute() else self.directory/p
             package['ssfile']=self.stage_reference(ss,self.directory,'ccdred.ssfile') if p.is_file() else self.package_path(ss,'ssfile')
         if package.get('cursor'):package['cursor']=self.stage_reference(package['cursor'],self.directory,'ccdred.cursor')
-        elif self.interactive and self.m['backend']=='cl':package['cursor']='cursor.fifo'
+        elif self.interactive and self.m['backend']=='cl':package['cursor']=str(cursor_fifo(self.job))
         self.assignments.append(('ccdred',package))
         prep=dict(self.m['ccdproc'])
         for role in ('zero','dark','flat','illum','fringe','fixfile'):prep[role]=self.list_value(role)

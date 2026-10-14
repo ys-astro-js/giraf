@@ -7,6 +7,7 @@ import re
 import select
 import signal
 import subprocess
+import tempfile
 import time
 import uuid
 
@@ -111,6 +112,15 @@ if __name__=='__main__':
 CL_TIMEOUT_SECONDS = 1800
 
 
+def cursor_fifo(job):
+    """IRAF's native cursor FIFO for one run.
+
+    Not in the run folder: under WSL that is a Windows folder (/mnt/c/...),
+    where named pipes are not supported.
+    """
+    return Path(tempfile.gettempdir()) / f'giraf-cursor-{Path(job).name}.fifo'
+
+
 def run_cl_terminal(command,job,log,env):
     """Send one CL command per native prompt; task questions own the terminal.
 
@@ -119,8 +129,8 @@ def run_cl_terminal(command,job,log,env):
     """
     commands=Path(command[-1]).read_text().splitlines()
     (job/'login.cl').write_text('set uparm = "'+str(job/'uparm')+'/"\nkeep\n')
-    fifo=job/'cursor.fifo'
-    if not fifo.exists():os.mkfifo(fifo)
+    fifo=cursor_fifo(job)
+    if not fifo.exists():os.mkfifo(fifo,0o600)
     child = pexpect.spawn(command[0], cwd=str(job), env=env, encoding=None,
                           echo=False, maxread=65536)
     child.logfile_read = log
@@ -221,3 +231,4 @@ def run_cl_terminal(command,job,log,env):
             if cursor is not None:
                 os.close(cursor)
             child.close()
+            fifo.unlink(missing_ok=True)

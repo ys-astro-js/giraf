@@ -30,7 +30,7 @@ for line in sys.stdin:
         emit('ANSWER=' + answer + '\nContinue (yes) ')
         emit('CONFIRM=' + sys.stdin.readline().strip() + '\n')
     elif command == 'cursor':
-        with open('cursor.fifo') as fifo:
+        with open(os.environ['PEER_FIFO']) as fifo:
             emit('CURSOR=' + fifo.readline())
             emit('CURSOR=' + fifo.readline())
     elif command == 'textcursor':
@@ -103,7 +103,9 @@ class CLTerminalTests(unittest.TestCase):
 
     def test_cursor_fifo_then_next_command(self):
         with patch.object(task_session, 'ask', side_effect=['12 34 1 a', '12 34 1 q']) as ask:
-            self.assertEqual(self.run_peer(['cursor', 'next', 'logout']), 0)
+            fifo = task_session.cursor_fifo(self.job)
+            self.assertEqual(self.run_peer(['cursor', 'next', 'logout'], PEER_FIFO=str(fifo)), 0)
+        self.assertFalse(fifo.exists())
         self.assertEqual(ask.call_count, 2)
         self.assertEqual(ask.call_args.args[1], 'cursor')
         self.assertIn('CURSOR=12 34 1 a', (self.job / 'task.log').read_text())
