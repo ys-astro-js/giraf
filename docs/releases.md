@@ -1,6 +1,6 @@
 # 릴리스와 업데이트 내역
 
-`main`에 push하면 `.github/workflows/desktop.yml`이 데스크톱 앱을 빌드해 Releases에 `v1.2.<빌드 번호>`로 올리고, 설치된 앱은 이 릴리스로 자동 업데이트합니다.
+`main`에 push하면 `.github/workflows/desktop.yml`이 데스크톱 앱을 빌드해 Releases에 `v1.3.<빌드 번호>`로 올리고, 설치된 앱은 이 릴리스로 자동 업데이트합니다.
 
 ## 업데이트 내역은 `RELEASE_NOTES.md`
 
