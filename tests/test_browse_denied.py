@@ -32,5 +32,18 @@ class BrowseDeniedEntriesTests(unittest.TestCase):
         self.assertEqual(data['fits'], 1)
 
 
+class BrowseEmptyPathTests(unittest.TestCase):
+    """The picker can open before the workspace loads and ask for path=''."""
+
+    def test_empty_path_is_the_workspace_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            folder = str(Path(tmp).resolve())
+            with patch.object(server, 'registry', {}), \
+                    patch.object(server, 'workspace', {'folder': folder, 'sets': [], 'overrides': {}, 'file_refs': {}}):
+                code, data = asyncio.run(request('GET', 'browse', query='path='))
+        self.assertEqual(code, 200)
+        self.assertEqual(data['path'], folder)
+
+
 if __name__ == '__main__':
     unittest.main()

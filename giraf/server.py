@@ -590,7 +590,9 @@ async def home_endpoint(request: Request):
 
 async def browse_endpoint(request: Request):
     q = request.query_params
-    path = Path(q.get('path', workspace['folder'])).expanduser().resolve()
+    # An empty path (the picker opened before the workspace loaded) is the
+    # workspace folder, never the backend's working directory.
+    path = Path(q.get('path') or workspace['folder']).expanduser().resolve()
     if not path.is_dir():
         raise ValueError('폴더를 찾을 수 없습니다.')
     folders, files = await run_in_threadpool(listing, path)
@@ -607,6 +609,8 @@ async def browse_endpoint(request: Request):
 
 async def folder_endpoint(request: Request):
     payload = await request_payload(request) if request.method == 'POST' else {}
+    if not str(payload.get('path') or '').strip():
+        raise ValueError('존재하는 데이터 폴더를 입력해 주세요.')
     folder = str(Path(payload['path']).expanduser().resolve())
     await run_in_threadpool(scan, folder)
     with lock:
