@@ -8,7 +8,7 @@ import tempfile
 import unittest
 import numpy as np
 from astropy.io import fits
-from giraf.task_capabilities import installed_root
+from tests.iraf_required import requires_iraf
 
 class AutomaticSchemaTests(unittest.TestCase):
     def test_new_package_gets_file_ports_without_descriptor_and_keeps_nonfile_parameters(self):
@@ -36,7 +36,7 @@ class AutomaticSchemaTests(unittest.TestCase):
         self.assertEqual(result['profile']['outputs'][0]['mode'],'single')
         self.assertFalse(infer_profile([par('custom')],'')['complete'])
 
-@unittest.skipUnless(installed_root(),'IRAF required')
+@requires_iraf
 class AutomaticIRAFTests(unittest.TestCase):
     def test_connected_image_and_spectrum_execution_both_backends(self):
         from giraf.task_catalog import catalog

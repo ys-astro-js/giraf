@@ -10,7 +10,8 @@ from unittest.mock import patch
 
 import numpy as np
 from astropy.io import fits
-from giraf.task_capabilities import read_parameters, installed_root
+from giraf.task_capabilities import read_parameters
+from tests.iraf_required import requires_iraf
 
 
 class DiscoveryTests(unittest.TestCase):
@@ -179,7 +180,7 @@ class EachOutputNameTests(unittest.TestCase):
         self.assertEqual(product_name('M67b.mag.1', 'text'), 'M67b.mag.1')
 
 
-@unittest.skipUnless(installed_root(), 'IRAF installation required')
+@requires_iraf
 class GenericIRAFTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.root = Path(self.tmp.name)

@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from astropy.io import fits
 from giraf.alignment import measure_alignment_star, parse_imexam_center
-from giraf.task_capabilities import installed_root
+from tests.iraf_required import requires_iraf
 
 class CenterLogTests(unittest.TestCase):
     def test_measured_center_and_failed_measurements(self):
@@ -14,7 +14,7 @@ class CenterLogTests(unittest.TestCase):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 parse_imexam_center(text)
 
-@unittest.skipUnless(installed_root(), 'IRAF required')
+@requires_iraf
 class AlignmentCenterTests(unittest.TestCase):
     def test_real_iraf_centers_are_subpixel_repeatable_and_originals_are_preserved(self):
         with tempfile.TemporaryDirectory() as tmp:

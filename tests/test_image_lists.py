@@ -11,6 +11,7 @@ from giraf.generic_tasks import validate_generic, GenericTaskRun
 from giraf.task_worker import TaskRun
 from giraf.workflow import execute_workflow
 from giraf.model import inspect_file
+from tests.iraf_required import requires_iraf
 
 class ImageListTests(unittest.TestCase):
     def setUp(self):
@@ -31,6 +32,7 @@ class ImageListTests(unittest.TestCase):
     def payload(self, ids):
         return dict(task='zerocombine',backend='cl',workingDirectory=str(self.root),inputs={'input':ids},
                     parameters={'ccdtype':'','process':'no','combine':'average','reject':'none'},output={'name':'Zero.fits'})
+    @requires_iraf
     def test_multiple_lists_expand_in_order_in_legacy_and_generic_paths(self):
         from giraf.image_lists import expand_image_selection
         rows, lists = expand_image_selection({'kind':'image','multiple':True},['first','second','a'],self.rows.__getitem__,self.root)
@@ -48,6 +50,7 @@ class ImageListTests(unittest.TestCase):
         self.assertEqual(len(g['inputs']['input']),4)
         with self.assertRaises(ValueError):
             expand_image_selection({'kind':'image','multiple':False},['first'],self.rows.__getitem__,self.root)
+    @requires_iraf
     def test_relative_nested_lists_missing_entries_and_cycles(self):
         from giraf.image_lists import expand_image_selection
         sub=self.root/'sub';sub.mkdir()
@@ -67,12 +70,14 @@ class ImageListTests(unittest.TestCase):
             expand_image_selection({'kind':'image','multiple':True},['outer'],self.rows.__getitem__,self.root)
         self.rows['text']=dict(self.rows['first'],id='text',asset='text')
         with self.assertRaises(ValueError): validate_task(self.payload(['text']),self.rows.__getitem__)
+    @requires_iraf
     def test_input_lists_are_frozen_with_the_execution_plan(self):
         m=validate_task(self.payload(['first']),self.rows.__getitem__)
         job=self.root/'frozen';job.mkdir();(job/'manifest.json').write_text(json.dumps(m))
         (self.root/'first.list').write_text('d.fits\n')
         with self.assertRaisesRegex(ValueError,'변경'):
             TaskRun(job).prepare()
+    @requires_iraf
     def test_list_nodes_feed_multiple_lists_to_an_image_node_and_execute(self):
         source=TASKS['giraf.file_input']
         self.assertEqual(source['run'],'pass-files')

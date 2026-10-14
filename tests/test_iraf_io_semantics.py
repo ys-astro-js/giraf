@@ -6,9 +6,10 @@ import unittest
 
 import numpy as np
 from astropy.io import fits
-from giraf.task_capabilities import installed_root, read_parameters
+from giraf.task_capabilities import read_parameters
 from giraf.task_discovery import discover
 from giraf.generic_tasks import GenericTaskRun, validate_generic
+from tests.iraf_required import requires_iraf
 
 
 class SemanticSchemaTests(unittest.TestCase):
@@ -48,7 +49,7 @@ class SemanticSchemaTests(unittest.TestCase):
             self.assertEqual(outputs[1]['mode'],'single')
 
 
-@unittest.skipUnless(installed_root(),'IRAF required')
+@requires_iraf
 class NativeOutputTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -122,8 +123,8 @@ class NativeOutputTests(unittest.TestCase):
                     self.assertEqual(len([p for p in products if p['role']==role]),2,products)
 
 class InlineCursorTests(unittest.TestCase):
+    @requires_iraf
     def test_inline_commands_are_validated_staged_and_execute_without_external_cursor_file(self):
-        if not installed_root():self.skipTest('IRAF required')
         task=discover()['tasks']['noao.digiphot.apphot.phot']
         helper=NativeOutputTests()
         for backend in ('cl','pyraf'):

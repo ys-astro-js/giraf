@@ -20,7 +20,8 @@ from giraf import server
 from giraf.jobs import ROOT, atomic_json
 from giraf.task_jobs import validate_task
 from giraf.task_worker import checksum
-from test_workspace import request
+from tests.test_workspace import request
+from tests.iraf_required import requires_iraf
 
 OFF={k:'no' for k in ('fixpix','overscan','trim','zerocor','darkcor','flatcor','illumcor','fringecor','readcor','scancor')}
 
@@ -56,6 +57,7 @@ class TaskMapTests(unittest.TestCase):
     def images(self,job,products):return [job/p['file'] for p in products if p['asset']=='image']
 
 
+    @requires_iraf
     def test_expressions_lists_sections_duplicates_and_safety(self):
         from giraf.task_expressions import resolve_expression
         a=self.frame('a.fits',10);b=self.frame('b.fits',20)
@@ -71,6 +73,7 @@ class TaskMapTests(unittest.TestCase):
         job,p=self.run_m(self.manifest('imstatistics',[],expressions={'images':'a.fits[1:4,1:3]'}))
         self.assertIn('10',(job/'task.log').read_text())
 
+    @requires_iraf
     def test_preprocessor_package_snapshot_and_auxiliary_files(self):
         a=self.frame('dark.fits',10,'dark')
         m=self.manifest('darkcombine',[a],{'process':'yes','reject':'none'},ccdred={'logfile':'custom.log','plotfile':'overscan.gki','backup':'bak_'},instanceId='draft-a')
@@ -82,6 +85,7 @@ class TaskMapTests(unittest.TestCase):
         self.assertTrue((job/'custom.log').exists())
         self.assertTrue(json.loads((job/'sources.json').read_text())[0]['sha256'])
 
+    @requires_iraf
     def test_real_scale_offsets_masks_projection_and_sections(self):
         a=self.frame('one.fits',10);b=self.frame('two.fits',20)
         scale=self.text('scale.txt','1\n2\n');off=self.text('offsets.txt','0 0\n0 0\n')
@@ -99,6 +103,7 @@ class TaskMapTests(unittest.TestCase):
             self.assertEqual(fits.getdata(self.images(job,p)[0])[0,0],20)
             self.assertIn('BPM',(job/'references.json').read_text())
 
+    @requires_iraf
     def test_header_diff_delete_return_and_original_preservation(self):
         a=self.frame('header.fits',10,ZEROCOR='old record');before=checksum(self.rows[a]['path'])
         for backend in ('cl','pyraf'):
@@ -108,6 +113,7 @@ class TaskMapTests(unittest.TestCase):
             self.assertTrue(any(x['key']=='ZEROCOR' and x['after'] is None for x in diff))
             self.assertEqual(checksum(self.rows[a]['path']),before)
 
+    @requires_iraf
     def test_processed_skipped_partial_failure_and_no_fake_products(self):
         good=self.frame('good.fits',100);wrong=self.frame('zero.fits',10,'zero')
         zero=self.frame('master.fits',10,'zero');bad=self.frame('bad.fits',np.ones((20,30)))
@@ -119,6 +125,7 @@ class TaskMapTests(unittest.TestCase):
         outcomes=json.loads((job/'outcomes.json').read_text());self.assertEqual([x['state'] for x in outcomes],['processed','failed'])
         self.assertEqual(len(self.images(job,p)),1)
 
+    @requires_iraf
     def test_output_paths_direct_backup_conflicts_and_changed_source(self):
         a=self.frame('original.fits',100);before=checksum(self.rows[a]['path'])
         target=self.root/'named.fits'
@@ -144,6 +151,7 @@ class TaskMapTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'clobber'):
             self.manifest('combine',[a],{'clobber':'yes'})
 
+    @requires_iraf
     def test_interactive_fitting_resume_graphics_and_cancellation(self):
         a=self.frame('overscan.fits',np.tile(np.arange(12)[:,None],(1,16))+100)
         for backend in ('pyraf','cl'):

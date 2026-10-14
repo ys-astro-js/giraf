@@ -14,6 +14,7 @@ from astropy.io import fits
 from giraf.jobs import ROOT, atomic_json
 from giraf.model import Settings, scan, selected, validate
 from giraf.worker import checksum
+from tests.iraf_required import requires_iraf
 
 
 def fixture(folder, science_time=20.):
@@ -57,6 +58,7 @@ def run_job(folder, rows, settings, operation="reduction", name=""):
 
 
 class ReductionTests(unittest.TestCase):
+    @requires_iraf
     def test_full_reduction_and_original_preservation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -83,6 +85,7 @@ class ReductionTests(unittest.TestCase):
             self.assertEqual(before, {str(p): checksum(p) for p in raw.glob('*.fits')})
             self.assertEqual(len([p for p in products if p['source']]), 2)
 
+    @requires_iraf
     def test_dark_scaling(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); raw = root / 'raw'; raw.mkdir()
@@ -95,6 +98,7 @@ class ReductionTests(unittest.TestCase):
                 if p['source']:
                     np.testing.assert_allclose(fits.getdata(root / 'run' / p['file']), 500., atol=.002, rtol=0)
 
+    @requires_iraf
     def test_geometry(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); raw = root / 'raw'; raw.mkdir()
@@ -110,6 +114,7 @@ class ReductionTests(unittest.TestCase):
                     self.assertEqual(a.shape, (24, 32))
                     np.testing.assert_allclose(a, 500., atol=.005, rtol=0)
 
+    @requires_iraf
     def test_resuming_partial_calibrations(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); raw = root / 'raw'; raw.mkdir()
@@ -130,6 +135,7 @@ class ReductionTests(unittest.TestCase):
                 if p['source']:
                     np.testing.assert_allclose(fits.getdata(root / 'run' / p['file']), 500., atol=.002, rtol=0)
 
+    @requires_iraf
     def test_minmax_average(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); raw = root / 'raw'; raw.mkdir()
@@ -140,6 +146,7 @@ class ReductionTests(unittest.TestCase):
             run_job(root / 'run', scan(str(raw)), s)
             np.testing.assert_array_equal(fits.getdata(root / 'run/masters/bias.fits'), 2.5)
 
+    @requires_iraf
     def test_combine_existing_results(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); raw = root / 'raw'; raw.mkdir()
@@ -152,6 +159,7 @@ class ReductionTests(unittest.TestCase):
             run_job(root / 'run', rows, s, 'combine', 'Zero.fits')
             np.testing.assert_array_equal(fits.getdata(root / 'run/masters/result.fits'), 16.5)
 
+    @requires_iraf
     def test_reuse_master_calibrations(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); raw = root / 'raw'; raw.mkdir()
@@ -188,6 +196,7 @@ class ReductionTests(unittest.TestCase):
             changed.update(use=True, kind='bias')
             self.assertTrue(any('처리된' in e for e in validate(rows, Settings())[0]))
 
+    @requires_iraf
     def test_course_bias_split(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); raw = root / 'raw'; raw.mkdir()

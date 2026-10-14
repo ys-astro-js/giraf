@@ -18,6 +18,7 @@ from giraf.jobs import atomic_json
 from giraf.task_jobs import preview_task, validate_task, authorize_file_plan
 from giraf.task_worker import TaskRun
 from tests.test_tasks import NO_CORRECTIONS
+from tests.iraf_required import requires_iraf
 
 
 def assert_products(case, job, products):
@@ -200,6 +201,7 @@ class ProductStorageTests(unittest.TestCase):
             validate_generic(TASKS['giraf.file_save'], dict(inputs={'files': ['b']}, workingDirectory=str(self.root),
                              destination=dict(path='없는 폴더')), self.rows.__getitem__)
 
+    @requires_iraf
     def test_legacy_paths_prefix_lists_and_direct_backup(self):
         from giraf.task_catalog import TASKS, definition
         legacy = definition('ccdproc', [dict(name='images', label='Images', kind='image', multiple=True, required=True)],

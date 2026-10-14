@@ -13,7 +13,7 @@ from astropy.io import fits
 from PIL import Image
 
 from giraf.display import DisplayServer, IIS_READ, PACKED, MEMORY, WCS, FEEDBACK, describe
-from giraf.task_capabilities import installed_root
+from tests.iraf_required import requires_iraf
 
 
 def header(tid, count, subunit, x=0, y=0, z=1, t=0):
@@ -136,7 +136,7 @@ def receive(connection, size):
     return data
 
 
-@unittest.skipUnless(installed_root(), 'IRAF required')
+@requires_iraf
 class IRAFDisplayTests(unittest.TestCase):
     def test_display_then_tvmark_draw_into_giraf_frames(self):
         from giraf.display import start_display, stop_display

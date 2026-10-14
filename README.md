@@ -130,6 +130,20 @@ uv run main.py
 
 브라우저에서 [http://127.0.0.1:8501/](http://127.0.0.1:8501/)을 엽니다. 종료하려면 실행한 터미널에서 **Ctrl+C**를 누릅니다. 이 방식으로 실행하면 실행 기록은 GIRAF 폴더의 `runs/`에 저장됩니다.
 
+테스트는 여러 프로세스에서 나눠 실행합니다. 기본으로는 IRAF를 실행하지 않는 테스트만 돌립니다.
+
+```bash
+uv run scripts/test.py
+```
+
+IRAF를 실제로 실행하는 테스트까지 모두 돌리려면 `--iraf`를 붙입니다. `test_task_map`처럼 이름을 붙이면 그 테스트만 실행합니다.
+
+```bash
+uv run scripts/test.py --iraf
+```
+
+웹 테스트는 `web` 폴더에서 `bun test`로 실행합니다.
+
 데스크톱 앱을 직접 빌드하거나 새 버전을 배포하는 방법은 [docs/releases.md](docs/releases.md)에 있습니다.
 
 ## 라이선스

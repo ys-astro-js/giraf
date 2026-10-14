@@ -8,11 +8,11 @@ import numpy as np
 from astropy.io import fits
 
 from giraf.generic_tasks import GenericTaskRun, validate_generic
-from giraf.task_capabilities import installed_root
 from giraf.task_discovery import discover
+from tests.iraf_required import requires_iraf
 
 
-@unittest.skipUnless(installed_root(), 'IRAF required')
+@requires_iraf
 class PhotStatusTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

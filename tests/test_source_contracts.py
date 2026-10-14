@@ -4,8 +4,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from giraf.task_capabilities import read_parameters, installed_root
+from giraf.task_capabilities import read_parameters
 from giraf.task_schema import infer_profile, node_profile, refine_help
+from tests.iraf_required import requires_iraf
 
 
 class SourceContractTests(unittest.TestCase):
@@ -127,7 +128,7 @@ end
             task=discover(self.root)['tasks']['demo.task']
         self.assertEqual(task['schemaSource'],'parameters')
 
-    @unittest.skipUnless(installed_root(), 'IRAF required')
+    @requires_iraf
     def test_installed_combine_contract_does_not_need_help_prose(self):
         from giraf.task_discovery import discover
         read=Path.read_text

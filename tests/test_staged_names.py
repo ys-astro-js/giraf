@@ -14,6 +14,7 @@ from astropy.io import fits
 from giraf.jobs import ROOT, atomic_json
 from giraf.staging import MAX_PATH, iraf_safe, staged_names
 from giraf.task_capabilities import installed_root
+from tests.iraf_required import requires_irafcl
 
 
 class StagedNameTests(unittest.TestCase):
@@ -100,7 +101,7 @@ class TaskRunStagingTests(unittest.TestCase):
             self.assertEqual([s['original'] for s in sources], [r['path'] for r in rows])
 
 
-@unittest.skipUnless(installed_root() and shutil.which('irafcl'), 'IRAF required')
+@requires_irafcl
 class IRAFRecordsNamesTests(unittest.TestCase):
     """Real IRAF runs: provenance keywords name the inputs, not the run's copies."""
 

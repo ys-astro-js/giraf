@@ -14,11 +14,13 @@ from giraf.jobs import ROOT, atomic_json
 from giraf.server import register
 from giraf.task_jobs import validate_task
 from giraf.task_worker import checksum
+from tests.iraf_required import requires_iraf
 
 
 NO_CORRECTIONS={k:'no' for k in ('fixpix','overscan','trim','zerocor','darkcor','flatcor','illumcor','fringecor','readcor','scancor')}
 
 
+@requires_iraf
 class TaskTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory()

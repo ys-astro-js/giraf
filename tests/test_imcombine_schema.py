@@ -4,10 +4,10 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from giraf.task_capabilities import installed_root
 from giraf.task_discovery import discover
 from giraf.generic_tasks import GenericTaskRun, validate_generic
 from giraf.task_schema import parameter_profile
+from tests.iraf_required import requires_iraf
 
 
 class CombineSchemaTests(unittest.TestCase):
@@ -23,7 +23,7 @@ class CombineSchemaTests(unittest.TestCase):
         self.assertEqual(profile['outputs'][0]['name'], 'counts')
         self.assertNotIn('scalar', profile['outputs'][0])
 
-    @unittest.skipUnless(installed_root(), 'IRAF required')
+    @requires_iraf
     def test_discovery_and_old_empty_drafts_execute_on_both_backends(self):
         import numpy as np
         from astropy.io import fits

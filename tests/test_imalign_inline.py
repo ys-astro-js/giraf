@@ -7,9 +7,9 @@ import numpy as np
 from astropy.io import fits
 from giraf.generic_tasks import validate_generic, GenericTaskRun
 from giraf.task_discovery import discover
-from giraf.task_capabilities import installed_root
+from tests.iraf_required import requires_iraf
 
-@unittest.skipUnless(installed_root(), 'IRAF required')
+@requires_iraf
 class InlineAlignmentTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

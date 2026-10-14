@@ -8,8 +8,8 @@ import unittest
 
 import numpy as np
 from astropy.io import fits
+from tests.iraf_required import requires_iraf
 
-from giraf.task_capabilities import installed_root
 
 
 class SchemaRules(unittest.TestCase):
@@ -139,7 +139,7 @@ def star_image(path, stars):
     fits.writeto(path, image.astype('float32'))
 
 
-@unittest.skipUnless(installed_root(), 'IRAF required')
+@requires_iraf
 class RealIraf(unittest.TestCase):
     def test_daoedit_measures_every_star_in_one_interactive_run(self):
         from giraf.generic_tasks import GenericTaskRun, validate_generic

@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch
 
 from giraf import task_session
+from tests.iraf_required import requires_irafcl
 
 
 PEER = r'''
@@ -164,7 +165,7 @@ class CLTerminalTests(unittest.TestCase):
         self.assertEqual(self.run_peer(['signal']), -signal.SIGTERM)
         self.assert_reaped()
 
-    @unittest.skipUnless(shutil.which('irafcl'), 'IRAF CL is not installed')
+    @requires_irafcl
     def test_installed_iraf_prompt_and_logout(self):
         self.peer = Path(shutil.which('irafcl'))
         with patch.object(task_session, 'CL_TIMEOUT_SECONDS', 15, create=True):

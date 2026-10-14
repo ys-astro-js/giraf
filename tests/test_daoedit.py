@@ -7,11 +7,11 @@ import unittest
 import numpy as np
 from astropy.io import fits
 from giraf.generic_tasks import GenericTaskRun, validate_generic
-from giraf.task_capabilities import installed_root
 from giraf.task_discovery import discover
+from tests.iraf_required import requires_iraf
 
 
-@unittest.skipUnless(installed_root(), 'IRAF required')
+@requires_iraf
 class DaoeditTests(unittest.TestCase):
     def test_both_backends_emit_native_measurements_and_preserve_source(self):
         spec = discover()['tasks']['noao.digiphot.daophot.daoedit']
