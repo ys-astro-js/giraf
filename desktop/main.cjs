@@ -12,8 +12,8 @@ const MAC = process.platform === "darwin"
 const TITLE_BAR_HEIGHT = 55
 
 // Runs and app state live here (GIRAF_DATA); the bundle itself is read-only.
-// On Windows the backend runs in WSL; start.sh puts them in the same Windows
-// folder, seen from WSL as /mnt/c/Users/<name>/Documents/GIRAF.
+// On Windows the backend runs in WSL; start.sh keeps them on the Linux disk
+// (~/.giraf/data), as Windows folders (/mnt/c) are slow to read from WSL.
 const DATA = process.env.GIRAF_DATA || path.join(os.homedir(), "Documents", "GIRAF")
 const LOG = WINDOWS ? path.join(app.getPath("userData"), "giraf.log") : path.join(DATA, "giraf.log")
 

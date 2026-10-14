@@ -12,7 +12,7 @@ import uuid
 import hashlib
 from copy import deepcopy
 
-from .jobs import ROOT, DATA, RUNS, atomic_json
+from .jobs import ROOT, FOLDER, RUNS, atomic_json
 from .task_inputs import resolve_task_inputs
 from .task_catalog import TASKS, parameters, CALIBRATIONS
 from .products import each_output_name, product_name
@@ -90,7 +90,7 @@ def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozense
     backend = payload.get('backend','cl')
     with issues.check():
         if backend not in ('cl','pyraf'): raise ValueError('CL 또는 PyRAF를 선택해 주세요.')
-    directory = str(Path(payload.get('workingDirectory') or DATA).expanduser().resolve())
+    directory = str(Path(payload.get('workingDirectory') or FOLDER).expanduser().resolve())
     inputs, sources, input_lists, expressions = resolve_task_inputs(
         spec, payload, directory, resolve, digest, CALIBRATIONS,
         diagnostics=diagnostics, pending_roles=pending_roles, issues=issues)

@@ -33,4 +33,4 @@ bun run dist
 
 - 앱의 실행 기록과 상태는 `~/Documents/GIRAF`에 저장됩니다(로그: `giraf.log`).
 - Mac 앱은 GitHub Secrets의 Developer ID 인증서로 서명·공증해야 스스로 업데이트할 수 있습니다(`MAC_CERTIFICATE`, `MAC_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`). 없으면 서명하지 않고 빌드합니다.
-- Windows 앱(`.exe`)은 WSL 안의 IRAF를 씁니다. 앱에 담긴 Linux 백엔드를 처음 실행할 때 WSL의 `~/.giraf/runtime`에 풀어 실행합니다. 파일 바로가기와 실행 기록·상태(`문서\GIRAF`)는 Windows 사용자 폴더(WSL에서 `/mnt/c/Users/<이름>`)를 씁니다. Windows 설치 파일은 Linux에서 준비한 백엔드를 담기 때문에 GitHub Actions에서만 만듭니다.
+- Windows 앱(`.exe`)은 WSL 안의 IRAF를 씁니다. 앱에 담긴 Linux 백엔드를 처음 실행할 때 WSL의 `~/.giraf/runtime`에 풀어 실행합니다. 파일 바로가기와 기본 작업 폴더(`문서\GIRAF`)는 Windows 사용자 폴더(WSL에서 `/mnt/c/Users/<이름>`)를 쓰고, 실행 기록과 상태는 WSL의 `~/.giraf/data`에 둡니다. WSL에서 `/mnt/c`를 읽고 쓰면 느리기 때문입니다. Windows 설치 파일은 Linux에서 준비한 백엔드를 담기 때문에 GitHub Actions에서만 만듭니다.
