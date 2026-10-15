@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react"
+import { useRef, useState, type DragEvent, type ReactNode } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { ChevronLeft, ChevronRight, Folder, Plus, Star, Terminal } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -20,6 +20,7 @@ import { nodeTiles } from "@/lib/node-chunks"
 import { shortcuts } from "@/lib/shortcuts"
 import { apiQueryOptions } from "@/lib/queries"
 import { favoriteName, favoriteTasks, toggleFavorite } from "@/lib/task-favorites"
+import { taskDragType } from "@/lib/task-drag"
 import { searchTasks, taskPackageTree, taskRowText, type TaskPackage } from "@/lib/task-tree"
 import { api, isGirafNode, type Home, type Spec } from "@/lib/workbench"
 import { useWorkbench } from "@/features/workbench/context"
@@ -27,6 +28,17 @@ import { CommandEntry } from "./CommandEntry"
 import { ListSkeleton, NoFiles, RefreshButton } from "./shared"
 import { useRefresh } from "./useRefresh"
 import "@/styles/library/popovers.css"
+
+/** Lets a task's row or tile be dragged onto the workflow canvas. */
+function dragTask(task: Spec) {
+  return {
+    draggable: true,
+    onDragStart: (event: DragEvent) => {
+      event.dataTransfer.setData(taskDragType, task.name)
+      event.dataTransfer.effectAllowed = "copy"
+    },
+  }
+}
 
 /** One task to add: its name and package, and what it does. */
 function TaskOption({ task, onAdd, showPackage = true }: { task: Spec; onAdd: () => void; showPackage?: boolean }) {
@@ -38,6 +50,7 @@ function TaskOption({ task, onAdd, showPackage = true }: { task: Spec; onAdd: ()
       title={path ? `${path}.${name}` : name}
       aria-label={`${name} 추가`}
       onClick={onAdd}
+      {...dragTask(task)}
     >
       <NodeIcon icon={task.icon} run={task.run} />
       <span className="library-option-text library-task-text">
@@ -86,9 +99,21 @@ function FavoriteTaskOption({
 }
 
 /** A small tile above the package tree: an icon and a name, what it does in the tooltip. */
-function Tile({ label, description, icon, onClick }: { label: string; description?: string; icon: ReactNode; onClick: () => void }) {
+function Tile({
+  label,
+  description,
+  icon,
+  onClick,
+  task,
+}: {
+  label: string
+  description?: string
+  icon: ReactNode
+  onClick: () => void
+  task?: Spec
+}) {
   const tile = (
-    <button type="button" className="library-option library-tile" onClick={onClick}>
+    <button type="button" className="library-option library-tile" onClick={onClick} {...(task && dragTask(task))}>
       {icon}
       <span className="library-option-name">{label}</span>
     </button>
@@ -279,6 +304,7 @@ export function AddTaskButton() {
                       description={taskRowText(task).description}
                       icon={<NodeIcon icon={task.icon} run={task.run} />}
                       onClick={() => add(task)}
+                      task={task}
                     />
                   ))}
                   <Tile

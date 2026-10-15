@@ -87,7 +87,6 @@ export function useTaskMapInteraction({
   const autoCollapse = useNodeView((state) => state.autoCollapse)
   // Decided when a zoom ends, so nodes do not flicker during the gesture.
   const collapseAll = autoCollapse && map.view.zoom < AUTO_COLLAPSE_ZOOM
-  const previousCount = useRef(map.tasks.length)
   const nodes = useMemo(
     () =>
       flowNodes(map, catalog, search, rows, collapseAll).map((node) => ({
@@ -268,11 +267,6 @@ export function useTaskMapInteraction({
     }
     clearSelection()
   }
-  useEffect(() => {
-    const added = map.tasks.length > previousCount.current
-    previousCount.current = map.tasks.length
-    if (added && flow) void flow.fitView(fitOptions)
-  }, [map.tasks.length, flow])
   const fittedLayout = useRef(0)
   useEffect(() => {
     if (!flow || fittedLayout.current === layoutRevision) return

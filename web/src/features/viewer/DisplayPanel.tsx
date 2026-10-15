@@ -127,7 +127,7 @@ export function CursorSessionWatcher({ job }: { job: Job | undefined }) {
   useEffect(() => {
     if (!id) return
     revealPanel("display")
-    useLayout.getState().viewLog(id)
+    useLayout.getState().selectLog(id)
     // Before the app's own shortcuts (capture), so a key IRAF takes stays IRAF's.
     window.addEventListener("keydown", cursorKeydown, true)
     return () => {

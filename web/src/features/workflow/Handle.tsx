@@ -104,10 +104,7 @@ export function Handle(props: ComponentProps<typeof FlowHandle>) {
           </ConnectionHandleAnchor>
         }
       />
-      <TooltipContent
-        className="pointer-events-none"
-        side={props.type === "target" ? "left" : "right"}
-      >
+      <TooltipContent side={props.type === "target" ? "left" : "right"}>
         <span className="connection-port-feedback" role="status">
           {!feedback?.valid && feedback?.message}
         </span>

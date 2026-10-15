@@ -1,4 +1,5 @@
-import { nodeLayout } from "@/lib/node-interaction"
+import { centeredAt, nodeLayout } from "@/lib/node-interaction"
+import { useLayout } from "@/features/workbench/layout-store"
 import { autoLayoutMap } from "@/lib/subflow"
 import { isValueNode } from "@/lib/values"
 import { nextValueLabel } from "@/lib/value-take"
@@ -34,16 +35,19 @@ export function useTaskEditing({
   rows: Frame[]
   task: Instance | undefined
 }) {
-  function add(name: string, ids: string[]) {
+  function add(name: string, ids: string[], position?: { x: number; y: number }) {
     if (!catalog) return false
     const s = catalog.tasks.find((s) => s.name === name)!
-    const t = makeInstance(s, catalog, prefs)
+    let t = makeInstance(s, catalog, prefs)
+    if (position) t.position = position
     // Every 값 node is one kind, whatever its 가져오기: titled and numbered together.
     if (isValueNode(s)) t.label = nextValueLabel(map, catalog)
     else {
       const count = map.tasks.filter((task) => task.task === name).length
       if (count) t.label = (s.taskName || name) + " " + (count + 1)
     }
+    const center = !position && useLayout.getState().visibleCenter?.()
+    if (center) t = centeredAt(map, t, catalog, center, rows)
     update((m) => {
       let next = addTask(m, t)
       if (ids.length && s.inputs.length)
@@ -56,7 +60,7 @@ export function useTaskEditing({
         )
       return next
     }, `${t.label} 추가`)
-    return true
+    return t.id
   }
   function remove(id: string) {
     update(

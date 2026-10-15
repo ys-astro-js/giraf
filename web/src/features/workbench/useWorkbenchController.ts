@@ -239,7 +239,6 @@ export function useWorkbenchController() {
       if (!editor[type](steps)) return
       queueSave()
       setTaskError("")
-      setLayoutRevision((revision) => revision + 1)
     },
     [editor, queueSave, setTaskError]
   )
@@ -495,8 +494,11 @@ export function useWorkbenchController() {
     task,
   })
   const { layoutBusy } = taskEditing
-  function add(name: string, ids: string[] = []) {
-    if (!taskEditing.add(name, ids)) return
+  function add(name: string, ids: string[] = [], position?: { x: number; y: number }) {
+    const id = taskEditing.add(name, ids, position)
+    if (!id) return
+    // A dropped node is already where the pointer is.
+    if (!position) layout().panToNode(id)
     setAddOpen(false)
     layout().setInspectorTab("input")
     revealPanel("inspector")

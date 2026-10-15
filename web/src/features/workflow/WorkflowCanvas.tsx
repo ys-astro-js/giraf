@@ -2,6 +2,8 @@ import { useTaskMapInteraction } from "./useCanvasInteraction"
 import type { TaskMapViewProps } from "./types"
 import { WorkflowContext } from "./context"
 import { TaskNode } from "./TaskNode"
+import { PanToNode } from "./PanToNode"
+import { VisibleCenter } from "./VisibleCenter"
 import { GroupNode } from "./GroupNode"
 import { CompoundNode } from "./CompoundNode"
 import { SelectionArea } from "./SelectionArea"
@@ -72,6 +74,7 @@ import { setSubflowCollapsed, subflowColor } from "@/lib/subflow"
 import { WorkflowClickConnection } from "@/components/workflow-click-connection"
 import { type WorkflowNode } from "@/lib/workflow-flow"
 import { clippedTitle } from "@/lib/clipped-title"
+import { taskDragType } from "@/lib/task-drag"
 import {
   bypassEdges,
   helperLevel,
@@ -104,6 +107,7 @@ export function TaskMapView({
   layoutRevision = 0,
   revealNode,
   revealConnection,
+  panNode,
   onAutoLayout,
   onStraightEdges,
   layoutBusy = false,
@@ -124,6 +128,7 @@ export function TaskMapView({
   runDisabled,
   open,
   add,
+  drop,
 }: TaskMapViewProps) {
   const [hoveredNode, setHoveredNode] = useState("")
   const values = useValueResults(map, catalog, rows)
@@ -269,6 +274,18 @@ export function TaskMapView({
           }
           setDragPreview({})
         }
+      }}
+      // A task dragged from the add-task list lands where it is dropped.
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(taskDragType)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = "copy"
+      }}
+      onDrop={(e) => {
+        const name = e.dataTransfer.getData(taskDragType)
+        if (!name) return
+        e.preventDefault()
+        drop(name, flow?.screenToFlowPosition({ x: e.clientX, y: e.clientY }))
       }}
     >
       <h1 className="sr-only">워크플로우</h1>
@@ -484,6 +501,8 @@ export function TaskMapView({
                 maskColor="var(--workflow-minimap-mask)"
               />
               <WorkflowClickConnection />
+              <PanToNode request={panNode} />
+              <VisibleCenter />
               {/* Navigation and the display window can go to the menu when
                   space runs short; arranging and grouping stay. */}
               <WindowToolbar>

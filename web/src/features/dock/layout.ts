@@ -81,10 +81,17 @@ export const columnShown = (dock: DockviewApi) => !!inColumn(dock)
 
 /**
  * Hides or shows the column; the canvas takes its space meanwhile, and it
- * comes back at its width.
+ * comes back at its width with its groups at their heights.
+ *
+ * A hidden group remembers its height, and the space it gives up goes to the
+ * lowest group still shown. Hidden top to bottom, the lowest one remembers
+ * the whole column, so they show again bottom to top: each one above takes
+ * its own height back from it.
  */
 export function showColumn(dock: DockviewApi, shown: boolean, width: number) {
-  for (const group of columnGroups(dock))
+  const groups = columnGroups(dock)
+  if (shown) groups.reverse()
+  for (const group of groups)
     if (group.api.isVisible !== shown) group.api.setVisible(shown)
   if (shown) fitColumn(dock, width)
 }

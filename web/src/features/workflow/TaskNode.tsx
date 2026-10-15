@@ -17,11 +17,6 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NodeIcon } from "@/components/node-icon"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { runState, stateLabel } from "@/lib/task-map"
 import { fieldIssues } from "@/lib/diagnostics"
 import { assigned } from "@/lib/task-map/inputs"
@@ -51,6 +46,7 @@ import { firstOutputName, groupInputs, inputFiles, splitOf, stem } from "@/lib/s
 import { groupedValue } from "@/lib/group-values"
 import { PairToken, SelectToken, SplitToken, TokenIcon } from "@/components/split-token"
 import { GroupStrip, GroupValues } from "./SplitRows"
+import { RowTooltip } from "./RowTooltip"
 
 import { WorkflowContext } from "./context"
 import { Handle } from "./Handle"
@@ -572,6 +568,15 @@ export const TaskNode = memo(function TaskNode({
                       })()
                   : null
                 const total = (splitting || chosen) && !pending && !perGroup ? inputFiles(map, task, slot.role, rows).ids.length : undefined
+                const rowValue = total !== undefined ? files(total) : <>
+                  {fromFiles && (
+                    <File
+                      className="node-input-file"
+                      aria-hidden="true"
+                    />
+                  )}
+                  {shown}
+                </>
                 return (
                   <div
                     className="node-input-row"
@@ -585,47 +590,35 @@ export const TaskNode = memo(function TaskNode({
                     data-severity={issues.get(slot.name)?.severity}
                   >
                     {inputHandle(slot)}
-                    <Tooltip disabled={connecting}>
-                      <TooltipTrigger
-                        render={<button />}
-                        className="node-input nodrag nopan"
-                        data-input-role={slot.name}
-                        aria-label={`${task.label} ${slot.role} 설정`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (clickStart) {
-                            if (enabled && isConnectable)
-                              inputHandles.current.get(slot.name)?.click()
-                          } else {
-                            choose(id)
-                            onInput?.(id, slot.name)
-                          }
-                        }}
-                      >
-                        <span className="node-input-label">{key}</span>
-                        {token}
-                        <span className="node-input-source">
-                          {perGroup ?? (total !== undefined ? files(total) : <>
-                            {fromFiles && (
-                              <File
-                                className="node-input-file"
-                                aria-hidden="true"
-                              />
-                            )}
-                            {shown}
-                          </>)}
-                        </span>
-                        {!enabled && (
-                          <span className="node-input-flag">비활성</span>
-                        )}
-                      </TooltipTrigger>
-                      {/* The row's tooltip also carries its key and value in full, in case either is cut off. */}
-                      <TooltipContent className="flex-col items-start">
-                        {about !== key && <span>{key}</span>}
-                        <span>{about}</span>
-                        <span>{shown}</span>
-                      </TooltipContent>
-                    </Tooltip>
+                    <RowTooltip
+                      name={slot.role}
+                      about={about}
+                      value={perGroup ? undefined : rowValue}
+                      disabled={connecting}
+                      render={<button />}
+                      className="node-input nodrag nopan"
+                      data-input-role={slot.name}
+                      aria-label={`${task.label} ${slot.role} 설정`}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (clickStart) {
+                          if (enabled && isConnectable)
+                            inputHandles.current.get(slot.name)?.click()
+                        } else {
+                          choose(id)
+                          onInput?.(id, slot.name)
+                        }
+                      }}
+                    >
+                      <span className="node-input-label" data-row-name>{key}</span>
+                      {token}
+                      <span className="node-input-source" data-row-value>
+                        {perGroup ?? rowValue}
+                      </span>
+                      {!enabled && (
+                        <span className="node-input-flag">비활성</span>
+                      )}
+                    </RowTooltip>
                   </div>
                 )
               })
@@ -650,7 +643,14 @@ export const TaskNode = memo(function TaskNode({
                   data-severity={row.pset ? undefined : issues.get(row.key)?.severity}
                 >
                   {paramHandle(row)}
-                  <button
+                  <RowTooltip
+                    name={name}
+                    about={entries.get(row.key)?.param.prompt}
+                    value={grouped?.cells ? undefined : <>{grouped?.kind && <TokenIcon icon={grouped.kind} />}{grouped?.formula ?? text}</>}
+                    from={grouped?.formula === undefined ? from : undefined}
+                    mono
+                    disabled={connecting}
+                    render={<button />}
                     className="node-input node-param nodrag nopan"
                     aria-label={`${task.label} ${row.key} 설정`}
                     onClick={(e) => {
@@ -670,16 +670,13 @@ export const TaskNode = memo(function TaskNode({
                       }
                     }}
                   >
-                    <span className="node-param-name" data-full-text={name}>{name}</span>
-                    <span
-                      className="node-param-value"
-                      data-full-text={grouped?.formula ?? (from ? `${text}\n${from}에서 받은 값` : text)}
-                    >
+                    <span className="node-param-name" data-row-name>{name}</span>
+                    <span className="node-param-value" data-row-value>
                       {grouped?.cells && columns
                         ? <GroupValues values={grouped.cells} icon={grouped.kind} />
                         : <>{grouped?.kind && <TokenIcon icon={grouped.kind} />}{grouped?.cells ? `${grouped.cells[0]} …` : grouped?.formula !== undefined ? grouped.text : text}</>}
                     </span>
-                  </button>
+                  </RowTooltip>
                   {offered && valueHandle(offered.handleId, offered.name)}
                 </div>
                 )

@@ -327,45 +327,24 @@ export function keyChoices(ids: string[], frames: Map<string, Frame>, chosen: st
   return [...choices.filter((c) => c.values.length > 1), ...choices.filter((c) => c.values.length <= 1)]
 }
 
-/** A keyword a menu lists: `aliases` sort the files into the same groups, so choosing the row chooses `key`. */
-export type KeyRow = { key: string; aliases: string[]; values: string[] }
+/** A keyword a menu lists, with its distinct values. */
+export type KeyRow = { key: string; values: string[] }
 
 /**
- * The keyword rows a menu lists, read from the files: a keyword with one
- * value, or a different value for every file (a group per file), is left out
- * unless chosen; keywords that group the files the same way share a row.
- * `hidden` says some keyword the files hold is not listed.
+ * The keyword rows a menu lists, read from the files: a keyword whose value
+ * is the same in every file is left out unless chosen. `hidden` says some
+ * keyword the files hold is not listed.
  */
 export function keyRows(ids: string[], frames: Map<string, Frame>, chosen: string[] = []): { rows: KeyRow[]; hidden: boolean } {
   const choices = keyChoices(ids, frames, chosen)
-  const rows: (KeyRow & { shape: string })[] = []
-  for (const { key, values } of choices) {
-    // Which group each file falls in, numbered as the groups first appear.
-    const seen: number[] = []
-    const shape = ids.map((id) => {
-      const index = values.findIndex((v) => sameValue(v, passValue(String(frames.get(id)?.headers?.[key] ?? ""))))
-      if (!seen.includes(index)) seen.push(index)
-      return seen.indexOf(index)
-    }).join(",")
-    const picked = chosen.includes(key)
-    if (!picked && (values.length < 2 || seen.length === ids.length)) continue
-    const same = rows.find((r) => r.shape === shape && !(picked && chosen.includes(r.key)))
-    if (!same) rows.push({ key, aliases: [], values, shape })
-    else if (picked) {
-      // A chosen keyword names its row.
-      same.aliases = [same.key, ...same.aliases]
-      same.key = key
-      same.values = values
-    } else same.aliases.push(key)
-  }
-  const listed = rows.reduce((n, r) => n + 1 + r.aliases.length, 0)
-  return { rows: rows.map(({ key, aliases, values }) => ({ key, aliases, values })), hidden: listed < choices.length }
+  const rows = choices.filter(({ key, values }) => values.length > 1 || chosen.includes(key))
+  return { rows, hidden: rows.length < choices.length }
 }
 
 /** Every keyword the files hold whose name has `query` in it, each on its own row. */
 export function searchKeys(ids: string[], frames: Map<string, Frame>, query: string): KeyRow[] {
   const q = query.trim().toUpperCase()
-  return keyChoices(ids, frames).filter((c) => c.key.toUpperCase().includes(q)).map(({ key, values }) => ({ key, aliases: [], values }))
+  return keyChoices(ids, frames).filter((c) => c.key.toUpperCase().includes(q))
 }
 
 /** Toggle a part: keys keep the order they were chosen in, then a chunk size or one group per file. */
