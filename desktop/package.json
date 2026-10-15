@@ -99,6 +99,9 @@
       ],
       "icon": "assets/icon.png"
     },
+    "releaseInfo": {
+      "releaseNotesFile": "../RELEASE_NOTES.md"
+    },
     "publish": [
       {
         "provider": "generic",

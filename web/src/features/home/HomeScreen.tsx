@@ -2,7 +2,8 @@ import { useQuery } from "@tanstack/react-query"
 import { CircleCheck, CircleX, Folder, FolderOpen, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ToolbarCluster } from "@/components/toolbar"
+import { ToolbarCluster, ToolbarSpacer } from "@/components/toolbar"
+import { UpdateButton } from "@/components/update-button"
 import { SettingsButton } from "@/features/library/SettingsPopover"
 import { useWorkbench } from "@/features/workbench/context"
 import { apiQueryOptions } from "@/lib/queries"
@@ -34,6 +35,8 @@ export function HomeScreen() {
         <div className="toolbar-center" />
         <div className="toolbar-end">
           <ToolbarCluster className="toolbar-trailing" edge="end">
+            <UpdateButton />
+            <ToolbarSpacer />
             <SettingsButton />
           </ToolbarCluster>
         </div>

@@ -1,5 +1,6 @@
 import { installDesktopShell } from "@/lib/desktop-shell"
 import { installRuntimeDiagnostics } from "@/lib/diagnostics"
+import { installFakeUpdate } from "@/lib/fake-update"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { QueryClientProvider } from "@tanstack/react-query"
@@ -11,6 +12,7 @@ import App from "./App.tsx"
 import { ThemeProvider } from "@/components/theme-provider.tsx"
 
 installDesktopShell(document.documentElement)
+if (import.meta.env.DEV) installFakeUpdate()
 
 const detachDiagnostics = installRuntimeDiagnostics(window)
 const queryClient = createQueryClient()

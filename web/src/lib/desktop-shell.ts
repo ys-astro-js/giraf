@@ -2,8 +2,12 @@
 // traffic lights on the left on macOS, the controls overlay on the right on
 // Windows and Linux (desktop/main.cjs, styles/workbench/toolbar.css).
 
+import type { UpdateBridge } from "@/lib/app-update"
+
 type DesktopShell = {
-  setTitleBarColors: (color: string, symbolColor: string) => void
+  /** Windows and Linux only, where the controls overlay the toolbar. */
+  setTitleBarColors?: (color: string, symbolColor: string) => void
+  update?: UpdateBridge
 }
 
 declare global {
@@ -15,8 +19,8 @@ declare global {
 export function installDesktopShell(root: HTMLElement) {
   if (!navigator.userAgent.includes("Electron")) return
   root.dataset.shell = "desktop"
-  const shell = window.girafShell
-  if (!shell) return
+  const setTitleBarColors = window.girafShell?.setTitleBarColors
+  if (!setTitleBarColors) return
   root.dataset.windowControls = "overlay"
   // Electron only parses sRGB colors; the theme is in oklch.
   const context = document.createElement("canvas").getContext("2d", { willReadFrequently: true })
@@ -28,7 +32,7 @@ export function installDesktopShell(root: HTMLElement) {
     const [r, g, b] = context.getImageData(0, 0, 1, 1).data
     return `rgb(${r}, ${g}, ${b})`
   }
-  const sync = () => shell.setTitleBarColors(rgb("--background"), rgb("--foreground"))
+  const sync = () => setTitleBarColors(rgb("--background"), rgb("--foreground"))
   // The theme provider switches the light/dark class on the root.
   new MutationObserver(sync).observe(root, { attributes: true, attributeFilter: ["class"] })
   sync()

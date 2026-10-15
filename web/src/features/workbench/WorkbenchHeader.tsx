@@ -7,6 +7,8 @@ import { useWorkbench } from "./context"
 import { toggleColumn, toggleTray, useDock } from "@/features/dock/store"
 import { AddTaskButton } from "@/features/library/TaskPopover"
 import { FilesButton } from "@/features/library/FilesPopover"
+import { ToolbarSpacer } from "@/components/toolbar"
+import { UpdateButton } from "@/components/update-button"
 import { SettingsButton } from "@/features/library/SettingsPopover"
 
 export function WorkbenchHeader() {
@@ -37,7 +39,13 @@ export function WorkbenchHeader() {
           onNavigate={w.navigateToDiagnostic}
         />
       }
-      trailing={<SettingsButton />}
+      trailing={
+        <>
+          <UpdateButton />
+          <ToolbarSpacer />
+          <SettingsButton />
+        </>
+      }
       workflowSelector={
         <WorkflowSelector
           document={w.prefs._document}

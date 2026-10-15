@@ -211,31 +211,70 @@ if (!MAC) {
 /**
  * Update in place from the latest GitHub release (desktop/package.json
  * build.publish): download in the background, install on restart or quit.
+ * The page shows the state (web/src/lib/app-update.ts) and asks for checks
+ * and the restart over IPC.
  */
-function checkForUpdates() {
-  if (!app.isPackaged) return
-  const { autoUpdater } = require("electron-updater")
-  // Offline, no release yet or an unsigned Mac build: try again next launch.
-  autoUpdater.on("error", () => {})
-  autoUpdater.on("update-downloaded", async ({ version }) => {
-    const { response } = await dialog.showMessageBox({
-      type: "info",
-      buttons: ["지금 재시작", "나중에"],
-      defaultId: 0,
-      cancelId: 1,
-      message: `GIRAF ${version}을 설치할 준비가 되었습니다.`,
-      detail: "나중에를 고르면 앱을 끝낼 때 설치합니다.",
-    })
-    if (response === 0) autoUpdater.quitAndInstall()
-  })
-  autoUpdater.checkForUpdates().catch(() => {})
+let update = { state: "idle", current: app.getVersion() }
+let manualCheck = false
+let updater = null
+
+function setUpdate(next) {
+  update = { state: next.state, current: app.getVersion(), ...next }
+  for (const win of BrowserWindow.getAllWindows()) win.webContents.send("update-state", update)
 }
+
+/** UpdateInfo.releaseNotes is a string, or a list per version with full changelogs. */
+function releaseNotes({ version, releaseNotes: notes }) {
+  if (!Array.isArray(notes)) return notes || undefined
+  const own = notes.find((entry) => entry.version === version)
+  return (own ? own.note : notes.map((entry) => entry.note).join("\n\n")) || undefined
+}
+
+function autoUpdater() {
+  if (updater) return updater
+  updater = require("electron-updater").autoUpdater
+  updater.on("checking-for-update", () => setUpdate({ state: "checking" }))
+  updater.on("update-available", (info) =>
+    setUpdate({ state: "downloading", version: info.version, notes: releaseNotes(info), percent: 0 })
+  )
+  updater.on("download-progress", ({ percent }) => {
+    if (update.state === "downloading") setUpdate({ ...update, percent })
+  })
+  updater.on("update-downloaded", (info) =>
+    setUpdate({ state: "downloaded", version: info.version, notes: releaseNotes(info) || update.notes })
+  )
+  updater.on("update-not-available", () => setUpdate({ state: manualCheck ? "not-available" : "idle" }))
+  // Offline, no release yet or an unsigned Mac build: only a check the user
+  // asked for says so; a background one tries again next launch.
+  updater.on("error", () => {
+    if (update.state !== "downloaded") setUpdate({ state: manualCheck ? "error" : "idle" })
+  })
+  return updater
+}
+
+async function checkForUpdates(manual) {
+  if (["checking", "downloading", "downloaded"].includes(update.state)) return update
+  manualCheck = manual
+  // Only a packaged app has a release feed to compare against.
+  if (!app.isPackaged) {
+    if (manual) setUpdate({ state: "error" })
+    return update
+  }
+  await autoUpdater().checkForUpdates().catch(() => {})
+  return update
+}
+
+ipcMain.handle("update-get", () => update)
+ipcMain.handle("update-check", () => checkForUpdates(true))
+ipcMain.on("update-install", () => {
+  if (update.state === "downloaded") autoUpdater().quitAndInstall()
+})
 
 app.whenReady().then(async () => {
   try {
     const url = await startBackend()
     createWindow(url)
-    checkForUpdates()
+    checkForUpdates(false)
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow(url)
     })

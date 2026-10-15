@@ -1,6 +1,6 @@
 import { useId } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { Settings2 } from "lucide-react"
+import { LoaderCircle, Settings2 } from "lucide-react"
 import {
   Popover,
   PopoverContent,
@@ -8,11 +8,14 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Separator } from "@/components/ui/separator"
 import { Choice } from "@/components/workbench-controls"
 import { ToolbarButton, ToolbarGroup } from "@/components/toolbar"
 import { useTheme } from "@/components/theme-provider"
 import { useWorkbench } from "@/features/workbench/context"
+import { checkForUpdate, useAppUpdate, type UpdateState } from "@/lib/app-update"
 import { apiQueryOptions } from "@/lib/queries"
 import { api, type Home } from "@/lib/workbench"
 
@@ -27,7 +30,10 @@ const STARTUP = [
   { value: "resume", label: "마지막 작업 이어서" },
 ]
 
-/** App preferences, in one place: the theme, the execution engine and the startup screen. */
+/**
+ * App preferences, in one place: the theme, the execution engine and the
+ * startup screen; in the desktop app also its version and update check.
+ */
 export function SettingsButton() {
   const id = useId()
   const { theme, setTheme } = useTheme()
@@ -87,8 +93,51 @@ export function SettingsButton() {
               />
             </Field>
           </FieldGroup>
+          <AppVersion />
         </PopoverContent>
       </Popover>
     </ToolbarGroup>
   )
+}
+
+/** The desktop app's version; restarting into an update is the toolbar's. */
+function AppVersion() {
+  const update = useAppUpdate()
+  if (!update) return null
+  return (
+    <>
+      <Separator />
+      <div className="flex min-h-8 items-center justify-between gap-3">
+        <span>GIRAF {update.current}</span>
+        <UpdateStatus update={update} />
+      </div>
+    </>
+  )
+}
+
+function UpdateStatus({ update }: { update: UpdateState }) {
+  switch (update.state) {
+    case "idle":
+      return (
+        <Button variant="outline" size="sm" onClick={checkForUpdate}>
+          업데이트 확인
+        </Button>
+      )
+    case "checking":
+      return (
+        <LoaderCircle
+          role="status"
+          aria-label="업데이트 확인 중"
+          className="size-4 text-muted-foreground motion-safe:animate-spin"
+        />
+      )
+    case "not-available":
+      return <span className="text-muted-foreground">최신 버전</span>
+    case "error":
+      return <span className="truncate text-muted-foreground">확인하지 못했습니다</span>
+    case "downloading":
+      return <span className="text-muted-foreground">{update.version} 받는 중</span>
+    case "downloaded":
+      return <span className="text-muted-foreground">{update.version} 준비됨</span>
+  }
 }
