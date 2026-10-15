@@ -181,21 +181,27 @@ test("menus list each keyword that groups the files on its own row", () => {
   ]
   const frames = framesOf(files)
   const ids = files.map((f) => f.id)
-  // OBJECT has one value and DATE-OBS a value for every file: neither is listed.
+  // OBJECT has one value in every file: it is not listed.
   expect(keyRows(ids, frames)).toEqual({
     rows: [
       { key: "SUBSET", values: ["B", "V"] },
       { key: "FILTERS", values: ["b", "v"] },
       { key: "EXPTIME", values: ["15", "30"] },
       { key: "EXPOSURE", values: ["15", "30"] },
+      { key: "DATE-OBS", values: ["1", "2", "3", "4"] },
     ],
     hidden: true,
   })
   // A chosen keyword stays listed.
-  expect(keyRows(ids, frames, ["DATE-OBS"]).rows.map((r) => r.key)).toEqual(["SUBSET", "FILTERS", "EXPTIME", "EXPOSURE", "DATE-OBS"])
+  expect(keyRows(ids, frames, ["OBJECT"]).rows.map((r) => r.key)).toEqual(["SUBSET", "FILTERS", "EXPTIME", "EXPOSURE", "DATE-OBS", "OBJECT"])
   // Search covers every keyword the files hold.
   expect(searchKeys(ids, frames, "obj")).toEqual([{ key: "OBJECT", values: ["M67"] }])
   expect(searchKeys(ids, frames, "EXP").map((r) => r.key)).toEqual(["EXPTIME", "EXPOSURE"])
+})
+
+test("a keyword with a different value in each file is listed", () => {
+  const files = [frame("b", { SUBSET: "B", IMAGETYP: "LIGHT" }), frame("v", { SUBSET: "V", IMAGETYP: "LIGHT" })]
+  expect(keyRows(files.map((f) => f.id), framesOf(files)).rows.map((r) => r.key)).toEqual(["SUBSET"])
 })
 
 test("nothing hidden hides the search", () => {

@@ -331,17 +331,13 @@ export function keyChoices(ids: string[], frames: Map<string, Frame>, chosen: st
 export type KeyRow = { key: string; values: string[] }
 
 /**
- * The keyword rows a menu lists, read from the files: a keyword with one
- * value, or a different value for every file (a group per file), is left out
- * unless chosen. `hidden` says some keyword the files hold is not listed.
+ * The keyword rows a menu lists, read from the files: a keyword whose value
+ * is the same in every file is left out unless chosen. `hidden` says some
+ * keyword the files hold is not listed.
  */
 export function keyRows(ids: string[], frames: Map<string, Frame>, chosen: string[] = []): { rows: KeyRow[]; hidden: boolean } {
   const choices = keyChoices(ids, frames, chosen)
-  const rows = choices.filter(({ key, values }) => {
-    if (chosen.includes(key)) return true
-    const groups = new Set(ids.map((id) => values.findIndex((v) => sameValue(v, passValue(String(frames.get(id)?.headers?.[key] ?? ""))))))
-    return values.length > 1 && groups.size < ids.length
-  })
+  const rows = choices.filter(({ key, values }) => values.length > 1 || chosen.includes(key))
   return { rows, hidden: rows.length < choices.length }
 }
 
