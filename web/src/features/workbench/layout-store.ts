@@ -12,6 +12,8 @@ type LayoutState = {
   parameterRequest: ParameterRequest | null
   revealedNode?: Request
   revealedConnection?: Request
+  /** A new node to bring into view, panning only. */
+  pannedNode?: Request
   logRequest: Request | null
   /** Counts log requests, so the tray shows the log again for each. */
   logRevision: number
@@ -21,8 +23,11 @@ type LayoutState = {
   clearInputRequest: () => void
   revealNode: (id: string) => void
   revealConnection: (id: string) => void
+  panToNode: (id: string) => void
   /** Opens the run tray on a job's log. */
   viewLog: (id: string) => void
+  /** Selects a job's log in the run tray, leaving the tray open or closed. */
+  selectLog: (id: string) => void
   clearLog: () => void
 }
 
@@ -67,12 +72,16 @@ export const useLayout = create<LayoutState>()((set) => ({
     set((state) => ({
       revealedConnection: next(state.revealedConnection, id),
     })),
+  panToNode: (id) =>
+    set((state) => ({ pannedNode: next(state.pannedNode, id) })),
   viewLog: (id) => {
+    useLayout.getState().selectLog(id)
+    toggleTray(true)
+  },
+  selectLog: (id) =>
     set((state) => ({
       logRequest: next(state.logRequest, id),
       logRevision: state.logRevision + 1,
-    }))
-    toggleTray(true)
-  },
+    })),
   clearLog: () => set({ logRequest: null }),
 }))

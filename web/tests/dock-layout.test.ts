@@ -225,3 +225,29 @@ test("the column hides, giving the canvas its space, and comes back at its width
     "viewer",
   ])
 })
+
+test("the column comes back with its groups at their heights", () => {
+  dock.addPanel({
+    id: "graphics",
+    component: "graphics",
+    title: "graphics",
+    position: dockPosition(dock.api, "graphics"),
+  })
+  const [top, , bottom] = column()
+  top.api.setSize({ height: 150 })
+  bottom.api.setSize({ height: 250 })
+  fitColumn(dock.api, 500)
+  const heights = () => column().map((group) => group.height)
+  expect(heights()).toEqual([150, 400, 250])
+  showColumn(dock.api, false, 500)
+  showColumn(dock.api, true, 500)
+  expect(heights()).toEqual([150, 400, 250])
+  expect(column()[0].width).toBe(500)
+  // Saved while hidden and restored, as on the next launch.
+  showColumn(dock.api, false, 500)
+  dock.api.fromJSON(dock.api.toJSON())
+  dock.layout(1200, 800)
+  showColumn(dock.api, true, 500)
+  expect(heights()).toEqual([150, 400, 250])
+  expect(column()[0].width).toBe(500)
+})

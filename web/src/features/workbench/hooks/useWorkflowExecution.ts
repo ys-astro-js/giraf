@@ -15,7 +15,6 @@ import {
   type Job,
 } from "@/lib/workbench"
 import { workflowRequest, type TaskMap } from "@/lib/task-map"
-import { toggleTray } from "@/features/dock/store"
 import type * as React from "react"
 
 const workflowOptions = apiQueryOptions<WorkflowRun | null>("workflow")
@@ -132,10 +131,8 @@ export function useWorkflowExecution({
       followed.current = step
       setSelectedJob(step)
     }
-    if (workflow.currentJob && workflow.state === "waiting") {
+    if (workflow.currentJob && workflow.state === "waiting")
       setSelectedJob(workflow.currentJob.id)
-      toggleTray(true)
-    }
   }, [
     ready,
     workflow,
@@ -181,7 +178,6 @@ export function useWorkflowExecution({
         followed.current = first.id
         setSelectedJob(first.id)
       }
-      toggleTray(true)
     } catch (e) {
       setError((e as Error).message)
     } finally {

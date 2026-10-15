@@ -56,7 +56,7 @@ export function useTaskEditing({
         )
       return next
     }, `${t.label} 추가`)
-    return true
+    return t.id
   }
   function remove(id: string) {
     update(

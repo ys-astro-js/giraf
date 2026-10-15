@@ -381,6 +381,23 @@ export function flowViewport(view: TaskMap["view"]) {
   }
 }
 
+/** The flow point to center on so `rect` shows at the current zoom, or null when it is already in view. */
+export function panTarget(
+  rect: { x: number; y: number; width: number; height: number },
+  viewport: { x: number; y: number; zoom: number },
+  size: { width: number; height: number }
+) {
+  const left = -viewport.x / viewport.zoom
+  const top = -viewport.y / viewport.zoom
+  const inView =
+    rect.x >= left &&
+    rect.y >= top &&
+    rect.x + rect.width <= left + size.width / viewport.zoom &&
+    rect.y + rect.height <= top + size.height / viewport.zoom
+  if (inView) return null
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+}
+
 /** A shared output can carry several destination colors; retain each rather than choosing an arbitrary one. */
 export function flowPortColors(edges: Edge[], nodeId: string, type: "source" | "target", handle: string | null | undefined): string[] {
   return [...new Set(edges.filter(edge => edge[type] === nodeId &&

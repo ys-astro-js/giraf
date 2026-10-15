@@ -2,6 +2,7 @@ import { useTaskMapInteraction } from "./useCanvasInteraction"
 import type { TaskMapViewProps } from "./types"
 import { WorkflowContext } from "./context"
 import { TaskNode } from "./TaskNode"
+import { PanToNode } from "./PanToNode"
 import { GroupNode } from "./GroupNode"
 import { CompoundNode } from "./CompoundNode"
 import {
@@ -101,6 +102,7 @@ export function TaskMapView({
   layoutRevision = 0,
   revealNode,
   revealConnection,
+  panNode,
   onAutoLayout,
   onStraightEdges,
   layoutBusy = false,
@@ -465,6 +467,7 @@ export function TaskMapView({
                 maskColor="var(--workflow-minimap-mask)"
               />
               <WorkflowClickConnection />
+              <PanToNode request={panNode} />
               {/* Navigation and the display window can go to the menu when
                   space runs short; arranging and grouping stay. */}
               <WindowToolbar>

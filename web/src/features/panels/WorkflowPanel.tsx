@@ -10,6 +10,7 @@ export function WorkflowPanel() {
   const w = useWorkbench()
   const revealNode = useLayout((state) => state.revealedNode)
   const revealConnection = useLayout((state) => state.revealedConnection)
+  const panNode = useLayout((state) => state.pannedNode)
   const requestInput = useLayout((state) => state.requestInput)
   const requestParameter = useLayout((state) => state.requestParameter)
   const clearInputRequest = useLayout((state) => state.clearInputRequest)
@@ -43,6 +44,7 @@ export function WorkflowPanel() {
             layoutRevision={w.layoutRevision}
             revealNode={revealNode}
             revealConnection={revealConnection}
+            panNode={panNode}
             onAutoLayout={() => void w.autoLayout()}
             onStraightEdges={() => void w.autoLayout(true)}
             layoutBusy={w.layoutBusy}

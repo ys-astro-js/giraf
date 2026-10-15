@@ -5,6 +5,7 @@ export type TaskMapViewProps = {
   search?: string
   onSearch?: (value: string) => void
   revealNode?: { id: string; revision: number }
+  panNode?: { id: string; revision: number }
   layoutRevision?: number
   onAutoLayout?: () => void
   onStraightEdges?: () => void

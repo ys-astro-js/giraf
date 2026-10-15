@@ -8,7 +8,6 @@ import { useRef, useState } from "react"
 import { api, type Catalog, type Workspace, type Job } from "@/lib/workbench"
 import { payloadFor, type TaskMap } from "@/lib/task-map"
 import { valueRequest, type ValueResponse, type ValueScalar } from "@/lib/values"
-import { toggleTray } from "@/features/dock/store"
 import type * as React from "react"
 
 export function useTaskExecution({
@@ -49,7 +48,6 @@ export function useTaskExecution({
       setLastExecution({ kind: "job", id: j.id })
       setJobs((old) => [j, ...old])
       setSelectedJob(j.id)
-      toggleTray(true)
       publishJob(j.manifest?.instanceId || map.view.selected, j)
       setPlan(null)
       return j

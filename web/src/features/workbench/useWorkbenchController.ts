@@ -239,7 +239,6 @@ export function useWorkbenchController() {
       if (!editor[type](steps)) return
       queueSave()
       setTaskError("")
-      setLayoutRevision((revision) => revision + 1)
     },
     [editor, queueSave, setTaskError]
   )
@@ -496,7 +495,9 @@ export function useWorkbenchController() {
   })
   const { layoutBusy } = taskEditing
   function add(name: string, ids: string[] = []) {
-    if (!taskEditing.add(name, ids)) return
+    const id = taskEditing.add(name, ids)
+    if (!id) return
+    layout().panToNode(id)
     setAddOpen(false)
     layout().setInspectorTab("input")
     revealPanel("inspector")
