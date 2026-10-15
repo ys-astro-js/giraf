@@ -20,12 +20,16 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release: ${{ steps.check.outputs.release }}
+      version: ${{ steps.check.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - id: check
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Each release has a higher version, so installed apps see it as an
+          # update; 1.4 counts from run 17, its first release.
+          echo "version=1.4.$((GITHUB_RUN_NUMBER - 17))" >> "$GITHUB_OUTPUT"
           published="$(gh release view --repo "$GITHUB_REPOSITORY" --json body --jq .body 2>/dev/null || true)"
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || [ "$(cat RELEASE_NOTES.md)" != "$published" ]; then
             echo release=true >> "$GITHUB_OUTPUT"
@@ -61,8 +65,7 @@ jobs:
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libx11-dev
       - run: bun install --frozen-lockfile
-      # Each release has a higher version, so installed apps see it as an update.
-      - run: npm pkg set version=1.3.${{ github.run_number }}
+      - run: npm pkg set version=${{ needs.notes.outputs.version }}
       - run: node scripts/stage.mjs
       # macOS signs with the Developer ID certificate from a keychain set up
       # here (electron-builder's own temporary keychain fails to unlock on
@@ -138,7 +141,7 @@ jobs:
           path: desktop/build/giraf-linux.tar.gz
 
   windows:
-    needs: build
+    needs: [notes, build]
     runs-on: windows-latest
     defaults:
       run:
@@ -154,7 +157,7 @@ jobs:
           name: wsl-backend
           path: desktop/build/wsl
       - run: bun install --frozen-lockfile
-      - run: npm pkg set version=1.3.${{ github.run_number }}
+      - run: npm pkg set version=${{ needs.notes.outputs.version }}
       - run: bunx electron-builder --win --publish never
       - uses: actions/upload-artifact@v4
         with:
@@ -166,7 +169,7 @@ jobs:
             desktop/dist/*.blockmap
 
   release:
-    needs: [build, windows]
+    needs: [notes, build, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -178,12 +181,13 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.notes.outputs.version }}
         run: |
           # Installed apps update from latest*.yml in the latest release
           # (see desktop/package.json build.publish).
           test -f dist/latest.yml && test -f dist/latest-mac.yml && test -f dist/latest-linux.yml
-          gh release create "v1.3.${GITHUB_RUN_NUMBER}" dist/* \
+          gh release create "v${VERSION}" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "GIRAF 1.3.${GITHUB_RUN_NUMBER}" \
+            --title "GIRAF ${VERSION}" \
             --notes-file RELEASE_NOTES.md
