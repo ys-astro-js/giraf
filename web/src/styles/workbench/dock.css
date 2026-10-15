@@ -1,6 +1,8 @@
 /* The workbench is a toolbar row above dockable windows. */
 .dock-body {
   position: relative;
+  /* Floating windows stay under the app's toolbar, which runs over this. */
+  z-index: 0;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -119,6 +121,8 @@
    scrolls beneath shows through. Their empty space drags the window. */
 .dockview-theme-giraf .dv-groupview {
   position: relative;
+  /* What of the window lies under the app's toolbar (toolbar.css). */
+  --window-cover: 0px;
   --window-bar: color-mix(in oklch, var(--background) 50%, transparent);
   --window-control-surface: color-mix(in oklch, var(--background) 75%, transparent);
   --window-blur: blur(20px) saturate(1.6);
@@ -168,10 +172,13 @@
   .window-bar-blur {
   display: block;
 }
-/* The header floats over the window's content. */
+.dockview-theme-giraf .dv-groupview[data-top] {
+  --window-cover: var(--toolbar-height, 0px);
+}
+/* The header floats over the window's content, below the app's toolbar. */
 .dockview-theme-giraf .dv-groupview > .dv-tabs-and-actions-container {
   position: absolute;
-  inset: 0 0 auto;
+  inset: var(--window-cover) 0 auto;
   z-index: 2;
   flex-wrap: wrap;
   align-items: center;
@@ -195,11 +202,11 @@
   --window-footer: calc(var(--window-inset) * 2 + var(--window-toolbar));
 }
 .dock-window:not([data-canvas]) {
-  padding-top: var(--window-header);
+  padding-top: calc(var(--window-cover) + var(--window-header));
   padding-bottom: var(--window-footer);
 }
 .dock-window[data-canvas] .react-flow__panel.top {
-  margin-top: calc(var(--window-header) + var(--window-inset));
+  margin-top: calc(var(--window-cover) + var(--window-header) + var(--window-inset));
 }
 /* A canvas's own floating pieces keep to the bars' inset, above the bottom bar. */
 .dock-window[data-canvas] .react-flow__minimap {
@@ -632,7 +639,7 @@
    pointer wherever it shows no control. */
 .canvas-bar {
   position: absolute;
-  inset: 0 0 auto;
+  inset: var(--window-cover) 0 auto;
   z-index: 2;
   display: flex;
   align-items: center;

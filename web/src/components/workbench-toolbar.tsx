@@ -110,7 +110,13 @@ export function WorkbenchToolbar(props: Props) {
       : undefined
   const StatusIcon = status ? statusIcons[status.state] : LoaderCircle
   return (
-    <header className="workbench-toolbar" aria-label="도구 막대">
+    <header
+      className="workbench-toolbar"
+      aria-label="도구 막대"
+      // Over the canvas alone the bar is clear; with the column open it
+      // becomes a translucent surface over both.
+      data-clear={!props.columnOpen || undefined}
+    >
       <div className="toolbar-start">
         <ToolbarCluster className="toolbar-leading" edge="start">
           {props.leading}

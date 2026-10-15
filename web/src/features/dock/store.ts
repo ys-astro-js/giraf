@@ -172,11 +172,15 @@ export function syncDock() {
 /**
  * Marks layout facts on each window's element for its bars' styles:
  * `data-tabbed` while it holds several tabs, `data-floating` while it
- * floats, `data-maximized` while it fills the workbench.
+ * floats, `data-maximized` while it fills the workbench, `data-top` while
+ * it meets the workbench's top edge, under the app's toolbar.
  */
 function markWindows(dock: DockviewApi) {
   const maximized = useDock.getState().maximized
+  const top = document.querySelector(".dock-root")?.getBoundingClientRect().top
   for (const group of dock.groups) {
+    const rect = (floatingBox(group) ?? group.element).getBoundingClientRect()
+    mark(group.element, "top", top !== undefined && rect.top - top < 1)
     mark(group.element, "tabbed", group.panels.length > 1)
     mark(group.element, "floating", !isDocked(group))
     mark(group.element, "maximized", group.id === maximized)
