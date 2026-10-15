@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { LinearBlur } from "progressive-blur"
 import { cn } from "@/lib/utils"
 import { AnimatedCount } from "@/components/animated-count"
 import { TextFlow } from "@/components/text-flow"
@@ -117,6 +118,15 @@ export function WorkbenchToolbar(props: Props) {
       // becomes a translucent surface over both.
       data-clear={!props.columnOpen || undefined}
     >
+      {/* The desktop app's clear bar is its title bar: it blurs the canvas
+          beneath it, strongest at the window's edge (toolbar.css). */}
+      <LinearBlur
+        className="workbench-toolbar-blur"
+        side="top"
+        strength={24}
+        steps={6}
+        tint="color-mix(in oklch, var(--background) 50%, transparent)"
+      />
       <div className="toolbar-start">
         <ToolbarCluster className="toolbar-leading" edge="start">
           {props.leading}

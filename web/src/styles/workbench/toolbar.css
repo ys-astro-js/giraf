@@ -24,6 +24,15 @@
   backdrop-filter: blur(12px);
   transition: opacity 240ms ease-out;
 }
+/* Under the translucent background, so switching between the two only
+   fades that background over a steady blur. */
+.workbench-toolbar-blur {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  display: none;
+}
 @media (prefers-reduced-motion: reduce) {
   .workbench-toolbar::before { transition-duration: 100ms; }
 }
@@ -37,6 +46,21 @@
      windows meeting the top edge start below it (dock.css). */
   .giraf-app > .workbench-toolbar { margin-bottom: calc(-1 * var(--toolbar-height)); }
   .giraf-app > .workbench-toolbar[data-clear]::before { opacity: 0; }
+  /* The desktop app's title bar stays legible: clear, it blurs instead. */
+  :root[data-shell="desktop"] .giraf-app > .workbench-toolbar .workbench-toolbar-blur { display: block; }
+  /* Over the blur's tint (50% at the top edge, none at the bottom), the
+     background adds only what makes the two together the same 50% at every
+     height: 1 - 0.5 / (1 - tint). */
+  :root[data-shell="desktop"] .giraf-app > .workbench-toolbar::before {
+    background: linear-gradient(
+      to bottom,
+      color-mix(in oklch, var(--background) 0%, transparent) 0%,
+      color-mix(in oklch, var(--background) 20%, transparent) 25%,
+      color-mix(in oklch, var(--background) 33.3%, transparent) 50%,
+      color-mix(in oklch, var(--background) 42.9%, transparent) 75%,
+      color-mix(in oklch, var(--background) 50%, transparent) 100%
+    );
+  }
   /* Clear, the bar is no surface: its empty space lets the pointer through
      to the canvas. The desktop app keeps it as the title bar instead. */
   :root:not([data-shell="desktop"]) .giraf-app > .workbench-toolbar[data-clear] { pointer-events: none; }
