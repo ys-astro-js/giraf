@@ -66,7 +66,10 @@ import { useNodeView } from "./node-view"
 import { useValueResults } from "./useValueResults"
 import { diagnostics } from "@/lib/diagnostics"
 import { revealPanel, useWindowShown } from "@/features/dock/store"
-import { WindowToolbar } from "@/features/dock/WindowToolbar"
+import {
+  WindowOverflowMenu,
+  WindowToolbar,
+} from "@/features/dock/WindowToolbar"
 import { Blank } from "@/components/workbench-controls"
 import { Button } from "@/components/ui/button"
 import { SubflowEditor } from "@/components/subflow-editor"
@@ -503,59 +506,21 @@ export function TaskMapView({
               <WorkflowClickConnection />
               <PanToNode request={panNode} />
               <VisibleCenter />
-              {/* Navigation and the display window can go to the menu when
-                  space runs short; arranging and grouping stay. */}
-              <WindowToolbar>
-                <ToolbarGroup
-                  label="선택한 작업"
-                  hidden={!map.view.selected}
-                  overflow
-                >
+              {/* Canvas tools lead the bottom bar, search sits in the middle,
+                  zoom ends it. Navigation and the display window can go to
+                  the menu when space runs short; arranging and grouping stay. */}
+              <WindowToolbar placement="bottom">
+                <ToolbarGroup label="그룹">
                   <ToolbarButton
-                    label="선택한 작업 보기"
-                    onClick={revealSelected}
-                  >
-                    <LocateFixed />
-                  </ToolbarButton>
-                </ToolbarGroup>
-                <ToolbarSpacer />
-                <ToolbarGroup label="디스플레이" hidden={!hasDisplay} overflow>
-                  <ToolbarButton
-                    label="IRAF 디스플레이"
-                    aria-pressed={displayOpen}
-                    onClick={() => revealPanel("display")}
-                  >
-                    <Monitor />
-                  </ToolbarButton>
-                </ToolbarGroup>
-                <ToolbarSpacer />
-                <ToolbarGroup label="배치">
-                  <WorkflowEdgeStyleButton
-                    straight={map.view.edgeStyle === "smoothstep"}
-                    disabled={layoutBusy || !onStraightEdges}
+                    label="선택"
+                    aria-pressed={selectingGroup}
                     onClick={() => {
-                      if (map.view.edgeStyle === "smoothstep")
-                        update(
-                          (m) => ({
-                            ...m,
-                            view: { ...m.view, edgeStyle: "default" },
-                          }),
-                          "연결선 모양 변경"
-                        )
-                      else onStraightEdges?.()
+                      closeGroupEditor()
+                      setSelectingGroup((v) => !v)
+                      setSelectedEdges([])
                     }}
-                  />
-                  <ToolbarButton
-                    label={layoutBusy ? "배치 중…" : "자동 배치"}
-                    onClick={onAutoLayout}
-                    disabled={layoutBusy || !onAutoLayout}
-                    aria-busy={layoutBusy}
                   >
-                    {layoutBusy ? (
-                      <LoaderCircle className="animate-spin" />
-                    ) : (
-                      <BroomSparkles />
-                    )}
+                    <SquareDashedMousePointer />
                   </ToolbarButton>
                 </ToolbarGroup>
                 <ToolbarSpacer />
@@ -566,7 +531,7 @@ export function TaskMapView({
                     >
                       <ChevronsDownUp />
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent side="top" align="start">
                       <DropdownMenuItem
                         onClick={() =>
                           setCollapsed(
@@ -641,22 +606,61 @@ export function TaskMapView({
                   </DropdownMenu>
                 </ToolbarGroup>
                 <ToolbarSpacer />
-                <ToolbarGroup label="그룹">
-                  <ToolbarButton
-                    label="선택"
-                    aria-pressed={selectingGroup}
+                <ToolbarGroup label="배치">
+                  <WorkflowEdgeStyleButton
+                    straight={map.view.edgeStyle === "smoothstep"}
+                    disabled={layoutBusy || !onStraightEdges}
                     onClick={() => {
-                      closeGroupEditor()
-                      setSelectingGroup((v) => !v)
-                      setSelectedEdges([])
+                      if (map.view.edgeStyle === "smoothstep")
+                        update(
+                          (m) => ({
+                            ...m,
+                            view: { ...m.view, edgeStyle: "default" },
+                          }),
+                          "연결선 모양 변경"
+                        )
+                      else onStraightEdges?.()
                     }}
+                  />
+                  <ToolbarButton
+                    label={layoutBusy ? "배치 중…" : "자동 배치"}
+                    onClick={onAutoLayout}
+                    disabled={layoutBusy || !onAutoLayout}
+                    aria-busy={layoutBusy}
                   >
-                    <SquareDashedMousePointer />
+                    {layoutBusy ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <BroomSparkles />
+                    )}
                   </ToolbarButton>
                 </ToolbarGroup>
-              </WindowToolbar>
-              {/* Search leads the bottom bar, zoom ends it. */}
-              <WindowToolbar placement="bottom">
+                <ToolbarSpacer />
+                <ToolbarGroup label="디스플레이" hidden={!hasDisplay} overflow>
+                  <ToolbarButton
+                    label="IRAF 디스플레이"
+                    aria-pressed={displayOpen}
+                    onClick={() => revealPanel("display")}
+                  >
+                    <Monitor />
+                  </ToolbarButton>
+                </ToolbarGroup>
+                <ToolbarSpacer />
+                <ToolbarGroup
+                  label="선택한 작업"
+                  hidden={!map.view.selected}
+                  overflow
+                >
+                  <ToolbarButton
+                    label="선택한 작업 보기"
+                    onClick={revealSelected}
+                  >
+                    <LocateFixed />
+                  </ToolbarButton>
+                </ToolbarGroup>
+                <ToolbarSpacer />
+                <WindowOverflowMenu />
+                <ToolbarSpacer flexible />
                 {onSearch && (
                   <SearchField
                     variant="glass"

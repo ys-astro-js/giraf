@@ -142,6 +142,16 @@
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+/* A clear bottom bar is no surface: its empty space lets the pointer
+   through to the content, like the canvas's top bar. */
+.dock-window[data-canvas] > .window-bottom-bar {
+  pointer-events: none;
+}
+.dock-window[data-canvas]
+  > .window-bottom-bar
+  :is(.toolbar-group, .search-field, .window-overflow) {
+  pointer-events: auto;
+}
 /* Over content, a clear top bar that carries a title blurs what runs
    beneath it, strongest at the window's edge and fading out toward the
    content; controls alone float on the content. */
@@ -222,6 +232,11 @@
 .window-bottom-bar .search-field.workflow-bar-search {
   flex: 0 1 240px;
   min-width: 120px;
+}
+/* The bottom bar's overflow menu stays where the tab placed it, among the
+   groups it takes from, not at the end. */
+.window-bottom-bar .toolbar-cluster > .toolbar-slot:has(> .toolbar-overflow) {
+  order: 0;
 }
 /* Buttons placed straight on a bar take the bar's capsule height. */
 .window-bottom-bar .window-toolbar-cluster > :is(button, [data-slot="button"]) {

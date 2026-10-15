@@ -1,6 +1,17 @@
-import { useCallback, useSyncExternalStore, type ReactNode } from "react"
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react"
 import { createPortal } from "react-dom"
-import { ToolbarCluster } from "@/components/toolbar"
+import { ToolbarCluster, ToolbarOverflowMenu } from "@/components/toolbar"
+import {
+  useToolbarOverflow,
+  type ToolbarOverflow,
+} from "@/components/toolbar-overflow"
 import {
   OverflowContext,
   ToolbarHiddenContext,
@@ -92,25 +103,51 @@ export function WindowToolbar({
   const { element, shown } = useTabSlot(placement)
   const panel = usePanel()?.panel
   const group = panel && barOwner(panel)
-  const overflow = useBarOverflow((bars) =>
+  const barOverflow = useBarOverflow((bars) =>
     placement === "top" && group ? bars[group] : undefined
   )
+  // The bottom bar is the tab's alone: its cluster is the room it has, and
+  // the tab places the menu (WindowOverflowMenu) among its groups.
+  const [cluster, setCluster] = useState<HTMLDivElement | null>(null)
+  const ownOverflow = useToolbarOverflow(
+    () =>
+      placement === "bottom" && cluster
+        ? { content: cluster, container: cluster }
+        : null,
+    cluster
+  )
+  const overflow =
+    placement === "bottom" ? ownOverflow.context : (barOverflow ?? null)
   if (!element) return null
   return createPortal(
     <ToolbarHiddenContext.Provider value={!shown}>
-      <OverflowContext.Provider value={overflow ?? null}>
-        <ToolbarCluster
-          edge={placement === "top" ? "end" : "start"}
-          placement={placement === "bottom" ? "bottom" : "top"}
-          className={cn("window-toolbar-cluster", className)}
-          data-inactive={!shown || undefined}
-        >
-          {children}
-        </ToolbarCluster>
+      <OverflowContext.Provider value={overflow}>
+        <MenuContext.Provider value={ownOverflow}>
+          <ToolbarCluster
+            ref={setCluster}
+            edge={placement === "top" ? "end" : "start"}
+            placement={placement === "bottom" ? "bottom" : "top"}
+            className={cn("window-toolbar-cluster", className)}
+            data-inactive={!shown || undefined}
+          >
+            {children}
+          </ToolbarCluster>
+        </MenuContext.Provider>
       </OverflowContext.Provider>
     </ToolbarHiddenContext.Provider>,
     element
   )
+}
+
+const MenuContext = createContext<ToolbarOverflow | null>(null)
+
+/**
+ * The bottom bar's overflow menu, where the tab places it: what its groups
+ * marked overflow went to when the bar ran short.
+ */
+export function WindowOverflowMenu() {
+  const overflow = useContext(MenuContext)
+  return overflow && <ToolbarOverflowMenu overflow={overflow} />
 }
 
 /**

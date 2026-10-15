@@ -85,7 +85,7 @@ export function ToolbarOverflowMenu({
 }: {
   overflow: ToolbarOverflow
 }) {
-  const { placement } = useContext(ToolbarContext)
+  const { edge, placement } = useContext(ToolbarContext)
   return (
     <ToolbarGroup
       label="더 보기"
@@ -97,7 +97,7 @@ export function ToolbarOverflowMenu({
           <Ellipsis />
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          align="end"
+          align={edge}
           side={placement === "top" ? "bottom" : "top"}
         >
           <DropdownMenuGroup>
