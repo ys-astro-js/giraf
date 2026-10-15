@@ -138,9 +138,8 @@ export function PairControl({ map, task, role, rows, edit }: Props) {
   const splitIds = split ? assigned(map, task, split.input).ids : []
   const chosen = rule && "by" in rule ? [rule.by] : []
   const own = keyRows(splitIds, frames, chosen.filter((key) => splitIds.some((id) => frames.get(id)?.headers?.[key] !== undefined)))
-  const listed = (row: KeyRow) => own.rows.some((o) => [o.key, ...o.aliases].some((key) => key === row.key || row.aliases.includes(key)))
   const candidates = keyRows(ids, frames, chosen)
-  const keys = [...own.rows, ...candidates.rows.filter((row) => !listed(row))]
+  const keys = [...own.rows, ...candidates.rows.filter((row) => !own.rows.some((o) => o.key === row.key))]
   const found = query.trim() ? searchKeys([...new Set([...splitIds, ...ids])], frames, query) : undefined
   const { groups } = taskGroups(map, task, rows)
   const set = (next: PairRule | undefined) => edit((t) => setPairing(t, role, next))
@@ -230,12 +229,11 @@ export function SelectControl({ map, task, role, rows, edit }: Props) {
 
 const itemClass = "flex cursor-default items-center gap-2 rounded-lg px-3 py-2 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0"
 
-/** A keyword row's name, the keywords that group the files the same way, and up to three of its values. */
+/** A keyword row's name and up to three of its values. */
 function KeyLabel({ row, values = true }: { row: KeyRow; values?: boolean }) {
   return (
     <>
       <span className="shrink-0 font-mono">{row.key}</span>
-      {row.aliases.length > 0 && <span className="split-key-alias font-mono">{row.aliases.join(" ")}</span>}
       {values && (
         <span className="split-choice-values">
           {row.values.slice(0, 3).map((v) => <span key={v}>{v}</span>)}
