@@ -1,8 +1,8 @@
 import { beforeAll, expect, test } from "bun:test"
-import { emptyMap, makeInstance, connect } from "../src/lib/task-map"
+import { emptyMap, makeInstance, connect, addTask } from "../src/lib/task-map"
 import { saveSubflow, autoLayoutMap } from "../src/lib/subflow"
 import type { Catalog, Spec, Preferences } from "../src/lib/workbench"
-import { nodeGeometry } from "../src/lib/node-interaction"
+import { centeredAt, nodeGeometry, nodeLayout } from "../src/lib/node-interaction"
 import { flowEdges } from "../src/lib/workflow-flow"
 // Bun exposes `self` in its main thread; ELK otherwise mistakes it for a worker.
 beforeAll(async () => {
@@ -154,4 +154,13 @@ test("multiple output ports preserve data and fit inside group bounds", async ()
     expect(task.position!.y).toBeGreaterThanOrEqual(group.position.y + 72)
     expect(task.position!.x + 280).toBeLessThan(group.position.x + group.width)
   }
+})
+
+test("a node centered on a point keeps that spot in the layout", () => {
+  const t = centeredAt(emptyMap(), makeInstance(spec, catalog, prefs), catalog, { x: 900, y: 600 })
+  const g = nodeGeometry(emptyMap(), t, catalog)
+  expect(t.position!.x + g.width / 2).toBeCloseTo(900, 0)
+  expect(t.position!.y + g.occupiedHeight / 2).toBeCloseTo(600, 0)
+  const node = nodeLayout(addTask(emptyMap(), t), catalog).find((n) => n.id === t.id)!
+  expect({ x: node.x, y: node.y }).toEqual(t.position!)
 })

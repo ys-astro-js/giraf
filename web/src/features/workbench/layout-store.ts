@@ -14,6 +14,8 @@ type LayoutState = {
   revealedConnection?: Request
   /** A new node to bring into view, panning only. */
   pannedNode?: Request
+  /** The middle of the visible canvas, in canvas coordinates; set while the canvas shows. */
+  visibleCenter?: () => { x: number; y: number } | undefined
   logRequest: Request | null
   /** Counts log requests, so the tray shows the log again for each. */
   logRevision: number

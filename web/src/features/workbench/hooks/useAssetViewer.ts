@@ -10,6 +10,8 @@ import {
 } from "@/lib/workbench"
 import { addTask, makeInstance, connect, type TaskMap } from "@/lib/task-map"
 import { revealPanel } from "@/features/dock/store"
+import { useLayout } from "@/features/workbench/layout-store"
+import { centeredAt } from "@/lib/node-interaction"
 import type * as React from "react"
 
 /** A file shown in a viewer, and the task input it was opened from. */
@@ -48,11 +50,13 @@ export function useAssetViewer({
 
   function headerEdit(target: AssetTarget) {
     if (!catalog) return
-    const t = makeInstance(
+    let t = makeInstance(
       catalog.tasks.find((s) => s.name === "ccdhedit")!,
       catalog,
       prefs
     )
+    const center = useLayout.getState().visibleCenter?.()
+    if (center) t = centeredAt(map, t, catalog, center)
     t.draft.parameters = { ...t.draft.parameters, parameter: "", value: "" }
     update(
       (m) =>

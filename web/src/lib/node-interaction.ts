@@ -295,3 +295,8 @@ export function fitNodes(
     y: 0,
   }
 }
+/** `t` placed with its center on `center`, a point in canvas coordinates. */
+export function centeredAt<T extends Instance>(map: TaskMap, t: T, catalog: Catalog, center: { x: number; y: number }, rows: Frame[] = []): T {
+  const g = nodeGeometry(map, t, catalog, rows)
+  return { ...t, position: { x: Math.round(center.x - g.width / 2), y: Math.round(center.y - g.occupiedHeight / 2) } }
+}

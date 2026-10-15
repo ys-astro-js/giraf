@@ -3,6 +3,7 @@ import type { TaskMapViewProps } from "./types"
 import { WorkflowContext } from "./context"
 import { TaskNode } from "./TaskNode"
 import { PanToNode } from "./PanToNode"
+import { VisibleCenter } from "./VisibleCenter"
 import { GroupNode } from "./GroupNode"
 import { CompoundNode } from "./CompoundNode"
 import {
@@ -482,6 +483,7 @@ export function TaskMapView({
               />
               <WorkflowClickConnection />
               <PanToNode request={panNode} />
+              <VisibleCenter />
               {/* Navigation and the display window can go to the menu when
                   space runs short; arranging and grouping stay. */}
               <WindowToolbar>
