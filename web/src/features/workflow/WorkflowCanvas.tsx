@@ -4,6 +4,7 @@ import { WorkflowContext } from "./context"
 import { TaskNode } from "./TaskNode"
 import { GroupNode } from "./GroupNode"
 import { CompoundNode } from "./CompoundNode"
+import { SelectionArea } from "./SelectionArea"
 import {
   WorkflowToolButton,
   WorkflowZoomControls,
@@ -45,6 +46,8 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   UnfoldVertical,
+  Group,
+  Trash2,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -165,7 +168,6 @@ export function TaskMapView({
     groupSelection,
     groupFormHidden,
     setGroupFormHidden,
-    setGroupSelection,
     selectingGroup,
     setSelectingGroup,
     setEditingGroup,
@@ -175,7 +177,11 @@ export function TaskMapView({
     setEdgeActionPosition,
     previewGroupDrop,
     finishGroupDrop,
-    finishGroupSelection,
+    area,
+    areaDraggingRef,
+    selectArea,
+    clearSelection,
+    deleteSelection,
     setSelectedEdges,
     choose,
     finishConnection,
@@ -254,7 +260,13 @@ export function TaskMapView({
       aria-label="워크플로우"
       onKeyDown={(e) => {
         if (e.key === "Escape") {
-          closeGroupEditor()
+          // The open form goes first, then the selection, then the selecting mode.
+          if (editingGroup !== null && !groupFormHidden) closeGroupEditor()
+          else if (groupSelection.length) clearSelection()
+          else {
+            closeGroupEditor()
+            setSelectingGroup(false)
+          }
           setDragPreview({})
         }
       }}
@@ -270,10 +282,11 @@ export function TaskMapView({
           taskIds={groupSelection.filter((id) =>
             map.tasks.some((t) => t.id === id && !t.subflowId)
           )}
+          bounds={area ?? undefined}
           hidden={editingGroup === "new" && groupFormHidden}
           reselect={() => {
             setGroupFormHidden(true)
-            setGroupSelection([])
+            clearSelection()
           }}
           close={closeGroupEditor}
         />
@@ -292,6 +305,8 @@ export function TaskMapView({
         <div
           className="map-viewport"
           aria-label="워크플로우 캔버스"
+          // Clicking the canvas focuses it, so its keys (Esc) reach the workspace.
+          tabIndex={-1}
           data-group-selecting={selectingGroup}
           onPointerOver={(e) => {
             const label = (e.target as Element).closest<HTMLElement>("[data-full-text]")
@@ -323,7 +338,7 @@ export function TaskMapView({
               editGroup: (id) => {
                 setSelectingGroup(false)
                 setGroupFormHidden(false)
-                setGroupSelection([])
+                clearSelection()
                 setEditingGroup(id)
               },
               runGroup: onRunSubflow,
@@ -379,8 +394,11 @@ export function TaskMapView({
                 finishGroupDrop(node)
                 onEditEnd?.()
               }}
+              onSelectionStart={() => {
+                if (selectingGroup) areaDraggingRef.current = true
+              }}
               onSelectionEnd={() => {
-                if (selectingGroup) finishGroupSelection()
+                areaDraggingRef.current = false
               }}
               selectionOnDrag={
                 selectingGroup && (editingGroup === null || groupFormHidden)
@@ -412,7 +430,8 @@ export function TaskMapView({
               onPaneClick={() => {
                 setEdgeActionPosition(null)
                 setSelectedEdges([])
-                if (!selectingGroup)
+                if (selectingGroup) clearSelection()
+                else
                   update((m) => ({ ...m, view: { ...m.view, selected: "" } }))
               }}
               onConnect={(connection) => finishConnection(connection)}
@@ -605,14 +624,12 @@ export function TaskMapView({
                 <ToolbarSpacer />
                 <ToolbarGroup label="그룹">
                   <ToolbarButton
-                    label="그룹 만들기"
+                    label="선택"
                     aria-pressed={selectingGroup}
-                    disabled={!map.tasks.some((t) => !t.subflowId)}
                     onClick={() => {
-                      setEditingGroup(null)
+                      closeGroupEditor()
                       setSelectingGroup((v) => !v)
                       setSelectedEdges([])
-                      setGroupSelection([])
                     }}
                   >
                     <SquareDashedMousePointer />
@@ -648,10 +665,44 @@ export function TaskMapView({
                         <span>{groupSelection.length}</span>
                       </span>
                     ) : (
-                      "그룹에 넣을 작업을 드래그해 선택하세요."
+                      "작업을 드래그해 선택하세요."
                     )}
                   </span>
                 </Panel>
+              )}
+              {selectingGroup && (
+                <SelectionArea area={area} onDrag={selectArea}>
+                  {!!groupSelection.length &&
+                    (editingGroup === null || groupFormHidden) && (
+                      <ToolbarGroup label="선택한 작업">
+                        <ToolbarButton
+                          label="그룹 만들기"
+                          // Only tasks outside any group join a new one.
+                          disabled={
+                            !groupSelection.every((id) =>
+                              map.tasks.some((t) => t.id === id && !t.subflowId)
+                            ) ||
+                            groupSelection.some((id) =>
+                              map.subflows?.some((g) => g.id === id)
+                            )
+                          }
+                          onClick={() => {
+                            setGroupFormHidden(false)
+                            setEditingGroup("new")
+                          }}
+                        >
+                          <Group />
+                        </ToolbarButton>
+                        <ToolbarButton
+                          label="삭제"
+                          className="text-destructive hover:text-destructive"
+                          onClick={deleteSelection}
+                        >
+                          <Trash2 />
+                        </ToolbarButton>
+                      </ToolbarGroup>
+                    )}
+                </SelectionArea>
               )}
               {!selectingGroup &&
                 !!selectedEdges.length &&

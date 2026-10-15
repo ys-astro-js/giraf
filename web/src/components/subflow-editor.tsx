@@ -22,6 +22,7 @@ export function SubflowEditor({
   catalog,
   group,
   taskIds = [],
+  bounds,
   update,
   close,
   reselect,
@@ -31,6 +32,8 @@ export function SubflowEditor({
   catalog: Catalog
   group?: Subflow
   taskIds?: string[]
+  /** The dragged area a new group starts from (lib/subflow saveSubflow). */
+  bounds?: { x: number; y: number; width: number; height: number }
   update: (fn: (map: TaskMap) => TaskMap, label?: string) => void
   reselect?: () => void
   hidden?: boolean
@@ -64,7 +67,7 @@ export function SubflowEditor({
         try {
           const saved = group
             ? updateSubflow(map, id, { name, color })
-            : saveSubflow(map, catalog, { id, name, color, taskIds })
+            : saveSubflow(map, catalog, { id, name, color, taskIds, bounds })
           update(() => saved, group ? "그룹 설정 변경" : "그룹 만들기")
           close()
         } catch (e) {

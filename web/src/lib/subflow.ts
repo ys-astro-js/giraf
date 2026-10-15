@@ -15,7 +15,14 @@ import { fitGroups, groupContents } from "./group-nesting"
 export function saveSubflow(
   map: TaskMap,
   catalog: Catalog,
-  input: { id: string; name: string; taskIds: string[]; color?: SubflowColor }
+  input: {
+    id: string
+    name: string
+    taskIds: string[]
+    color?: SubflowColor
+    /** The dragged area, in flow coordinates; the box grows only to keep its members' insets. */
+    bounds?: Area
+  }
 ): TaskMap {
   const name = input.name.trim()
   const ids = new Set(input.taskIds)
@@ -40,16 +47,27 @@ export function saveSubflow(
         : t.subflowId,
   }))
   const members = tasks.filter((t) => ids.has(t.id))
-  const x = Math.min(...members.map((t) => t.position.x)) - 24
-  const y = Math.min(...members.map((t) => t.position.y)) - 72
-  const right =
-    Math.max(
-      ...members.map((t) => t.position.x + layout[tasks.indexOf(t)].width)
-    ) + 24
-  const bottom =
-    Math.max(
-      ...members.map((t) => t.position.y + layout[tasks.indexOf(t)].height)
-    ) + 24
+  const area = input.bounds
+  const x = Math.min(
+    ...members.map((t) => t.position.x - 24),
+    ...(area ? [area.x] : [])
+  )
+  const y = Math.min(
+    ...members.map((t) => t.position.y - 72),
+    ...(area ? [area.y] : [])
+  )
+  const right = Math.max(
+    ...members.map(
+      (t) => t.position.x + layout[tasks.indexOf(t)].width + 24
+    ),
+    ...(area ? [area.x + area.width] : [])
+  )
+  const bottom = Math.max(
+    ...members.map(
+      (t) => t.position.y + layout[tasks.indexOf(t)].height + 24
+    ),
+    ...(area ? [area.y + area.height] : [])
+  )
   const group: Subflow = {
     id: input.id,
     name,
@@ -66,6 +84,43 @@ export function saveSubflow(
     tasks,
     subflows: [...(map.subflows ?? []).filter((g) => g.id !== input.id), group],
   }
+}
+
+type Area = { x: number; y: number; width: number; height: number }
+
+/**
+ * What a dragged area selects, from the drawn nodes' boxes (flow coordinates):
+ * tasks it touches and groups it holds whole. A selected group stands for
+ * what it holds, so its tasks and inner groups are not selected again.
+ */
+export function areaSelection(
+  map: TaskMap,
+  area: Area,
+  boxes: (Area & { id: string; group: boolean })[]
+): string[] {
+  const touches = (b: Area) =>
+    b.x < area.x + area.width &&
+    b.x + b.width > area.x &&
+    b.y < area.y + area.height &&
+    b.y + b.height > area.y
+  const holds = (b: Area) =>
+    b.x >= area.x &&
+    b.y >= area.y &&
+    b.x + b.width <= area.x + area.width &&
+    b.y + b.height <= area.y + area.height
+  const groups = boxes.filter((b) => b.group && holds(b)).map((b) => b.id)
+  const inside = new Set(
+    groups.flatMap((id) => {
+      const contents = groupContents(map, id)
+      return [...contents.tasks, ...contents.groups]
+    })
+  )
+  return [
+    ...groups.filter((id) => !inside.has(id)),
+    ...boxes
+      .filter((b) => !b.group && touches(b) && !inside.has(b.id))
+      .map((b) => b.id),
+  ]
 }
 
 export function dissolveSubflow(map: TaskMap, id: string): TaskMap {

@@ -1,6 +1,7 @@
 import { useMapConnections } from "./useConnections"
 import { AUTO_COLLAPSE_ZOOM, useNodeView } from "./node-view"
 import { useSubflowInteraction } from "./useSubflows"
+import { dissolveSubflow } from "@/lib/subflow"
 import type { TaskMap } from "@/lib/task-map"
 import type { Catalog, Frame } from "@/lib/workbench"
 import type { Diagnostic } from "@/lib/diagnostics"
@@ -75,7 +76,10 @@ export function useTaskMapInteraction({
     setEditingGroup,
     previewGroupDrop,
     finishGroupDrop,
-    finishGroupSelection,
+    area,
+    areaDraggingRef,
+    selectArea,
+    clearSelection,
   } = useSubflowInteraction({ flow, map, update, catalog })
   const [nodeUI, setNodeUI] = useState<
     Record<string, Pick<TaskFlowNode, "measured" | "dragging">>
@@ -91,13 +95,10 @@ export function useTaskMapInteraction({
         ...nodeUI[node.id],
         ...(selectingGroup
           ? {
-              selected:
-                node.type === "task" &&
-                groupSelection.includes(node.id) &&
-                !node.parentId,
+              selected: groupSelection.includes(node.id),
+              // Groups are selected by a dragged area holding them whole.
               selectable:
                 node.type === "task" &&
-                !node.parentId &&
                 (editingGroup === null || groupFormHidden),
               draggable: false,
             }
@@ -161,16 +162,12 @@ export function useTaskMapInteraction({
     (changes: NodeChange<WorkflowNode>[]) => {
       if (selectingGroup) {
         const selections = changes.filter((c) => c.type === "select")
-        if (selections.length)
+        if (selections.length && !areaDraggingRef.current)
           setGroupSelection((current) => {
             const next = new Set(current)
             for (const change of selections)
               if (change.type === "select") {
-                if (
-                  change.selected &&
-                  map.tasks.some((t) => t.id === change.id && !t.subflowId)
-                )
-                  next.add(change.id)
+                if (change.selected) next.add(change.id)
                 else next.delete(change.id)
               }
             return [...next]
@@ -213,7 +210,16 @@ export function useTaskMapInteraction({
             : "노드 이동"
         )
     },
-    [update, catalog, map, rows, collapseAll, selectingGroup, setGroupSelection]
+    [
+      update,
+      catalog,
+      map,
+      rows,
+      collapseAll,
+      selectingGroup,
+      setGroupSelection,
+      areaDraggingRef,
+    ]
   )
   const {
     validateConnection,
@@ -248,6 +254,20 @@ export function useTaskMapInteraction({
     },
     [remove, removeLink, onEditStart, onEditEnd]
   )
+  // One undo step: selected tasks go as a deletion does, selected groups are
+  // dissolved and keep their tasks.
+  function deleteSelection() {
+    const groups = new Set(map.subflows?.map((g) => g.id))
+    onEditStart?.()
+    try {
+      for (const id of groupSelection)
+        if (groups.has(id)) update((m) => dissolveSubflow(m, id), "그룹 해제")
+        else remove(id)
+    } finally {
+      onEditEnd?.()
+    }
+    clearSelection()
+  }
   useEffect(() => {
     const added = map.tasks.length > previousCount.current
     previousCount.current = map.tasks.length
@@ -319,13 +339,23 @@ export function useTaskMapInteraction({
     setEdgeActionPosition,
     previewGroupDrop,
     finishGroupDrop,
-    finishGroupSelection,
+    area,
+    areaDraggingRef,
+    selectArea,
+    clearSelection,
+    deleteSelection,
     setSelectedEdges,
     choose,
     finishConnection,
     isValidConnection,
     reconnectingRef,
-    onBeforeDelete,
+    // The delete key removes what the 삭제 button does while selecting.
+    onBeforeDelete: selectingGroup
+      ? async () => {
+          deleteSelection()
+          return false
+        }
+      : onBeforeDelete,
     setFlow,
     initialViewport,
     shouldFit,

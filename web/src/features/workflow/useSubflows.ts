@@ -1,8 +1,12 @@
 import type { TaskMap } from "@/lib/task-map"
 import type { Catalog } from "@/lib/workbench"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { type Edge, type ReactFlowInstance } from "@xyflow/react"
-import { moveTaskToSubflow, subflowDropTarget } from "@/lib/subflow"
+import {
+  areaSelection,
+  moveTaskToSubflow,
+  subflowDropTarget,
+} from "@/lib/subflow"
 import { type WorkflowNode } from "@/lib/workflow-flow"
 
 export function useSubflowInteraction({
@@ -24,6 +28,10 @@ export function useSubflowInteraction({
     leaving?: string
   }>({})
   const [editingGroup, setEditingGroup] = useState<string | null>(null)
+  // The dragged area stays, in flow coordinates, with what it selected.
+  const [area, setArea] = useState<SelectionArea | null>(null)
+  // While dragging, the area decides the selection, not React Flow.
+  const areaDraggingRef = useRef(false)
 
   function groupDrop(node: WorkflowNode) {
     if (!flow) return null
@@ -69,20 +77,27 @@ export function useSubflowInteraction({
       update((m) => moveTaskToSubflow(m, catalog, node.id, info.target, info.position), "노드 이동")
     setDragPreview({})
   }
-  function finishGroupSelection() {
-    const ids = (flow?.getNodes() ?? [])
-      .filter((n) => n.type === "task" && n.selected && !n.parentId)
-      .map((n) => n.id)
-    if (!ids.length) return
-    setGroupSelection(ids)
-    setGroupFormHidden(false)
-    setEditingGroup("new")
+  function selectArea(next: SelectionArea) {
+    setArea(next)
+    if (!flow) return
+    const boxes = flow
+      .getNodes()
+      .filter((n) => !n.hidden)
+      .map((n) => ({
+        id: n.id,
+        group: n.type !== "task",
+        ...flow.getNodesBounds([n]),
+      }))
+    setGroupSelection(areaSelection(map, next, boxes))
+  }
+  function clearSelection() {
+    setArea(null)
+    setGroupSelection([])
   }
   function closeGroupEditor() {
     setGroupFormHidden(false)
     setEditingGroup(null)
-    setSelectingGroup(false)
-    setGroupSelection([])
+    clearSelection()
   }
 
   return {
@@ -99,6 +114,11 @@ export function useSubflowInteraction({
     setEditingGroup,
     previewGroupDrop,
     finishGroupDrop,
-    finishGroupSelection,
+    area,
+    areaDraggingRef,
+    selectArea,
+    clearSelection,
   }
 }
+
+export type SelectionArea = { x: number; y: number; width: number; height: number }

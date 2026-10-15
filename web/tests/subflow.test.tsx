@@ -8,6 +8,7 @@ import {
   updateSubflow,
   moveTaskToSubflow,
   subflowDropTarget,
+  areaSelection,
 } from "../src/lib/subflow"
 import { flowNodes, flowEdges, changeFlowNodes, flowPortColors } from "../src/lib/workflow-flow"
 import type { Catalog, Preferences, Spec } from "../src/lib/workbench"
@@ -291,4 +292,38 @@ test("children can leave fixed parent bounds without growing the group during a 
   expect(
     flowNodes(m, catalog).find((n) => n.id === "a")!.extent
   ).toBeUndefined()
+})
+
+test("a dragged area sets the group box, grown only to keep the insets", () => {
+  const box = (m: ReturnType<typeof fixture>) => {
+    const g = m.subflows!.find((g) => g.id === "group")!
+    return { ...g.position, width: g.width, height: g.height }
+  }
+  const save = (bounds?: { x: number; y: number; width: number; height: number }) =>
+    box(saveSubflow(fixture(), catalog, { id: "group", name: "보정", taskIds: ["a", "b"], bounds }))
+  const fitted = save()
+  // Without an area the box hugs its members: 24px sides and bottom, 72px above.
+  expect(fitted).toMatchObject({ x: -24, y: 28 })
+  expect(save(undefined)).toEqual(box(group()))
+  const roomy = { x: fitted.x - 40, y: fitted.y - 30, width: fitted.width + 100, height: fitted.height + 60 }
+  expect(save(roomy)).toEqual(roomy)
+  // An area cutting into the members grows just enough to hold them.
+  expect(save({ x: 100, y: 150, width: 10, height: 10 })).toEqual(fitted)
+  const left = { x: fitted.x - 80, y: fitted.y + 20, width: 100, height: 20 }
+  expect(save(left)).toEqual({ ...fitted, x: left.x, width: fitted.width + 80 })
+})
+test("a dragged area selects the tasks it touches and the groups it holds whole", () => {
+  const m = group()
+  const boxes = [
+    { id: "group", group: true, x: -24, y: 28, width: 700, height: 300 },
+    { id: "a", group: false, x: 0, y: 100, width: 248, height: 200 },
+    { id: "b", group: false, x: 400, y: 100, width: 248, height: 200 },
+    { id: "c", group: false, x: 800, y: 100, width: 248, height: 200 },
+  ]
+  // Holding the group whole: the group stands for its tasks.
+  expect(areaSelection(m, { x: -50, y: 0, width: 900, height: 400 }, boxes)).toEqual(["group", "c"])
+  // Cutting into the group: only the tasks it touches.
+  expect(areaSelection(m, { x: 300, y: 0, width: 520, height: 400 }, boxes)).toEqual(["b", "c"])
+  // Edges that only meet do not touch.
+  expect(areaSelection(m, { x: 248, y: 0, width: 152, height: 400 }, boxes)).toEqual([])
 })

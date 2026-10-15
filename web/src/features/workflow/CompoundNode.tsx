@@ -18,7 +18,7 @@ export const CompoundNode = memo(function CompoundNode({
   dragging,
   isConnectable,
 }: NodeProps<CompoundFlowNode>) {
-  const { map, currentIssues, runGroup, groupRunDisabled, setGroupCollapsed, editGroup } =
+  const { map, currentIssues, runGroup, groupRunDisabled, setGroupCollapsed, editGroup, selectingGroup } =
     useContext(WorkflowContext)!
   const { group, members, inputs, outputs, height } = data
   const name = group.name
@@ -46,6 +46,7 @@ export const CompoundNode = memo(function CompoundNode({
       }
       aria-label={`${name} 그룹 노드`}
       data-selected={selected}
+      data-group-selected={(selectingGroup && selected) || undefined}
       data-dragging={dragging}
       data-running={status.state === "running"}
       data-diagnostic={status.severity}

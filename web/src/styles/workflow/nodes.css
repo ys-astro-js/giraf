@@ -121,7 +121,9 @@
 .map-viewport[data-group-selecting="true"] .react-flow__pane { cursor:crosshair; }
 .map-viewport[data-group-selecting="true"] .react-flow__node-subflow { pointer-events:none !important; }
 .map-viewport[data-group-selecting="true"] .workflow-node:not([data-group-selected="true"]) { outline:none; }
-.workflow-node[data-group-selected="true"] { border-color:var(--primary); outline:2px solid var(--primary); outline-offset:-1px; }
+.workflow-node[data-group-selected="true"], .subflow-node[data-group-selected="true"] { border-color:var(--primary); outline:2px solid var(--primary); outline-offset:-1px; }
+/* The kept area stands for the selection; React Flow's box around the nodes would cover them. */
+.map-viewport[data-group-selecting="true"] .react-flow__nodesselection { display:none; }
 .subflow-node[data-drop-state="entering"] { border-color:var(--group-color); outline:2px solid var(--group-color); outline-offset:-1px; background:color-mix(in srgb,var(--group-color) 14%,transparent); }
 .subflow-node[data-drop-state="leaving"] { border:2px dashed var(--group-color); }
 .subflow-colors { display:flex; flex-wrap:wrap; gap:8px; }

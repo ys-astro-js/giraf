@@ -89,6 +89,7 @@ export const TaskNode = memo(function TaskNode({
     values,
     onParameter,
     hiddenNodes,
+    selectingGroup,
   } = useContext(WorkflowContext)!
   const { task, geometry } = data
   // A split task's groups (lib/splits): chips under the header, values per group in the rows.
@@ -401,6 +402,7 @@ export const TaskNode = memo(function TaskNode({
       aria-label={`${task.label} 노드`}
       data-collapsed={collapsed}
       data-selected={selected}
+      data-group-selected={(selectingGroup && selected) || undefined}
       data-running={state === "running"}
       data-dragging={dragging}
       data-connection-target={connectionTarget !== null}

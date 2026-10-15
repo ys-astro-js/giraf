@@ -12,6 +12,7 @@ import { WorkflowContext } from "./context"
 import { StatusIcon } from "./StatusIcon"
 export const GroupNode = memo(function GroupNode({
   data,
+  selected,
 }: NodeProps<SubflowNode>) {
   const {
     map,
@@ -23,6 +24,7 @@ export const GroupNode = memo(function GroupNode({
     endEdit,
     setGroupCollapsed,
     currentIssues,
+    selectingGroup,
   } = useContext(WorkflowContext)!
   const name = data.group.name
   // The same status as the collapsed node: members' runs and diagnostics.
@@ -38,6 +40,7 @@ export const GroupNode = memo(function GroupNode({
       className="subflow-node"
       aria-label={name}
       data-diagnostic={status.severity}
+      data-group-selected={(selectingGroup && selected) || undefined}
       data-drop-state={
         dragPreview.leaving === data.group.id
           ? "leaving"
