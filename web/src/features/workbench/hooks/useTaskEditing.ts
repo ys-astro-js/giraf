@@ -34,10 +34,11 @@ export function useTaskEditing({
   rows: Frame[]
   task: Instance | undefined
 }) {
-  function add(name: string, ids: string[]) {
+  function add(name: string, ids: string[], position?: { x: number; y: number }) {
     if (!catalog) return false
     const s = catalog.tasks.find((s) => s.name === name)!
     const t = makeInstance(s, catalog, prefs)
+    if (position) t.position = position
     // Every 값 node is one kind, whatever its 가져오기: titled and numbered together.
     if (isValueNode(s)) t.label = nextValueLabel(map, catalog)
     else {

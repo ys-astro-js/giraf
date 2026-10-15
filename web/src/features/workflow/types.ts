@@ -18,6 +18,8 @@ export type TaskMapViewProps = {
   onEditStart?: () => void
   onEditEnd?: () => void
   add: () => void
+  /** Adds the named task where it was dropped on the canvas. */
+  drop: (name: string, position?: { x: number; y: number }) => void
   link: (target?: string, source?: Source) => void
   open: (r: Frame) => void
   removeLink: (id: string) => void

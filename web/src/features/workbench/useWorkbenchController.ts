@@ -494,10 +494,11 @@ export function useWorkbenchController() {
     task,
   })
   const { layoutBusy } = taskEditing
-  function add(name: string, ids: string[] = []) {
-    const id = taskEditing.add(name, ids)
+  function add(name: string, ids: string[] = [], position?: { x: number; y: number }) {
+    const id = taskEditing.add(name, ids, position)
     if (!id) return
-    layout().panToNode(id)
+    // A dropped node is already where the pointer is.
+    if (!position) layout().panToNode(id)
     setAddOpen(false)
     layout().setInspectorTab("input")
     revealPanel("inspector")

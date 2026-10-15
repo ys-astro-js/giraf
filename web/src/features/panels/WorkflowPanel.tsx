@@ -59,6 +59,7 @@ export function WorkflowPanel() {
             onEditStart={w.editor.beginEdit}
             onEditEnd={w.finishEdit}
             add={() => w.setAddOpen(true)}
+            drop={(name, position) => w.add(name, [], position)}
             link={w.link}
             open={w.assetViewer.open}
             remove={w.remove}

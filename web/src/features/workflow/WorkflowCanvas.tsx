@@ -70,6 +70,7 @@ import { setSubflowCollapsed, subflowColor } from "@/lib/subflow"
 import { WorkflowClickConnection } from "@/components/workflow-click-connection"
 import { type WorkflowNode } from "@/lib/workflow-flow"
 import { clippedTitle } from "@/lib/clipped-title"
+import { taskDragType } from "@/lib/task-drag"
 import {
   bypassEdges,
   helperLevel,
@@ -123,6 +124,7 @@ export function TaskMapView({
   runDisabled,
   open,
   add,
+  drop,
 }: TaskMapViewProps) {
   const [hoveredNode, setHoveredNode] = useState("")
   const values = useValueResults(map, catalog, rows)
@@ -259,6 +261,18 @@ export function TaskMapView({
           closeGroupEditor()
           setDragPreview({})
         }
+      }}
+      // A task dragged from the add-task list lands where it is dropped.
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(taskDragType)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = "copy"
+      }}
+      onDrop={(e) => {
+        const name = e.dataTransfer.getData(taskDragType)
+        if (!name) return
+        e.preventDefault()
+        drop(name, flow?.screenToFlowPosition({ x: e.clientX, y: e.clientY }))
       }}
     >
       <h1 className="sr-only">워크플로우</h1>
