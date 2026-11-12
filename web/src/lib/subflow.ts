@@ -7,7 +7,7 @@ import {
   type Instance,
 } from "@/lib/task-map"
 import { nodeLayout, roleActive } from "./node-interaction"
-import type { Catalog } from "./workbench"
+import type { Catalog, Frame } from "./workbench"
 import { isValueNode, isValueRole } from "./values"
 import { resolvedSource } from "./task-map/runs"
 import { fitGroups, groupContents } from "./group-nesting"
@@ -22,6 +22,8 @@ export function saveSubflow(
     color?: SubflowColor
     /** The dragged area, in flow coordinates; the box grows only to keep its members' insets. */
     bounds?: Area
+    /** The files the canvas knows: a split task's node is as tall as its groups make it. */
+    rows?: Frame[]
   }
 ): TaskMap {
   const name = input.name.trim()
@@ -36,7 +38,7 @@ export function saveSubflow(
     )
   )
     throw Error("다른 그룹에 속한 작업은 먼저 해당 그룹에서 빼 주세요.")
-  const layout = nodeLayout(map, catalog)
+  const layout = nodeLayout(map, catalog, input.rows)
   const tasks = map.tasks.map((t, i) => ({
     ...t,
     position: t.position ?? { x: layout[i].x, y: layout[i].y },
@@ -257,7 +259,8 @@ export function moveTaskToSubflow(
   catalog: Catalog,
   taskId: string,
   groupId: string | undefined,
-  position: { x: number; y: number }
+  position: { x: number; y: number },
+  rows?: Frame[]
 ): TaskMap {
   if (!map.tasks.some((t) => t.id === taskId)) return map
   if (groupId && !map.subflows?.some((g) => g.id === groupId)) return map
@@ -268,7 +271,7 @@ export function moveTaskToSubflow(
     ),
   }
   if (!groupId) return next
-  const layout = nodeLayout(next, catalog)
+  const layout = nodeLayout(next, catalog, rows)
   const size = (id: string) => layout[next.tasks.findIndex((t) => t.id === id)]
   return fitGroups(next, groupId, size)
 }

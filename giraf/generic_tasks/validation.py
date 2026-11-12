@@ -216,7 +216,7 @@ def validate_generic(spec, payload, resolve, *, diagnostics=False, pending_roles
     if input_lists: m['inputSelections']=deepcopy(supplied_inputs)
     if spec.get('run') == 'save-files':
         from ..file_nodes import checked_destination
-        with issues.check():
+        with issues.check('destination'):
             m['destination'] = checked_destination(payload.get('destination'), directory)
     if interactive:
         from ..cursor_keys import cursor_keys

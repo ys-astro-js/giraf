@@ -8,7 +8,7 @@
 import { Fragment, useEffect, useRef, useState } from "react"
 import { applyCommandEdit } from "@/lib/command-edit"
 import type { ParsedCommands } from "@/lib/command-workflow"
-import type { Instance } from "@/lib/task-map"
+import type { Instance, TaskMap } from "@/lib/task-map"
 import { api, type Catalog, type Spec } from "@/lib/workbench"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -51,7 +51,7 @@ export function MarkedText({ line, issues }: { line: string; issues: CommandIssu
   )
 }
 
-export function CommandLine({ line, issues = [], task, spec, catalog, group, edit }: {
+export function CommandLine({ line, issues = [], task, spec, catalog, group, update }: {
   line: string
   issues?: CommandIssue[]
   task: Instance
@@ -59,7 +59,8 @@ export function CommandLine({ line, issues = [], task, spec, catalog, group, edi
   catalog: Catalog
   /** The group this line runs, of a split task's groups. */
   group?: { id: string; groups: string[] }
-  edit: (fn: (task: Instance) => Instance) => void
+  /** A change of the workflow: a shared pset's values are its 작업 설정 node's. */
+  update: (fn: (map: TaskMap) => TaskMap) => void
 }) {
   const [draft, setDraft] = useState(line)
   const [editing, setEditing] = useState(false)
@@ -77,7 +78,7 @@ export function CommandLine({ line, issues = [], task, spec, catalog, group, edi
     try {
       const parsed = await api<ParsedCommands>("parse-commands", { text: `${line}\n${edited}`, task: spec.name, resolve: false })
       const [before, after] = parsed.lines
-      if (before && after) edit((current) => applyCommandEdit(current, spec, catalog, before, after, group))
+      if (before && after) update((map) => applyCommandEdit(map, task.id, spec, catalog, before, after, group))
     } catch {
       setDraft(line)
     } finally {

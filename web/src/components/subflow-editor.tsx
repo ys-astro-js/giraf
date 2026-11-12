@@ -8,7 +8,7 @@ import {
   type SubflowColor,
   uid,
 } from "@/lib/task-map"
-import type { Catalog } from "@/lib/workbench"
+import type { Catalog, Frame } from "@/lib/workbench"
 import {
   saveSubflow,
   dissolveSubflow,
@@ -23,6 +23,7 @@ export function SubflowEditor({
   group,
   taskIds = [],
   bounds,
+  rows,
   update,
   close,
   reselect,
@@ -34,6 +35,7 @@ export function SubflowEditor({
   taskIds?: string[]
   /** The dragged area a new group starts from (lib/subflow saveSubflow). */
   bounds?: { x: number; y: number; width: number; height: number }
+  rows?: Frame[]
   update: (fn: (map: TaskMap) => TaskMap, label?: string) => void
   reselect?: () => void
   hidden?: boolean
@@ -67,7 +69,7 @@ export function SubflowEditor({
         try {
           const saved = group
             ? updateSubflow(map, id, { name, color })
-            : saveSubflow(map, catalog, { id, name, color, taskIds, bounds })
+            : saveSubflow(map, catalog, { id, name, color, taskIds, bounds, rows })
           update(() => saved, group ? "그룹 설정 변경" : "그룹 만들기")
           close()
         } catch (e) {

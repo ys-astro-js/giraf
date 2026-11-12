@@ -116,7 +116,7 @@ export function CommandList({ groups, catalog, task, issues }: {
             {workbench && spec ? (
               <CommandLine line={line.text} issues={tokenIssues(line.tokens, issues)} task={task} spec={spec} catalog={catalog}
                 group={ids.length > 1 ? { id: group, groups: ids } : undefined}
-                edit={(fn) => workbench.edit(fn, task.id)} />
+                update={(fn) => workbench.update(fn, `${task.label} 설정 변경`)} />
             ) : <span className="font-mono command-line"><MarkedText line={line.text} issues={tokenIssues(line.tokens, issues)} /></span>}
           </li>
         ))}

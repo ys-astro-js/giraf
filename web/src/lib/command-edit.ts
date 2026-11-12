@@ -4,11 +4,14 @@
  * parameters that changed go back to the node the way the inspector sets
  * them. A split task's group line changes only that group's values
  * (`draft.groupValues`); a value every group then shares is the shared one.
- * Files and connections are not rewired from text: a different input is an
- * issue, shown with the node's other diagnostics.
+ * A pset fed by a 작업 설정 node is that node's shared values, set there as
+ * the inspector's settings set them. Files and connections are not rewired
+ * from text: a different input is an issue, shown with the node's other
+ * diagnostics.
  */
 import type { ParsedLine } from "./command-workflow"
 import type { Instance, TaskMap } from "./task-map"
+import { psetSource } from "./values"
 import type { Catalog, Param, Spec, Values } from "./workbench"
 
 type Place = "parameters" | "preprocess" | "packageValues" | { pset: string }
@@ -41,33 +44,51 @@ function defaultOf(spec: Spec, catalog: Catalog, place: Place, name: string): st
 /** The key `draft.groupValues` uses: `name`, or `pset.name`. */
 const groupKey = (change: Change) => (typeof change.place === "object" ? `${change.place.pset}.${change.name}` : change.name)
 
-function shared(task: Instance, change: Change): Values[string] | undefined {
+/** Where a pset's values are kept: the task, or the 작업 설정 node feeding it, under the name it holds them. */
+function psetOwner(map: TaskMap, task: Instance, pset: string): { owner: string; held: string } {
+  const node = psetSource(map, task.id, pset)
+  return node?.draft.pset ? { owner: node.id, held: node.draft.pset.name } : { owner: task.id, held: pset }
+}
+
+const taskOf = (map: TaskMap, id: string) => map.tasks.find((t) => t.id === id)!
+const withTask = (map: TaskMap, id: string, fn: (t: Instance) => Instance): TaskMap =>
+  ({ ...map, tasks: map.tasks.map((t) => (t.id === id ? fn(t) : t)) })
+
+function shared(map: TaskMap, task: Instance, change: Change): Values[string] | undefined {
   const place = change.place
-  if (typeof place === "object") return task.parameterSets?.[place.pset]?.[change.name]
+  if (typeof place === "object") {
+    const { owner, held } = psetOwner(map, task, place.pset)
+    return taskOf(map, owner).parameterSets?.[held]?.[change.name]
+  }
   if (place === "parameters") return task.draft.parameters[change.name]
   if (place === "preprocess") return task.preprocess.parameters[change.name]
   return task.packageValues[change.name]
 }
 
-function setShared(task: Instance, change: Change): Instance {
+function setShared(map: TaskMap, task: Instance, change: Change): TaskMap {
   const place = change.place, { name, value } = change
-  if (typeof place === "object")
-    return { ...task, parameterSets: { ...task.parameterSets, [place.pset]: { ...task.parameterSets?.[place.pset], [name]: value } } }
-  if (place === "parameters") return { ...task, draft: { ...task.draft, parameters: { ...task.draft.parameters, [name]: value } } }
-  if (place === "preprocess") return { ...task, preprocess: { ...task.preprocess, parameters: { ...task.preprocess.parameters, [name]: value } } }
-  return { ...task, packageValues: { ...task.packageValues, [name]: value } }
+  if (typeof place === "object") {
+    const { owner, held } = psetOwner(map, task, place.pset)
+    return withTask(map, owner, (t) => ({ ...t, parameterSets: { ...t.parameterSets, [held]: { ...t.parameterSets?.[held], [name]: value } } }))
+  }
+  return withTask(map, task.id, (t) => {
+    if (place === "parameters") return { ...t, draft: { ...t.draft, parameters: { ...t.draft.parameters, [name]: value } } }
+    if (place === "preprocess") return { ...t, preprocess: { ...t.preprocess, parameters: { ...t.preprocess.parameters, [name]: value } } }
+    return { ...t, packageValues: { ...t.packageValues, [name]: value } }
+  })
 }
 
 /**
- * The node after its line `before` became `after`. With `group`, the line is
- * that group's of a split task whose groups are `groups`.
+ * The map after node `taskId`'s line `before` became `after`. With `group`,
+ * the line is that group's of a split task whose groups are `groups`.
  */
-export function applyCommandEdit(task: Instance, spec: Spec, catalog: Catalog, before: ParsedLine, after: ParsedLine,
-  group?: { id: string; groups: string[] }): Instance {
+export function applyCommandEdit(map: TaskMap, taskId: string, spec: Spec, catalog: Catalog, before: ParsedLine, after: ParsedLine,
+  group?: { id: string; groups: string[] }): TaskMap {
   const issues = [...after.issues]
   if (after.kind !== "task" || after.task !== before.task)
     issues.push(`${after.text.split(/\s+/)[0]}: 이 노드의 작업이 아닙니다.`)
-  let next = task
+  let next = map
+  const edit = (fn: (t: Instance) => Instance) => { next = withTask(next, taskId, fn) }
   if (!issues.length) {
     const old = entries(before), now = entries(after)
     const changes: Change[] = []
@@ -87,13 +108,14 @@ export function applyCommandEdit(task: Instance, spec: Spec, catalog: Catalog, b
         issues.push(`${role}: 이 출력 이름은 출력 탭에서 바꾸세요.`)
         continue
       }
-      next = spec.adapter === "generic"
-        ? { ...next, draft: { ...next.draft, outputs: { ...next.draft.outputs, [role]: value } } }
-        : { ...next, draft: { ...next.draft, output: { ...next.draft.output, name: value } } }
+      edit((t) => spec.adapter === "generic"
+        ? { ...t, draft: { ...t.draft, outputs: { ...t.draft.outputs, [role]: value } } }
+        : { ...t, draft: { ...t.draft, output: { ...t.draft.output, name: value } } })
     }
     for (const change of changes) {
+      const task = taskOf(next, taskId)
       if (!group || group.groups.length < 2) {
-        next = setShared(next, change)
+        next = setShared(next, task, change)
         continue
       }
       if (typeof change.place === "string" && change.place !== "parameters") {
@@ -101,13 +123,13 @@ export function applyCommandEdit(task: Instance, spec: Spec, catalog: Catalog, b
         continue
       }
       const key = groupKey(change)
-      const values = next.draft.groupValues?.[key] ?? {}
-      const base = text(shared(next, change))
+      const values = task.draft.groupValues?.[key] ?? {}
+      const base = text(shared(next, task, change))
       const after = group.groups.map((id) => (id === group.id ? change.value : text(values[id] ?? base)))
-      const groupValues = { ...next.draft.groupValues }
+      const groupValues = { ...task.draft.groupValues }
       if (after.every((v) => v === change.value)) {
         // Every group now reads it: the shared value.
-        next = setShared(next, change)
+        next = setShared(next, task, change)
         delete groupValues[key]
       } else {
         const own = { ...values, [group.id]: change.value }
@@ -115,12 +137,15 @@ export function applyCommandEdit(task: Instance, spec: Spec, catalog: Catalog, b
         if (Object.keys(own).length) groupValues[key] = own
         else delete groupValues[key]
       }
-      next = { ...next, draft: { ...next.draft, groupValues } }
+      edit((t) => ({ ...t, draft: { ...t.draft, groupValues } }))
     }
   }
-  const { commandIssues: _old, ...rest } = next
-  void _old
-  return issues.length ? { ...rest, commandIssues: issues } : rest
+  // What the line could not set warns on the node until its next edit.
+  return withTask(next, taskId, (t) => {
+    const { commandIssues: _old, ...rest } = t
+    void _old
+    return issues.length ? { ...rest, commandIssues: issues } : rest
+  })
 }
 
 /** The editor's issues from edited command lines, shown with the server's diagnostics. */

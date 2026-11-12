@@ -303,6 +303,7 @@ export function TaskMapView({
             map.tasks.some((t) => t.id === id && !t.subflowId)
           )}
           bounds={area ?? undefined}
+          rows={rows}
           hidden={editingGroup === "new" && groupFormHidden}
           reselect={() => {
             setGroupFormHidden(true)

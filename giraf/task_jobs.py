@@ -129,11 +129,11 @@ def validate_task(payload, resolve, *, diagnostics=False, pending_roles=frozense
     exam = payload.get('exam', {})
     waiting = diagnostics and not main and first in pending_roles
     if name=='imexamine' and waiting:
-        if exam.get('key') not in ('r','a','m','l','c'): issues.error(ValueError('지원하는 조사 동작을 선택해 주세요.'))
+        if exam.get('key') not in ('r','a','m','l','c'): issues.error(FieldError('exam', '지원하는 조사 동작을 선택해 주세요.'))
         for group in ('rimexam','limexam','cimexam'):
             values(group, exam.get('parameters', {}).get(group, {}), group + '.', issues)
     if name=='imexamine' and not waiting and not issues.failed(first):
-        with issues.check():
+        with issues.check('exam'):
             try:
                 x,y=float(exam['x']),float(exam['y'])
                 row = sources[main[0]]
